@@ -70,7 +70,7 @@ export const useRuleStore = defineStore('rules', () => {
   const DYNAMIC_RULE_OPERATORS = computed(getDynamicRuleOperators)
   const refreshRuleState = async () => {
     await fetchRules()
-    await appStore.refreshModCoreData('规则变更后同步模组状态', {
+    await appStore.refreshModCoreData(t('check.rules.refresh_mod_state_after_change', '规则变更后同步模组状态'), {
       preserveListState: true,
       refreshRules: false,
       refreshBackups: false,
@@ -88,7 +88,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.rules_get_all()
-      if (checkResult(res, '获取规则', false, { silent })) {
+      if (checkResult(res, t('check.rules.fetch', '获取规则'), false, { silent })) {
         communityModRules.value = res.data.community_rules
         communityRulesUpdateTime.value = res.data.community_rules_update_time
         workshopRulesUpdateTime.value = res.data.workshop_rules_update_time || 0
@@ -101,7 +101,7 @@ export const useRuleStore = defineStore('rules', () => {
       }
     } catch (e) {
       console.error("获取规则失败:", e)
-      if (!silent) toast.error('获取规则失败。请稍后重试，详细原因已写入系统日志。')
+      if (!silent) toast.error(t('errors.rules.fetch_failed_retry', '获取规则失败。请稍后重试，详细原因已写入系统日志。'))
     }
     return false
   }
@@ -188,8 +188,8 @@ export const useRuleStore = defineStore('rules', () => {
 
     // 发送后端
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (!checkResult(res, '添加用户规则')) {
-      toast.error(toUserMessage(res?.message, '添加用户规则失败。可能是规则内容无效或本地规则文件暂时无法写入，已尝试重新加载规则。'))
+    if (!checkResult(res, t('check.rules.add_user_rule', '添加用户规则'))) {
+      toast.error(toUserMessage(res?.message, t('errors.rules.add_user_rule_failed', '添加用户规则失败。可能是规则内容无效或本地规则文件暂时无法写入，已尝试重新加载规则。')))
       fetchRules() // 回滚
     } else {
       await refreshRuleState()
@@ -215,7 +215,7 @@ export const useRuleStore = defineStore('rules', () => {
         return
     }
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (!checkResult(res, '移除用户规则')) fetchRules()
+    if (!checkResult(res, t('check.rules.remove_user_rule', '移除用户规则'))) fetchRules()
     else await refreshRuleState()
   }
   // 修改单项规则说明
@@ -229,14 +229,14 @@ export const useRuleStore = defineStore('rules', () => {
     // 乐观更新
     userModRules.value[pid][type][other] = rule[type][other]
     const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (!checkResult(res, '更新用户规则说明')) fetchRules()
+    if (!checkResult(res, t('check.rules.update_comment', '更新用户规则说明'))) fetchRules()
     else await refreshRuleState()
   }
   // 删除用户单项规则
   const deleteUserModRule = async (id) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_delete_user_mod(id)
-    if (checkResult(res, '删除用户规则', true)) {
+    if (checkResult(res, t('check.rules.delete_user_rule', '删除用户规则'), true)) {
       await refreshRuleState()
     }
   }
@@ -306,7 +306,7 @@ export const useRuleStore = defineStore('rules', () => {
     else delete userModRules.value[pid]
 
     const res = await window.pywebview.api.rule_set_language_pack_owner_override(pid, normalizedOwnerIds, normalizedReplace)
-    if (!checkResult(res, '设置语言包所属覆盖')) {
+    if (!checkResult(res, t('check.rules.set_language_owner_override', '设置语言包所属覆盖'))) {
       if (Object.keys(previousRule).length > 0) userModRules.value[pid] = previousRule
       else delete userModRules.value[pid]
       fetchRules()
@@ -320,7 +320,7 @@ export const useRuleStore = defineStore('rules', () => {
   const setAbsolutePosition = async (modId, position, comment = '') => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_set_user_mod_absolute_position(modId, position, comment)
-    if (checkResult(res, '设置绝对排序位置')) {
+    if (checkResult(res, t('check.rules.set_absolute_position', '设置绝对排序位置'))) {
       await refreshRuleState()
     }
   }
@@ -329,7 +329,7 @@ export const useRuleStore = defineStore('rules', () => {
   const changeRuleSourcePriority = async (rules_sources) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.change_rule_source_priority(rules_sources)
-    if (checkResult(res, '改变规则优先级', true)) {
+    if (checkResult(res, t('check.rules.change_source_priority', '改变规则优先级'), true)) {
       await refreshRuleState()
       return true
     }
@@ -348,7 +348,7 @@ export const useRuleStore = defineStore('rules', () => {
     if (!window.pywebview) return
     settings.value[type[key]] = enabled
     const res = await window.pywebview.api.rule_global_enable(type[key], enabled)
-    if (!checkResult(res, '全局规则开关')) {
+    if (!checkResult(res, t('check.rules.global_switch', '全局规则开关'))) {
       fetchRules()
       return
     }
@@ -380,7 +380,7 @@ export const useRuleStore = defineStore('rules', () => {
       settings.value.excluded_workshop_mods = Array.from(excludedSet);
     }
     const res = await window.pywebview.api.rule_toggle_mod(rule_type, pid, excludedSet.has(pid))
-    if (!checkResult(res, '用户规则开关')) fetchRules()
+    if (!checkResult(res, t('check.rules.rule_switch', '用户规则开关'))) fetchRules()
     else await refreshRuleState()
   }
 
@@ -391,7 +391,7 @@ export const useRuleStore = defineStore('rules', () => {
     // 乐观更新 UI
     rule.enabled = !rule.enabled
     const res = await window.pywebview.api.rule_toggle_dynamic(rule.rule_id, rule.enabled)
-    if(!checkResult(res, '切换规则')) {
+    if(!checkResult(res, t('check.rules.toggle_rule', '切换规则'))) {
       fetchRules()
     } else {
       await refreshRuleState()
@@ -401,7 +401,7 @@ export const useRuleStore = defineStore('rules', () => {
   const saveDynamicRules = async (rule) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_update_dynamic(rule)
-    if (checkResult(res, '保存规则',true)) {
+    if (checkResult(res, t('check.rules.save_rule', '保存规则'), true)) {
       await refreshRuleState()
       return true
     }
@@ -410,7 +410,7 @@ export const useRuleStore = defineStore('rules', () => {
   const deleteDynamicRule = async (rule) => {
     if (!window.pywebview) return
     const res = await window.pywebview.api.rule_delete_dynamic(rule.rule_id)
-    if(checkResult(res, '删除规则', true)) {
+    if(checkResult(res, t('check.rules.delete_rule', '删除规则'), true)) {
       await refreshRuleState()
     }
   }
@@ -421,7 +421,7 @@ export const useRuleStore = defineStore('rules', () => {
     try {
         await appStore.updateExternalDB('community_rules')
     } catch (error) {
-        toast.error(toUserMessage(error?.message || error, '更新社区规则库失败。请检查网络连接、代理设置和本地文件写入权限，详细原因已写入系统日志。'))
+        toast.error(toUserMessage(error?.message || error, t('errors.rules.update_community_failed', '更新社区规则库失败。请检查网络连接、代理设置和本地文件写入权限，详细原因已写入系统日志。')))
     } finally {
       isLoading.value = false
     }
@@ -436,14 +436,14 @@ export const useRuleStore = defineStore('rules', () => {
   const handleExport = async () => {
     const ids = userDynamicRules.value.map(r => r.rule_id)
     const res = await window.pywebview.api.rule_export_bundle(ids)
-    if(!checkResult(res, '导出规则', true)) {
+    if(!checkResult(res, t('check.rules.export_bundle', '导出规则'), true)) {
       return
     }
   }
   // 导入规则
   const handleImport = async () => {
     const res = await window.pywebview.api.rule_import_bundle()
-    if(checkResult(res, '导入规则', true)) {
+    if(checkResult(res, t('check.rules.import_bundle', '导入规则'), true)) {
       if (res.data?.warnings?.length) {
         toast.warning(res.data.warnings.join('\n'), { timeout: 8000 })
       }

@@ -103,10 +103,12 @@ def apply_config_relocation(config: Any, old_home: str, new_home: str) -> AppRel
 
     config.home_path = result.new_home
     result.moved = True
+    # 避免 settings 初始化阶段通过 i18n 再反向导入 settings，触发循环依赖。
+    from backend.i18n.messages import tr
     if result.config_updates:
-        result.messages.append("检测到管理器目录已移动，已自动更新内部工具、规则库和管理器模组路径。")
+        result.messages.append(tr("startup.relocation.config_paths_updated", "检测到管理器目录已移动，已自动更新内部工具、规则库和管理器模组路径。"))
     else:
-        result.messages.append("检测到管理器目录已移动，正在同步内部数据库路径。")
+        result.messages.append(tr("startup.relocation.database_syncing", "检测到管理器目录已移动，正在同步内部数据库路径。"))
     return result
 
 
@@ -192,9 +194,14 @@ def apply_database_relocation(old_home: str, new_home: str) -> AppRelocationResu
 
     result.moved = bool(result.profile_updates or result.asset_updates)
     if result.moved:
-        result.messages.append(
-            f"已同步内部数据库路径：环境 {result.profile_updates} 项，模组记录 {result.asset_updates} 项。"
-        )
+        # 延迟导入，避免启动阶段的 settings -> relocation -> messages -> settings 环。
+        from backend.i18n.messages import tr
+        result.messages.append(tr(
+            "startup.relocation.database_paths_synced",
+            "已同步内部数据库路径：环境 {profile_count} 项，模组记录 {asset_count} 项。",
+            profile_count=result.profile_updates,
+            asset_count=result.asset_updates,
+        ))
     return result
 
 

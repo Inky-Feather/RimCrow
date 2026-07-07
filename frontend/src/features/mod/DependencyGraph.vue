@@ -41,6 +41,7 @@ import { useHoverStore } from '../../shared/components/popover/hoverStore'
 import DependencyGraphManagerPanel from './DependencyGraphManagerPanel.vue'
 import { useModStore } from './stores/modStore'
 import { CornerUpRight, Eye, EyeOff, Filter, FilterX, Focus, FolderTree, Settings2, Undo2 } from 'lucide-vue-next'
+import { t } from '../../shared/i18n'
 
 const props = defineProps({
   // 当前显示列表的 ID 数组（必须是有序的 modelValue）
@@ -173,7 +174,9 @@ const hiddenGroupItems = computed(() => {
         id: sourceId,
         name: modStore.displayModName(sourceId) || sourceId,
         color: currentGroup?.isError ? CONFIG.colorError : currentGroup?.color || hashSourceColor(sourceId),
-        childCountLabel: currentGroup ? `${currentGroup.childIndices.length}项` : '历史项',
+        childCountLabel: currentGroup
+          ? t('ui.dependency_graph.manager.child_count', '{count}项', { count: currentGroup.childIndices.length })
+          : t('ui.dependency_graph.manager.historical_item', '历史项'),
         inCurrentList: !!currentGroup,
       }
     })
@@ -184,10 +187,10 @@ const hiddenGroupItems = computed(() => {
 })
 
 const managerButtonTooltip = computed(() => {
-  let text = `依赖线：${currentVisibleCount.value} / ${currentEffectiveCount.value}`
-  if (hiddenSourceIds.value.length > 0) text += `\n已隐藏 ${hiddenSourceIds.value.length} 条依赖线`
-  if (focusSourceId.value) text += '\n当前仅绘制 1 条依赖线'
-  text += '\n\n__[[(点击打开依赖线管理面板)]]__'
+  let text = t('tooltip.dependency_graph.manager.summary', '依赖线：{visible} / {total}', { visible: currentVisibleCount.value, total: currentEffectiveCount.value })
+  if (hiddenSourceIds.value.length > 0) text += t('tooltip.dependency_graph.manager.hidden_count', '\n已隐藏 {count} 条依赖线', { count: hiddenSourceIds.value.length })
+  if (focusSourceId.value) text += t('tooltip.dependency_graph.manager.focus_only', '\n当前仅绘制 1 条依赖线')
+  text += t('tooltip.dependency_graph.manager.open_hint', '\n\n__[[(点击打开依赖线管理面板)]]__')
   return text
 })
 
@@ -437,8 +440,8 @@ const toggleHiddenSource = async (sourceId) => {
   await saveHiddenSourceIds(nextIds)
   toast.success(
     wasHidden
-      ? `已恢复依赖线：${modStore.displayModName(normalizedId) || normalizedId}`
-      : `已隐藏依赖线：${modStore.displayModName(normalizedId) || normalizedId}`,
+      ? t('toast.dependency_graph.restored_line', '已恢复依赖线：{name}', { name: modStore.displayModName(normalizedId) || normalizedId })
+      : t('toast.dependency_graph.hidden_line', '已隐藏依赖线：{name}', { name: modStore.displayModName(normalizedId) || normalizedId }),
     { timeout: 2000 }
   )
 }
@@ -446,7 +449,7 @@ const toggleHiddenSource = async (sourceId) => {
 const restoreAllHiddenSources = async () => {
   if (hiddenSourceIds.value.length === 0) return
   await saveHiddenSourceIds([])
-  toast.success('已恢复全部隐藏依赖线', { timeout: 2000 })
+  toast.success(t('toast.dependency_graph.restored_all', '已恢复全部隐藏依赖线'), { timeout: 2000 })
 }
 
 const jumpToSourceMod = async (group) => {
@@ -486,11 +489,15 @@ const handleMouseMove = (event) => {
     if (canvasRef.value) canvasRef.value.style.cursor = 'pointer'
     if (hoveredGroupId.value !== group.id) {
       hoveredGroupId.value = group.id
-      let content = `{{${group.color}|依赖源:}} ${modStore.displayModName(group.parentId)}\n包含 ${group.childIndices.length} 个子模组`
+      let content = t('tooltip.dependency_graph.line.summary', '{{{color}|依赖源:}} {name}\n包含 {count} 个子模组', {
+        color: group.color,
+        name: modStore.displayModName(group.parentId),
+        count: group.childIndices.length,
+      })
       if (group.isError) {
-        content += '\n!!(⚠ 依赖源后置，依赖源应在所有需求模组前加载)!!'
+        content += t('tooltip.dependency_graph.line.source_after_warning', '\n!!(⚠ 依赖源后置，依赖源应在所有需求模组前加载)!!')
       }
-      content += '\n\n__[[(左键可筛选该依赖线，右键可隐藏或查看更多操作)]]__'
+      content += t('tooltip.dependency_graph.line.action_hint', '\n\n__[[(左键可筛选该依赖线，右键可隐藏或查看更多操作)]]__')
       hoverStore.show(content, event)
       return
     }
@@ -512,34 +519,34 @@ const openLineContextMenu = (event, group) => {
 
   contextMenuStore.open(event, [
     {
-      label: '隐藏该依赖线',
+      label: t('menu.dependency_graph.hide_line', '隐藏该依赖线'),
       icon: EyeOff,
-      tooltip: '按依赖源模组全局隐藏这组依赖线。',
+      tooltip: t('menu.dependency_graph.hide_line_tooltip', '按依赖源模组全局隐藏这组依赖线。'),
       action: () => toggleHiddenSource(group.id),
     },
     {
-      label: '跳转到源头模组',
+      label: t('menu.dependency_graph.jump_to_source', '跳转到源头模组'),
       icon: CornerUpRight,
-      tooltip: '滚动并定位到当前依赖线的源头模组。',
+      tooltip: t('menu.dependency_graph.jump_to_source_tooltip', '滚动并定位到当前依赖线的源头模组。'),
       action: () => jumpToSourceMod(group),
     },
     {
-      label: lineFilterActive ? '取消筛选该依赖线' : '筛选该依赖线',
+      label: lineFilterActive ? t('menu.dependency_graph.clear_line_filter', '取消筛选该依赖线') : t('menu.dependency_graph.filter_line', '筛选该依赖线'),
       icon: lineFilterActive ? FilterX : Filter,
-      tooltip: lineFilterActive ? '清除当前依赖线筛选。' : '只在列表中显示这组依赖线相关模组。',
+      tooltip: lineFilterActive ? t('menu.dependency_graph.clear_line_filter_tooltip', '清除当前依赖线筛选。') : t('menu.dependency_graph.filter_line_tooltip', '只在列表中显示这组依赖线相关模组。'),
       action: () => emit('lineClick', lineFilterActive ? [] : linePayload),
     },
     {
-      label: onlyThisLine ? '显示全部线' : '仅显示该依赖线',
+      label: onlyThisLine ? t('menu.dependency_graph.show_all_lines', '显示全部线') : t('menu.dependency_graph.focus_line', '仅显示该依赖线'),
       icon: onlyThisLine ? Eye : Focus,
-      tooltip: onlyThisLine ? '恢复绘制全部未隐藏依赖线。' : '临时只绘制这组依赖线，不影响列表内容。',
+      tooltip: onlyThisLine ? t('menu.dependency_graph.show_all_lines_tooltip', '恢复绘制全部未隐藏依赖线。') : t('menu.dependency_graph.focus_line_tooltip', '临时只绘制这组依赖线，不影响列表内容。'),
       action: () => { focusSourceId.value = onlyThisLine ? '' : group.id },
     },
     { divider: true },
     {
-      label: '管理依赖线',
+      label: t('menu.dependency_graph.manage_lines', '管理依赖线'),
       icon: Settings2,
-      tooltip: '打开依赖线管理面板，查看当前依赖线与已隐藏历史项。',
+      tooltip: t('menu.dependency_graph.manage_lines_tooltip', '打开依赖线管理面板，查看当前依赖线与已隐藏历史项。'),
       action: () => {
         isManagerOpen.value = true
         updateManagerPanelPosition()
@@ -554,26 +561,26 @@ const openLineContextMenu = (event, group) => {
 const openCanvasContextMenu = (event) => {
   contextMenuStore.open(event, [
     {
-      label: '管理依赖线',
+      label: t('menu.dependency_graph.manage_lines', '管理依赖线'),
       icon: Settings2,
-      tooltip: '打开依赖线管理面板。',
+      tooltip: t('menu.dependency_graph.manage_lines_simple_tooltip', '打开依赖线管理面板。'),
       action: () => {
         isManagerOpen.value = true
         updateManagerPanelPosition()
       },
     },
     {
-      label: '显示全部线',
+      label: t('menu.dependency_graph.show_all_lines', '显示全部线'),
       icon: Eye,
       hidden: !focusSourceId.value,
-      tooltip: '清除“仅显示该依赖线”状态，恢复绘制全部未隐藏依赖线。',
+      tooltip: t('menu.dependency_graph.show_all_lines_from_canvas_tooltip', '清除“仅显示该依赖线”状态，恢复绘制全部未隐藏依赖线。'),
       action: clearFocusSource,
     },
     {
-      label: '恢复全部隐藏依赖线',
+      label: t('menu.dependency_graph.restore_all_hidden', '恢复全部隐藏依赖线'),
       icon: Undo2,
       hidden: hiddenSourceIds.value.length === 0,
-      tooltip: '一次恢复当前已隐藏的全部依赖线。',
+      tooltip: t('menu.dependency_graph.restore_all_hidden_tooltip', '一次恢复当前已隐藏的全部依赖线。'),
       action: restoreAllHiddenSources,
     },
   ], { type: 'dependency-canvas' })

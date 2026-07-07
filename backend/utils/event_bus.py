@@ -106,22 +106,36 @@ class EventBus:
     def send_toast(cls, message: str, type: str = 'info', duration: int = 3000):
         """快捷发送 Toast"""
         print(f"[EventBus] send_toast: {message}")
-        cls.emit('backend-popup', {
+        payload = {
             'mode': 'toast',
-            'message': message,
+            'message': str(message or ""),
             'type': type,
             'duration': duration
-        })
+        }
+        key = localized_key(message)
+        params = localized_params(message)
+        if key:
+            payload["message_key"] = key
+        if params:
+            payload["message_params"] = params
+        cls.emit('backend-popup', payload)
 
     @classmethod
     def send_alert(cls, title: str, message: str, type: str = 'info'):
         """快捷发送 Modal/Alert"""
-        cls.emit('backend-popup', {
+        payload = {
             'mode': 'modal',
             'title': title,
-            'message': message,
+            'message': str(message or ""),
             'type': type
-        })
+        }
+        message_key = localized_key(message)
+        message_params = localized_params(message)
+        if message_key:
+            payload["message_key"] = message_key
+        if message_params:
+            payload["message_params"] = message_params
+        cls.emit('backend-popup', payload)
 
     @staticmethod
     def _normalize_progress_status(status: str) -> str:

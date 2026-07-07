@@ -134,7 +134,10 @@ const targetLanguageOptions = computed(() => (
 const providerBaseOptions = computed(() => {
   const options = props.providerOptions.length
     ? props.providerOptions
-    : appStore.translationProviders.map(item => ({ label: item.label || item.id, value: item.id }))
+    : appStore.translationProviders.map(item => ({
+      label: item.label_key ? t(item.label_key, item.default_label || item.label || item.id) : (item.label || item.id),
+      value: item.id,
+    }))
   return options.length ? options : [{ label: t('ui.translation.provider.ai_default', 'AI 翻译'), value: 'ai.default' }]
 })
 const providerSelectOptions = computed(() => (

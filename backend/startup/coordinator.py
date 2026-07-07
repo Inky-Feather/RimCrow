@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING, Callable
 
+from backend.i18n.messages import tr
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
 
@@ -63,14 +64,15 @@ class StartupCoordinator:
                 self.dlc_cache_warmup()
         except Exception as exc:
             logger.error(f"启动后台预热失败: {exc}", exc_info=True)
-            startup_messages.append("后台数据缓存加载失败，主界面已继续打开；依赖、替代或 DLC 文本可能暂时不完整。")
+            startup_messages.append(tr("startup.warmup.background_cache_failed", "后台数据缓存加载失败，主界面已继续打开；依赖、替代或 DLC 文本可能暂时不完整。"))
         finally:
             if not startup_messages:
                 return
             if self.append_messages and any("失败" in item for item in startup_messages):
                 # 只有失败需要写入启动上下文；成功保持静默，避免启动后重复打扰用户。
                 self.append_messages(startup_messages)
+            toast_message = startup_messages[0] if len(startup_messages) == 1 else "\n".join(startup_messages)
             EventBus.send_toast(
-                "\n".join(startup_messages),
+                toast_message,
                 type="warning" if any("失败" in item for item in startup_messages) else "info",
             )

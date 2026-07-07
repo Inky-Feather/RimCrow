@@ -15,6 +15,7 @@ from backend.managers.mgr_github import (
     GithubInstallRequest,
     GithubManager,
 )
+from backend.i18n.messages import tr
 from backend.settings import TOOLS_DIR, settings
 
 
@@ -176,20 +177,25 @@ def get_ripgrep_status(raw_path: str | None = None, *, strict: bool = False) -> 
             available=False,
             resolved_path="",
             current_version="",
-            message="未找到 ripgrep，可在外部工具检查中下载安装。",
+            message=tr("text_search.ripgrep.status_missing", "未找到 ripgrep，可在外部工具检查中下载安装。"),
         )
 
+    found_message = (
+        tr("text_search.ripgrep.status_found_with_version", "已找到 ripgrep v{version}", version=version)
+        if version
+        else tr("text_search.ripgrep.status_found", "已找到 ripgrep")
+    )
     return RipgrepStatus(
         available=True,
         resolved_path=str(executable),
         current_version=version,
-        message=f"已找到 ripgrep{f' v{version}' if version else ''}",
+        message=found_message,
     )
 
 
 def prepare_ripgrep_download(download_mgr, raw_path: str | None = None, *, force: bool = False) -> dict[str, bool]:
     if platform.system() != "Windows":
-        raise RuntimeError("当前自动下载 ripgrep 仅支持 Windows 平台。")
+        raise RuntimeError(tr("text_search.ripgrep.download_windows_only", "当前自动下载 ripgrep 仅支持 Windows 平台。"))
 
     status = get_ripgrep_status(raw_path)
     # 普通安装只补缺失；维护检查判定为 outdated 时会传 force=True，复用同一套下载/覆盖流程升级。
@@ -218,10 +224,10 @@ def prepare_ripgrep_download(download_mgr, raw_path: str | None = None, *, force
                 overwrite_existing=True,
                 cleanup_archive=True,
             ),
-            download_start_message="开始下载 ripgrep 工具包",
-            install_start_message="ripgrep 工具包获取成功，正在解压...",
-            success_toast=f"ripgrep 下载完成: {install_dir}",
-            failure_toast="ripgrep 下载失败",
+            download_start_message=tr("text_search.ripgrep.download_start", "开始下载 ripgrep 工具包"),
+            install_start_message=tr("text_search.ripgrep.install_start", "ripgrep 工具包获取成功，正在解压..."),
+            success_toast=tr("text_search.ripgrep.download_done", "ripgrep 下载完成: {install_dir}", install_dir=str(install_dir)),
+            failure_toast=tr("text_search.ripgrep.download_failed", "ripgrep 下载失败"),
         ),
     )
     return {"already_ready": False}

@@ -6,6 +6,7 @@ import uuid
 from typing import Any
 
 from backend.settings import settings
+from backend.i18n.messages import tr
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
 
@@ -47,9 +48,12 @@ class FileSearchManager:
             "file-search",
             status="pending",
             progress=0,
-            message="搜索任务已加入后台队列" if superseded_count == 0 else f"搜索任务已加入后台队列，正在替换 {superseded_count} 个旧任务",
+            message=(
+                tr("tasks.file_search.queued", "搜索任务已加入后台队列")
+                if superseded_count == 0
+                else tr("tasks.file_search.queued_replacing", "搜索任务已加入后台队列，正在替换 {count} 个旧任务", count=superseded_count)
+            ),
             metrics={
-                "title": "文件内容搜索",
                 "query": request.query,
                 "scope": request.scope,
                 "superseded_count": superseded_count,
@@ -76,7 +80,7 @@ class FileSearchManager:
         try:
             context = self.api.active_context
             if not context:
-                raise ValueError("当前环境未激活，无法执行搜索")
+                raise ValueError(tr("tasks.file_search.no_active_profile", "当前环境未激活，无法执行搜索"))
             EventBus.emit_progress(
                 task_id,
                 "file-search",
@@ -84,7 +88,6 @@ class FileSearchManager:
                 progress=1,
                 message=self._prepare_stage_message(request),
                 metrics={
-                    "title": "文件内容搜索",
                     "query": request.query,
                     "scope": request.scope,
                     "stage": "prepare",
@@ -120,9 +123,8 @@ class FileSearchManager:
                     "file-search",
                     status="cancelled",
                     progress=0,
-                    message="搜索任务已被新的搜索请求替换",
+                    message=tr("tasks.file_search.replaced", "搜索任务已被新的搜索请求替换"),
                     metrics={
-                        "title": "文件内容搜索",
                         "query": request.query,
                         "scope": request.scope,
                     },
@@ -135,9 +137,8 @@ class FileSearchManager:
                 "file-search",
                 status="running",
                 progress=self.SCAN_STAGE_START_PROGRESS,
-                message=f"已锁定 {total_roots} 个{self._root_unit_label(request)}，正在使用 {backend.backend_label} 扫描",
+                message=tr("tasks.file_search.scan_started", "已锁定 {count} 个{unit}，正在使用 {backend} 扫描", count=total_roots, unit=self._root_unit_label(request), backend=backend.backend_label),
                 metrics={
-                    "title": "文件内容搜索",
                     "query": request.query,
                     "scope": request.scope,
                     "mod_count": len(mods),
@@ -185,9 +186,8 @@ class FileSearchManager:
                     "file-search",
                     status="cancelled",
                     progress=min(99, int(progress_state["processed"] * 100 / max(total_roots, 1))),
-                    message="搜索任务已取消",
+                    message=tr("tasks.file_search.cancelled", "搜索任务已取消"),
                     metrics={
-                        "title": "文件内容搜索",
                         "query": request.query,
                         "scope": request.scope,
                         "matched_count": matched_count,
@@ -203,9 +203,8 @@ class FileSearchManager:
                 "file-search",
                 status="success",
                 progress=100,
-                message=f"搜索完成，共命中 {matched_count} 条结果",
+                message=tr("tasks.file_search.finished", "搜索完成，共命中 {count} 条结果", count=matched_count),
                 metrics={
-                    "title": "文件内容搜索",
                     "query": request.query,
                     "scope": request.scope,
                     "matched_count": matched_count,
@@ -223,9 +222,8 @@ class FileSearchManager:
                 "file-search",
                 status="cancelled",
                 progress=max(0, int(progress_state.get("current_progress", 0) or 0)),
-                message=f"搜索任务已在{self._build_stage_label(request)}阶段取消",
+                message=tr("tasks.file_search.cancelled_in_stage", "搜索任务已在{stage}阶段取消", stage=self._build_stage_label(request)),
                 metrics={
-                    "title": "文件内容搜索",
                     "query": request.query,
                     "scope": request.scope,
                     "stage": "build-roots",
@@ -239,9 +237,8 @@ class FileSearchManager:
                 "file-search",
                 status="failed",
                 progress=0,
-                message=f"搜索失败: {exc}",
+                message=tr("tasks.file_search.failed_with_reason", "搜索失败: {reason}", reason=exc),
                 metrics={
-                    "title": "文件内容搜索",
                     "query": request.query,
                     "scope": request.scope,
                     "error": str(exc),
@@ -277,9 +274,8 @@ class FileSearchManager:
             "file-search",
             status="running",
             progress=progress,
-            message=f"已扫描 {processed}/{total} 个{self._root_unit_label(request)}",
+            message=tr("tasks.file_search.scanned_count", "已扫描 {processed}/{total} 个{unit}", processed=processed, total=total, unit=self._root_unit_label(request)),
             metrics={
-                "title": "文件内容搜索",
                 "query": request.query,
                 "scope": request.scope,
                 "matched_count": matched_count,
@@ -311,9 +307,8 @@ class FileSearchManager:
             "file-search",
             status="running",
             progress=progress,
-            message=f"正在整理{self._build_stage_label(request)} {processed_mods}/{total_mods}: {mod_name}",
+            message=tr("tasks.file_search.building_roots", "正在整理{stage} {processed}/{total}: {name}", stage=self._build_stage_label(request), processed=processed_mods, total=total_mods, name=mod_name),
             metrics={
-                "title": "文件内容搜索",
                 "query": request.query,
                 "scope": request.scope,
                 "processed_mods": processed_mods,
@@ -366,12 +361,12 @@ class FileSearchManager:
 
     @staticmethod
     def _root_unit_label(request: SearchRequest) -> str:
-        return "有效搜索根" if request.effective_only else "模组目录"
+        return tr("tasks.file_search.unit.effective_root", "有效搜索根") if request.effective_only else tr("tasks.file_search.unit.mod_dir", "模组目录")
 
     @staticmethod
     def _build_stage_label(request: SearchRequest) -> str:
-        return "有效搜索根" if request.effective_only else "搜索模组目录"
+        return tr("tasks.file_search.stage.effective_roots", "有效搜索根") if request.effective_only else tr("tasks.file_search.stage.mod_dirs", "搜索模组目录")
 
     def _prepare_stage_message(self, request: SearchRequest) -> str:
-        if request.effective_only: return "正在准备有效搜索根与缓存签名"
-        return "正在准备搜索模组目录"
+        if request.effective_only: return tr("tasks.file_search.preparing_effective_roots", "正在准备有效搜索根与缓存签名")
+        return tr("tasks.file_search.preparing_mod_dirs", "正在准备搜索模组目录")

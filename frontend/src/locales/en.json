@@ -2040,7 +2040,11 @@
         "visit_workshop": "Open Workshop"
       },
       "current_mod": "current mod",
-      "name": "Mod"
+      "name": "Mod",
+      "missing": {
+        "description": "This mod was not found locally. It may not be downloaded, or it may have been deleted manually.",
+        "name_with_id": "⚠ Unknown mod ({id})"
+      }
     },
     "update": {
       "available_desc": "An update is available.",
@@ -2069,6 +2073,62 @@
       "current": "Current environment",
       "no_game_dir": "No game directory bound",
       "unnamed": "Unnamed environment"
+    },
+    "dependency_graph": {
+      "manager": {
+        "child_count": "{count} items",
+        "close": "Close dependency-line manager",
+        "focus_hint": "Currently drawing only 1 line. Right-click the graph area to restore all.",
+        "hidden_empty": "No hidden dependency lines match the search.",
+        "hidden_tip": "Click any hidden item to restore it immediately.",
+        "historical_hidden_item": "Previously hidden item",
+        "historical_item": "History item",
+        "restore_all": "Restore all",
+        "search_placeholder": "Search dependency source name or package ID",
+        "summary": "{visible} visible, {hidden} hidden.",
+        "tab_hidden": "Hidden",
+        "tab_visible": "Visible",
+        "title": "Dependency-Line Manager",
+        "visible_empty": "No visible dependency lines match the search.",
+        "visible_tip": "Click any visible item to hide that dependency line."
+      }
+    },
+    "group": {
+      "default_name": "New Group"
+    },
+    "texture_opt": {
+      "card": {
+        "combined_share": "Combined size share",
+        "exclude_mod_label": "Exclude mod",
+        "excluded_label": "Excluded",
+        "existing_dds_count": "Existing DDS {count}",
+        "image_count": "{count} images",
+        "invalid_png_count": "Invalid PNG {count}",
+        "mod_texture_actions": "Mod texture actions",
+        "open_mod_path": "Open mod folder",
+        "pending_generate_count": "Pending {count}",
+        "scale": {
+          "fallback_text": "Fallback {label} ({count})",
+          "fallback_tooltip": "These images are not suitable for the current scale and will fall back to {label}.",
+          "keep_text": "No scale ({count})",
+          "keep_tooltip": "These images will keep their original size.",
+          "original_size": "Original size",
+          "scaled_text": "Current {label} ({count})",
+          "scaled_tooltip": "These images will be generated at {label}."
+        },
+        "unsupported_no_preview": "Some files are named PNG but are not valid images, so they were skipped automatically.",
+        "unsupported_preview_title": "The following disguised PNG files were skipped automatically:",
+        "vram_estimate": "VRAM estimate"
+      },
+      "scale": {
+        "original_size": "Original size"
+      }
+    },
+    "file_search": {
+      "preview": {
+        "loading": "Reading file...",
+        "empty": "Select a file or match on the left to preview read-only file contents here."
+      }
     }
   },
   "tooltip": {
@@ -2474,6 +2534,19 @@
       "supported_versions": "Supported versions: {value}",
       "visit_copy_page": "Visit this copy's page",
       "workshop_id": "Workshop ID: {value}"
+    },
+    "dependency_graph": {
+      "line": {
+        "action_hint": "\n\n__[[(Left-click to filter this dependency line; right-click to hide it or show more actions.)]]__",
+        "source_after_warning": "\n!!(⚠ Dependency source is after its target; it should load before all required mods.)!!",
+        "summary": "{{{color}|Dependency source:}} {name}\nContains {count} child mods"
+      },
+      "manager": {
+        "focus_only": "\nCurrently drawing only 1 dependency line",
+        "hidden_count": "\n{count} dependency lines hidden",
+        "open_hint": "\n\n__[[(Click to open the dependency-line manager)]]__",
+        "summary": "Dependency lines: {visible} / {total}"
+      }
     }
   },
   "toast": {
@@ -2592,6 +2665,10 @@
       "share_code_empty": "Share code cannot be empty",
       "share_code_failed": "Failed to generate the share code. Check whether the current actived list is valid, or try again later. Details were written to the system log.",
       "share_code_imported": "Share code imported"
+    },
+    "mod_residue": {
+      "whitelist_added": "Added to whitelist. Future scans will skip it.",
+      "whitelist_removed": "Removed from whitelist. Future scans will show it again."
     },
     "group_item": {
       "rename_duplicate": "Group name already exists. Added suffix {index}"
@@ -2731,6 +2808,76 @@
       "resolve_failed": "Conflict handling failed. The target file may be in use, permissions may be insufficient, or the list state may have changed. Rescan and try again.",
       "resolved_partial": "Processed {successCount} items, {errorCount} failed. Remaining issues will be shown again after the rescan.",
       "resolved_success": "Processed {count} conflict copies. Rescanning now."
+    },
+    "dependency_graph": {
+      "hidden_line": "Dependency line hidden: {name}",
+      "restored_all": "All hidden dependency lines restored",
+      "restored_line": "Dependency line restored: {name}"
+    },
+    "group": {
+      "add_mods_failed": "Failed to add mods to the group. The list state has been restored. Try again later. Details were written to the system log.",
+      "content_reorder_failed": "Failed to save group content order. The list state has been restored. Try again later. Details were written to the system log.",
+      "create_failed": "Failed to create group. The list state has been restored. Try again later. Details were written to the system log.",
+      "delete_failed": "Failed to delete group. The list state has been restored. Try again later. Details were written to the system log.",
+      "expansion_failed": "Failed to save group expansion states. The list state has been restored. Try again later.",
+      "get_failed": "Failed to load groups. The database or current environment may be temporarily unavailable. Try again later.",
+      "remove_mods_failed": "Failed to remove mods from the group. The list state has been restored. Try again later. Details were written to the system log.",
+      "reorder_failed": "Failed to save group order. The list state has been restored. Try again later. Details were written to the system log.",
+      "update_failed": "Failed to update group. The list state has been restored. Try again later. Details were written to the system log."
+    },
+    "image": {
+      "copied": "Image copied",
+      "copy_failed": "Failed to copy image. Check browser clipboard permission, or use Save As instead.",
+      "copy_url_failed": "Failed to copy image URL. Check browser clipboard permission, or copy the address manually.",
+      "save_as_failed": "Failed to save image. Check target folder permission, disk space, or whether the current runtime supports saving files.",
+      "url_copied": "Image URL copied"
+    },
+    "mod": {
+      "auto_sort_done": "Auto-sort completed",
+      "auto_sort_failed": "Auto-sort failed. Rule data, missing-item handling, or the backend sorter may be temporarily unavailable. Details were written to the system log.",
+      "auto_sort_rule_warning_intro": "Check whether the following mod rules are correct:\n",
+      "auto_sort_rule_warning_item": "{mod} may have a problem in its {type} rule: ({target})\n",
+      "batch_add_tags_failed": "Failed to batch add tags. Local state has been restored. Try again later.",
+      "batch_force_deleted": "Permanently deleted {count} mods",
+      "batch_moved_to_trash": "Moved {count} mods to Trash",
+      "batch_remove_tags_failed": "Failed to batch remove tags. Local state has been restored. Try again later.",
+      "batch_set_color_failed": "Failed to batch set color. Local state has been restored. Try again later.",
+      "batch_set_type_failed": "Failed to batch set type. Local state has been restored. Try again later.",
+      "batch_update_data_failed": "Failed to batch update mod data. Local state has been restored. Try again later. Details were written to the system log.",
+      "failed_suffix": ", {count} failed",
+      "link_failed": "Failed to link mods. Try again later. Details were written to the system log.",
+      "localize_no_workshop_items": "No selected mods come from Workshop",
+      "scan_already_running": "A scan task is already running. Wait for the current scan to finish.",
+      "scan_cancelled": "Scan cancelled",
+      "scan_conflicts_found": "Scan completed. Found {count} duplicate package-ID conflicts that need review.{extra}",
+      "scan_done": "Scan completed. Scanned {total} mods: {added} added, {updated} updated, {removed} removed, {skipped} known.{extra}",
+      "scan_done_with_restore_warning": "Scan completed. Scanned {total} mods: {added} added, {updated} updated, {removed} removed, {skipped} known.\n{extra}",
+      "scan_external_enabled_count": "{count} externally re-enabled",
+      "scan_failed": "Scan failed. Path permission, file locking, or scanner state may be unavailable. Details were written to the system log.",
+      "scan_request_failed": "Scan request failed. The backend may be temporarily unavailable or the current environment paths may be invalid. Details were written to the system log.",
+      "scan_start_failed": "Failed to start scan. The current environment path may be invalid, the scanner may not be initialized, or background tasks may be temporarily unavailable. Details were written to the system log.",
+      "scan_strict_restore_failed_count": "{count} restore failed",
+      "scan_strict_restored_count": "{count} re-disabled",
+      "update_time_failed": "Failed to update mod operation time. Mod data is being resynced. Details were written to the system log.",
+      "update_user_data_failed": "Failed to update mod user data. Local state has been restored. Try again later. Details were written to the system log."
+    },
+    "mod_issues": {
+      "batch_ignore_failed": "Failed to batch update issue ignore state. The local list state has been restored. Try again later.",
+      "ignored_count": "Ignored {count} issues",
+      "restored_count": "Restored {count} warnings"
+    },
+    "package_transfer": {
+      "export_complete": "{title} complete",
+      "mod_import_running": "A mod package import task is already running"
+    },
+    "path": {
+      "batch_delete_warning": "{label} completed, but some items need confirmation",
+      "batch_force_deleted": "Permanently deleted {count} files/folders",
+      "batch_moved_to_trash": "Moved {count} files/folders to Trash",
+      "force_deleted": "Permanently deleted:\n{path}",
+      "moved_to_trash": "Moved to Trash:\n{path}",
+      "no_openable_url": "No openable URL. Make sure the current item contains a valid link.",
+      "updated": "Path updated"
     }
   },
   "dialog": {
@@ -3546,7 +3693,19 @@
       },
       "unknown_size_change": "Unable to estimate size change",
       "unpacked_size": "Estimated unpacked size",
-      "use_self_mods": "Use manager mods"
+      "use_self_mods": "Use manager mods",
+      "data_export": {
+        "complete_title": "App Data Export"
+      },
+      "export_complete": {
+        "message": "Export path: {path}",
+        "title": "{title} Complete"
+      },
+      "mod_export": {
+        "description": "Optionally include dependencies, linked mods, and language packs.",
+        "selected_summary": "{count} mods selected.",
+        "title": "Export Mods"
+      }
     },
     "texture_opt": {
       "add_file_exclusion": "Add file to exclusions",
@@ -3835,6 +3994,40 @@
       "supported_version": "Supports {version}",
       "title": "Handle Duplicate Mods",
       "workshop_delete_warning": "After deleting Workshop copies, Steam may download them again later."
+    },
+    "mod": {
+      "delete": {
+        "message": "Delete these {count} mods?",
+        "title": "Confirm Delete"
+      },
+      "disable": {
+        "message": "Deactivate {target}?\nAfter deactivation, it will not be available in game. You can activate it again from the Deactivated list.",
+        "selected_count": "the selected {count} mods",
+        "this_mod": "this mod",
+        "title": "Confirm Deactivation"
+      },
+      "localize": {
+        "create_message": "Localize the selected {total} {store} mods as separate local copies?\nLocalized copies use additional disk space. Future {store} updates will not automatically change these local copies.",
+        "create_title": "Localize as Separate Local Mods",
+        "sync_and_create_message": "Among the selected {total} {store} mods, {createCount} will be localized as separate local copies, and {existingCount} existing local copies will be synced.",
+        "sync_and_create_title": "Localize / Sync Local Copies",
+        "sync_message": "The selected {total} {store} mods already have local copies.\nContinuing will sync the current {store} files into those local copies.",
+        "sync_title": "Sync Local Copies"
+      }
+    },
+    "mod_store": {
+      "undo": {
+        "title": "Undo List Change"
+      }
+    },
+    "path": {
+      "delete": {
+        "message": "Delete {path}?",
+        "title": "Confirm Delete"
+      },
+      "delete_batch": {
+        "message": "Delete these {count} files/folders?"
+      }
     }
   },
   "api": {
@@ -3900,6 +4093,13 @@
     },
     "warnings": {
       "partial_success": "The operation completed, but some items need attention."
+    },
+    "work": {
+      "mod_residue": {
+        "add_whitelist": "Add to whitelist",
+        "load_overview": "Read uninstalled residue list",
+        "remove_whitelist": "Remove from whitelist"
+      }
     },
     "common": {
       "cancelled": "Cancelled",
@@ -4332,6 +4532,7 @@
       "tags_remove_failed": "Failed to remove mod tags. The previous state was kept. Please try again later.",
       "time_update_failed": "Failed to update the mod last operation time. Check the database state and try again. Details were written to the system log.",
       "type_update_failed": "Failed to set the mod type. The previous state was kept. Please try again later.",
+      "user_data_update_failed": "Failed to update mod user data. Refresh the list and try again later. Details were written to the system log.",
       "user_data_batch_update_failed": "Failed to update mod user data in batch. Refresh the list and try again later. Details were written to the system log."
     },
     "backup": {
@@ -4390,7 +4591,16 @@
       "folder_select_failed": "Failed to choose the folder. Try again later. Details were written to the system log."
     },
     "image": {
-      "save_as_failed": "Failed to save the image. Check target folder permissions, disk space, or whether the file name is valid."
+      "save_as_failed": "Failed to save the image. Check target folder permissions, disk space, or whether the file name is valid.",
+      "clipboard_image_unsupported": "This environment does not support copying images to the clipboard.",
+      "convert_failed": "Failed to convert image format.",
+      "copy_url_missing": "No image URL is available to copy.",
+      "decode_failed": "Failed to decode the image.",
+      "empty_content": "Image content is empty.",
+      "read_content_failed": "Failed to read image content.",
+      "read_failed_status": "Failed to read image: {status}",
+      "save_as_unsupported": "This environment does not support saving images as files.",
+      "url_missing": "No image URL was found."
     },
     "path": {
       "batch_check_failed": "Failed to check paths in batch. Make sure paths exist, permissions allow access, then try again later.",
@@ -4455,6 +4665,14 @@
     },
     "uri": {
       "open_failed": "Failed to open the current link through the system. Make sure system protocol association works, or try again later."
+    },
+    "clipboard": {
+      "text_unsupported": "This environment does not support copying text to the clipboard."
+    },
+    "rules": {
+      "add_user_rule_failed": "Failed to add the user rule. The rule content may be invalid or the local rule file may be temporarily unwritable. Rules have been reloaded.",
+      "fetch_failed_retry": "Failed to fetch rules. Try again later. Details have been written to the system log.",
+      "update_community_failed": "Failed to update the community rule database. Check the network connection, proxy settings, and local file permissions. Details have been written to the system log."
     }
   },
   "maintenance": {
@@ -4533,7 +4751,8 @@
       "processing": "Processing...",
       "scan_complete": "Scan complete",
       "scan_interrupted_by_suspend": "Scan was interrupted because the interface was suspended. Refresh again.",
-      "texture_task": "Texture task"
+      "texture_task": "Texture task",
+      "queued": "Task has been queued"
     },
     "phase": {
       "cancelling": "Cancelling",
@@ -4592,13 +4811,58 @@
     },
     "file_search": {
       "no_task_id": "Backend did not return a task ID",
-      "queued": "Task queued in background",
+      "queued": "Search task has been queued",
       "ready": "Ready to search",
       "start_failed_short": "Failed to start",
-      "submitted": "Search task submitted"
+      "submitted": "Search task submitted",
+      "queued_replacing": "Search task has been queued and is replacing {count} old tasks",
+      "no_active_profile": "No active profile. Search cannot run.",
+      "replaced": "Search task was replaced by a newer search request",
+      "scan_started": "Locked {count} {unit}; scanning with {backend}",
+      "cancelled": "Search task cancelled",
+      "finished": "Search completed with {count} matches",
+      "cancelled_in_stage": "Search task was cancelled during {stage}",
+      "failed_with_reason": "Search failed: {reason}",
+      "scanned_count": "Scanned {processed}/{total} {unit}",
+      "building_roots": "Preparing {stage} {processed}/{total}: {name}",
+      "unit": {
+        "effective_root": "effective roots",
+        "mod_dir": "mod folders"
+      },
+      "stage": {
+        "effective_roots": "effective roots",
+        "mod_dirs": "mod folders"
+      },
+      "preparing_effective_roots": "Preparing effective roots and cache signature",
+      "preparing_mod_dirs": "Preparing mod folders"
     },
     "status": {
       "execution_failed": "Task execution failed"
+    },
+    "mod_package": {
+      "export_preparing": "Preparing mod package export...",
+      "export_title": "Export Mod Package",
+      "import_preparing": "Preparing mod package import...",
+      "import_title": "Import Mod Package"
+    },
+    "scan": {
+      "title": "Mod Scan",
+      "already_running": "A scan is already running",
+      "prepare_task": "Preparing scan task...",
+      "preparing": "Preparing scan...",
+      "no_valid_paths": "No valid paths",
+      "reading_game_info": "Reading base game information...",
+      "indexing_files": "Indexing files...",
+      "analyzing_mod": "Analyzing: {name}",
+      "processing_conflicts_runtime": "Processing conflicts and runtime links...",
+      "finished": "Scan completed",
+      "failed_with_reason": "Scan failed: {reason}",
+      "cancelled": "Scan cancelled by user",
+      "cancelled_no_changes": "Scan was cancelled by the user. No database changes were made."
+    },
+    "error": {
+      "not_completed": "Task did not complete successfully. Check your network connection, file permissions, or try again later. Details were written to the system log.",
+      "timeout": "Task timed out"
     }
   },
   "logs": {},
@@ -5106,7 +5370,10 @@
       "context": "Context",
       "log_summary": "{source} summary",
       "log": "log",
-      "selected_logs": "{count} selected {source}"
+      "selected_logs": "{count} selected {source}",
+      "mod_selection": {
+        "count_summary": "{count} selected mods"
+      }
     }
   },
   "error": {
@@ -5133,6 +5400,17 @@
       "move_to_section": "Move {count} items to {position} of section group \"{group}\" in {list}",
       "remove_invalid": "Remove {count} invalid mods",
       "reorder": "Reorder {list}"
+    },
+    "mod": {
+      "activate_count": "Activate {count} mods",
+      "auto_sort_count": "Auto-sort {count} mods",
+      "deactivate_count": "Deactivate {count} mods",
+      "delete_local_files_count": "Delete {count} local files",
+      "disable_count": "Disable {count} mods",
+      "switch_to_local_count": "Switch {count} mods to local copies",
+      "switch_to_workshop_count": "Switch {count} mods to Workshop copies",
+      "unsubscribe_and_delete_count": "Unsubscribe and delete {count} files",
+      "unsubscribe_workshop_count": "Unsubscribe {count} Workshop items"
     }
   },
   "menu": {
@@ -5269,6 +5547,31 @@
       "recommendation_export": "Recommendation export{countText}",
       "remove_from_named_group": "Remove from “{name}”{countText}",
       "select_group": "Select whole group"
+    },
+    "dependency_graph": {
+      "clear_line_filter": "Clear dependency-line filter",
+      "clear_line_filter_tooltip": "Clear the current dependency-line filter.",
+      "filter_line": "Filter this dependency line",
+      "filter_line_tooltip": "Show only mods related to this dependency line in the list.",
+      "focus_line": "Show only this dependency line",
+      "focus_line_tooltip": "Temporarily draw only this dependency line without changing the list.",
+      "hide_line": "Hide this dependency line",
+      "hide_line_tooltip": "Hide this dependency line globally by its source mod.",
+      "jump_to_source": "Jump to source mod",
+      "jump_to_source_tooltip": "Scroll to and focus the source mod of this dependency line.",
+      "manage_lines": "Manage dependency lines",
+      "manage_lines_simple_tooltip": "Open the dependency-line manager.",
+      "manage_lines_tooltip": "Open the dependency-line manager to view current lines and hidden history.",
+      "restore_all_hidden": "Restore all hidden dependency lines",
+      "restore_all_hidden_tooltip": "Restore all currently hidden dependency lines.",
+      "show_all_lines": "Show all lines",
+      "show_all_lines_from_canvas_tooltip": "Clear “show only this dependency line” and draw all non-hidden dependency lines.",
+      "show_all_lines_tooltip": "Draw all non-hidden dependency lines again."
+    },
+    "image": {
+      "copy": "Copy image",
+      "copy_url": "Copy image URL",
+      "save_as": "Save as..."
     }
   },
   "bridge": {
@@ -5332,7 +5635,14 @@
       "open_path": "Open path",
       "open_workshop": "Open Workshop",
       "select_all": "Select all",
-      "select_file": "Select file"
+      "select_file": "Select file",
+      "force_delete": "Delete permanently",
+      "move_to_trash": "Move to Trash",
+      "open_export_dir": "Open export folder",
+      "restore_list": "Restore list",
+      "sort": "Sort",
+      "start_localize": "Start localizing",
+      "start_processing": "Start processing"
     },
     "status": {
       "checking": "Checking",
@@ -5421,6 +5731,10 @@
     },
     "unit": {
       "item": "item"
+    },
+    "run_command": {
+      "popup_window": "Borderless window mode",
+      "quick_test": "Quick test"
     }
   },
   "confirm": {
@@ -5692,6 +6006,95 @@
     "steam": {
       "download_workshop_items": "Download Workshop items",
       "fetch_collection_items": "Get collection items {collectionId}"
+    },
+    "group": {
+      "add_mods": "Add mods to group",
+      "content_reorder": "Reorder group contents",
+      "create": "Create group",
+      "delete": "Delete group",
+      "expansion_all": "Toggle all group expansion states",
+      "get": "Load groups",
+      "remove_mods": "Remove mods from group",
+      "reorder": "Reorder groups",
+      "update": "Update group"
+    },
+    "image": {
+      "save_as": "Save image as"
+    },
+    "mod": {
+      "auto_sort": "Auto-sort mods",
+      "batch_add_tags": "Batch add mod tags",
+      "batch_remove_tags": "Batch remove mod tags",
+      "batch_set_color": "Batch set mod color",
+      "batch_set_type": "Batch set mod type",
+      "batch_update_data": "Batch update mod data",
+      "delete_batch": "Batch delete mods",
+      "disable_selected": "Deactivate selected mods",
+      "enable_selected": "Activate selected mods",
+      "get_interlock_missing": "Get missing linked mods",
+      "heal_interlock": "Repair broken links",
+      "link": "Link mods",
+      "smart_insert_active": "Smart insert mods into the Active list",
+      "unlink": "Unlink mods",
+      "update_time": "Update last mod operation time",
+      "update_user_data": "Update mod user data"
+    },
+    "mod_issues": {
+      "batch_ignore": "Batch ignore or restore issues"
+    },
+    "package_transfer": {
+      "data_schema": "Load data import/export options",
+      "export_data_bundle": "Export app data",
+      "import_data_bundle": "Import app data",
+      "inspect_data_bundle": "Read data bundle summary",
+      "mod_schema": "Load mod package options",
+      "prepare_mod_import": "Precheck mod package import",
+      "profile_summary": "Read profile export summary",
+      "start_mod_export": "Start export task",
+      "start_mod_import": "Start mod package import"
+    },
+    "path": {
+      "auto_detect": "Auto-detect paths",
+      "check": "Check path information",
+      "check_batch": "Batch check path information",
+      "default_external": "Get default external path",
+      "delete": "Delete file/folder",
+      "delete_batch": "Batch delete files/folders",
+      "empty": "Path is empty",
+      "open": "Open path",
+      "open_file": "Open file",
+      "read_text_file": "Read text file",
+      "select_file": "Pick file path",
+      "select_folder": "Pick folder path"
+    },
+    "texture": {
+      "exclude_file": "Add file exclusion",
+      "exclude_mod": "Add mod exclusion",
+      "include_file": "Remove file exclusion",
+      "include_mod": "Remove mod exclusion",
+      "load_exclusions": "Load texture exclusion rules",
+      "load_result_history": "Load texture result history",
+      "start_analysis": "Start texture analysis",
+      "start_task": "Start optimization task",
+      "tool_status": "Check texture tool"
+    },
+    "rules": {
+      "add_user_rule": "Add user rule",
+      "change_source_priority": "Change rule priority",
+      "delete_rule": "Delete rule",
+      "delete_user_rule": "Delete user rule",
+      "export_bundle": "Export rules",
+      "fetch": "Fetch rules",
+      "global_switch": "Global rule switch",
+      "import_bundle": "Import rules",
+      "refresh_mod_state_after_change": "Sync mod state after rule changes",
+      "remove_user_rule": "Remove user rule",
+      "rule_switch": "User rule switch",
+      "save_rule": "Save rule",
+      "set_absolute_position": "Set absolute load position",
+      "set_language_owner_override": "Set language pack owner override",
+      "toggle_rule": "Toggle rule",
+      "update_comment": "Update rule note"
     }
   },
   "command": {
@@ -6378,6 +6781,187 @@
     "toast": {
       "reset_all": "All guide records have been reset.",
       "skipped_all": "All guides have been skipped. You can reset guides from UI settings at any time."
+    }
+  },
+  "issue": {
+    "message": {
+      "alternative_used": "__{title}__: dependency [[{base}]] is replaced by alternative mod [[{alternative}]]",
+      "dependency_after_mod": "!!Dependency After Target!!: must load after dependency [[{mod}]]",
+      "inactive_alternative_dependency": "!!{title}!!: alternative dependency [[{mod}]] is not active",
+      "inactive_dependency": "!!{title}!!: dependency [[{mod}]] is not active",
+      "inactive_language_pack": "^^{title}^^: does not support the current language, but local language pack [[{pack}]] exists",
+      "inactive_possible_language_pack": "^^{title}^^: does not support the current language, but a possibly related local language pack [[{pack}]] exists (that pack does not declare support for the current language)",
+      "incompatible": "!!{title}!!: __{source}__ reports incompatibility with [[{target}]]{extra}",
+      "interlock_after_missing": "^^Broken Link^^: must be placed immediately after [[{mod}]]",
+      "interlock_before_missing": "^^Broken Link^^: must be placed immediately before [[{mod}]]",
+      "language_pack_inactive_target": "^^{title}^^: the language pack target is not active. Check whether this pack is unnecessary, or manually set its dependency target in the rule editor.",
+      "language_pack_unknown_target": "^^{title}^^: the language pack target is unknown. Check whether this pack is unnecessary, or manually set its dependency target in the rule editor.",
+      "load_after_wrong_order": "{prefix}: according to __{source}__, it should load after [[{target}]]",
+      "load_before_wrong_order": "{prefix}: according to __{source}__, it should load before [[{target}]]",
+      "missing_dependency": "!!{title}!!: missing dependency [[{mod}]]",
+      "missing_file": "Local file is missing or cannot be parsed.",
+      "missing_language_pack": "^^{title}^^: does not support the current language, and no related local language pack was found",
+      "multiplayer_compat": "{mark}{title}{mark}: Multiplayer compatibility level is [[{label}]]{fixText}",
+      "multiplayer_patch_hint": "; enable Multiplayer Compatibility to help fix it",
+      "multiplayer_unknown": "__{title}__: Multiplayer has no clear compatibility level yet",
+      "pin_bottom_wrong_order": "^^Sort Warning^^: {source} requires bottom placement, but regular mod [[{mod}]] blocks it before the trailing dependencies",
+      "pin_top_wrong_order": "^^Sort Warning^^: {source} requires top placement, but it appears after regular mod [[{mod}]], which is not a leading dependency",
+      "version_mismatch": "^^{title}^^: does not support the current game version ··[[{version}]]·· \n __(Supported: ··{supported}··)__"
+    },
+    "prefix": {
+      "sort_error": "!!Sort Error!!",
+      "sort_warning": "^^Sort Warning^^"
+    },
+    "source": {
+      "unknown_rule": "Unknown rule"
+    }
+  },
+  "keybinding": {
+    "conflict": {
+      "different_scope": "The same shortcut is reused in different areas and only works in the active area.",
+      "global_scope": "A global shortcut duplicates a scoped shortcut. The scoped command overrides it while that area is active.",
+      "locked_duplicate": "Locked shortcuts conflict. Adjust one of the commands.",
+      "related_scope": "Duplicate shortcuts exist in related scopes. Check whether the active area is clear.",
+      "same_scope": "Duplicate shortcuts in the same scope. Only the highest-priority command can run."
+    },
+    "mouse": {
+      "back": "Back button",
+      "forward": "Forward button",
+      "left": "Left button",
+      "middle": "Middle button",
+      "right": "Right button"
+    }
+  },
+  "secret": {
+    "errors": {
+      "backend_unavailable": "System credential storage is unavailable",
+      "delete_failed": "Could not delete the saved secret. Make sure secure storage is available on this machine and try again.",
+      "fallback_plaintext_kept": "Local secure storage is unavailable, so the secret is temporarily kept in the config file.",
+      "local_store_unavailable": "Local secure storage is unavailable. Check the system credential service and try again.",
+      "read_failed": "Failed to read system credentials",
+      "save_failed": "Could not save the secret. Make sure secure storage is available on this machine and try again.",
+      "unsupported_key": "Unsupported secret item"
+    }
+  },
+  "startup": {
+    "warmup": {
+      "background_cache_failed": "Background data cache loading failed. The main UI has continued opening; dependency, replacement, or DLC text may be incomplete for now."
+    },
+    "message": {
+      "database_load_failed": "Database failed to load. Some features may be temporarily unavailable.",
+      "duplicate_groups_renamed": "Duplicate group names were detected and {count} items were automatically renamed.",
+      "relocation_partial_failed": "Manager directory changes were detected, but some internal path migrations failed. Check the path settings."
+    },
+    "action": {
+      "staged_database_repair_applied": "Applied the staged database repair copy",
+      "startup_database_auto_repair_failed": "Database auto-repair did not complete during startup",
+      "startup_database_auto_repaired": "Database was automatically repaired during startup"
+    },
+    "migration": {
+      "companion_toolmod_migrated": "Built-in companion tool mod migration is complete. The legacy tool mod directory and load order references have been cleaned up.",
+      "core_engine_scan_recommended": "A core parser engine upgrade was detected. A full scan is recommended for better compatibility.",
+      "legacy_group_memberships_fixed": "Legacy group data repair is complete: corrected {fixed_count} items and deduplicated {deduped_count} items.",
+      "path_normalization_done": "Path normalization is complete: {profile_count} environments, {asset_count} mod records, and {merge_count} duplicate merges.",
+      "path_normalization_failed": "Path normalization failed. Some old paths may need to be saved again or rescanned.",
+      "profile_runtime_flags_normalized": "Steam / Workshop runtime settings were normalized for {count} environments.",
+      "steam_path_detected": "Steam executable path was automatically filled during upgrade migration.",
+      "user_custom_data_fixed": "User custom data format was repaired: {user_count} user data items and {interlock_count} interlock groups.",
+      "workshop_cache_rebuilt": "Workshop cache schema upgrade was detected. The legacy workshop_cache database was removed and will be rebuilt with the new structure after startup."
+    },
+    "relocation": {
+      "config_paths_updated": "Manager directory move detected. Internal tool, rule library, and manager mod paths have been updated automatically.",
+      "database_paths_synced": "Internal database paths were synced: {profile_count} environments and {asset_count} mod records.",
+      "database_syncing": "Manager directory move detected. Internal database paths are being synced."
+    }
+  },
+  "text_search": {
+    "ripgrep": {
+      "download_done": "ripgrep download complete: {install_dir}",
+      "download_failed": "ripgrep download failed",
+      "download_start": "Downloading ripgrep tool package",
+      "download_windows_only": "Automatic ripgrep download is currently supported only on Windows.",
+      "executable_missing": "ripgrep executable was not found.",
+      "install_start": "ripgrep tool package downloaded. Extracting...",
+      "search_failed": "ripgrep search failed",
+      "status_found": "ripgrep found",
+      "status_found_with_version": "ripgrep v{version} found",
+      "status_missing": "ripgrep was not found. You can install it from the external tool check."
+    },
+    "validation": {
+      "query_required": "Search query is required",
+      "unsupported_scope": "Unsupported search scope: {scope}"
+    }
+  },
+  "theme": {
+    "errors": {
+      "id_invalid": "Theme ID can contain only lowercase letters, numbers, hyphens, and underscores, with length 2-64.",
+      "id_invalid_short": "Theme ID is invalid",
+      "name_required": "Theme name is required",
+      "root_must_be_object": "themes.json root must be an object",
+      "theme_must_be_object": "Theme data must be an object",
+      "themes_must_be_array": "themes.json themes must be an array",
+      "tokens_must_be_object": "Theme tokens must be an object"
+    }
+  },
+  "translation": {
+    "errors": {
+      "empty_document": "There is no text to translate",
+      "invalid_provider_response": "The translator returned an invalid response format",
+      "missing_segments": "The translator did not return all translated text: {keys}",
+      "provider_unavailable": "The current translator is unavailable",
+      "target_language_required": "Target language is required"
+    }
+  },
+  "browser": {
+    "api": {
+      "call_failed": "Backend API execution failed. The runtime environment, path permissions, or internal state may be temporarily unavailable. Details were written to the system log.",
+      "method_missing": "The requested backend API does not exist. Refresh the page or restart the app and try again."
+    },
+    "session": {
+      "expired": "The browser session has expired. Refresh the page or restart the app.",
+      "missing_param": "Browser session parameters are missing. Refresh the page and try again."
+    },
+    "static": {
+      "dev_server_missing": "In browser mode, static assets are served by the frontend dev server. Make sure the frontend dev server is still running.",
+      "frontend_missing": "Frontend page assets were not found. Rebuild the frontend or check the installation package integrity."
+    },
+    "workshop": {
+      "error": {
+        "load_failed": "Failed to load page: {reason}",
+        "missing_url": "No target Workshop page URL was provided",
+        "unsupported_url": "Only Steam Workshop pages can be proxied here"
+      },
+      "script": {
+        "action_done": "Action completed",
+        "action_failed": "Action failed",
+        "bridge_not_ready": "The page bridge is not ready yet. Try again later.",
+        "downloading": "Starting SteamCMD download...",
+        "get_form_only": "Only GET navigation forms are handled. The original page behavior has been kept.",
+        "id_missing": "No Workshop ID was detected on this page. You can continue browsing other Workshop pages.",
+        "navigation_failed": "Page navigation failed",
+        "opening_steam": "Trying to open the current page in Steam...",
+        "request_unfinished": "Request did not finish. Status code: {status}. Check your network connection or try again later.",
+        "subscribing": "Sending subscribe request...",
+        "unsubscribing": "Sending unsubscribe request..."
+      },
+      "toolbar": {
+        "download": "SteamCMD Download",
+        "open_in_steam": "Open in Steam",
+        "open_original": "Open Original Page",
+        "subscribe": "Subscribe",
+        "unknown_id": "Unrecognized",
+        "unsubscribe": "Unsubscribe"
+      }
+    }
+  },
+  "brand": {
+    "logo": {
+      "default_alt": "RimCrow default icon",
+      "private_alt": "Inky Feather logo",
+      "fallback_alt": "Project logo"
+    },
+    "project": {
+      "description": "RimCrow helps organize mods, adjust load order, and manage local RimWorld environments."
     }
   }
 }

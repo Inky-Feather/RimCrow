@@ -1,6 +1,6 @@
 <template>
   <div v-if="loading" class="flex h-full items-center justify-center text-sm text-text-dim">
-    正在读取文件...
+    {{ t('ui.file_search.preview.loading', '正在读取文件...') }}
   </div>
 
   <div v-else-if="error" class="flex h-full items-center justify-center px-6 text-center text-sm text-accent-danger">
@@ -28,6 +28,7 @@ import { csharp } from '@replit/codemirror-lang-csharp'
 import { EditorSelection, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
 import { getTailwindColorRgba } from '../../shared/lib/color'
+import { t } from '../../shared/i18n'
 import { buildSearchRegExp, rememberSelectedText } from '../../shared/lib/text'
 
 const props = defineProps({
@@ -73,7 +74,7 @@ const props = defineProps({
   },
   emptyText: {
     type: String,
-    default: '选择左侧文件或命中项后，这里显示只读文件内容。',
+    default: () => t('ui.file_search.preview.empty', '选择左侧文件或命中项后，这里显示只读文件内容。'),
   },
 })
 

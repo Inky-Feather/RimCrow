@@ -22,7 +22,7 @@ import { usePackageTransferActions } from './app/packageTransferActions'
 import { useSteamWorkshopActions } from './app/steamWorkshopActions'
 import { useMaintenanceActions } from './app/maintenanceActions'
 import { useUpdateActions } from './app/updateActions'
-import { setLocale, t } from '../../shared/i18n'
+import { setLocale, t, translateMessagePayload } from '../../shared/i18n'
 
 export const useAppStore = defineStore('app', () => {
   const taskStore = useTaskStore()
@@ -1643,11 +1643,12 @@ export const useAppStore = defineStore('app', () => {
   const _backendPopup = (event) => {
     const confirmStore = useConfirmStore()
     const { mode, title, message, type, duration } = event.detail
+    const displayMessage = translateMessagePayload(event.detail, message)
     console.debug('后端弹窗:', event.detail)
     // 模式1: 轻提示 (Toast)
     if (mode === 'toast') {
       const toastType = type || 'info' // success, error, warning, info
-      toast[toastType](message, {
+      toast[toastType](displayMessage, {
         timeout: duration || 3000
       })
     }
@@ -1655,7 +1656,7 @@ export const useAppStore = defineStore('app', () => {
     else {
       confirmStore.open({
         title: title || t('messages.app.backend_popup.title', '系统提示'),
-        message: message,
+        message: displayMessage,
         type: type || 'info', // info, success, warning, error
         mode: 'alert', // 强制设为 alert 模式，因为后端无法直接await前端的选择结果(除非用更复杂的Promise桥接)
       })

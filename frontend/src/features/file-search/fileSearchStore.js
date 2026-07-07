@@ -165,7 +165,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
         type: 'file-search',
         status: 'pending',
         progress: 0,
-        message: t('tasks.file_search.queued', '任务已加入后台队列'),
+        message: t('tasks.file_search.queued', '搜索任务已加入后台队列'),
         metrics: {
           title: t('dialog.file_search.title', '文件内容搜索'),
           query,

@@ -133,7 +133,7 @@ export const useTextureStore = defineStore('texture', () => {
       ;(Array.isArray(row.scale_breakdown) ? row.scale_breakdown : []).forEach(item => {
         if (!item || typeof item !== 'object') return
         const kind = String(item.kind || 'keep_original')
-        const label = String(item.label || '原尺寸')
+        const label = String(item.label || t('ui.texture_opt.scale.original_size', '原尺寸'))
         const key = `${kind}\n${label}`
         counts.set(key, {
           kind,
@@ -508,7 +508,7 @@ export const useTextureStore = defineStore('texture', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.texture_get_env_status(appStore.settings.texture_opt)
-      if (checkResult(res, "检查贴图工具", false)) {
+      if (checkResult(res, t('check.texture.tool_status', '检查贴图工具'), false)) {
         toolStatus.value = {
           ...(res.data || {}),
           message: translateMessagePayload(res.data || {}, res.data?.message || ''),
@@ -559,7 +559,7 @@ export const useTextureStore = defineStore('texture', () => {
         ...extraOptions,
         target_scope: targetScope,
       })
-      if (checkResult(res, "启动贴图分析", false)) {
+      if (checkResult(res, t('check.texture.start_analysis', '启动贴图分析'), false)) {
         bindTaskId(res.data, 'analyze')
         applyReturnedTaskState(res.data)
         applySnapshotPayload(res.data)
@@ -587,7 +587,7 @@ export const useTextureStore = defineStore('texture', () => {
         ...extraOptions,
         target_scope: targetScope,
       })
-      if (checkResult(res, "启动优化任务", false)) {
+      if (checkResult(res, t('check.texture.start_task', '启动优化任务'), false)) {
         bindTaskId(res.data, 'optimize')
         applyReturnedTaskState(res.data)
         applySnapshotPayload(res.data)
@@ -638,7 +638,7 @@ export const useTextureStore = defineStore('texture', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.texture_get_result_history(3)
-      if (!checkResult(res, "读取贴图结果历史", false)) return
+      if (!checkResult(res, t('check.texture.load_result_history', '读取贴图结果历史'), false)) return
       resultHistory.value = Array.isArray(res.data) ? res.data.map(normalizeResultHistoryItem) : []
       if (!selectedResultPath.value || !resultHistory.value.some(item => item.result_path === selectedResultPath.value)) {
         selectedResultPath.value = resultHistory.value[0]?.result_path || ''
@@ -652,7 +652,7 @@ export const useTextureStore = defineStore('texture', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.texture_get_exclusions()
-      if (!checkResult(res, "读取贴图排除规则", false)) return
+      if (!checkResult(res, t('check.texture.load_exclusions', '读取贴图排除规则'), false)) return
       applyExclusionsPayload(res.data)
     } catch (e) {
       console.error('读取贴图排除规则失败:', e)
@@ -676,7 +676,8 @@ export const useTextureStore = defineStore('texture', () => {
   const toggleModExclusion = async (packageId, exclude) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.texture_toggle_mod_exclusion(packageId, !!exclude)
-    if (!checkResult(res, exclude ? "添加模组排除" : "移除模组排除", false)) return false
+    const actionLabel = exclude ? t('check.texture.exclude_mod', '添加模组排除') : t('check.texture.include_mod', '移除模组排除')
+    if (!checkResult(res, actionLabel, false)) return false
     applyExclusionsPayload(res.data)
     return true
   }
@@ -684,7 +685,8 @@ export const useTextureStore = defineStore('texture', () => {
   const toggleFileExclusion = async (modPath, relPath, exclude) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.texture_toggle_file_exclusion(modPath, relPath, !!exclude)
-    if (!checkResult(res, exclude ? "添加文件排除" : "移除文件排除", false)) return false
+    const actionLabel = exclude ? t('check.texture.exclude_file', '添加文件排除') : t('check.texture.include_file', '移除文件排除')
+    if (!checkResult(res, actionLabel, false)) return false
     applyExclusionsPayload(res.data)
     return true
   }

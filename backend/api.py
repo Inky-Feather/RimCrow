@@ -102,6 +102,26 @@ def _build_error_detail(detail: Any = None, context: dict[str, Any] | None = Non
         payload["context"] = context
     return payload
 
+
+def _localized_message_payload(message: Any) -> dict[str, Any]:
+    """把启动期提示收口成前端可翻译 payload；普通字符串保持旧显示方式。"""
+    payload = {"message": str(message or "")}
+    key = localized_key(message)
+    params = localized_params(message)
+    if key:
+        payload["message_key"] = key
+    if params:
+        payload["message_params"] = params
+    return payload
+
+
+def _api_message_key_from_code(namespace: str, code: str = "") -> str:
+    """按稳定错误码生成前端可翻译 key，避免每个 API 调用点都重复声明 message_key。"""
+    normalized = re.sub(r"[^a-z0-9.]+", "_", str(code or "").strip().lower()).strip("._")
+    if not normalized or normalized in {"app.unknown_error", "app.warning"}:
+        return ""
+    return f"api.{namespace}.{normalized}"
+
 # 2. 引入数据库层
 from backend.database.models import MOD_ASSET_STATE_DELETED, MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, ModAsset, ModInterlock, UserModData, GithubModRecord, GithubTimeline, db
 from backend.database.dao import CollectionDAO, GroupDAO, ModDAO, ModInterlockDAO, ModMaintenanceDAO
@@ -298,6 +318,8 @@ class ApiResponse:
         has_exc = sys.exc_info()[0] is not None
         public_message = str(user_message or _default_user_error_message(message)).strip()
         _, key, params = cls._message_meta(user_message or message, message_key=message_key, message_params=message_params)
+        if not key:
+            key = _api_message_key_from_code("errors", code)
         error_detail = _build_error_detail(detail, context)
         log_context = error_detail or None
         logger.error(
@@ -318,6 +340,8 @@ class ApiResponse:
     def warning(cls, message, data=None, *, code="APP.WARNING", detail=None, user_message=None, context=None, message_key: str = "", message_params: dict[str, Any] | None = None):
         public_message = str(user_message or _default_user_error_message(message or tr("api.warnings.partial_success", "操作已完成，但有部分情况需要确认。"))).strip()
         _, key, params = cls._message_meta(user_message or message, message_key=message_key, message_params=message_params)
+        if not key:
+            key = _api_message_key_from_code("warnings", code)
         warning_detail = _build_error_detail(detail, context)
         logger.warning(
             "API 返回警告：%s",
@@ -432,7 +456,7 @@ class API:
         self.is_first_db_init = bool(startup_repair_result.get('created_clean_database')) or (not os.path.exists(db_path))
         init_ok = init_db(db_path)
         if not init_ok:
-            self._upgrade_context["messages"].append("数据库加载失败，部分功能可能暂时不可用。")
+            self._upgrade_context["messages"].append(tr("startup.message.database_load_failed", "数据库加载失败，部分功能可能暂时不可用。"))
         self._upgrade_context["actions_taken"].extend(startup_repair_result.get("actions_taken", []))
         self._upgrade_context["messages"].extend(startup_repair_result.get("messages", []))
         self._handle_app_relocation()
@@ -467,7 +491,7 @@ class API:
             self._upgrade_context["messages"].extend(path_normalization.messages)
         renamed_groups = normalize_duplicate_group_names_on_load()
         if renamed_groups:
-            self._upgrade_context["messages"].append(f"检测到重名分组，已自动重命名 {len(renamed_groups)} 项。")
+            self._upgrade_context["messages"].append(tr("startup.message.duplicate_groups_renamed", "检测到重名分组，已自动重命名 {count} 项。", count=len(renamed_groups)))
             logger.warning(
                 "启动时发现重名分组，已自动规范化: %s",
                 ", ".join(f"{old_name!r}->{new_name!r}" for _, old_name, new_name in renamed_groups),
@@ -562,7 +586,7 @@ class API:
             write_relocation_marker(relocation, DATA_DIR)
         except Exception as e:
             logger.warning(f"管理器目录迁移处理失败: {e}", exc_info=True)
-            self._upgrade_context["messages"].append("检测到管理器目录变化，但部分内部路径迁移失败，请检查路径设置。")
+            self._upgrade_context["messages"].append(tr("startup.message.relocation_partial_failed", "检测到管理器目录变化，但部分内部路径迁移失败，请检查路径设置。"))
         
     @staticmethod
     def _normalize_str_items(items: List[str] | str) -> list[str]:
@@ -1328,7 +1352,7 @@ class API:
             "health_report": {},
             "is_first_db_init": self.is_first_db_init,
             "active_context": self.active_context if self.active_context else None,
-            "upgrade_context": self._upgrade_context.copy() if include_upgrade_context else {},
+            "upgrade_context": self._upgrade_context_payload() if include_upgrade_context else {},
             "runtime_session": self._get_runtime_session_data(),
             "user_themes": user_themes,
         }
@@ -1561,7 +1585,7 @@ class API:
             "active_load_version_token": {},
             "is_first_db_init": self.is_first_db_init,
             "active_context": self.active_context if self.active_context else None,
-            "upgrade_context": self._upgrade_context.copy(),
+            "upgrade_context": self._upgrade_context_payload(),
             "runtime_session": self._get_runtime_session_data(),
             "user_themes": user_themes,
             "multiplayer_compatibility_state": {},
@@ -1691,6 +1715,11 @@ class API:
         
         return ApiResponse.success(result)
     
+    def _upgrade_context_payload(self) -> dict[str, Any]:
+        payload = self._upgrade_context.copy()
+        payload["messages"] = [_localized_message_payload(message) for message in self._upgrade_context.get("messages", [])]
+        return payload
+
     def _reset_upgrade_context(self):
         """重置升级上下文，确保信息只在启动后下发一次"""
         self._upgrade_context = {
@@ -2608,10 +2637,10 @@ class API:
             return ApiResponse.success()
         except Exception as e:
             return ApiResponse.error(
-                "批量更新 Mod 用户数据失败",
-                code="MODS.USER_DATA_BATCH_UPDATE_FAILED",
+                "更新 Mod 用户数据失败",
+                code="MODS.USER_DATA_UPDATE_FAILED",
                 detail=e,
-                user_message=tr("errors.mods.user_data_batch_update_failed", "批量更新 Mod 用户数据失败。请稍后刷新列表后重试，详细原因已写入系统日志。"),
+                user_message=tr("errors.mods.user_data_update_failed", "更新 Mod 用户数据失败。请稍后刷新列表后重试，详细原因已写入系统日志。"),
             )
     
     @log_api_call

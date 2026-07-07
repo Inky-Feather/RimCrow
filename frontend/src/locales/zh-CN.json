@@ -120,6 +120,25 @@
       "share_code": "分享码",
       "title": "备份"
     },
+    "dependency_graph": {
+      "manager": {
+        "child_count": "{count}项",
+        "close": "关闭依赖线管理",
+        "focus_hint": "当前仅绘制 1 条，右键绘图区可恢复。",
+        "hidden_empty": "当前没有符合搜索条件的隐藏依赖线。",
+        "hidden_tip": "点击任意隐藏项可立即恢复显示。",
+        "historical_hidden_item": "历史隐藏项",
+        "historical_item": "历史项",
+        "restore_all": "全部恢复",
+        "search_placeholder": "搜索依赖源名称或包名",
+        "summary": "可见 {visible} 条，已隐藏 {hidden} 条。",
+        "tab_hidden": "隐藏",
+        "tab_visible": "可见",
+        "title": "依赖线管理",
+        "visible_empty": "当前没有符合搜索条件的可见依赖线。",
+        "visible_tip": "点击任意可见项可直接隐藏该依赖线。"
+      }
+    },
     "diff_view": {
       "action": {
         "apply_file_order": "应用文件序列",
@@ -182,6 +201,15 @@
     },
     "drag": {
       "default_item": "拖拽项目"
+    },
+    "file_search": {
+      "preview": {
+        "empty": "选择左侧文件或命中项后，这里显示只读文件内容。",
+        "loading": "正在读取文件..."
+      }
+    },
+    "group": {
+      "default_name": "新分组"
     },
     "group_list": {
       "action": {
@@ -265,6 +293,10 @@
         "authors": "作者: {authors}",
         "package_id": "包名: {packageId}",
         "workshop_id": "工坊 ID: {workshopId}"
+      },
+      "missing": {
+        "description": "该模组在本地未找到，可能未下载，或已被手动删除。",
+        "name_with_id": "⚠ 未知模组 ({id})"
       },
       "name": "模组"
     },
@@ -1301,6 +1333,34 @@
         "tooltip": "**{description}**\n原始格式：{fullKey}\n其它格式：{aliases}\n使用示例：{usage}"
       }
     },
+    "texture_opt": {
+      "card": {
+        "combined_share": "综合体积占比",
+        "exclude_mod_label": "排除模组",
+        "excluded_label": "已排除",
+        "existing_dds_count": "现有 DDS {count}",
+        "image_count": "{count}张",
+        "invalid_png_count": "无效 PNG {count}",
+        "mod_texture_actions": "模组贴图操作",
+        "open_mod_path": "打开模组路径",
+        "pending_generate_count": "待生成 {count}",
+        "scale": {
+          "fallback_text": "回退{label} ({count})",
+          "fallback_tooltip": "这些图片不适合当前比例，会自动回退到 {label} 处理。",
+          "keep_text": "不缩放 ({count})",
+          "keep_tooltip": "这些图片会保留原来的大小。",
+          "original_size": "原尺寸",
+          "scaled_text": "当前{label} ({count})",
+          "scaled_tooltip": "这些图片会按 {label} 缩放生成。"
+        },
+        "unsupported_no_preview": "有些文件虽然名字是 PNG，但内容不是正常图片，已经自动跳过。",
+        "unsupported_preview_title": "以下伪装 PNG 已自动跳过：",
+        "vram_estimate": "显存预估"
+      },
+      "scale": {
+        "original_size": "原尺寸"
+      }
+    },
     "time": {
       "before_yesterday": "前天",
       "days_ago": "{count} 天前",
@@ -2139,6 +2199,19 @@
       "visit_copy_page": "访问该副本页面",
       "workshop_id": "工坊 ID：{value}"
     },
+    "dependency_graph": {
+      "line": {
+        "action_hint": "\n\n__[[(左键可筛选该依赖线，右键可隐藏或查看更多操作)]]__",
+        "source_after_warning": "\n!!(⚠ 依赖源后置，依赖源应在所有需求模组前加载)!!",
+        "summary": "{{{color}|依赖源:}} {name}\n包含 {count} 个子模组"
+      },
+      "manager": {
+        "focus_only": "\n当前仅绘制 1 条依赖线",
+        "hidden_count": "\n已隐藏 {count} 条依赖线",
+        "open_hint": "\n\n__[[(点击打开依赖线管理面板)]]__",
+        "summary": "依赖线：{visible} / {total}"
+      }
+    },
     "diff_view": {
       "colorful_blocks": "为不同的区块使用不同颜色便于区分",
       "download_item": {
@@ -2511,10 +2584,26 @@
       "failed_with_label": "复制{label}失败。请检查剪贴板权限，或手动选中文本复制。",
       "success": "已复制{label}"
     },
+    "dependency_graph": {
+      "hidden_line": "已隐藏依赖线：{name}",
+      "restored_all": "已恢复全部隐藏依赖线",
+      "restored_line": "已恢复依赖线：{name}"
+    },
     "file_search": {
       "empty_query": "请输入搜索词",
       "no_file_type": "请至少选择一种文件类型",
       "start_failed": "启动文件搜索失败。请检查当前环境路径是否可访问，或稍后重试。"
+    },
+    "group": {
+      "add_mods_failed": "添加模组到分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
+      "content_reorder_failed": "保存分组内排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
+      "create_failed": "创建分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
+      "delete_failed": "删除分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
+      "expansion_failed": "保存分组展开状态失败，正在还原列表状态。请稍后重试。",
+      "get_failed": "获取分组失败。可能是数据库或当前环境暂时不可用，请稍后重试。",
+      "remove_mods_failed": "从分组移除模组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
+      "reorder_failed": "保存分组排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
+      "update_failed": "更新分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。"
     },
     "group_item": {
       "rename_duplicate": "分组名称已存在，已添加序号 {index}"
@@ -2525,6 +2614,13 @@
         "duplicate_skipped_all": "目标分组已包含 {count} 个模组，已跳过",
         "duplicate_suffix": "，跳过 {count} 个重复项"
       }
+    },
+    "image": {
+      "copied": "已复制图片",
+      "copy_failed": "复制图片失败。请检查浏览器剪贴板权限，或改用另存为。",
+      "copy_url_failed": "复制图片地址失败。请检查浏览器剪贴板权限，或手动复制地址。",
+      "save_as_failed": "图片另存为失败。请检查目标目录权限、磁盘空间或当前运行环境是否支持保存文件。",
+      "url_copied": "已复制图片地址"
     },
     "load_order": {
       "applied": "已应用Mod序列",
@@ -2574,6 +2670,35 @@
       "todds_download_started": "todds 下载任务已启动，请留意底部状态栏。",
       "tools_ready": "工具环境检查完成，当前均已就绪。"
     },
+    "mod": {
+      "auto_sort_done": "自动排序已完成",
+      "auto_sort_failed": "自动排序失败。可能是规则数据、缺失项处理或后端排序器暂时不可用，详细原因已写入系统日志。",
+      "auto_sort_rule_warning_intro": "请检查以下Mod规则是否正确：\n",
+      "auto_sort_rule_warning_item": "{mod} 的 {type} 规则 可能存在问题：（{target}）\n",
+      "batch_add_tags_failed": "批量添加标签失败，已还原本地状态。请稍后重试。",
+      "batch_force_deleted": "已彻底删除 {count} 个Mod",
+      "batch_moved_to_trash": "已移入回收站 {count} 个Mod",
+      "batch_remove_tags_failed": "批量移除标签失败，已还原本地状态。请稍后重试。",
+      "batch_set_color_failed": "批量设置颜色失败，已还原本地状态。请稍后重试。",
+      "batch_set_type_failed": "批量设置类型失败，已还原本地状态。请稍后重试。",
+      "batch_update_data_failed": "批量更新 Mod 数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。",
+      "failed_suffix": "，{count} 个失败",
+      "link_failed": "设置 Mod 联锁失败。请稍后重试，详细原因已写入系统日志。",
+      "localize_no_workshop_items": "选中的模组中没有来自工坊的项",
+      "scan_already_running": "扫描任务已在进行中，请等待当前扫描完成。",
+      "scan_cancelled": "扫描已取消",
+      "scan_conflicts_found": "扫描已完成，发现 {count} 个包名重复冲突需要处理。{extra}",
+      "scan_done": "扫描已完成，共扫描 {total} 个模组，新增 {added} 个，更新 {updated} 个，删除 {removed} 个，已知 {skipped} 个。{extra}",
+      "scan_done_with_restore_warning": "扫描已完成，共扫描 {total} 个模组，新增 {added} 个，更新 {updated} 个，删除 {removed} 个，已知 {skipped} 个。\n{extra}",
+      "scan_external_enabled_count": "外部解除禁用 {count} 个",
+      "scan_failed": "扫描异常。可能是路径权限、文件占用或扫描器内部状态暂时不可用，详细原因已写入系统日志。",
+      "scan_request_failed": "扫描请求异常。可能是软件后端暂时不可用或当前环境路径配置异常，详细原因已写入系统日志。",
+      "scan_start_failed": "扫描启动失败。可能是当前环境路径无效、扫描器未初始化或后台任务暂时不可用，详细原因已写入系统日志。",
+      "scan_strict_restore_failed_count": "恢复失败 {count} 个",
+      "scan_strict_restored_count": "已重新禁用 {count} 个",
+      "update_time_failed": "更新 Mod 操作时间失败。正在重新同步模组数据，详细原因已写入系统日志。",
+      "update_user_data_failed": "更新 Mod 用户数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。"
+    },
     "mod_alias_review": {
       "no_valid_result": "当前任务还没有可应用的有效结果",
       "regenerate_failed": "重新生成失败",
@@ -2583,6 +2708,11 @@
     "mod_details": {
       "filter_applied": "已按{label}筛选：{text}",
       "filter_cleared": "已清除列表筛选"
+    },
+    "mod_issues": {
+      "batch_ignore_failed": "批量更新问题忽略状态失败。已还原本地列表状态，请稍后重试。",
+      "ignored_count": "已忽略 {count} 项问题",
+      "restored_count": "已恢复 {count} 项警告"
     },
     "mod_item": {
       "alias": {
@@ -2595,6 +2725,23 @@
         "filtered_out": "搜索项 {id} 已被 {list} 列表筛选器过滤，请清除筛选后重试。",
         "loop_to_first": "已到达最后一个搜索结果，循环回到第一个"
       }
+    },
+    "mod_residue": {
+      "whitelist_added": "已加入白名单，之后扫描会跳过它",
+      "whitelist_removed": "已移出白名单，之后扫描会再次提示它"
+    },
+    "package_transfer": {
+      "export_complete": "{title}完成",
+      "mod_import_running": "已有模组包导入任务正在进行"
+    },
+    "path": {
+      "batch_delete_warning": "{label}完成，但有部分项目需要确认",
+      "batch_force_deleted": "已彻底删除 {count} 个文件/文件夹",
+      "batch_moved_to_trash": "已移入回收站 {count} 个文件/文件夹",
+      "force_deleted": "已彻底删除: \n{path}",
+      "moved_to_trash": "已移入回收站: \n{path}",
+      "no_openable_url": "没有可打开的网址。请确认当前条目包含有效链接。",
+      "updated": "路径已更新"
     },
     "profiles": {
       "choose_game_install_path": "请重新选择游戏执行目录",
@@ -3180,6 +3327,26 @@
       "unknown_only_desc": "这些项目暂时无法直接处理。",
       "unknown_only_title": "只有未知项"
     },
+    "mod": {
+      "delete": {
+        "message": "确定要删除这 {count} 个Mod吗？",
+        "title": "删除确认"
+      },
+      "disable": {
+        "message": "确定要禁用{target}吗？\n禁用后将无法在游戏中使用，可在“已禁用”列表中重新启用。",
+        "selected_count": "选中的 {count} 个 Mod",
+        "this_mod": "该 Mod",
+        "title": "禁用确认"
+      },
+      "localize": {
+        "create_message": "确定要将选中的 {total} 个{store}模组本地化为共存模组吗？\n本地化后会独立占用磁盘空间，后续{store}更新不会自动改动这些本地副本。",
+        "create_title": "本地化共存模组",
+        "sync_and_create_message": "选中的 {total} 个{store}模组中，{createCount} 个会本地化为共存模组，{existingCount} 个会同步已有本地共存副本。",
+        "sync_and_create_title": "本地化/同步本地共存模组",
+        "sync_message": "选中的 {total} 个{store}模组已经存在本地共存模组。\n继续后会用当前{store}文件同步已有本地副本。",
+        "sync_title": "同步本地共存模组"
+      }
+    },
     "mod_alias_review": {
       "ai_alias": "AI 别名",
       "ai_notes": "AI 备注",
@@ -3351,6 +3518,11 @@
       "unknown_file_count": "残留/未知文件 {count}",
       "unrecognized_setting": "未识别设置"
     },
+    "mod_store": {
+      "undo": {
+        "title": "撤销列表变更"
+      }
+    },
     "package_transfer": {
       "apply_environment_data": "同时应用环境数据",
       "apply_environment_data_desc": "覆盖现有环境时，只会替换这个环境的实际使用数据，不会改名称、说明和绑定关系。新建环境时，会尽量保留原来的环境信息。",
@@ -3358,6 +3530,9 @@
       "bundle_size": "压缩包大小",
       "bundle_summary": "包摘要",
       "contains_items": "包含 {count} 项",
+      "data_export": {
+        "complete_title": "软件数据导出"
+      },
       "data_import_summary": "已选择 {selected}/{total} 项",
       "data_import_summary_with_profiles": "已选择 {selected}/{total} 项，含 {profiles} 个环境",
       "data_source_desc": "包含该数据源的导入内容。",
@@ -3369,6 +3544,10 @@
       "disk_space_text": "当前剩余 {free}，按这次导入建议至少预留 {recommended}",
       "environment_data": "环境数据",
       "expansion_ratio": "解压后约为压缩内容的 {ratio} 倍",
+      "export_complete": {
+        "message": "导出路径：{path}",
+        "title": "{title}完成"
+      },
       "export_plan": "当前选中 {selected} 个模组，预计导出 {resolved} 个。",
       "export_plan_compact": "当前选中 {selected} 个，预计导出 {resolved} 个。",
       "export_plan_extra": "当前选中 {selected} 个模组，预计导出 {resolved} 个，其中附加带上 {extra} 个。",
@@ -3420,6 +3599,11 @@
       "mod_conflict_handling_desc": "这里只处理同名文件夹。你可以统一替换、跳过、另存为新文件夹，也可以逐项调整。",
       "mod_conflicts_found": "当前发现 {count} 个同名模组，导入时会按这里的规则处理。",
       "mod_count": "模组数量",
+      "mod_export": {
+        "description": "可按需附带依赖、联锁项和语言包。",
+        "selected_summary": "已选 {count} 个模组。",
+        "title": "导出模组"
+      },
       "mode": {
         "rename": "另存为新文件夹",
         "replace_original": "替换原文件",
@@ -3476,6 +3660,15 @@
       "unknown_size_change": "当前无法估算体积变化",
       "unpacked_size": "预计解压后大小",
       "use_self_mods": "使用管理器模组"
+    },
+    "path": {
+      "delete": {
+        "message": "确定要删除 {path} 吗？",
+        "title": "删除确认"
+      },
+      "delete_batch": {
+        "message": "确定要删除这 {count} 个文件/文件夹吗？"
+      }
     },
     "profiles": {
       "delete": {
@@ -4213,6 +4406,13 @@
     "warnings": {
       "partial_success": "操作已完成，但有部分情况需要确认。"
     },
+    "work": {
+      "mod_residue": {
+        "add_whitelist": "加入白名单",
+        "load_overview": "读取卸载残留列表",
+        "remove_whitelist": "移出白名单"
+      }
+    },
     "workshop": {
       "author_profile_failed": "获取作者信息失败。请检查网络连接、Steam Web API Key 或稍后重试。",
       "author_profile_invalid": "作者信息请求无效。请检查 Steam 用户 ID 或 Steam Web API Key 后重试。",
@@ -4301,6 +4501,9 @@
       "rename_failed": "重命名备份失败。请检查备份名称、文件占用状态和目录权限。",
       "save_as_failed": "另存备份失败。请检查目标目录权限和磁盘空间，详细原因已写入系统日志。"
     },
+    "clipboard": {
+      "text_unsupported": "当前环境不支持复制文本到剪贴板"
+    },
     "dialog": {
       "file_save_failed": "选择保存文件失败。请稍后重试，详细原因已写入系统日志。",
       "file_select_failed": "选择文件失败。请稍后重试，详细原因已写入系统日志。",
@@ -4323,7 +4526,16 @@
       "user_locale_load_failed": "读取用户语言文件失败。请检查 data/locales 下的语言文件格式。"
     },
     "image": {
-      "save_as_failed": "图片另存为失败。请检查目标目录权限、磁盘空间或文件名是否有效。"
+      "clipboard_image_unsupported": "当前环境不支持复制图片到剪贴板",
+      "convert_failed": "转换图片格式失败",
+      "copy_url_missing": "未找到可复制的图片地址",
+      "decode_failed": "图片解码失败",
+      "empty_content": "图片内容为空",
+      "read_content_failed": "读取图片内容失败",
+      "read_failed_status": "读取图片失败：{status}",
+      "save_as_failed": "图片另存为失败。请检查目标目录权限、磁盘空间或文件名是否有效。",
+      "save_as_unsupported": "当前环境不支持图片另存为",
+      "url_missing": "未找到图片地址"
     },
     "load_order": {
       "export_failed": "导出加载顺序失败。请检查目标目录权限、磁盘空间和当前启用列表状态。",
@@ -4369,7 +4581,8 @@
       "tags_remove_failed": "移除 Mod 标签失败。已保留原状态，请稍后重试。",
       "time_update_failed": "更新 Mod 最后操作时间失败。请检查数据库状态后重试，详细原因已写入系统日志。",
       "type_update_failed": "设置 Mod 类型失败。已保留原状态，请稍后重试。",
-      "user_data_batch_update_failed": "批量更新 Mod 用户数据失败。请稍后刷新列表后重试，详细原因已写入系统日志。"
+      "user_data_batch_update_failed": "批量更新 Mod 用户数据失败。请稍后刷新列表后重试，详细原因已写入系统日志。",
+      "user_data_update_failed": "更新 Mod 用户数据失败。请稍后刷新列表后重试，详细原因已写入系统日志。"
     },
     "path": {
       "batch_check_failed": "批量检查路径失败。请确认路径存在、权限可访问，并稍后重试。",
@@ -4398,6 +4611,11 @@
       "user_mod_delete_failed": "删除用户规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
       "user_mod_position_failed": "保存固定位置规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
       "user_mod_save_failed": "保存用户规则失败。请检查规则内容和规则文件权限，详细原因已写入系统日志。"
+    },
+    "rules": {
+      "add_user_rule_failed": "添加用户规则失败。可能是规则内容无效或本地规则文件暂时无法写入，已尝试重新加载规则。",
+      "fetch_failed_retry": "获取规则失败。请稍后重试，详细原因已写入系统日志。",
+      "update_community_failed": "更新社区规则库失败。请检查网络连接、代理设置和本地文件写入权限，详细原因已写入系统日志。"
     },
     "secret": {
       "reveal_failed_preserve": "无法读取已保存密钥，保存时会保留原值"
@@ -4454,19 +4672,50 @@
     }
   },
   "tasks": {
+    "error": {
+      "not_completed": "任务未成功完成。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。",
+      "timeout": "任务超时"
+    },
     "file_search": {
+      "building_roots": "正在整理{stage} {processed}/{total}: {name}",
+      "cancelled": "搜索任务已取消",
+      "cancelled_in_stage": "搜索任务已在{stage}阶段取消",
+      "failed_with_reason": "搜索失败: {reason}",
+      "finished": "搜索完成，共命中 {count} 条结果",
+      "no_active_profile": "当前环境未激活，无法执行搜索",
       "no_task_id": "后端未返回任务 ID",
-      "queued": "任务已加入后台队列",
+      "preparing_effective_roots": "正在准备有效搜索根与缓存签名",
+      "preparing_mod_dirs": "正在准备搜索模组目录",
+      "queued": "搜索任务已加入后台队列",
+      "queued_replacing": "搜索任务已加入后台队列，正在替换 {count} 个旧任务",
       "ready": "准备搜索",
+      "replaced": "搜索任务已被新的搜索请求替换",
+      "scan_started": "已锁定 {count} 个{unit}，正在使用 {backend} 扫描",
+      "scanned_count": "已扫描 {processed}/{total} 个{unit}",
+      "stage": {
+        "effective_roots": "有效搜索根",
+        "mod_dirs": "搜索模组目录"
+      },
       "start_failed_short": "启动失败",
-      "submitted": "搜索任务已提交"
+      "submitted": "搜索任务已提交",
+      "unit": {
+        "effective_root": "有效搜索根",
+        "mod_dir": "模组目录"
+      }
     },
     "message": {
       "cancelling_request": "正在尝试中止任务...",
       "processing": "处理中...",
+      "queued": "任务已加入后台队列",
       "scan_complete": "扫描完成",
       "scan_interrupted_by_suspend": "扫描因界面挂起而中断，请重新刷新。",
       "texture_task": "贴图任务"
+    },
+    "mod_package": {
+      "export_preparing": "准备导出模组包...",
+      "export_title": "导出模组包",
+      "import_preparing": "准备导入模组包...",
+      "import_title": "导入模组包"
     },
     "phase": {
       "cancelling": "正在取消",
@@ -4475,6 +4724,21 @@
     "queue": {
       "count": "{count} 个任务",
       "title": "任务队列"
+    },
+    "scan": {
+      "already_running": "扫描已在进行中",
+      "analyzing_mod": "分析中: {name}",
+      "cancelled": "扫描已由用户中止",
+      "cancelled_no_changes": "扫描已由用户中止，未对数据库进行任何修改。",
+      "failed_with_reason": "扫描失败: {reason}",
+      "finished": "扫描完成",
+      "indexing_files": "正在索引文件...",
+      "no_valid_paths": "没有有效路径",
+      "prepare_task": "准备扫描任务...",
+      "preparing": "正在准备扫描...",
+      "processing_conflicts_runtime": "正在处理冲突与运行态收敛...",
+      "reading_game_info": "正在读取游戏基础信息...",
+      "title": "模组扫描"
     },
     "status": {
       "execution_failed": "任务执行失败"
@@ -4903,6 +5167,9 @@
       "context": "上下文",
       "log": "日志",
       "log_summary": "{source}摘要",
+      "mod_selection": {
+        "count_summary": "已选 {count} 个模组"
+      },
       "selected_logs": "{count} 条已选{source}",
       "summary_prefix": "附件: {summary}",
       "token_estimate": "约 {count}k token"
@@ -5035,11 +5302,63 @@
       "user_input_intro": "消息输入按一次真实请求统计的^^估算Token^^，包含系统提示词、会话记忆、附件信息、用户输入、工具回灌和必要的总结补充。"
     }
   },
+  "brand": {
+    "logo": {
+      "default_alt": "RimCrow 默认图标",
+      "fallback_alt": "项目标识",
+      "private_alt": "Inky Feather 标识"
+    },
+    "project": {
+      "description": "RimCrow 用于整理模组、调整排序和管理 RimWorld 本地环境。"
+    }
+  },
   "bridge": {
     "browser": {
       "connect_failed": "无法连接软件后端服务。可能是后端进程已退出、浏览器桥接端口不可用或本机安全软件拦截，请重启软件后重试。",
       "request_failed_with_status": "浏览器桥接请求失败，状态码：{status}。请确认后端服务仍在运行，或重启软件后重试。",
       "session_create_failed": "浏览器桥接会话创建失败，请重启软件后重试。"
+    }
+  },
+  "browser": {
+    "api": {
+      "call_failed": "后端接口执行失败。可能是运行环境、路径权限或内部状态暂时不可用，详细原因已写入系统日志。",
+      "method_missing": "请求的后端接口不存在，请刷新页面或重启软件后重试。"
+    },
+    "session": {
+      "expired": "浏览器会话已失效，请刷新页面或重启软件。",
+      "missing_param": "浏览器会话参数缺失，请刷新页面后重试。"
+    },
+    "static": {
+      "dev_server_missing": "浏览器模式下静态资源由前端开发服务提供，请确认前端开发服务仍在运行。",
+      "frontend_missing": "未找到前端页面资源，请重新构建前端或检查安装包完整性。"
+    },
+    "workshop": {
+      "error": {
+        "load_failed": "加载页面失败: {reason}",
+        "missing_url": "未提供目标工坊页面地址",
+        "unsupported_url": "当前仅代理 Steam 创意工坊相关页面"
+      },
+      "script": {
+        "action_done": "操作已完成",
+        "action_failed": "操作失败",
+        "bridge_not_ready": "页面桥接尚未就绪，请稍后重试。",
+        "downloading": "正在启动 SteamCMD 下载...",
+        "get_form_only": "当前仅接管 GET 导航表单，已保留原页面行为。",
+        "id_missing": "当前页面未识别到 Workshop ID，可继续浏览其它工坊页面。",
+        "navigation_failed": "页面跳转失败",
+        "opening_steam": "正在尝试在 Steam 中打开当前页面...",
+        "request_unfinished": "请求未完成，状态码：{status}。请检查网络连接或稍后重试。",
+        "subscribing": "正在发送订阅请求...",
+        "unsubscribing": "正在发送取消订阅请求..."
+      },
+      "toolbar": {
+        "download": "SteamCMD 下载",
+        "open_in_steam": "在 Steam 打开",
+        "open_original": "打开原网页",
+        "subscribe": "订阅",
+        "unknown_id": "未识别",
+        "unsubscribe": "取消订阅"
+      }
     }
   },
   "check": {
@@ -5052,6 +5371,20 @@
     },
     "file_search": {
       "start": "启动文件搜索"
+    },
+    "group": {
+      "add_mods": "分组添加模组",
+      "content_reorder": "分组内排序",
+      "create": "创建分组",
+      "delete": "删除分组",
+      "expansion_all": "批量展开切换",
+      "get": "获取分组",
+      "remove_mods": "分组移除模组",
+      "reorder": "分组排序",
+      "update": "更新分组"
+    },
+    "image": {
+      "save_as": "图片另存为"
     },
     "load_order": {
       "export_mod_order": "导出Mod加载顺序",
@@ -5087,6 +5420,52 @@
       "update_multiplayer_compatibility": "更新 Multiplayer 兼容表",
       "update_workshop_db": "更新社区工坊数据库"
     },
+    "mod": {
+      "auto_sort": "自动排序Mod",
+      "batch_add_tags": "批量添加 Mod 标签",
+      "batch_remove_tags": "批量移除 Mod 标签",
+      "batch_set_color": "批量设置 Mod 颜色",
+      "batch_set_type": "批量设置 Mod 类型",
+      "batch_update_data": "批量更新Mod数据",
+      "delete_batch": "批量删除Mod",
+      "disable_selected": "禁用选中的模组",
+      "enable_selected": "启用选中的模组",
+      "get_interlock_missing": "获取联锁缺失项",
+      "heal_interlock": "修复断裂联锁",
+      "link": "设置 Mod 联锁",
+      "smart_insert_active": "智能插入 Mod 到 Active 列表",
+      "unlink": "解除 Mod 联锁",
+      "update_time": "更新Mod最后操作时间",
+      "update_user_data": "更新Mod用户数据"
+    },
+    "mod_issues": {
+      "batch_ignore": "批量忽略/取消忽略问题"
+    },
+    "package_transfer": {
+      "data_schema": "获取数据导入导出配置",
+      "export_data_bundle": "导出软件数据",
+      "import_data_bundle": "导入软件数据",
+      "inspect_data_bundle": "读取数据包摘要",
+      "mod_schema": "获取模组打包配置",
+      "prepare_mod_import": "预检模组包导入",
+      "profile_summary": "读取环境导出统计",
+      "start_mod_export": "启动导出任务",
+      "start_mod_import": "启动模组包导入"
+    },
+    "path": {
+      "auto_detect": "自动检测路径",
+      "check": "检测路径信息",
+      "check_batch": "批量检测路径信息",
+      "default_external": "获取默认外部路径",
+      "delete": "删除文件/文件夹",
+      "delete_batch": "批量删除文件/文件夹",
+      "empty": "未填写路径",
+      "open": "打开路径",
+      "open_file": "打开文件",
+      "read_text_file": "读取文本文件",
+      "select_file": "获取文件路径",
+      "select_folder": "获取文件夹路径"
+    },
     "profiles": {
       "create": "创建环境 \"{name}\"",
       "create_shortcut": "创建环境桌面快捷方式",
@@ -5100,6 +5479,24 @@
       "write_steam_shortcut_config": "写入 Steam 快捷方式配置"
     },
     "recommendation_export": "推荐导出",
+    "rules": {
+      "add_user_rule": "添加用户规则",
+      "change_source_priority": "改变规则优先级",
+      "delete_rule": "删除规则",
+      "delete_user_rule": "删除用户规则",
+      "export_bundle": "导出规则",
+      "fetch": "获取规则",
+      "global_switch": "全局规则开关",
+      "import_bundle": "导入规则",
+      "refresh_mod_state_after_change": "规则变更后同步模组状态",
+      "remove_user_rule": "移除用户规则",
+      "rule_switch": "用户规则开关",
+      "save_rule": "保存规则",
+      "set_absolute_position": "设置绝对排序位置",
+      "set_language_owner_override": "设置语言包所属覆盖",
+      "toggle_rule": "切换规则",
+      "update_comment": "更新用户规则说明"
+    },
     "settings": {
       "apply": "应用设置",
       "clear_secret": "清除密钥",
@@ -5112,6 +5509,17 @@
     "steam": {
       "download_workshop_items": "下载创意工坊项目",
       "fetch_collection_items": "获取订阅合集列表 {collectionId}"
+    },
+    "texture": {
+      "exclude_file": "添加文件排除",
+      "exclude_mod": "添加模组排除",
+      "include_file": "移除文件排除",
+      "include_mod": "移除模组排除",
+      "load_exclusions": "读取贴图排除规则",
+      "load_result_history": "读取贴图结果历史",
+      "start_analysis": "启动贴图分析",
+      "start_task": "启动优化任务",
+      "tool_status": "检查贴图工具"
     },
     "update": {
       "check": "检查更新",
@@ -5339,6 +5747,7 @@
       "delete_permanently": "彻底删除",
       "edit": "编辑",
       "expand": "展开",
+      "force_delete": "强制删除",
       "got_it": "知道了",
       "got_it_verbose": "我知道了",
       "import": "导入",
@@ -5346,9 +5755,11 @@
       "later_short": "稍后",
       "more_actions": "更多操作",
       "move": "移动",
+      "move_to_trash": "移入回收站",
       "ok": "确定",
       "open": "打开",
       "open_containing_folder": "打开所在目录",
+      "open_export_dir": "打开导出目录",
       "open_file": "打开文件",
       "open_folder": "打开文件夹",
       "open_link": "打开链接",
@@ -5361,11 +5772,15 @@
       "reset": "重置",
       "restart_later": "稍后重启",
       "restore_default": "恢复默认",
+      "restore_list": "恢复列表",
       "save": "保存",
       "search": "搜索",
       "select_all": "全选",
       "select_file": "选择文件",
       "skip": "跳过",
+      "sort": "排序",
+      "start_localize": "开始本地化",
+      "start_processing": "开始处理",
       "update": "更新",
       "visit_page": "访问页面"
     },
@@ -5412,6 +5827,10 @@
     "position": {
       "bottom": "底部",
       "top": "顶部"
+    },
+    "run_command": {
+      "popup_window": "无边框窗口模式",
+      "quick_test": "快速测试"
     },
     "source": {
       "core": "游戏本体",
@@ -6024,6 +6443,17 @@
       "external_data_refresh_after_named_update": "{name}后同步模组数据",
       "external_data_refresh_after_update": "外部库更新后同步模组数据"
     },
+    "mod": {
+      "activate_count": "启用 {count} 个 Mod",
+      "auto_sort_count": "自动排序 {count} 个 Mod",
+      "deactivate_count": "停用 {count} 个 Mod",
+      "delete_local_files_count": "删除 {count} 个本地文件",
+      "disable_count": "禁用 {count} 个 Mod",
+      "switch_to_local_count": "切换 {count} 个 Mod 到本地版",
+      "switch_to_workshop_count": "切换 {count} 个 Mod 到工坊版",
+      "unsubscribe_and_delete_count": "取消订阅并删除 {count} 个文件",
+      "unsubscribe_workshop_count": "取消订阅 {count} 个创意工坊项目"
+    },
     "mod_item": {
       "remove_missing": "移除 {count} 个缺失项"
     },
@@ -6034,6 +6464,55 @@
       "move_to_section": "移动 {count} 项到{list}分割组「{group}」{position}",
       "remove_invalid": "移除 {count} 个无效 Mod",
       "reorder": "调整{list}顺序"
+    }
+  },
+  "issue": {
+    "message": {
+      "alternative_used": "__{title}__：前置依赖 [[{base}]] 已由备选模组 [[{alternative}]] 替代",
+      "dependency_after_mod": "!!依赖后置!!：必须在依赖 [[{mod}]] 之后加载",
+      "inactive_alternative_dependency": "!!{title}!!：未启用备选前置模组 [[{mod}]]",
+      "inactive_dependency": "!!{title}!!：未启用前置模组 [[{mod}]]",
+      "inactive_language_pack": "^^{title}^^：不支持当前语言，但本地存在语言包 [[{pack}]]",
+      "inactive_possible_language_pack": "^^{title}^^：不支持当前语言，但本地存在可能相关的语言包 [[{pack}]]（该语言包未声明支持当前语言）",
+      "incompatible": "!!{title}!!：__{source}__ 指出与 [[{target}]] 不兼容{extra}",
+      "interlock_after_missing": "^^联锁断裂^^：必须紧跟在 [[{mod}]] 之后",
+      "interlock_before_missing": "^^联锁断裂^^：必须紧接 [[{mod}]] 之前",
+      "language_pack_inactive_target": "^^{title}^^：语言包指向对象未启用，请检查该语言包是否多余，或者可在规则编辑器手动指定前置对象",
+      "language_pack_unknown_target": "^^{title}^^：语言包指向对象未知，请检查该语言包是否多余，或者可在规则编辑器手动指定前置对象",
+      "load_after_wrong_order": "{prefix}：根据 __{source}__，应在 [[{target}]] 之后加载",
+      "load_before_wrong_order": "{prefix}：根据 __{source}__，应在 [[{target}]] 之前加载",
+      "missing_dependency": "!!{title}!!：缺少前置模组 [[{mod}]]",
+      "missing_file": "本地文件缺失或无法解析",
+      "missing_language_pack": "^^{title}^^：不支持当前语言，且未在本地发现相关语言包",
+      "multiplayer_compat": "{mark}{title}{mark}：Multiplayer 兼容等级为 [[{label}]]{fixText}",
+      "multiplayer_patch_hint": "；可启用 Multiplayer Compatibility 辅助修正",
+      "multiplayer_unknown": "__{title}__：Multiplayer 暂无明确兼容等级",
+      "pin_bottom_wrong_order": "^^排序警告^^：根据 {source} 要求置底，但前方拦截了非后置依赖的常规模组 [[{mod}]]",
+      "pin_top_wrong_order": "^^排序警告^^：根据 {source} 要求置顶，但被排在了非前置依赖的常规模组 [[{mod}]] 之后",
+      "version_mismatch": "^^{title}^^：不支持当前游戏版本··[[{version}]]·· \n __(支持: ··{supported}··)__"
+    },
+    "prefix": {
+      "sort_error": "!!排序错误!!",
+      "sort_warning": "^^排序警告^^"
+    },
+    "source": {
+      "unknown_rule": "未知规则"
+    }
+  },
+  "keybinding": {
+    "conflict": {
+      "different_scope": "不同区域复用了同一个快捷键，仅在对应区域生效。",
+      "global_scope": "全局快捷键与分区快捷键重复，分区激活时会覆盖全局命令。",
+      "locked_duplicate": "锁定快捷键发生重复，需要调整其中一个命令。",
+      "related_scope": "相关作用域中存在重复快捷键，请确认触发区域是否清晰。",
+      "same_scope": "同一作用域内快捷键重复，触发时只能执行优先级最高的命令。"
+    },
+    "mouse": {
+      "back": "后退键",
+      "forward": "前进键",
+      "left": "左键",
+      "middle": "中键",
+      "right": "右键"
     }
   },
   "maintenance": {
@@ -6107,6 +6586,26 @@
       "open_folder": "打开所在目录",
       "remove_from_list": "从列表移除"
     },
+    "dependency_graph": {
+      "clear_line_filter": "取消筛选该依赖线",
+      "clear_line_filter_tooltip": "清除当前依赖线筛选。",
+      "filter_line": "筛选该依赖线",
+      "filter_line_tooltip": "只在列表中显示这组依赖线相关模组。",
+      "focus_line": "仅显示该依赖线",
+      "focus_line_tooltip": "临时只绘制这组依赖线，不影响列表内容。",
+      "hide_line": "隐藏该依赖线",
+      "hide_line_tooltip": "按依赖源模组全局隐藏这组依赖线。",
+      "jump_to_source": "跳转到源头模组",
+      "jump_to_source_tooltip": "滚动并定位到当前依赖线的源头模组。",
+      "manage_lines": "管理依赖线",
+      "manage_lines_simple_tooltip": "打开依赖线管理面板。",
+      "manage_lines_tooltip": "打开依赖线管理面板，查看当前依赖线与已隐藏历史项。",
+      "restore_all_hidden": "恢复全部隐藏依赖线",
+      "restore_all_hidden_tooltip": "一次恢复当前已隐藏的全部依赖线。",
+      "show_all_lines": "显示全部线",
+      "show_all_lines_from_canvas_tooltip": "清除“仅显示该依赖线”状态，恢复绘制全部未隐藏依赖线。",
+      "show_all_lines_tooltip": "恢复绘制全部未隐藏依赖线。"
+    },
     "disabled_mod_list": {
       "copy_field": "复制{label}{countText}",
       "copy_mod_info": "复制模组信息{countText}",
@@ -6129,6 +6628,11 @@
       "recommendation_export": "推荐导出{countText}",
       "remove_from_named_group": "从「{name}」移除{countText}",
       "select_group": "选中整组"
+    },
+    "image": {
+      "copy": "复制图片",
+      "copy_url": "复制图片地址",
+      "save_as": "另存为..."
     },
     "mod_item": {
       "activate": "启用",
@@ -6367,6 +6871,48 @@
       }
     }
   },
+  "secret": {
+    "errors": {
+      "backend_unavailable": "系统凭据库不可用",
+      "delete_failed": "无法删除已保存密钥，请确认本机安全存储可用后重试",
+      "fallback_plaintext_kept": "本机安全存储不可用，密钥暂时保留在配置文件中",
+      "local_store_unavailable": "本机安全存储不可用，请检查系统凭据服务后重试",
+      "read_failed": "系统凭据库读取失败",
+      "save_failed": "无法保存密钥，请确认本机安全存储可用后重试",
+      "unsupported_key": "不支持的密钥项"
+    }
+  },
+  "startup": {
+    "action": {
+      "staged_database_repair_applied": "已应用待切换数据库修复库",
+      "startup_database_auto_repair_failed": "启动时数据库自动修复未完成",
+      "startup_database_auto_repaired": "启动时已自动修复数据库"
+    },
+    "message": {
+      "database_load_failed": "数据库加载失败，部分功能可能暂时不可用。",
+      "duplicate_groups_renamed": "检测到重名分组，已自动重命名 {count} 项。",
+      "relocation_partial_failed": "检测到管理器目录变化，但部分内部路径迁移失败，请检查路径设置。"
+    },
+    "migration": {
+      "companion_toolmod_migrated": "已完成内置伴生工具模组迁移，旧版工具模组目录和排序引用已清理。",
+      "core_engine_scan_recommended": "检测到核心解析引擎升级，建议执行全量扫描以获得更好的兼容性。",
+      "legacy_group_memberships_fixed": "已完成旧版分组数据修复：纠正 {fixed_count} 项，去重 {deduped_count} 项。",
+      "path_normalization_done": "已完成路径规范化：环境 {profile_count} 项，模组记录 {asset_count} 项，合并重复 {merge_count} 项。",
+      "path_normalization_failed": "路径规范化迁移失败，部分旧路径可能需要重新保存或重新扫描。",
+      "profile_runtime_flags_normalized": "已归一化 {count} 个环境的 Steam / Workshop 运行配置。",
+      "steam_path_detected": "升级迁移时已自动补全 Steam 程序路径。",
+      "user_custom_data_fixed": "已修复用户自定义数据格式：用户数据 {user_count} 项，联锁组 {interlock_count} 项。",
+      "workshop_cache_rebuilt": "检测到工坊缓存结构升级，已清理旧版 workshop_cache 缓存库，启动后将按新结构自动重建。"
+    },
+    "relocation": {
+      "config_paths_updated": "检测到管理器目录已移动，已自动更新内部工具、规则库和管理器模组路径。",
+      "database_paths_synced": "已同步内部数据库路径：环境 {profile_count} 项，模组记录 {asset_count} 项。",
+      "database_syncing": "检测到管理器目录已移动，正在同步内部数据库路径。"
+    },
+    "warmup": {
+      "background_cache_failed": "后台数据缓存加载失败，主界面已继续打开；依赖、替代或 DLC 文本可能暂时不完整。"
+    }
+  },
   "steam": {
     "action": {
       "inventory_cleanup": "库存记录清理",
@@ -6374,6 +6920,44 @@
     },
     "status": {
       "not_ready": "Steam 未就绪"
+    }
+  },
+  "text_search": {
+    "ripgrep": {
+      "download_done": "ripgrep 下载完成: {install_dir}",
+      "download_failed": "ripgrep 下载失败",
+      "download_start": "开始下载 ripgrep 工具包",
+      "download_windows_only": "当前自动下载 ripgrep 仅支持 Windows 平台。",
+      "executable_missing": "未找到 ripgrep 可执行文件。",
+      "install_start": "ripgrep 工具包获取成功，正在解压...",
+      "search_failed": "ripgrep 搜索执行失败",
+      "status_found": "已找到 ripgrep",
+      "status_found_with_version": "已找到 ripgrep v{version}",
+      "status_missing": "未找到 ripgrep，可在外部工具检查中下载安装。"
+    },
+    "validation": {
+      "query_required": "搜索词不能为空",
+      "unsupported_scope": "不支持的搜索范围: {scope}"
+    }
+  },
+  "theme": {
+    "errors": {
+      "id_invalid": "主题 ID 只能包含小写字母、数字、短横线和下划线，长度 2-64",
+      "id_invalid_short": "主题 ID 不合法",
+      "name_required": "主题名称不能为空",
+      "root_must_be_object": "themes.json 根节点必须是对象",
+      "theme_must_be_object": "主题数据必须是对象",
+      "themes_must_be_array": "themes.json themes 必须是数组",
+      "tokens_must_be_object": "主题 tokens 必须是对象"
+    }
+  },
+  "translation": {
+    "errors": {
+      "empty_document": "没有可翻译的文本",
+      "invalid_provider_response": "翻译器返回格式无效",
+      "missing_segments": "翻译器未返回完整译文: {keys}",
+      "provider_unavailable": "当前翻译器不可用",
+      "target_language_required": "目标语言不能为空"
     }
   }
 }

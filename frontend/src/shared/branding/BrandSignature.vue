@@ -12,6 +12,7 @@
 import { computed } from 'vue'
 import LuxBreatheIcon from '../decorations/LuxBreatheIcon.vue'
 import brandProfile from './brandProfile'
+import { t } from '../i18n'
 
 const props = defineProps({
   logoClass: { type: String, default: 'size-60' },
@@ -20,7 +21,7 @@ const props = defineProps({
 })
 
 const logoUrl = computed(() => String(brandProfile.branding?.logoUrl || '').trim())
-const logoAlt = computed(() => String(brandProfile.branding?.logoAlt || brandProfile.project?.name || '项目标识'))
+const logoAlt = computed(() => String(brandProfile.branding?.logoAlt || brandProfile.project?.name || t('brand.logo.fallback_alt', '项目标识')))
 const renderMode = computed(() => String(brandProfile.branding?.renderMode || 'image').trim() || 'image')
 const maskClass = computed(() => [props.logoClass, props.toneClass, 'brand-signature-mask'])
 const imageClass = computed(() => [props.logoClass, 'block object-contain'])

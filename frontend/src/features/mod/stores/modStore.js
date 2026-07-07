@@ -21,6 +21,7 @@ import { useModListHistory } from './mod-store/listHistory'
 import { useModSelection } from './mod-store/selection'
 import { useModExportPlan } from './mod-store/exportPlan'
 import { useModIssues } from './mod-store/issues'
+import { t } from '../../../shared/i18n'
 
 export const useModStore = defineStore('mods', () => {
   const appStore = useAppStore()
@@ -207,12 +208,12 @@ export const useModStore = defineStore('mods', () => {
     const notice = entry?.undoNotice
     if (!notice?.message) return true
     const ok = await confirmStore.confirmAction(
-      notice.title || '撤销列表变更',
+      notice.title || t('dialog.mod_store.undo.title', '撤销列表变更'),
       notice.message,
       {
         type: notice.type || 'warning',
-        confirmText: notice.confirmText || '恢复列表',
-        cancelText: notice.cancelText || '取消',
+        confirmText: notice.confirmText || t('common.action.restore_list', '恢复列表'),
+        cancelText: notice.cancelText || t('common.action.cancel', '取消'),
       }
     )
     return !!ok
@@ -258,7 +259,7 @@ export const useModStore = defineStore('mods', () => {
     activeLoadVersionToken.value = { ...(versionToken || {}) }
   }
   // 获取 Mod 对象
-  const takeModById = (id, defaultName = '未知模组') => {
+  const takeModById = (id, defaultName = t('common.entity.unknown_mod', '未知模组')) => {
     if (!id) return null
     const tokenInfo = parsePackageToken(id)
     const canonicalId = tokenInfo.canonicalPackageId || normalizeCanonicalId(id)
@@ -290,7 +291,7 @@ export const useModStore = defineStore('mods', () => {
       active_package_token: tokenInfo.sourcePreference === 'steam' ? buildSteamPackageToken(canonicalId || id) : (canonicalId || id),
       name: `⚠ ${defaultName} (${canonicalId || id})`,
       path: null,
-      description: '该模组在本地未找到，可能未下载，或已被手动删除。',
+      description: t('ui.mod.missing.description', '该模组在本地未找到，可能未下载，或已被手动删除。'),
       isMissing: true,
     }
     applyInstallSourceHintToMod(ghostMod, canonicalId || id)
@@ -314,7 +315,7 @@ export const useModStore = defineStore('mods', () => {
     return (ids || []).map(id => takeModById(id)).filter(Boolean)
   }
   // 显示 Mod 名称（优先 alias_name -> display_name -> name -> package_id）
-  const displayModName = (modOrId, defaultName = '未知模组') => {
+  const displayModName = (modOrId, defaultName = t('common.entity.unknown_mod', '未知模组')) => {
     // 处理输入：Mod 对象或 ID 字符串统统转为Mod对象
     let mod = null
     if(typeof modOrId === 'string') mod = takeModById(modOrId, defaultName)
@@ -442,11 +443,11 @@ export const useModStore = defineStore('mods', () => {
         baseMod.name = `⚠ ${meta.name || id} (${id})`
         baseMod.display_name = meta.name
       } else if (!currentMod) {
-        baseMod.name = `⚠ 未知模组 (${id})`
+        baseMod.name = t('ui.mod.missing.name_with_id', '⚠ 未知模组 ({id})', { id })
       }
       baseMod.path = null
       baseMod.isMissing = true
-      baseMod.description = '该模组在本地未找到，可能未下载，或已被手动删除。'
+      baseMod.description = t('ui.mod.missing.description', '该模组在本地未找到，可能未下载，或已被手动删除。')
       baseMod.package_id = id
       applyInstallSourceHintToMod(baseMod, id)
       return baseMod
@@ -704,7 +705,9 @@ export const useModStore = defineStore('mods', () => {
     if (nextIds.length === 0) return false
     return await runListHistoryTransaction({
       type: active ? 'change-active-enable' : 'change-active-disable',
-      label: active ? `启用 ${nextIds.length} 个 Mod` : `停用 ${nextIds.length} 个 Mod`,
+      label: active
+        ? t('history.mod.activate_count', '启用 {count} 个 Mod', { count: nextIds.length })
+        : t('history.mod.deactivate_count', '停用 {count} 个 Mod', { count: nextIds.length }),
       trackedModIds: nextIds
     }, async () => {
       removeIdsOnAllList(nextIds)
@@ -746,7 +749,9 @@ export const useModStore = defineStore('mods', () => {
     if (switchableIds.size === 0) return false
     return await runListHistoryTransaction({
       type: `coexist-source-${targetSource}`,
-      label: targetSource === 'steam' ? `切换 ${switchableIds.size} 个 Mod 到工坊版` : `切换 ${switchableIds.size} 个 Mod 到本地版`,
+      label: targetSource === 'steam'
+        ? t('history.mod.switch_to_workshop_count', '切换 {count} 个 Mod 到工坊版', { count: switchableIds.size })
+        : t('history.mod.switch_to_local_count', '切换 {count} 个 Mod 到本地版', { count: switchableIds.size }),
       trackedModIds: [...switchableIds],
     }, async () => {
       activeIds.value = replaceCoexistenceTokensInList(activeIds.value, switchableIds, targetSource)
@@ -798,7 +803,7 @@ export const useModStore = defineStore('mods', () => {
     console.debug('准备智能插入 Mod:', ids)
 
     const res = await window.pywebview.api.smart_insert_mod_in_actives(ids, activeIds.value)
-    if(checkResult(res, '智能插入 Mod 到 Active 列表') && res.data){
+    if(checkResult(res, t('check.mod.smart_insert_active', '智能插入 Mod 到 Active 列表')) && res.data){
       activeIds.value = [...res.data]
     }
   }
@@ -811,12 +816,12 @@ export const useModStore = defineStore('mods', () => {
       // 调用 API，会立即返回 { status: 'started' }
       const res = await window.pywebview.api.scan_mods(path_list, forced_update, size_check_override, size_check_paths)
       if (res.status === 'warning') {
-        toast.info(res.message || '扫描任务已在进行中，请等待当前扫描完成。')
+        toast.info(res.message || t('toast.mod.scan_already_running', '扫描任务已在进行中，请等待当前扫描完成。'))
         return false
       }
       if (res.status !== 'success' && res.status !== 'started') {
         console.error("启动扫描失败:", res)
-        toast.error(toUserMessage(res.message, '扫描启动失败。可能是当前环境路径无效、扫描器未初始化或后台任务暂时不可用，详细原因已写入系统日志。'))
+        toast.error(toUserMessage(res.message, t('toast.mod.scan_start_failed', '扫描启动失败。可能是当前环境路径无效、扫描器未初始化或后台任务暂时不可用，详细原因已写入系统日志。')))
         return false
       }
       const taskDetail = res?.data?.details || {}
@@ -827,9 +832,9 @@ export const useModStore = defineStore('mods', () => {
           type: 'scan',
           status: 'pending',
           progress: 0,
-          message: '任务已加入后台队列',
+          message: t('tasks.message.queued', '任务已加入后台队列'),
           metrics: {
-            title: '模组扫描',
+            title: t('tasks.scan.title', '模组扫描'),
             forced_update: !!forced_update,
             specific_paths: Array.isArray(path_list) ? path_list : [],
           },
@@ -838,7 +843,7 @@ export const useModStore = defineStore('mods', () => {
       return true
     } catch (e) {
       console.error("扫描请求异常:", e)
-      toast.error(toUserMessage(e?.message || e, '扫描请求异常。可能是软件后端暂时不可用或当前环境路径配置异常，详细原因已写入系统日志。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.scan_request_failed', '扫描请求异常。可能是软件后端暂时不可用或当前环境路径配置异常，详细原因已写入系统日志。')))
       return false
     }
   }
@@ -852,13 +857,13 @@ export const useModStore = defineStore('mods', () => {
     )
 
     if (detail?.status === 'cancelled') {
-      toast.info(detail.message || '扫描已取消')
+      toast.info(detail.message || t('toast.mod.scan_cancelled', '扫描已取消'))
       console.info("扫描已取消:", detail)
       return
     }
 
     if (detail?.status && detail.status !== 'success') {
-      toast.error(toUserMessage(detail.message, '扫描异常。可能是路径权限、文件占用或扫描器内部状态暂时不可用，详细原因已写入系统日志。'))
+      toast.error(toUserMessage(detail.message, t('toast.mod.scan_failed', '扫描异常。可能是路径权限、文件占用或扫描器内部状态暂时不可用，详细原因已写入系统日志。')))
       console.error("扫描完成事件异常:", detail)
       return
     }
@@ -874,9 +879,9 @@ export const useModStore = defineStore('mods', () => {
     const total = Number(detail?.total ?? (added + updated + skipped))
     const silentSuccess = !!options?.silentSuccess
     const disabledStateText = [
-      externalEnabled ? `外部解除禁用 ${externalEnabled} 个` : '',
-      strictRestored ? `已重新禁用 ${strictRestored} 个` : '',
-      strictRestoreFailed ? `恢复失败 ${strictRestoreFailed} 个` : '',
+      externalEnabled ? t('toast.mod.scan_external_enabled_count', '外部解除禁用 {count} 个', { count: externalEnabled }) : '',
+      strictRestored ? t('toast.mod.scan_strict_restored_count', '已重新禁用 {count} 个', { count: strictRestored }) : '',
+      strictRestoreFailed ? t('toast.mod.scan_strict_restore_failed_count', '恢复失败 {count} 个', { count: strictRestoreFailed }) : '',
     ].filter(Boolean).join('，')
 
     let totalCount = 0
@@ -893,11 +898,11 @@ export const useModStore = defineStore('mods', () => {
     }
     if (totalCount > 0) {
       // 注意：有冲突时暂不提示 "扫描完成" 的 Toast，以免遮挡，或者提示 Warning
-      toast.warning(`扫描已完成，发现 ${totalCount} 个包名重复冲突需要处理。${disabledStateText ? `\n${disabledStateText}` : ''}`, {timeout: 10000})
+      toast.warning(t('toast.mod.scan_conflicts_found', '扫描已完成，发现 {count} 个包名重复冲突需要处理。{extra}', { count: totalCount, extra: disabledStateText ? `\n${disabledStateText}` : '' }), {timeout: 10000})
     } else if (strictRestoreFailed > 0) {
-      toast.warning(`扫描已完成，共扫描 ${total} 个模组，新增 ${added} 个，更新 ${updated} 个，删除 ${removed} 个，已知 ${skipped} 个。\n${disabledStateText}`, {position: "top-center", timeout: 8000})
+      toast.warning(t('toast.mod.scan_done_with_restore_warning', '扫描已完成，共扫描 {total} 个模组，新增 {added} 个，更新 {updated} 个，删除 {removed} 个，已知 {skipped} 个。\n{extra}', { total, added, updated, removed, skipped, extra: disabledStateText }), {position: "top-center", timeout: 8000})
     } else if (!silentSuccess) {
-      toast.success(`扫描已完成，共扫描 ${total} 个模组，新增 ${added} 个，更新 ${updated} 个，删除 ${removed} 个，已知 ${skipped} 个。${disabledStateText ? `\n${disabledStateText}` : ''}`,{position: "top-center",timeout: 5000})
+      toast.success(t('toast.mod.scan_done', '扫描已完成，共扫描 {total} 个模组，新增 {added} 个，更新 {updated} 个，删除 {removed} 个，已知 {skipped} 个。{extra}', { total, added, updated, removed, skipped, extra: disabledStateText ? `\n${disabledStateText}` : '' }),{position: "top-center",timeout: 5000})
     }
     // 扫描结束后只回填模组主数据，避免把工作区、GitHub、合集等页面也一起重刷。
     console.debug("扫描统计:", {
@@ -931,22 +936,22 @@ export const useModStore = defineStore('mods', () => {
       const supplementStore = useSupplementStore()
       const canResolveMissing = await missingInstallStore.ensureResolvedBeforeAction({
         activeIds: activeIds.value,
-        actionLabel: '排序',
+        actionLabel: t('common.action.sort', '排序'),
       })
       if (!canResolveMissing) return
       const canContinue = await supplementStore.ensureRequiredBeforeAutosort({ activeIds: activeIds.value })
       if (!canContinue) return
       mod_ids = activeIds.value
       const res = await window.pywebview.api.auto_sort_mods(mod_ids)
-      if (checkResult(res, "自动排序Mod")) {
+      if (checkResult(res, t('check.mod.auto_sort', '自动排序Mod'))) {
         await runListHistoryTransaction({
           type: 'auto-sort',
-          label: `自动排序 ${mod_ids.length} 个 Mod`
+          label: t('history.mod.auto_sort_count', '自动排序 {count} 个 Mod', { count: mod_ids.length })
         }, async () => {
           activeIds.value = res.data.sorted_ids || []
           updateInactiveIds()
         })
-        toast.success("自动排序已完成")
+        toast.success(t('toast.mod.auto_sort_done', '自动排序已完成'))
         // 处理警告信息
         if(res.data.warnings?.length > 0) {
           let warningMessages = ''
@@ -960,9 +965,13 @@ export const useModStore = defineStore('mods', () => {
           toast.warning(warningMessages,{position: "top-center",timeout: 5000})
           if (warnModRule.length > 0) {
             console.debug("自动排序警告:",warnModRule)
-            let msg = '请检查以下Mod规则是否正确：\n'
+            let msg = t('toast.mod.auto_sort_rule_warning_intro', '请检查以下Mod规则是否正确：\n')
             warnModRule.forEach(item => {
-              msg += `${displayModName(item.mod_id)} 的 ${item.type.name} 规则 可能存在问题：（${displayModName(item.target_id)}）\n`
+              msg += t('toast.mod.auto_sort_rule_warning_item', '{mod} 的 {type} 规则 可能存在问题：（{target}）\n', {
+                mod: displayModName(item.mod_id),
+                type: item.type.name,
+                target: displayModName(item.target_id),
+              })
             })
             toast.warning(msg,{position: "top-center",timeout: 10000})
           }
@@ -971,14 +980,14 @@ export const useModStore = defineStore('mods', () => {
       }
     } catch (e) {
       console.error("自动排序Mod异常:", e)
-      toast.error(toUserMessage(e?.message || e, '自动排序失败。可能是规则数据、缺失项处理或后端排序器暂时不可用，详细原因已写入系统日志。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.auto_sort_failed', '自动排序失败。可能是规则数据、缺失项处理或后端排序器暂时不可用，详细原因已写入系统日志。')))
     }
     return false
   }
   const getLocalizeActionTitle = (totalCount = 0, existingCount = 0) => {
     const createCount = Math.max(Number(totalCount || 0) - Number(existingCount || 0), 0)
-    if (existingCount > 0) return createCount > 0 ? '本地化/同步本地共存模组' : '同步本地共存模组'
-    return '本地化共存模组'
+    if (existingCount > 0) return createCount > 0 ? t('dialog.mod.localize.sync_and_create_title', '本地化/同步本地共存模组') : t('dialog.mod.localize.sync_title', '同步本地共存模组')
+    return t('dialog.mod.localize.create_title', '本地化共存模组')
   }
   const resolveLocalizeCandidates = (mods = [], store='workshop') => {
     const candidateMap = new Map()
@@ -1005,27 +1014,27 @@ export const useModStore = defineStore('mods', () => {
     // 使用 path_hash 精确定位当前副本，避免共存场景误选到另一份同包名模组。
     const { pathHashes, existingCount } = resolveLocalizeCandidates(selectedMods.value, store)
     if (pathHashes.length === 0) {
-      toast.info("选中的模组中没有来自工坊的项");
+      toast.info(t('toast.mod.localize_no_workshop_items', '选中的模组中没有来自工坊的项'));
       return;
     }
     await localizeMods(pathHashes, store, { existingCount })
   }
   const localizeMods = async (pathHashes, store='workshop', options = {}) => {
-    const storeText = store === 'workshop' ? '工坊' : store
+    const storeText = store === 'workshop' ? t('common.source.workshop', 'Steam 创意工坊') : store
     const existingCount = Number(options?.existingCount || 0)
     const createCount = Math.max(pathHashes.length - existingCount, 0)
     const actionTitle = getLocalizeActionTitle(pathHashes.length, existingCount)
     const syncMessage = existingCount > 0
       ? (
           createCount > 0
-            ? `选中的 ${pathHashes.length} 个${storeText}模组中，${createCount} 个会本地化为共存模组，${existingCount} 个会同步已有本地共存副本。`
-            : `选中的 ${pathHashes.length} 个${storeText}模组已经存在本地共存模组。\n继续后会用当前${storeText}文件同步已有本地副本。`
+            ? t('dialog.mod.localize.sync_and_create_message', '选中的 {total} 个{store}模组中，{createCount} 个会本地化为共存模组，{existingCount} 个会同步已有本地共存副本。', { total: pathHashes.length, store: storeText, createCount, existingCount })
+            : t('dialog.mod.localize.sync_message', '选中的 {total} 个{store}模组已经存在本地共存模组。\n继续后会用当前{store}文件同步已有本地副本。', { total: pathHashes.length, store: storeText })
         )
-      : `确定要将选中的 ${pathHashes.length} 个${storeText}模组本地化为共存模组吗？\n本地化后会独立占用磁盘空间，后续${storeText}更新不会自动改动这些本地副本。`
+      : t('dialog.mod.localize.create_message', '确定要将选中的 {total} 个{store}模组本地化为共存模组吗？\n本地化后会独立占用磁盘空间，后续{store}更新不会自动改动这些本地副本。', { total: pathHashes.length, store: storeText })
     const confirm = await confirmStore.confirmAction(
       actionTitle,
       syncMessage,
-      { type: existingCount > 0 ? 'warning' : 'info', confirmText: existingCount > 0 ? '开始处理' : '开始本地化' }
+      { type: existingCount > 0 ? 'warning' : 'info', confirmText: existingCount > 0 ? t('common.action.start_processing', '开始处理') : t('common.action.start_localize', '开始本地化') }
     );
     if (confirm) {
       appStore.isLoading = true;
@@ -1041,10 +1050,12 @@ export const useModStore = defineStore('mods', () => {
     const hashes = [...new Set((Array.isArray(pathHashes) ? pathHashes : [pathHashes]).map(hash => String(hash || '').trim()).filter(Boolean))]
     if (hashes.length === 0) return false
     if (disabled) {
-      const countText = hashes.length > 1 ? `选中的 ${hashes.length} 个 Mod` : '该 Mod'
+      const countText = hashes.length > 1
+        ? t('dialog.mod.disable.selected_count', '选中的 {count} 个 Mod', { count: hashes.length })
+        : t('dialog.mod.disable.this_mod', '该 Mod')
       const confirm = await confirmStore.confirmAction(
-        '禁用确认',
-        `确定要禁用${countText}吗？\n禁用后将无法在游戏中使用，可在“已禁用”列表中重新启用。`,
+        t('dialog.mod.disable.title', '禁用确认'),
+        t('dialog.mod.disable.message', '确定要禁用{target}吗？\n禁用后将无法在游戏中使用，可在“已禁用”列表中重新启用。', { target: countText }),
         { type: 'warning' }
       );
       if (!confirm) return false
@@ -1052,11 +1063,14 @@ export const useModStore = defineStore('mods', () => {
     appStore.isLoading = true;
     try {
       const res = await window.pywebview.api.mods_disable(hashes, disabled);
-      const actionText = disabled ? '禁用选中的模组' : '启用选中的模组'
+      const actionText = disabled ? t('check.mod.disable_selected', '禁用选中的模组') : t('check.mod.enable_selected', '启用选中的模组')
       if (checkResult(res, actionText)) {
         const successCount = Number(res.data?.success_count || hashes.length)
         const errorCount = Number(res.data?.error_count || 0)
-        toast.success(`${disabled ? '已禁用' : '已启用'} ${successCount} 个 Mod${errorCount ? `，${errorCount} 个失败` : ''}`)
+        toast.success(t(disabled ? 'toast.mod.disabled_count' : 'toast.mod.enabled_count', disabled ? '已禁用 {count} 个 Mod{errorText}' : '已启用 {count} 个 Mod{errorText}', {
+          count: successCount,
+          errorText: errorCount ? t('toast.mod.failed_suffix', '，{count} 个失败', { count: errorCount }) : '',
+        }))
         if (options.finishScan !== false) {
           await appStore.requestModScan({ preserveListState: !!options.preserveListState })
         }
@@ -1080,7 +1094,7 @@ export const useModStore = defineStore('mods', () => {
     if (changedItems.length === 0) return false
     await runListHistoryTransaction({
       type: 'disable-mod-files',
-      label: `禁用 ${changedItems.length} 个 Mod`,
+      label: t('history.mod.disable_count', '禁用 {count} 个 Mod', { count: changedItems.length }),
       trackedModIds: changedItems.map(item => item.id).filter(Boolean),
     }, async () => {
       removeIdsOnAllList(changedItems.map(item => item.id))
@@ -1095,16 +1109,19 @@ export const useModStore = defineStore('mods', () => {
     if(!window.pywebview) return
     const confirmStore = useConfirmStore()
     const decision = await confirmStore.confirmDeleteAction(
-      '删除确认', `确定要删除这 ${path_hashes.length} 个Mod吗？`,
+      t('dialog.mod.delete.title', '删除确认'),
+      t('dialog.mod.delete.message', '确定要删除这 {count} 个Mod吗？', { count: path_hashes.length }),
       {
-        trashOptionText: '移入回收站',
-        forceOptionText: '强制删除',
+        trashOptionText: t('common.action.move_to_trash', '移入回收站'),
+        forceOptionText: t('common.action.force_delete', '强制删除'),
       }
     );
     if(!decision?.confirmed) return
     const res = await window.pywebview.api.mods_delete(path_hashes, !!decision.force)
-    if (checkResult(res, "批量删除Mod")) {
-      toast.success(`${decision.force ? '已彻底删除' : '已移入回收站'} ${res.data.success_count} 个Mod`)
+    if (checkResult(res, t('check.mod.delete_batch', '批量删除Mod'))) {
+      toast.success(decision.force
+        ? t('toast.mod.batch_force_deleted', '已彻底删除 {count} 个Mod', { count: res.data.success_count })
+        : t('toast.mod.batch_moved_to_trash', '已移入回收站 {count} 个Mod', { count: res.data.success_count }))
       if(finish_scan) await appStore.requestModScan({ forceCoreRefresh: true })
       return true
     }
@@ -1145,7 +1162,7 @@ export const useModStore = defineStore('mods', () => {
     const removed = await removeDeletedItemsFromLists({
       items: deleteItems,
       type: 'delete-mod-files',
-      label: `删除 ${deleteItems.length} 个本地文件`,
+      label: t('history.mod.delete_local_files_count', '删除 {count} 个本地文件', { count: deleteItems.length }),
     })
     if (removed) await appStore.requestModScan({ preserveListState: true, forceCoreRefresh: true })
     return removed
@@ -1178,8 +1195,8 @@ export const useModStore = defineStore('mods', () => {
       items: removedWorkshopItems,
       type: deleteFiles ? 'unsubscribe-delete-mod-files' : 'unsubscribe-mods',
       label: deleteFiles
-        ? `取消订阅并删除 ${removedWorkshopItems.length} 个文件`
-        : `取消订阅 ${removedWorkshopItems.length} 个创意工坊项目`,
+        ? t('history.mod.unsubscribe_and_delete_count', '取消订阅并删除 {count} 个文件', { count: removedWorkshopItems.length })
+        : t('history.mod.unsubscribe_workshop_count', '取消订阅 {count} 个创意工坊项目', { count: removedWorkshopItems.length }),
     })
     if (removed) await appStore.requestModScan({ preserveListState: true, forceCoreRefresh: true })
     return removed
@@ -1195,14 +1212,14 @@ export const useModStore = defineStore('mods', () => {
       const mod = resolveStoredMod(modId)
       if (mod) Object.assign(mod, userData)
       const res = await window.pywebview.api.mod_user_data_update(modId, userData)
-      if (!checkResult(res, "更新Mod用户数据", true)) {
+      if (!checkResult(res, t('check.mod.update_user_data', '更新Mod用户数据'), true)) {
         restoreModSnapshots(rollback)
         return false
       }
       return true
     } catch (e) {
       console.error("更新Mod用户数据异常:", e)
-      toast.error(toUserMessage(e?.message || e, '更新 Mod 用户数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.update_user_data_failed', '更新 Mod 用户数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。')))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1221,7 +1238,7 @@ export const useModStore = defineStore('mods', () => {
       }));
       console.debug("准备更新 Mod 最后操作时间:", {all_mods_time:all_mods})
       const res = await window.pywebview.api.mod_time_update(all_mods)
-      if (!checkResult(res, "更新Mod最后操作时间")) {
+      if (!checkResult(res, t('check.mod.update_time', '更新Mod最后操作时间'))) {
         await appStore.refreshModCoreData('Mod 时间更新失败后同步模组数据', {
           preserveListState: true,
           refreshRules: false,
@@ -1233,7 +1250,7 @@ export const useModStore = defineStore('mods', () => {
       return true
     } catch (e) {
       console.error("更新Mod最后操作时间异常:", e)
-      toast.error(toUserMessage(e?.message || e, '更新 Mod 操作时间失败。正在重新同步模组数据，详细原因已写入系统日志。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.update_time_failed', '更新 Mod 操作时间失败。正在重新同步模组数据，详细原因已写入系统日志。')))
       await appStore.refreshModCoreData('Mod 时间更新异常后同步模组数据', {
         preserveListState: true,
         refreshRules: false,
@@ -1257,13 +1274,13 @@ export const useModStore = defineStore('mods', () => {
       })
       // 发送请求给后端
       const res = await window.pywebview.api.mods_sign_color_update(modIds, color)
-      if (!checkResult(res, "批量设置 Mod 颜色", true)) {
+      if (!checkResult(res, t('check.mod.batch_set_color', '批量设置 Mod 颜色'), true)) {
         restoreModSnapshots(rollback)
         return false
       }
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, '批量设置颜色失败，已还原本地状态。请稍后重试。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_set_color_failed', '批量设置颜色失败，已还原本地状态。请稍后重试。')))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1280,13 +1297,13 @@ export const useModStore = defineStore('mods', () => {
       })
       // 发送请求给后端
       const res = await window.pywebview.api.mods_user_mod_type_update(modIds, type)
-      if (!checkResult(res, "批量设置 Mod 类型", true)) {
+      if (!checkResult(res, t('check.mod.batch_set_type', '批量设置 Mod 类型'), true)) {
         restoreModSnapshots(rollback)
         return false
       }
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, '批量设置类型失败，已还原本地状态。请稍后重试。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_set_type_failed', '批量设置类型失败，已还原本地状态。请稍后重试。')))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1303,13 +1320,13 @@ export const useModStore = defineStore('mods', () => {
       })
       // 发送请求给后端
       const res = await window.pywebview.api.mods_add_tags(modIds, tags)
-      if (!checkResult(res, "批量添加 Mod 标签", true)) {
+      if (!checkResult(res, t('check.mod.batch_add_tags', '批量添加 Mod 标签'), true)) {
         restoreModSnapshots(rollback)
         return false
       }
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, '批量添加标签失败，已还原本地状态。请稍后重试。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_add_tags_failed', '批量添加标签失败，已还原本地状态。请稍后重试。')))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1326,13 +1343,13 @@ export const useModStore = defineStore('mods', () => {
       })
       // 发送请求给后端
       const res = await window.pywebview.api.mods_remove_tags(modIds, tags)
-      if (!checkResult(res, "批量移除 Mod 标签", true)) {
+      if (!checkResult(res, t('check.mod.batch_remove_tags', '批量移除 Mod 标签'), true)) {
         restoreModSnapshots(rollback)
         return false
       }
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, '批量移除标签失败，已还原本地状态。请稍后重试。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_remove_tags_failed', '批量移除标签失败，已还原本地状态。请稍后重试。')))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1384,13 +1401,13 @@ export const useModStore = defineStore('mods', () => {
     try {
       // 发送请求给后端
       const res = await window.pywebview.api.mods_link(modIds)
-      if (checkResult(res, "设置 Mod 联锁", true)) {
+      if (checkResult(res, t('check.mod.link', '设置 Mod 联锁'), true)) {
         await refreshAfterInterlockChange('联锁变更后同步模组数据')
         return true
       }
     } catch (e) {
       console.error("设置 Mod 联锁异常:", e)
-      toast.error(toUserMessage(e?.message || e, '设置 Mod 联锁失败。请稍后重试，详细原因已写入系统日志。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.link_failed', '设置 Mod 联锁失败。请稍后重试，详细原因已写入系统日志。')))
       return false
     }
   }
@@ -1399,7 +1416,7 @@ export const useModStore = defineStore('mods', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.mods_unlink(modIds)
-      if (checkResult(res, "解除 Mod 联锁", true)) {
+      if (checkResult(res, t('check.mod.unlink', '解除 Mod 联锁'), true)) {
         await refreshAfterInterlockChange('联锁变更后同步模组数据')
         return true
       }
@@ -1413,7 +1430,7 @@ export const useModStore = defineStore('mods', () => {
     appStore.isLoading = true
     try {
       const res = await window.pywebview.api.mods_interlock_heal(interlock_id)
-      if (checkResult(res, "修复断裂联锁", true)) {
+      if (checkResult(res, t('check.mod.heal_interlock', '修复断裂联锁'), true)) {
         await refreshAfterInterlockChange('联锁修复后同步模组数据')
         return true
       }
@@ -1426,7 +1443,7 @@ export const useModStore = defineStore('mods', () => {
     if (!window.pywebview || !interlock_id) return []
     try {
       const res = await window.pywebview.api.mods_interlock_missing_get(interlock_id)
-      if (checkResult(res, "获取联锁缺失项")) return res.data
+      if (checkResult(res, t('check.mod.get_interlock_missing', '获取联锁缺失项'))) return res.data
     } catch (e) {
       console.error("获取联锁缺失项失败:", e)
     }
@@ -1450,14 +1467,14 @@ export const useModStore = defineStore('mods', () => {
       })
       // 2. 发送请求给后端
       const res = await window.pywebview.api.mods_user_data_update(updatesList)
-      if (!checkResult(res, "批量更新Mod数据", true)) {
+      if (!checkResult(res, t('check.mod.batch_update_data', '批量更新Mod数据'), true)) {
         restoreModSnapshots(rollback)
         return false
       }
       return true
     } catch (e) {
       console.error("批量更新Mod数据异常:", e)
-      toast.error(toUserMessage(e?.message || e, '批量更新 Mod 数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。'))
+      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_update_data_failed', '批量更新 Mod 数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。')))
       restoreModSnapshots(rollback)
       return false
     } finally {

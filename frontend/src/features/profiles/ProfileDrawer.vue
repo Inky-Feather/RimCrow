@@ -166,7 +166,7 @@
           <CommonSwitch :disabled="workshopModsChecking" :label="t('ui.profiles.form.use_workshop_mods', '使用创意工坊 Mod')" :model-value="form.use_workshop_mods" :description="t('ui.profiles.form.use_workshop_mods_desc', '开启后，管理器会把创意工坊模组接入当前环境的本地模组目录。目录不可用时会提醒，但仍可手动开启。')" @update:modelValue="handleWorkshopModsUpdate" />
           <CommonSwitch v-if="appStore.settings.self_mods_path" :label="t('ui.profiles.form.use_manager_mods', '使用管理器 Mod')" v-model="form.use_self_mods" :description="t('ui.profiles.form.use_manager_mods_desc', '启用后将通过链接方式自动为游戏添加管理器模组。')" />
           <CommonSwitch v-if="!isEditing" :label="t('ui.profiles.form.copy_current_data', '继承当前配置')" v-model="form.copy_current_data" :description="t('ui.profiles.form.copy_current_data_desc', '自动复制当前的游戏配置到新环境')" />
-          <CommonTagInput :label="t('ui.profiles.form.run_commands', '游戏启动参数')" v-model="form.run_commands" :allTags="RUN_COMMAND_TAGS" :placeholder="t('ui.profiles.form.run_commands_placeholder', '请输入一个完整指令后回车确认……')" :description="t('ui.profiles.form.run_commands_desc', '注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。')" />
+          <CommonTagInput :label="t('ui.profiles.form.run_commands', '游戏启动参数')" v-model="form.run_commands" :allTags="runCommandTags" :placeholder="t('ui.profiles.form.run_commands_placeholder', '请输入一个完整指令后回车确认……')" :description="t('ui.profiles.form.run_commands_desc', '注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。')" />
 
           <div class="text-[0.7rem] text-text-disabled leading-relaxed">
             {{ t('ui.profiles.form.isolation_note', '* 每一个环境都拥有完全独立的存档、设置和 Mod 排序文件。系统将通过启动参数自动执行数据隔离。Mod 文件则会共用游戏本体所在的 Mods 目录。') }}
@@ -198,7 +198,7 @@ import CommonInput from '../../shared/components/input/CommonInput.vue'
 import CommonPathInput from '../../shared/components/input/CommonPathInput.vue'
 import CommonSwitch from '../../shared/components/input/CommonSwitch.vue'
 import CommonTagInput from '../../shared/components/input/CommonTagInput.vue'
-import { RUN_COMMAND_TAGS } from '../../shared/lib/constants'
+import { getRunCommandTags } from '../../shared/lib/constants'
 import { formatDate } from '../../shared/lib/format'
 import { t } from '../../shared/i18n'
 
@@ -206,6 +206,7 @@ const profileStore = useProfileStore()
 const modStore = useModStore()
 const appStore = useAppStore()
 const confirmStore = useConfirmStore()
+const runCommandTags = computed(() => getRunCommandTags())
 
 // --- 状态 ---
 const showModal = ref(false)

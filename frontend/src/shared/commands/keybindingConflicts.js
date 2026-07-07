@@ -1,5 +1,6 @@
 import { getAllCommands } from './commandRegistry'
 import { normalizeKeybindingList } from './keybindingParser'
+import { t } from '../i18n'
 
 export const createDefaultKeybindingConfig = () => ({
   version: 1,
@@ -64,30 +65,30 @@ const classifyConflict = (left, right, keybinding) => {
   if (locked) {
     return {
       level: 'critical',
-      message: '锁定快捷键发生重复，需要调整其中一个命令。',
+      message: t('keybinding.conflict.locked_duplicate', '锁定快捷键发生重复，需要调整其中一个命令。'),
     }
   }
   if (left.scope === right.scope) {
     return {
       level: 'critical',
-      message: '同一作用域内快捷键重复，触发时只能执行优先级最高的命令。',
+      message: t('keybinding.conflict.same_scope', '同一作用域内快捷键重复，触发时只能执行优先级最高的命令。'),
     }
   }
   if (left.scope === 'global' || right.scope === 'global') {
     return {
       level: 'high',
-      message: '全局快捷键与分区快捷键重复，分区激活时会覆盖全局命令。',
+      message: t('keybinding.conflict.global_scope', '全局快捷键与分区快捷键重复，分区激活时会覆盖全局命令。'),
     }
   }
   if (scopesAreRelated(left.scope, right.scope)) {
     return {
       level: 'medium',
-      message: '相关作用域中存在重复快捷键，请确认触发区域是否清晰。',
+      message: t('keybinding.conflict.related_scope', '相关作用域中存在重复快捷键，请确认触发区域是否清晰。'),
     }
   }
   return {
     level: 'medium',
-    message: '不同区域复用了同一个快捷键，仅在对应区域生效。',
+    message: t('keybinding.conflict.different_scope', '不同区域复用了同一个快捷键，仅在对应区域生效。'),
   }
 }
 

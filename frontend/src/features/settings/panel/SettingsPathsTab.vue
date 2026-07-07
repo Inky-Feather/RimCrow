@@ -31,7 +31,7 @@
                     :description="t('ui.settings.paths.workshop_mods_path_desc', '创意工坊目录即创意工坊下载的模组所在的目录，该设置所有环境通用')"
                     @blur="checkPath('workshop_mods_path', formData.workshop_mods_path)"/>
                   <CommonPathInput :label="t('ui.settings.paths.local_mods_path', '本地模组目录')" v-model="formData.local_mods_path" readOnly @browse="handleBrowse('local_mods_path')" :description="t('ui.settings.paths.local_mods_path_desc', '根据游戏安装目录自动生成')" />
-                  <CommonTagInput :label="t('ui.settings.paths.run_commands', '游戏启动参数')" v-model="formData.run_commands" :allTags="RUN_COMMAND_TAGS" :placeholder="t('ui.settings.paths.run_commands_placeholder', '请输入一个完整指令后回车确认……')" :description="t('ui.settings.paths.run_commands_desc', '注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。')" />
+                  <CommonTagInput :label="t('ui.settings.paths.run_commands', '游戏启动参数')" v-model="formData.run_commands" :allTags="runCommandTags" :placeholder="t('ui.settings.paths.run_commands_placeholder', '请输入一个完整指令后回车确认……')" :description="t('ui.settings.paths.run_commands_desc', '注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。')" />
                   <div class="modal-section grid grid-cols-1 gap-2 p-3">
                     <CommonPathInput :label="t('ui.settings.paths.steam_path', 'Steam程序路径')" :check="formData.check_info?.steam_path"
                       :description="t('ui.settings.paths.steam_path_desc', 'Steam 程序路径即 Steam 安装目录或程序所在位置，不同系统位置不同，可留空使用自动检测。')"
@@ -96,7 +96,7 @@ import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import CommonTagInput from '../../../shared/components/input/CommonTagInput.vue'
-import { RUN_COMMAND_TAGS } from '../../../shared/lib/constants'
+import { getRunCommandTags } from '../../../shared/lib/constants'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useProfileStore } from '../../profiles/profileStore'
 import { t } from '../../../shared/i18n'
@@ -113,6 +113,7 @@ const props = defineProps({
 const appStore = useAppStore()
 const profileStore = useProfileStore()
 const pendingAction = ref('')
+const runCommandTags = computed(() => getRunCommandTags())
 
 const LOAD_ORDER_DIR_MODE_OPTIONS = computed(() => [
   { label: t('ui.settings.paths.dir_mode.default', '默认'), value: 'default' },

@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { toUserMessage } from '../../shared/lib/common'
-import { translateMessagePayload } from '../../shared/i18n'
+import { t, translateMessagePayload } from '../../shared/i18n'
 
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'cancelled'])
 const ACTIVE_STATUSES = new Set(['pending', 'running'])
@@ -9,7 +9,7 @@ const TASK_RETENTION_MS = 3000
 
 const getTaskFailureMessage = (task = {}) => toUserMessage(
   translateMessagePayload(task, task.message) || task.metrics?.error || task.metrics?.original_error,
-  '任务未成功完成。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。',
+  t('tasks.error.not_completed', '任务未成功完成。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。'),
 )
 
 export const useTaskStore = defineStore('tasks', () => {
@@ -137,7 +137,7 @@ export const useTaskStore = defineStore('tasks', () => {
       const timer = window.setTimeout(() => {
         const entries = waiters.get(taskId) || []
         waiters.set(taskId, entries.filter(entry => entry.timer !== timer))
-        reject(new Error('任务超时'))
+        reject(new Error(t('tasks.error.timeout', '任务超时')))
       }, timeout)
       const entries = waiters.get(taskId) || []
       entries.push({ resolve, reject, timer })

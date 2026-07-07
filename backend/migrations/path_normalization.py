@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from backend.database.models import MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_PRESENT, GameProfile, ModAsset, SystemInfo, db
+from backend.i18n.messages import tr
 from backend.settings import settings
 from backend.utils.logger import logger
 from backend.utils.tools import generate_path_hash, normalize_path_for_storage, normalize_path_list_for_storage
@@ -191,11 +192,15 @@ def run_path_normalization_migration(force: bool = False) -> PathNormalizationRe
             ).on_conflict_replace().execute()
     except Exception as exc:
         logger.warning(f"路径规范化迁移失败: {exc}", exc_info=True)
-        result.messages.append("路径规范化迁移失败，部分旧路径可能需要重新保存或重新扫描。")
+        result.messages.append(tr("startup.migration.path_normalization_failed", "路径规范化迁移失败，部分旧路径可能需要重新保存或重新扫描。"))
         return result
 
     if result.changed:
-        result.messages.append(
-            f"已完成路径规范化：环境 {result.profile_updates} 项，模组记录 {result.asset_updates} 项，合并重复 {result.asset_merges} 项。"
-        )
+        result.messages.append(tr(
+            "startup.migration.path_normalization_done",
+            "已完成路径规范化：环境 {profile_count} 项，模组记录 {asset_count} 项，合并重复 {merge_count} 项。",
+            profile_count=result.profile_updates,
+            asset_count=result.asset_updates,
+            merge_count=result.asset_merges,
+        ))
     return result

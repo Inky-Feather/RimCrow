@@ -249,6 +249,39 @@ def is_tr_call(node: ast.Call) -> bool:
     )
 
 
+def api_message_key_from_code(namespace: str, code: str = "") -> str:
+    normalized = re.sub(r"[^a-z0-9.]+", "_", str(code or "").strip().lower()).strip("._")
+    if not normalized or normalized in {"app.unknown_error", "app.warning"}:
+        return ""
+    return f"api.{namespace}.{normalized}"
+
+
+def extract_api_response_messages(tree: ast.AST) -> dict[str, str]:
+    messages: dict[str, str] = {}
+    namespaces = {"error": "errors", "warning": "warnings"}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "ApiResponse"
+            and func.attr in namespaces
+        ):
+            continue
+        keywords = call_keywords(node)
+        # user_message 已经由 tr() 或调用方显式 key 管理；这里只兜住未来新增的简洁字面量调用。
+        if "user_message" in keywords or "message_key" in keywords:
+            continue
+        default_text = literal_string(node.args[0]) if node.args else None
+        code = literal_string(keywords["code"]) if "code" in keywords else None
+        key = api_message_key_from_code(namespaces[func.attr], code or "")
+        if key and default_text:
+            messages[key] = default_text
+    return messages
+
+
 def extract_python_messages(path: Path) -> dict[str, str]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     messages: dict[str, str] = {}
@@ -259,6 +292,7 @@ def extract_python_messages(path: Path) -> dict[str, str]:
         default_text = literal_string(node.args[1])
         if key and default_text is not None:
             messages[key.strip()] = default_text
+    messages.update(extract_api_response_messages(tree))
     messages.update(extract_ai_action_messages(path, tree))
     messages.update(extract_ai_entry_messages(path, tree))
     messages.update(extract_ai_attachment_messages(path, tree))

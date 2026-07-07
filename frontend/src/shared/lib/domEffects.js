@@ -1,6 +1,7 @@
 import { Copy, Download, Link } from 'lucide-vue-next'
 import { useContextMenuStore } from '../components/context-menu/contextMenuStore'
 import { checkResult, toast, toUserMessage } from './common'
+import { t } from '../i18n'
 
 /**
  * 给元素添加一次性的强调动画，用于提示用户关注某个控件。
@@ -183,18 +184,18 @@ const getViewerImagePayload = (viewerImage, originalImage) => {
 }
 
 const fetchViewerImageBlob = async (imagePayload) => {
-  if (!imagePayload?.src) throw new Error('未找到可复制的图片地址')
+  if (!imagePayload?.src) throw new Error(t('errors.image.copy_url_missing', '未找到可复制的图片地址'))
   const response = await fetch(imagePayload.src, { cache: 'no-store' })
-  if (!response.ok) throw new Error(`读取图片失败：${response.status}`)
+  if (!response.ok) throw new Error(t('errors.image.read_failed_status', '读取图片失败：{status}', { status: response.status }))
   const blob = await response.blob()
-  if (!blob?.size) throw new Error('图片内容为空')
+  if (!blob?.size) throw new Error(t('errors.image.empty_content', '图片内容为空'))
   return blob
 }
 
 const blobToBase64 = (blob) => new Promise((resolve, reject) => {
   const reader = new FileReader()
   reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '')
-  reader.onerror = () => reject(reader.error || new Error('读取图片内容失败'))
+  reader.onerror = () => reject(reader.error || new Error(t('errors.image.read_content_failed', '读取图片内容失败')))
   reader.readAsDataURL(blob)
 })
 
@@ -211,7 +212,7 @@ const convertImageBlobToPng = (blob) => new Promise((resolve, reject) => {
       canvas.toBlob((pngBlob) => {
         URL.revokeObjectURL(objectUrl)
         if (pngBlob) resolve(pngBlob)
-        else reject(new Error('转换图片格式失败'))
+        else reject(new Error(t('errors.image.convert_failed', '转换图片格式失败')))
       }, 'image/png')
     } catch (error) {
       URL.revokeObjectURL(objectUrl)
@@ -220,7 +221,7 @@ const convertImageBlobToPng = (blob) => new Promise((resolve, reject) => {
   }
   image.onerror = () => {
     URL.revokeObjectURL(objectUrl)
-    reject(new Error('图片解码失败'))
+    reject(new Error(t('errors.image.decode_failed', '图片解码失败')))
   }
   image.src = objectUrl
 })
@@ -228,7 +229,7 @@ const convertImageBlobToPng = (blob) => new Promise((resolve, reject) => {
 const copyViewerImage = async (imagePayload) => {
   try {
     if (!navigator?.clipboard?.write || typeof ClipboardItem === 'undefined') {
-      throw new Error('当前环境不支持复制图片到剪贴板')
+      throw new Error(t('errors.image.clipboard_image_unsupported', '当前环境不支持复制图片到剪贴板'))
     }
     const sourceBlob = await fetchViewerImageBlob(imagePayload)
     // 系统剪贴板对 PNG 支持最稳定，其他图片格式统一转成 PNG 后写入。
@@ -236,29 +237,29 @@ const copyViewerImage = async (imagePayload) => {
       ? sourceBlob
       : await convertImageBlobToPng(sourceBlob)
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': clipboardBlob })])
-    toast.success('已复制图片', { timeout: 600 })
+    toast.success(t('toast.image.copied', '已复制图片'), { timeout: 600 })
   } catch (error) {
     console.warn('复制图片失败:', error)
-    toast.error(toUserMessage(error?.message || error, '复制图片失败。请检查浏览器剪贴板权限，或改用另存为。'))
+    toast.error(toUserMessage(error?.message || error, t('toast.image.copy_failed', '复制图片失败。请检查浏览器剪贴板权限，或改用另存为。')))
   }
 }
 
 const copyViewerImageUrl = async (imagePayload) => {
   try {
-    if (!imagePayload?.originalSrc) throw new Error('未找到图片地址')
-    if (!navigator?.clipboard?.writeText) throw new Error('当前环境不支持复制文本到剪贴板')
+    if (!imagePayload?.originalSrc) throw new Error(t('errors.image.url_missing', '未找到图片地址'))
+    if (!navigator?.clipboard?.writeText) throw new Error(t('errors.clipboard.text_unsupported', '当前环境不支持复制文本到剪贴板'))
     await navigator.clipboard.writeText(imagePayload.originalSrc)
-    toast.success('已复制图片地址', { timeout: 600 })
+    toast.success(t('toast.image.url_copied', '已复制图片地址'), { timeout: 600 })
   } catch (error) {
     console.warn('复制图片地址失败:', error)
-    toast.error(toUserMessage(error?.message || error, '复制图片地址失败。请检查浏览器剪贴板权限，或手动复制地址。'))
+    toast.error(toUserMessage(error?.message || error, t('toast.image.copy_url_failed', '复制图片地址失败。请检查浏览器剪贴板权限，或手动复制地址。')))
   }
 }
 
 const saveViewerImageAs = async (imagePayload) => {
   try {
     if (!window.pywebview?.api?.image_save_as) {
-      throw new Error('当前环境不支持图片另存为')
+      throw new Error(t('errors.image.save_as_unsupported', '当前环境不支持图片另存为'))
     }
     const blob = await fetchViewerImageBlob(imagePayload)
     const contentBase64 = await blobToBase64(blob)
@@ -268,20 +269,20 @@ const saveViewerImageAs = async (imagePayload) => {
       content_base64: contentBase64,
     })
     if (res?.status === 'warning' && res?.message === '已取消') return
-    checkResult(res, '图片另存为', true)
+    checkResult(res, t('check.image.save_as', '图片另存为'), true)
   } catch (error) {
     console.warn('图片另存为失败:', error)
-    toast.error(toUserMessage(error?.message || error, '图片另存为失败。请检查目标目录权限、磁盘空间或当前运行环境是否支持保存文件。'))
+    toast.error(toUserMessage(error?.message || error, t('toast.image.save_as_failed', '图片另存为失败。请检查目标目录权限、磁盘空间或当前运行环境是否支持保存文件。')))
   }
 }
 
 const openViewerImageContextMenu = (event, imagePayload) => {
   const contextMenuStore = useContextMenuStore()
   contextMenuStore.open(event, [
-    { label: '复制图片', icon: Copy, action: () => copyViewerImage(imagePayload) },
-    { label: '另存为...', icon: Download, action: () => saveViewerImageAs(imagePayload) },
+    { label: t('menu.image.copy', '复制图片'), icon: Copy, action: () => copyViewerImage(imagePayload) },
+    { label: t('menu.image.save_as', '另存为...'), icon: Download, action: () => saveViewerImageAs(imagePayload) },
     { divider: true },
-    { label: '复制图片地址', icon: Link, action: () => copyViewerImageUrl(imagePayload) },
+    { label: t('menu.image.copy_url', '复制图片地址'), icon: Link, action: () => copyViewerImageUrl(imagePayload) },
   ], imagePayload)
 }
 

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { toast, checkResult } from '../../shared/lib/common'
+import { t } from '../../shared/i18n'
 
 const createEmptyOverview = () => ({
   summary: {
@@ -35,7 +36,7 @@ export const useModResidueStore = defineStore('modResidue', () => {
     loading.value = true
     try {
       const res = await window.pywebview.api.mod_residue_get_overview()
-      if (!checkResult(res, '读取卸载残留列表', false, { silent })) return null
+      if (!checkResult(res, t('api.work.mod_residue.load_overview', '读取卸载残留列表'), false, { silent })) return null
       setOverview(res.data || createEmptyOverview())
       return overview.value
     } finally {
@@ -46,18 +47,18 @@ export const useModResidueStore = defineStore('modResidue', () => {
   const addWhitelist = async (paths) => {
     if (!window.pywebview?.api?.mod_residue_whitelist_add) return false
     const res = await window.pywebview.api.mod_residue_whitelist_add(paths)
-    if (!checkResult(res, '加入白名单')) return false
+    if (!checkResult(res, t('api.work.mod_residue.add_whitelist', '加入白名单'))) return false
     setOverview(res.data?.overview || overview.value)
-    toast.success('已加入白名单，之后扫描会跳过它')
+    toast.success(t('toast.mod_residue.whitelist_added', '已加入白名单，之后扫描会跳过它'))
     return true
   }
 
   const removeWhitelist = async (paths) => {
     if (!window.pywebview?.api?.mod_residue_whitelist_remove) return false
     const res = await window.pywebview.api.mod_residue_whitelist_remove(paths)
-    if (!checkResult(res, '移出白名单')) return false
+    if (!checkResult(res, t('api.work.mod_residue.remove_whitelist', '移出白名单'))) return false
     setOverview(res.data?.overview || overview.value)
-    toast.success('已移出白名单，之后扫描会再次提示它')
+    toast.success(t('toast.mod_residue.whitelist_removed', '已移出白名单，之后扫描会再次提示它'))
     return true
   }
 
