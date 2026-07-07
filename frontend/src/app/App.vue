@@ -291,6 +291,9 @@
       @save="saveThemeEditor"
     />
   </div>
+
+  <!-- 翻译模式浮窗：独立于主布局，确保任意界面都能通过快捷键呼出。 -->
+  <TranslationModeOverlay />
 </template>
 
 <script setup>
@@ -318,6 +321,7 @@ import ModList from '../features/mod/list/ModList.vue'
 import GroupList from '../features/mod/GroupList.vue'
 import ContextMenu from '../shared/components/context-menu/ContextMenu.vue'
 import HoverPanel from '../shared/components/popover/HoverPanel.vue'
+import TranslationModeOverlay from '../shared/components/translation/TranslationModeOverlay.vue'
 import BackupList from '../features/load-order/BackupList.vue'
 import ModRuleEditor from '../features/rules/ModRuleEditor.vue'
 import SegmentedTabs from '../shared/components/tabs/SegmentedTabs.vue'

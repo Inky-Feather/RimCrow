@@ -1,8 +1,10 @@
 import { createI18n } from 'vue-i18n'
+import { ref } from 'vue'
 import zhCN from '../../locales/zh-CN.json'
 import en from '../../locales/en.json'
 
 export const DEFAULT_LOCALE = 'zh-CN'
+export const UNTRANSLATED_PREFIX = '[UNTRANSLATED] '
 
 const builtinMessages = {
   'zh-CN': zhCN,
@@ -10,6 +12,8 @@ const builtinMessages = {
 }
 
 const loadedUserMessages = new Map()
+const translationRegistry = new Map()
+export const localeRevision = ref(0)
 
 const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value)
 
@@ -26,6 +30,30 @@ export const deepMerge = (base = {}, override = {}) => {
 const formatFallback = (text = '', params = {}) => String(text ?? '').replace(/\{([^{}]+)\}/g, (match, name) => (
   Object.prototype.hasOwnProperty.call(params || {}, name) ? String(params[name] ?? '') : match
 ))
+
+export const stripUntranslatedPrefix = (text = '') => {
+  const value = String(text ?? '')
+  return value.startsWith(UNTRANSLATED_PREFIX) ? value.slice(UNTRANSLATED_PREFIX.length) : value
+}
+
+const normalizeLookupText = (text = '') => String(text ?? '')
+  .replace(/<[^>]*>/g, ' ')
+  .replace(/(\^\^|!!|__|\[\[|\]\]|##|··|\*\*)/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLocaleLowerCase()
+
+const recordTranslationEntry = (key, defaultText, rawText, displayText, params = {}) => {
+  if (!key || !displayText) return
+  translationRegistry.set(key, {
+    key,
+    defaultText: String(defaultText ?? ''),
+    rawText: String(rawText ?? ''),
+    currentText: stripUntranslatedPrefix(rawText),
+    displayText: String(displayText ?? ''),
+    params: { ...(params || {}) },
+  })
+}
 
 const getMessageByPath = (messages = {}, key = '') => {
   if (!key) return undefined
@@ -73,6 +101,7 @@ export const setLocale = async (language = DEFAULT_LOCALE) => {
   loadedUserMessages.set(locale, userMessages)
   i18n.global.setLocaleMessage(locale, deepMerge(builtin, userMessages))
   i18n.global.locale.value = locale
+  localeRevision.value += 1
   document.documentElement.lang = locale
   return locale
 }
@@ -80,6 +109,7 @@ export const setLocale = async (language = DEFAULT_LOCALE) => {
 export const getCurrentLocale = () => i18n.global.locale.value || DEFAULT_LOCALE
 
 export const t = (key = '', defaultText = '', params = {}) => {
+  localeRevision.value
   const normalizedKey = String(key || '').trim()
   const safeParams = params && typeof params === 'object' ? params : {}
   if (!normalizedKey) return formatFallback(defaultText, safeParams)
@@ -87,8 +117,23 @@ export const t = (key = '', defaultText = '', params = {}) => {
   const locale = i18n.global.locale.value || DEFAULT_LOCALE
   const translated = getMessageByPath(i18n.global.getLocaleMessage(locale), normalizedKey)
     ?? getMessageByPath(i18n.global.getLocaleMessage(DEFAULT_LOCALE), normalizedKey)
-  if (translated !== undefined) return formatFallback(translated, safeParams)
-  return formatFallback(defaultText, safeParams)
+  const rawText = translated !== undefined ? translated : defaultText
+  const displayText = formatFallback(stripUntranslatedPrefix(rawText), safeParams)
+  recordTranslationEntry(normalizedKey, defaultText, rawText, displayText, safeParams)
+  return displayText
+}
+
+export const findTranslationEntriesForText = (text = '') => {
+  const lookup = normalizeLookupText(text)
+  if (!lookup) return []
+  return Array.from(translationRegistry.values())
+    .filter(entry => {
+      const display = normalizeLookupText(entry.displayText)
+      const fallback = normalizeLookupText(entry.defaultText)
+      return (display && (display === lookup || lookup.includes(display)))
+        || (fallback && (fallback === lookup || lookup.includes(fallback)))
+    })
+    .sort((left, right) => right.displayText.length - left.displayText.length)
 }
 
 export const translateMessagePayload = (payload = {}, fallback = '') => {

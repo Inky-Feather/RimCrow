@@ -11,6 +11,7 @@
                     <ThemeSelect v-if="formData.ui" v-model="currentThemeId" :themes="appStore.themes"
                       @create="openThemeCreate" @edit="openThemeEdit" @delete="handleThemeDelete"
                     />
+                    <CommonSwitch :label="t('ui.settings.general.translation_mode', '翻译模式')" v-model="translationMode" :description="t('ui.settings.general.translation_mode_desc', '开启后显示翻译辅助浮窗，也可按 Ctrl + Shift + L 快速开关。')" />
                   </div>
                   <CommonSwitch :label="t('ui.settings.general.open_url_in_system_browser', '在系统浏览器中打开 URL')" v-model="formData.open_url_on_system" :description="t('ui.settings.general.open_url_in_system_browser_desc', '关闭则使用内置浏览器')" />
                   <div class="grid grid-cols-2 gap-4">
@@ -140,6 +141,11 @@ const languageOptions = computed(() => [
   { label: t('ui.settings.general.language.zh_cn', '简体中文'), value: 'zh-CN' },
   { label: t('ui.settings.general.language.en', 'English'), value: 'en' },
 ])
+
+const translationMode = computed({
+  get: () => !!appStore.translationModeEnabled,
+  set: (enabled) => { appStore.translationModeEnabled = !!enabled },
+})
 
 const selectedFormTheme = computed(() => {
   return findThemeById(appStore.themes, currentThemeId.value)

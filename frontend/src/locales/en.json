@@ -1493,7 +1493,9 @@
         "tooltip_hover_time": "Tooltip hover delay",
         "tooltip_hover_time_desc": "Controls how long to wait before showing tooltips, in milliseconds",
         "visit": "Visit",
-        "workshop_page": "Workshop page"
+        "workshop_page": "Workshop page",
+        "translation_mode": "Translation mode",
+        "translation_mode_desc": "Show the translation helper overlay. You can also press Ctrl + Shift + L to toggle it."
       },
       "features": {
         "action_prechecks": "Required checks before key actions",
@@ -2139,6 +2141,21 @@
         "loading": "Reading file...",
         "empty": "Select a file or match on the left to preview read-only file contents here."
       }
+    },
+    "i18n": {
+      "translation_mode": {
+        "auto_translate": "Auto translate",
+        "cancel_pick": "Cancel picking",
+        "candidate_key": "Candidate text key",
+        "pick_text": "Pick again",
+        "picking": "Click interface text to translate it",
+        "saving": "Saving...",
+        "shortcut_hint": "Ctrl + Shift + L toggle",
+        "source_text": "Chinese source text",
+        "title": "Translation mode",
+        "translation": "Current translation",
+        "provider": "Translator"
+      }
     }
   },
   "tooltip": {
@@ -2554,6 +2571,12 @@
         "hidden_count": "\n{count} dependency lines hidden",
         "open_hint": "\n\n__[[(Click to open the dependency-line manager)]]__",
         "summary": "Dependency lines: {visible} / {total}"
+      }
+    },
+    "i18n": {
+      "translation_mode": {
+        "close": "Close translation mode",
+        "minimize": "Minimize to floating button"
       }
     }
   },
@@ -4498,6 +4521,11 @@
       "document_invalid": "Invalid translation request. Check the text to translate, target language, and translation service settings.",
       "empty_result": "The translator did not return a valid translation",
       "target_language_required": "Target language is required"
+    },
+    "i18n": {
+      "user_locale_message_invalid": "Failed to save the user locale text. Check that the text key is valid.",
+      "user_locale_message_save_failed": "Failed to save the user locale text. Check that the data/locales directory is writable. Details were written to the system log.",
+      "user_locale_message_saved": "Saved translation: {key}"
     }
   },
   "errors": {
@@ -5913,6 +5941,18 @@
       "update": {
         "download_failed": "Failed to download update package. Check network connection, proxy settings, and disk space, then try again later."
       }
+    },
+    "i18n": {
+      "translation_mode": {
+        "ai_not_configured": "Enable and configure AI translation in Settings first.",
+        "auto_translate_failed": "Auto translation failed.",
+        "auto_translate_unavailable": "Auto translation is not available in the current runtime.",
+        "default_locale_skip": "The current language is already the default Chinese locale. Auto translation is not needed.",
+        "no_match": "No translatable text was found. Make sure this text is connected to the i18n system.",
+        "save_failed": "Failed to save the translation.",
+        "save_unavailable": "Saving user locale files is not available in the current runtime.",
+        "saved": "Translation saved and reloaded."
+      }
     }
   },
   "check": {
@@ -6146,6 +6186,10 @@
       "open_workspace": {
         "title": "Open Inventory Hub",
         "description": "Open the inventory management hub."
+      },
+      "toggle_translation_mode": {
+        "description": "Show or hide the translation helper overlay.",
+        "title": "Toggle translation mode"
       }
     },
     "load_order": {

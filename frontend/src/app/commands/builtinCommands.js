@@ -159,6 +159,19 @@ export const registerBuiltinCommands = () => {
       run: ({ appStore }) => appStore.openSettingsPanel(),
     },
     {
+      id: 'app.toggleTranslationMode',
+      title: '切换翻译模式',
+      category: COMMAND_CATEGORIES.app,
+      description: '显示或隐藏翻译辅助浮窗。',
+      scope: 'global',
+      defaultKeys: ['Ctrl+Shift+L'],
+      allowInInput: true,
+      run: ({ appStore }) => {
+        if (!appStore) return
+        appStore.translationModeEnabled = !appStore.translationModeEnabled
+      },
+    },
+    {
       id: 'app.openFileSearch',
       title: '打开文件内容搜索',
       category: COMMAND_CATEGORIES.app,

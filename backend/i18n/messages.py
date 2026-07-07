@@ -76,6 +76,32 @@ def load_user_locale(language: str) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def set_nested(payload: dict[str, Any], dotted_key: str, value: str) -> None:
+    parts = [part for part in str(dotted_key or "").split(".") if part]
+    if not parts:
+        raise ValueError("语言包 key 不能为空")
+    current = payload
+    for part in parts[:-1]:
+        child = current.get(part)
+        if not isinstance(child, dict):
+            child = {}
+            current[part] = child
+        current = child
+    current[parts[-1]] = str(value or "")
+
+
+def save_user_locale_message(language: str, key: str, value: str) -> dict[str, str]:
+    """保存单条用户语言覆盖；只写 data/locales，不改内置语言包。"""
+    code = normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE
+    normalized_key = str(key or "").strip()
+    if not normalized_key:
+        raise ValueError("语言包 key 不能为空")
+    payload = load_user_locale(code)
+    set_nested(payload, normalized_key, value)
+    write_json(USER_LOCALES_DIR / f"{code}.json", payload)
+    return {"language": code, "key": normalized_key}
+
+
 def write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(

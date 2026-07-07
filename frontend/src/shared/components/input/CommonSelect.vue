@@ -34,6 +34,7 @@
     <FixedPopover
       :trigger-ref="inputRef" :is-open="isOpen"
       :placement="menuPlacement"
+      :z-index="popoverZIndex"
       close-on-other-popover
       @request-close="handlePopoverRequestClose"
     >
@@ -88,6 +89,7 @@ const props = defineProps({
   options: { type: Array, default: () => [] }, // { label, value, ... }
   mini: { type: Boolean, default: false },
   showBottom: { type: Boolean, default: false }, // 默认向下展开
+  popoverZIndex: { type: [Number, String], default: 8000 }, // 特殊高层浮窗可抬高下拉层级，普通场景保持默认。
   editable: { type: Boolean, default: false }, // 是否可输入
   disabled: { type: Boolean, default: false },
 })

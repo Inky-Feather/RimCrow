@@ -47,6 +47,7 @@ export const useAppStore = defineStore('app', () => {
   const settingsReady = ref(false) // 后端设置已注入，避免其它 store 把默认空配置误判为用户配置
   const isGameRunning = ref(false) // 全局游戏运行状态
   const isSuspended = ref(false) // 浏览器模式下的同页静默挂起状态
+  const translationModeEnabled = ref(false) // 翻译模式只影响当前前端会话，不写入后端设置。
   // 运行时会话与 UI 当前环境分离：这里只记录“游戏现在实际按谁在跑”。
   const runtimeSession = ref(createDefaultRuntimeSession())
 
@@ -1736,7 +1737,7 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     // 基础状态
-    appVersion, buildMode, uiState, settings, settingsReady, isLoading, isDownloading, isScanRunning, updateState,
+    appVersion, buildMode, uiState, settings, settingsReady, isLoading, isDownloading, isScanRunning, updateState, translationModeEnabled,
     themes, currentTheme, userThemes, themeEditor, packageTransferDialog, recommendationExportDialog,
     // 布局与运行态
     remoteImageCache, translationProviders, isTranslationProvidersLoaded, translationLanguageOptions, isTranslationLanguageOptionsLoaded, DEFAULT_DETAILS_LAYOUT, DETAILS_LAYOUT_MAPS, DEFAULT_MAIN_LAYOUT, MAIN_LAYOUT_MAPS, SIDEBAR_TABS, activeSidebarTab, isGameRunning, isSuspended, runtimeSession, upgradeContext,

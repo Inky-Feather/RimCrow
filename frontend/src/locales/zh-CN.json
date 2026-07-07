@@ -246,6 +246,21 @@
       },
       "workspace_hub": "库存枢纽"
     },
+    "i18n": {
+      "translation_mode": {
+        "auto_translate": "自动翻译",
+        "cancel_pick": "取消拾取",
+        "candidate_key": "候选文本 key",
+        "pick_text": "重新拾取",
+        "picking": "点击界面文本进行翻译",
+        "provider": "翻译器",
+        "saving": "保存中...",
+        "shortcut_hint": "Ctrl + Shift + L 开关",
+        "source_text": "中文原文",
+        "title": "翻译模式",
+        "translation": "当前译文"
+      }
+    },
     "issue": {
       "default": "其他问题",
       "inactive_dependency": "依赖未启用",
@@ -971,6 +986,8 @@
         "title": "界面与布局",
         "tooltip_hover_time": "提示悬停时间",
         "tooltip_hover_time_desc": "控制悬浮提示信息的等待时间，单位是毫秒",
+        "translation_mode": "翻译模式",
+        "translation_mode_desc": "开启后显示翻译辅助浮窗，也可按 Ctrl + Shift + L 快速开关。",
         "visit": "访问",
         "workshop_page": "工坊页面"
       },
@@ -2294,6 +2311,12 @@
       "settings": "设置",
       "texture_opt": "贴图优化",
       "workspace_hub": "库存管理中枢"
+    },
+    "i18n": {
+      "translation_mode": {
+        "close": "关闭翻译模式",
+        "minimize": "缩小为悬浮球"
+      }
     },
     "log_panel": {
       "clear_time_filter": "清除时间限制",
@@ -4198,6 +4221,11 @@
       "mark_done_failed": "保存引导状态失败。请检查配置文件是否可写，详细原因已写入系统日志。",
       "reset_failed": "重置引导状态失败。请检查配置文件是否可写，详细原因已写入系统日志。"
     },
+    "i18n": {
+      "user_locale_message_invalid": "保存用户语言文本失败。请确认文本 key 有效。",
+      "user_locale_message_save_failed": "保存用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
+      "user_locale_message_saved": "已保存翻译：{key}"
+    },
     "image": {
       "content_empty": "图片内容为空",
       "no_content_to_save": "没有可保存的图片内容",
@@ -5597,6 +5625,10 @@
       "open_workspace": {
         "description": "打开库存管理中枢。",
         "title": "打开库存枢纽"
+      },
+      "toggle_translation_mode": {
+        "description": "显示或隐藏翻译辅助浮窗。",
+        "title": "切换翻译模式"
       }
     },
     "category": {
@@ -6881,6 +6913,18 @@
       },
       "update": {
         "download_failed": "下载更新包失败。请检查网络连接、代理设置和磁盘空间，稍后重试。"
+      }
+    },
+    "i18n": {
+      "translation_mode": {
+        "ai_not_configured": "请先在设置中启用并配置 AI 翻译。",
+        "auto_translate_failed": "自动翻译失败。",
+        "auto_translate_unavailable": "当前运行环境不支持自动翻译。",
+        "default_locale_skip": "当前已经是默认中文，不需要自动翻译。",
+        "no_match": "未找到可翻译文本。请确认该文本已经接入多语言结构。",
+        "save_failed": "保存翻译失败。",
+        "save_unavailable": "当前运行环境不支持保存用户语言文件。",
+        "saved": "翻译已保存并重新加载。"
       }
     }
   },

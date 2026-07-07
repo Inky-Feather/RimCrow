@@ -50,7 +50,7 @@ from backend.utils.tools import open_system_uri as open_uri_with_system_handler
 from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.constants import RIMWORLD_DLC_OPTIONS, RIMWORLD_STEAM_APP_ID_STR, get_steam_elanguage_options
 from backend.i18n.language_registry import get_language_options, normalize_language_code
-from backend.i18n.messages import DEFAULT_LOCALE, load_user_locale, localized_key, localized_params, tr
+from backend.i18n.messages import DEFAULT_LOCALE, load_user_locale, localized_key, localized_params, save_user_locale_message, tr
 from backend.utils.logger import logger, app_log_reader
 from backend.utils.shortcuts import get_desktop_directory
 from backend.managers.mgr_network import network_mgr
@@ -1325,6 +1325,35 @@ class API:
                 user_message=tr(
                     "errors.i18n.user_locale_load_failed",
                     "读取用户语言文件失败。请检查 data/locales 下的语言文件格式。",
+                ),
+            )
+
+    @log_api_call
+    def locale_save_user_message(self, language: str, key: str, value: str):
+        """保存单条用户语言覆盖，供前端翻译模式即时更新界面文本。"""
+        locale = normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE
+        try:
+            return ApiResponse.success(
+                save_user_locale_message(locale, key, value),
+                tr("api.i18n.user_locale_message_saved", "已保存翻译：{key}", key=key),
+            )
+        except ValueError as e:
+            return ApiResponse.warning(
+                "保存用户语言文本失败",
+                code="I18N.LOCALE_MESSAGE_INVALID",
+                detail=e,
+                context={"language": locale, "key": key},
+                user_message=tr("api.i18n.user_locale_message_invalid", "保存用户语言文本失败。请确认文本 key 有效。"),
+            )
+        except Exception as e:
+            return ApiResponse.error(
+                "保存用户语言文本失败",
+                code="I18N.LOCALE_MESSAGE_SAVE_FAILED",
+                detail=e,
+                context={"language": locale, "key": key},
+                user_message=tr(
+                    "api.i18n.user_locale_message_save_failed",
+                    "保存用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
                 ),
             )
     
