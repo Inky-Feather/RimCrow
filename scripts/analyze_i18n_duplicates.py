@@ -4,6 +4,7 @@ import argparse
 import difflib
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from collections.abc import Mapping
 from pathlib import Path
@@ -12,7 +13,16 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LOCALE_PATH = ROOT / "frontend" / "src" / "locales" / "zh-CN.json"
-PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][\w]*)\}")
+PLACEHOLDER_RE = re.compile(r"\{([A-Za-z_][\w.-]*)\}")
+
+
+def configure_stdout() -> None:
+    """避免 Windows GBK 控制台输出多语言文本时报 UnicodeEncodeError。"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 
 def flatten_strings(payload: Mapping[str, Any], prefix: str = "") -> dict[str, str]:
@@ -52,7 +62,7 @@ def print_group(title: str, groups: list[tuple[str, list[str]]], limit: int) -> 
             print("  ...")
 
 
-def analyze(locale_path: Path, limit: int, similar_limit: int, similar_threshold: float) -> None:
+def build_analysis(locale_path: Path, similar_threshold: float) -> dict[str, Any]:
     payload = json.loads(locale_path.read_text(encoding="utf-8"))
     if not isinstance(payload, Mapping):
         raise SystemExit(f"{locale_path} 不是 JSON 对象")
@@ -112,8 +122,50 @@ def analyze(locale_path: Path, limit: int, similar_limit: int, similar_threshold
                 pairs.append((ratio, key_a, text_a, key_b, text_b))
     pairs.sort(key=lambda item: -item[0])
 
-    print(f"Locale: {locale_path.relative_to(ROOT).as_posix() if locale_path.is_relative_to(ROOT) else locale_path}")
-    print(f"Total keys: {len(values)}")
+    return {
+        "locale": locale_path.relative_to(ROOT).as_posix() if locale_path.is_relative_to(ROOT) else str(locale_path),
+        "total_keys": len(values),
+        "exact_duplicate_groups": [
+            {"text": text, "keys": keys, "domains": dict(Counter(domain_of(key) for key in keys))}
+            for text, keys in exact_groups
+        ],
+        "normalized_duplicate_groups": [
+            {"normalized": normalized_text, "items": entries}
+            for normalized_text, entries in normalized_groups
+        ],
+        "common_reuse_candidates": [
+            {"text": text, "keys": keys, "domains": dict(Counter(domain_of(key) for key in keys))}
+            for text, keys in common_groups
+        ],
+        "cross_domain_exact_duplicates": [
+            {"text": text, "keys": keys, "domains": dict(Counter(domain_of(key) for key in keys))}
+            for text, keys in cross_domain_groups
+        ],
+        "same_domain_exact_duplicates": [
+            {"text": text, "keys": keys, "domains": dict(Counter(domain_of(key) for key in keys))}
+            for text, keys in same_domain_groups
+        ],
+        "similar_pairs": [
+            {"ratio": ratio, "a": {"key": key_a, "text": text_a}, "b": {"key": key_b, "text": text_b}}
+            for ratio, key_a, text_a, key_b, text_b in pairs
+        ],
+    }
+
+
+def analyze(locale_path: Path, limit: int, similar_limit: int, similar_threshold: float, as_json: bool) -> None:
+    result = build_analysis(locale_path, similar_threshold)
+    if as_json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    exact_groups = [(item["text"], item["keys"]) for item in result["exact_duplicate_groups"]]
+    normalized_groups = [(item["normalized"], item["items"]) for item in result["normalized_duplicate_groups"]]
+    common_groups = [(item["text"], item["keys"]) for item in result["common_reuse_candidates"]]
+    cross_domain_groups = [(item["text"], item["keys"]) for item in result["cross_domain_exact_duplicates"]]
+    same_domain_groups = [(item["text"], item["keys"]) for item in result["same_domain_exact_duplicates"]]
+
+    print(f"Locale: {result['locale']}")
+    print(f"Total keys: {result['total_keys']}")
     print(f"Exact duplicate groups: {len(exact_groups)}, keys involved: {sum(len(keys) for _, keys in exact_groups)}")
     print(f"Normalized duplicate groups: {len(normalized_groups)}, keys involved: {sum(len(keys) for _, keys in normalized_groups)}")
 
@@ -122,23 +174,25 @@ def analyze(locale_path: Path, limit: int, similar_limit: int, similar_threshold
     print_group("same-domain exact duplicates", same_domain_groups, limit)
     print_group("normalized text differs only by punctuation/spacing", normalized_groups, limit)
 
-    print(f"\n# similar pairs >= {similar_threshold} ({len(pairs)} pairs)")
-    for ratio, key_a, text_a, key_b, text_b in pairs[:similar_limit]:
-        print(f"{ratio:.3f}")
-        print(f"  - {key_a} => {text_a!r}")
-        print(f"  - {key_b} => {text_b!r}")
+    print(f"\n# similar pairs >= {similar_threshold} ({len(result['similar_pairs'])} pairs)")
+    for item in result["similar_pairs"][:similar_limit]:
+        print(f"{item['ratio']:.3f}")
+        print(f"  - {item['a']['key']} => {item['a']['text']!r}")
+        print(f"  - {item['b']['key']} => {item['b']['text']!r}")
 
 
 def main() -> None:
+    configure_stdout()
     parser = argparse.ArgumentParser(description="分析语言包里的重复、相关和相似文本。")
     parser.add_argument("--locale-file", type=Path, default=DEFAULT_LOCALE_PATH)
     parser.add_argument("--limit", type=int, default=40)
     parser.add_argument("--similar-limit", type=int, default=60)
     parser.add_argument("--similar-threshold", type=float, default=0.88)
+    parser.add_argument("--json", action="store_true", help="输出完整 JSON，便于自动化统计和对比。")
     args = parser.parse_args()
 
     locale_path = args.locale_file if args.locale_file.is_absolute() else ROOT / args.locale_file
-    analyze(locale_path, args.limit, args.similar_limit, args.similar_threshold)
+    analyze(locale_path, args.limit, args.similar_limit, args.similar_threshold, args.json)
 
 
 if __name__ == "__main__":
