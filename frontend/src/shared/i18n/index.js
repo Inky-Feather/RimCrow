@@ -1,21 +1,19 @@
 import { createI18n } from 'vue-i18n'
 import { ref } from 'vue'
-import zhCN from '../../locales/zh-CN.json'
-import en from '../../locales/en.json'
 
 export const DEFAULT_LOCALE = 'zh-CN'
 export const UNTRANSLATED_PREFIX = '[UNTRANSLATED] '
-
-const builtinMessages = {
-  'zh-CN': zhCN,
-  en,
-}
 
 const loadedUserMessages = new Map()
 const translationRegistry = new Map()
 export const localeRevision = ref(0)
 
 const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value)
+
+const localeModules = import.meta.glob('../../locales/*.json', { eager: true, import: 'default' })
+const builtinMessages = Object.fromEntries(Object.values(localeModules)
+  .map(messages => [String(messages?._meta?.language || '').trim(), messages])
+  .filter(([code, messages]) => code && isPlainObject(messages)))
 
 export const deepMerge = (base = {}, override = {}) => {
   const result = { ...(isPlainObject(base) ? base : {}) }
@@ -66,7 +64,10 @@ const getMessageByPath = (messages = {}, key = '') => {
   return typeof current === 'string' || typeof current === 'number' ? String(current) : undefined
 }
 
-export const getBuiltinLocaleOptions = () => Object.keys(builtinMessages).map(code => ({ value: code, code, builtin: true, user: false }))
+export const getBuiltinLocaleOptions = () => Object.entries(builtinMessages).map(([code, messages]) => {
+  const meta = isPlainObject(messages?._meta) ? messages._meta : {}
+  return { label: String(meta.label || code), value: code, code, name: String(meta.name || code), builtin: true, user: false }
+})
 
 const normalizeLocale = (language = '') => {
   const value = String(language || '').trim()
