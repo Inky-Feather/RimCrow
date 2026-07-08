@@ -133,7 +133,7 @@
                         {{ t('common.action.cancel', '取消') }}
                       </button>
                       <button type="button" class="rounded-lg bg-accent-primary px-4 py-2 text-xs font-black text-on-accent-primary hover:bg-accent-primary/85 disabled:opacity-50" :disabled="creatingLanguage || !languageCode.trim()" @click="createLanguagePack">
-                        {{ creatingLanguage ? t('ui.common.status.processing', '处理中') : t('common.action.create', '创建') }}
+                        {{ creatingLanguage ? t('common.status.processing', '处理中') : t('common.action.create', '创建') }}
                       </button>
                     </div>
                   </div>

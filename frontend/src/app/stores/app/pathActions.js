@@ -145,7 +145,7 @@ export const usePathActions = ({ settings, requestModScan } = {}) => {
     if (!targetPaths.length) return false
     const {
       title = t('dialog.path.delete.title', '删除确认'),
-      message = t('dialog.path.delete_batch.message', '确定要删除这 {count} 个文件/文件夹吗？', { count: targetPaths.length }),
+      message = t('dialog.path.delete.batch_message', '确定要删除这 {count} 个文件/文件夹吗？', { count: targetPaths.length }),
       trashOptionText = t('common.action.move_to_trash', '移入回收站'),
       forceOptionText = t('common.action.force_delete', '强制删除'),
       checkLabel = t('check.path.delete_batch', '批量删除文件/文件夹'),

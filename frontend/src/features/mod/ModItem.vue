@@ -560,7 +560,7 @@ const generateAliasNotes = async () => {
 const getCopyInfoFields = () => [
   { key: 'name', label: t('common.field.name', '名称') },
   { key: 'package_id', label: t('common.field.package_id', '包名') },
-  { key: 'workshop_id', label: t('common.field.workshop_id', '工坊ID') },
+  { key: 'workshop_id', label: t('common.field.workshop_id', '工坊 ID') },
   { key: 'url', label: t('common.field.url', '网址') },
   { key: 'path', label: t('common.field.path', '路径') },
 ]
@@ -576,7 +576,7 @@ const getModCopyInfoValue = (mod, fieldKey) => {
 }
 const copyTextToClipboard = async (text, label) => {
   try {
-    if (!navigator?.clipboard?.writeText) throw new Error(t('error.clipboard.unsupported', '当前环境不支持剪贴板'))
+    if (!navigator?.clipboard?.writeText) throw new Error(t('errors.clipboard.text_unsupported', '当前环境不支持复制文本到剪贴板'))
     await navigator.clipboard.writeText(text)
     toast.success(t('toast.copy.success', '已复制{label}', { label }), { timeout: 600 })
   } catch (error) {

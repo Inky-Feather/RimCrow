@@ -46,7 +46,7 @@ export const buildModInfoCopyMenuItem = (mod = {}, options = {}) => {
   const fields = [
     { key: 'name', label: t('common.field.name', '名称'), value: info.name },
     { key: 'packageId', label: t('common.field.package_id', '包名'), value: info.packageId },
-    { key: 'workshopId', label: t('common.field.workshop_id', '工坊ID'), value: info.workshopId },
+    { key: 'workshopId', label: t('common.field.workshop_id', '工坊 ID'), value: info.workshopId },
     { key: 'path', label: t('common.field.path', '路径'), value: info.path },
   ].filter(field => !options.fields || options.fields.includes(field.key))
 

@@ -29,7 +29,7 @@
         <div v-if="mod.package_id" :title="t('common.field.package_id', '包名')" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
           {{ mod.package_id }}
         </div>
-        <div v-if="mod.workshop_id" :title="t('common.field.workshop_id', '工坊ID')" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
+        <div v-if="mod.workshop_id" :title="t('common.field.workshop_id', '工坊 ID')" class="text-[0.65rem] truncate text-text-dim font-mono mt-0.5 opacity-60">
           {{ mod.workshop_id }}
         </div>
       </div>

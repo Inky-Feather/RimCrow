@@ -200,7 +200,7 @@ const setPendingAction = (key, pending) => {
   pendingActions.value = next
 }
 const actionTooltip = (action) => (
-  isPendingAction(action?.key) ? t('tooltip.action.processing', '{label}处理中', { label: action?.label || t('ui.action.operation', '操作') }) : (action?.tooltip || action?.label || '')
+  isPendingAction(action?.key) ? t('tooltip.action.processing', '{label}处理中', { label: action?.label || t('common.field.operation', '操作') }) : (action?.tooltip || action?.label || '')
 )
 const getTaskIdFromResult = (result) => String(result?.taskId || result?.task_id || result?.data?.task_id || '')
 const waitForActionTask = async (types, startedAt, result) => {

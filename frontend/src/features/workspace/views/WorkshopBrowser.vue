@@ -128,7 +128,7 @@
                 </div>
                 <span v-if="getWorkshopItemStatus(item.workshop_id).isSubscribed"
                   class="absolute left-0 top-0 rounded-md border border-accent-primary/30 bg-accent-primary/90 px-1.5 py-0.5 text-[0.58rem] font-black text-on-accent-primary shadow-lg">
-                  {{ t('ui.workspace.workshop.item.subscribed', '已订阅') }}
+                  {{ t('ui.workspace.common.subscribed', '已订阅') }}
                 </span>
                 <WorkshopItemActions :workshop-id="item.workshop_id" :show-unsubscribe="getWorkshopItemStatus(item.workshop_id).isSubscribed"
                   colorful size="xs" class="absolute right-2 top-2 z-5 pointer-events-none opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100" />
@@ -155,7 +155,7 @@
                       <span v-if="item.stats?.subscriptions" class="rounded-md border border-accent-primary/20 bg-accent-primary/10 px-1.5 py-0.5 font-bold text-accent-primary" v-tooltip="t('ui.workspace.workshop.item.subscribers_tooltip', '订阅人数')">
                         {{ formatCount(item.stats.subscriptions) }}
                       </span>
-                      <div class="rounded-md border border-border-base/10 bg-bg-inset/80 px-1.5 py-0.5 font-mono font-bold text-text-dim" v-tooltip="t('ui.workspace.workshop.item.workshop_id_tooltip', '工坊ID')">
+                      <div class="rounded-md border border-border-base/10 bg-bg-inset/80 px-1.5 py-0.5 font-mono font-bold text-text-dim" v-tooltip="t('common.field.workshop_id', '工坊 ID')">
                         {{ item.workshop_id }}
                       </div>
                     </div>
@@ -381,7 +381,7 @@
           <!-- 游戏截图画廊 (Horizontal Scroll) -->
           <div v-if="selectedMod?.screenshots?.length > 0" class="mb-4 space-y-3 rounded-2xl border border-border-base/10 bg-bg-inset/45 p-4">
             <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-text-dim">
-              <Image class="size-3" /> {{ t('ui.workspace.workshop.detail.screenshots.title', '截图') }}
+              <Image class="size-3" /> {{ t('ui.workspace.workshop.detail.section.screenshots', '截图') }}
             </h4>
             <!-- 使用 flex nowrap 和 overflow-x-auto 实现横向滚动 -->
             <div v-viewer.rebuild="imageViewerOptions" class="flex gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x">
@@ -415,7 +415,7 @@
           <!-- Steam 详情数据 -->
           <div v-if="hasRichSteamDetails" class="mt-4 space-y-2 rounded-2xl border border-border-base/10 bg-bg-inset/45 p-4">
             <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-accent-tip">
-              <SlidersHorizontal class="size-3" /> {{ t('ui.workspace.workshop.detail.steam_details.title', 'Steam 详情数据') }}
+              <SlidersHorizontal class="size-3" /> {{ t('ui.workspace.workshop.detail.section.steam_details', 'Steam 详情数据') }}
             </h4>
             <div class="grid grid-cols-2 gap-2 text-xs">
               <div v-if="selectedMod?.kv_tags?.length" class="col-span-2 flex flex-wrap gap-1.5 rounded-xl border border-border-base/10 bg-bg-inset/70 p-2">
@@ -430,7 +430,7 @@
           <div v-if="relatedCollectionChildren.length > 0 || (selectedMod?.item_type === 'collection' && workspaceStore.workshopSearch.relatedLoading.dependencies)" class="mt-4 space-y-3 rounded-2xl border border-border-base/10 bg-bg-inset/45 p-4">
             <div class="flex items-center justify-between gap-2">
               <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-accent-tip">
-                <Link class="size-3" /> {{ t('ui.workspace.workshop.detail.collection_children.title', '合集子项') }}
+                <Link class="size-3" /> {{ t('ui.workspace.workshop.detail.section.collection_children', '合集子项') }}
               </h4>
               <span v-if="workspaceStore.workshopSearch.relatedLoading.dependencies" class="text-[0.65rem] text-text-dim">{{ t('common.status.loading', '加载中...') }}</span>
             </div>
@@ -447,7 +447,7 @@
           <div v-if="relatedDependents.length > 0 || workspaceStore.workshopSearch.relatedLoading.dependents || workspaceStore.workshopSearch.relatedErrors.dependents" class="mt-4 space-y-3 rounded-2xl border border-border-base/10 bg-bg-inset/45 p-4">
             <div class="flex items-center justify-between gap-2">
               <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-accent-primary">
-                <Network class="size-3" /> {{ t('ui.workspace.workshop.detail.dependents.title', '生态关联') }}
+                <Network class="size-3" /> {{ t('ui.workspace.workshop.detail.section.dependents', '生态关联') }}
               </h4>
               <button v-if="workspaceStore.workshopSearch.relatedMeta.dependents.total > relatedDependents.length"
                 @click="showRelatedList('dependents')" class="rounded-lg border border-border-base/10 bg-bg-inset px-2 py-1 text-[0.65rem] font-bold text-text-dim hover:text-accent-primary">
@@ -466,7 +466,7 @@
           <div v-if="relatedSameAuthor.length > 0 || workspaceStore.workshopSearch.relatedLoading.same_author || workspaceStore.workshopSearch.relatedErrors.same_author" class="mt-4 space-y-3 rounded-2xl border border-border-base/10 bg-bg-inset/45 p-4">
             <div class="flex items-center justify-between gap-2">
               <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-accent-success">
-                <User class="size-3" /> {{ t('ui.workspace.workshop.detail.same_author.title', '同作者作品') }}
+                <User class="size-3" /> {{ t('ui.workspace.workshop.detail.section.same_author', '同作者作品') }}
               </h4>
               <button v-if="workspaceStore.workshopSearch.relatedMeta.same_author.total > relatedSameAuthor.length"
                 @click="showRelatedList('same_author')" class="rounded-lg border border-border-base/10 bg-bg-inset px-2 py-1 text-[0.65rem] font-bold text-text-dim hover:text-accent-success">
@@ -593,12 +593,12 @@ const workshopSearchPlaceholder = computed(() => (
 const workshopTokenSchema = computed(() => {
   const schema = {
     text: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.workshop.search.field.text', '搜索文本'), alias: ['q', 'text'], suggest: true, defaultSearch: true },
-    tag: { type: TAG_FIELD_TYPES.LIST, label: t('ui.workspace.workshop.search.field.tag', '标签'), alias: ['t', 'tag'], suggest: true },
+    tag: { type: TAG_FIELD_TYPES.LIST, label: t('common.field.tags', '标签'), alias: ['t', 'tag'], suggest: true },
     dlc: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.workshop.search.field.dlc', 'DLC依赖'), alias: ['d', 'dlc'], suggest: true },
     dependency: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.workshop.search.field.dependency', '模组依赖'), alias: ['m', 'mod', 'dep'], suggest: false },
   }
   if (!workspaceStore.workshopSearch.isEnhancedMode) {
-    schema.author = { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.workshop.search.field.author', '作者'), alias: ['a', 'author'], suggest: false }
+    schema.author = { type: TAG_FIELD_TYPES.STRING, label: t('common.field.author', '作者'), alias: ['a', 'author'], suggest: false }
   }
   return schema
 })
@@ -611,11 +611,11 @@ const workshopSearchController = computed(() => createTagSearchController({
   valueOptions: workshopTokenValueOptions.value,
 }))
 const workshopInputHelpText = computed(() => [
-  t('ui.workspace.workshop.search.help.title', '**输入关键词并回车确认**'),
-  t('ui.workspace.workshop.search.help.basic', '可直接输入关键词，或使用 类别:关键词 格式'),
-  t('ui.workspace.workshop.search.help.logic', '搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。'),
-  t('ui.workspace.workshop.search.help.example', '例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。'),
-  t('ui.workspace.workshop.search.help.tab', '\n[[(使用 Tab 键应用输入建议)]]'),
+  t('ui.workspace.search.help.title', '**输入关键词并回车确认**'),
+  t('ui.workspace.search.help.basic', '可直接输入关键词，或使用 类别:关键词 格式'),
+  t('ui.workspace.search.help.logic', '搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。'),
+  t('ui.workspace.search.help.example', '例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。'),
+  t('ui.workspace.search.help.tab', '\n[[(使用 Tab 键应用输入建议)]]'),
 ].join('\n'))
 
 // 仅在用户真正打开工坊页且当前没有任何结果时，才触发默认搜索。

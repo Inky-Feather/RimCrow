@@ -168,7 +168,7 @@ const closeModal = () => {
   appStore.uiState.showUpdateModal = false
   // 可选：触发一个推荐扫描的通知
   if (context.value.pending_actions?.includes('recommend_scan')) {
-    toast.info(t('toast.update_modal.recommend_scan', '建议执行一次全量扫描，以应用新版本的核心引擎特性！'), { timeout: 5000 })
+    toast.info(t('toast.update.recommend_scan', '建议执行一次全量扫描，以应用新版本的核心引擎特性！'), { timeout: 5000 })
   }
 }
 

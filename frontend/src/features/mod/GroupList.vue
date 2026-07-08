@@ -576,7 +576,7 @@ const openCustomExport = (ids: string[], title: string, description: string) => 
     title,
     description,
     modIds: [...ids],
-    summary: t('dialog.group_list.export.summary', '共 {count} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。', { count: ids.length }),
+    summary: t('dialog.group_list.package_export.summary', '共 {count} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。', { count: ids.length }),
   })
 }
 const openRecommendationExport = (ids: string[]) => {

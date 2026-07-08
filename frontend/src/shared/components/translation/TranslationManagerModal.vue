@@ -387,7 +387,7 @@ const exportWorkfile = async () => {
       const targetPath = res.data?.path || ''
       const action = await confirmStore.confirmAction(
         t('dialog.translation_manager.workfile_exported', '待翻译文件已导出。'),
-        targetPath ? t('dialog.translation_manager.workfile_exported_path', '导出路径：{path}', { path: targetPath }) : '',
+        targetPath ? t('common.message.export_path', '导出路径：{path}', { path: targetPath }) : '',
         {
           type: 'success',
           actionButtons: [

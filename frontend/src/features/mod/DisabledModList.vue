@@ -257,7 +257,7 @@ const buildSelectedDisabledCopyMenuItem = (selectedMods) => {
     children: [
       copyField(t('common.field.name', '名称'), mod => mod.alias_name || mod.display_name || mod.name || mod.package_id),
       copyField(t('common.field.package_id', '包名'), mod => mod.package_id),
-      copyField(t('common.field.workshop_id', '工坊ID'), mod => mod.workshop_id),
+      copyField(t('common.field.workshop_id', '工坊 ID'), mod => mod.workshop_id),
       copyField(t('common.field.path', '路径'), mod => mod.path),
     ],
   }

@@ -544,9 +544,9 @@ const buildBackupMenuItems = (item) => {
   const canExportOrder = canUsePath || (Array.isArray(item?.active_ids) && item.active_ids.length > 0)
   return [
     { label: t('menu.backup_list.load_file', '加载文件'), icon: FileInput, action: () => handleLoad(null, item) },
-    { label: t('menu.backup_list.open_file', '打开文件'), icon: FileText, disabled: !canUsePath, action: () => handleOpenFile(item) },
-    { label: t('menu.backup_list.open_folder', '打开所在目录'), icon: FolderOpen, disabled: !canUsePath, action: () => handleOpenFolder(item) },
-    { label: t('menu.backup_list.copy_path', '复制文件路径'), icon: Copy, disabled: !canUsePath, action: () => copyTextToClipboard(item.path, t('common.field.file_path', '文件路径')) },
+    { label: t('common.action.open_file', '打开文件'), icon: FileText, disabled: !canUsePath, action: () => handleOpenFile(item) },
+    { label: t('common.action.open_containing_folder', '打开所在目录'), icon: FolderOpen, disabled: !canUsePath, action: () => handleOpenFolder(item) },
+    { label: t('common.action.copy_file_path', '复制文件路径'), icon: Copy, disabled: !canUsePath, action: () => copyTextToClipboard(item.path, t('common.field.file_path', '文件路径')) },
     { label: t('menu.backup_list.export_as', '导出为...'), icon: Download, disabled: !canExportOrder, children: [
       { label: t('ui.backup_list.share_code', '分享码'), icon: ClipboardPlus, action: () => exportBackupItemShareCode(item) },
       { label: 'ModList', icon: FileText, action: () => exportBackupItemAsFile(item, 'modlist') },

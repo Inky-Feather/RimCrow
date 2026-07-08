@@ -150,7 +150,7 @@ const saveGroupName = () => {
   const result = resolveUniqueGroupName(editingGroupName.value)
   if (result.renamed) {
     // 分组名称冲突时沿用旧行为：自动添加序号，而不是阻断用户输入。
-    toast.warning(t('toast.group_item.rename_duplicate', '分组名称已存在，已添加序号 {index}', { index: result.index }))
+    toast.warning(t('toast.group.rename_duplicate', '分组名称已存在，已添加序号 {index}', { index: result.index }))
   }
   if (result.valid && result.name !== props.groupData.name) {
     emit('update-group', props.id, { name: result.name })

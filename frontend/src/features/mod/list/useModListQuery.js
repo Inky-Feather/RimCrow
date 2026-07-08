@@ -33,9 +33,9 @@ export function useModListQuery({
   const searchResultSet = computed(() => new Set(searchResults.value))
   const SORT_MODE_MAP = computed(() => ({
     default: t('ui.mod_list.sort.default', '默认'),
-    name: t('ui.mod_list.sort.name', '名称'),
-    package_id: t('ui.mod_list.sort.package_id', '包名'),
-    author: t('ui.mod_list.sort.author', '作者'),
+    name: t('common.field.name', '名称'),
+    package_id: t('common.field.package_id', '包名'),
+    author: t('common.field.author', '作者'),
     last_active_time: t('ui.mod_list.sort.last_active_time', '启用时间'),
     last_moved_time: t('ui.mod_list.sort.last_moved_time', '移动时间'),
     file_create_time: t('ui.mod_list.sort.file_create_time', '创建时间'),

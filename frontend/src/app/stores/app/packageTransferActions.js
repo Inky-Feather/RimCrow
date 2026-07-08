@@ -50,7 +50,7 @@ export const usePackageTransferActions = ({
     const confirmStore = useConfirmStore()
     const action = await confirmStore.confirmAction(
       t('dialog.package_transfer.export_complete.title', '{title}完成', { title }),
-      t('dialog.package_transfer.export_complete.message', '导出路径：{path}', { path: normalizedPath }),
+      t('common.message.export_path', '导出路径：{path}', { path: normalizedPath }),
       {
         type: 'success',
         actionButtons: [
@@ -120,7 +120,7 @@ export const usePackageTransferActions = ({
     const res = await window.pywebview.api.data_bundle_export(payload)
     if (!checkResult(res, t('check.package_transfer.export_data_bundle', '导出软件数据'), true)) return false
     window.setTimeout(() => {
-      void showExportCompleteDialog(t('dialog.package_transfer.data_export.complete_title', '软件数据导出'), res.data?.path)
+      void showExportCompleteDialog(t('dialog.package_transfer.export_complete.data_export_title', '软件数据导出'), res.data?.path)
     }, 0)
     return res.data
   }

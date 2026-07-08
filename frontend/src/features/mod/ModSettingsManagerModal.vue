@@ -231,7 +231,7 @@ const stateFilter = ref('all')
 const modGroups = computed(() => overview.value?.mod_groups || [])
 const unknownCleanupPaths = computed(() => overview.value?.cleanup_candidate_paths || [])
 const stateFilterOptions = computed(() => [
-  { value: 'all', label: t('dialog.mod_settings.filter.all', '全部状态') },
+  { value: 'all', label: t('dialog.mod_settings.state.all', '全部状态') },
   { value: 'active', label: t('dialog.mod_settings.state.active', '当前激活') },
   { value: 'coexist_disabled', label: t('dialog.mod_settings.state.coexist_disabled', '共存停用') },
   { value: 'mod_disabled', label: t('dialog.mod_settings.state.mod_disabled', '模组停用') },

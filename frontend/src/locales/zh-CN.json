@@ -1,8 +1,5 @@
 {
   "ui": {
-    "action": {
-      "operation": "操作"
-    },
     "app": {
       "actions": {
         "autosort": "自动排序",
@@ -91,9 +88,6 @@
         "description": "管理器已切换到浏览器静默挂起状态。游戏退出后会自动恢复主界面；也可以手动唤醒。",
         "title": "RimWorld 正在运行",
         "wake": "唤醒管理界面"
-      },
-      "translation": {
-        "provider_ai_default": "AI 翻译"
       }
     },
     "backup_list": {
@@ -116,11 +110,6 @@
       },
       "share_code": "分享码",
       "title": "备份"
-    },
-    "common": {
-      "status": {
-        "processing": "处理中"
-      }
     },
     "dependency_graph": {
       "manager": {
@@ -201,17 +190,11 @@
       },
       "title": "已禁用"
     },
-    "drag": {
-      "default_item": "拖拽项目"
-    },
     "file_search": {
       "preview": {
         "empty": "选择左侧文件或命中项后，这里显示只读文件内容。",
         "loading": "正在读取文件..."
       }
-    },
-    "group": {
-      "default_name": "新分组"
     },
     "group_list": {
       "action": {
@@ -388,16 +371,13 @@
         "unnamed": "未命名分割组"
       },
       "sort": {
-        "author": "作者",
         "default": "默认",
         "file_create_time": "创建时间",
         "file_modify_time": "修改时间",
         "file_size": "文件大小",
         "last_active_time": "启用时间",
         "last_moved_time": "移动时间",
-        "multiplayer_compat": "联机兼容性",
-        "name": "名称",
-        "package_id": "包名"
+        "multiplayer_compat": "联机兼容性"
       }
     },
     "mod_rule_editor": {
@@ -1375,6 +1355,7 @@
         "vram_estimate": "显存预估"
       },
       "scale": {
+        "none": "不缩放",
         "original_size": "原尺寸"
       }
     },
@@ -1531,15 +1512,7 @@
         },
         "search": {
           "field": {
-            "tag": "标签",
             "text": "搜索文本"
-          },
-          "help": {
-            "basic": "可直接输入关键词，或使用 类别:关键词 格式",
-            "example": "例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。",
-            "logic": "搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。",
-            "tab": "\n[[(使用 Tab 键应用输入建议)]]",
-            "title": "**输入关键词并回车确认**"
           },
           "placeholder": "搜索 Steam 合集...",
           "sort": "排序",
@@ -1568,13 +1541,11 @@
           "create_subscription": "建立订阅",
           "parse_recommended_repo": "解析推荐仓库",
           "parse_repo": "解析 Git 仓库链接",
-          "remove_subscription": "移除订阅",
           "request_transfer": "请求数据传输"
         },
         "actions": {
           "open_local": "打开本地目录",
-          "open_original": "打开原始地址",
-          "remove_subscription": "移除订阅"
+          "open_original": "打开原始地址"
         },
         "active": {
           "current_mode": "当前模式: {mode}",
@@ -1621,14 +1592,12 @@
           "use_cached_release": "Git 仓库信息查询失败，已改用本地缓存的 Release 版本继续部署"
         },
         "detail": {
-          "author": "作者",
           "default_branch": "默认分支",
           "dependencies": "依赖项",
-          "install_type": "安装类型",
-          "source": "来源"
+          "install_type": "安装类型"
         },
         "empty": {
-          "select_or_add": "Select or Add a Repository"
+          "select_or_add": "选择或添加仓库"
         },
         "input": {
           "parse": "解析地址",
@@ -1677,8 +1646,7 @@
           "repo_success": "仓库已成功订阅"
         },
         "tabs": {
-          "recommend": "推荐列表",
-          "subscribed": "已订阅"
+          "recommend": "推荐列表"
         },
         "time": {
           "published": "发布: {time}",
@@ -1808,13 +1776,9 @@
           "copy_to_local": "复制到 游戏本地库",
           "copy_to_self": "复制到 管理器库",
           "copy_to_workshop": "复制到 创意工坊库",
-          "count_suffix": " ({count} 项)",
           "deactivate": "禁用{count}",
           "delete_files": "删除文件{count}",
           "download_to_self": "下载到管理器{count}",
-          "field": {
-            "workshop_id": "工坊 ID"
-          },
           "jump_group_label": "{label} ({count} 项)",
           "jump_replacement": "跳转到替代项",
           "jump_same": "跳转到相同项",
@@ -1888,6 +1852,15 @@
           "conflict": "当前库存在同包名冲突项",
           "replacement": "已检测到替代项",
           "same": "其它库存在相同项"
+        }
+      },
+      "search": {
+        "help": {
+          "basic": "可直接输入关键词，或使用 类别:关键词 格式",
+          "example": "例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。",
+          "logic": "搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。",
+          "tab": "\n[[(使用 Tab 键应用输入建议)]]",
+          "title": "**输入关键词并回车确认**"
         }
       },
       "startup": {
@@ -1973,9 +1946,6 @@
             "tooltip": "作者名称。增强模式下优先显示作者资料缓存中的公开名称。单击可复制。"
           },
           "back": "返回上一层",
-          "collection_children": {
-            "title": "合集子项"
-          },
           "comments": {
             "title": "评论",
             "tooltip": "Steam 工坊公开评论数量。"
@@ -1999,9 +1969,6 @@
             "unsubscribe_all": "取消订阅全部依赖",
             "unsubscribing": "取消中"
           },
-          "dependents": {
-            "title": "生态关联"
-          },
           "empty_hint": "左侧结果会保留搜索和排序状态，点击项目后可查看说明、依赖、截图和关联项目。",
           "empty_title": "选择一个工坊项目查看详情",
           "favorites": {
@@ -2019,11 +1986,12 @@
             "title": "评分",
             "tooltip": "Steam 返回的综合评分。适合快速判断整体用户反馈。"
           },
-          "same_author": {
-            "title": "同作者作品"
-          },
-          "screenshots": {
-            "title": "截图"
+          "section": {
+            "collection_children": "合集子项",
+            "dependents": "生态关联",
+            "same_author": "同作者作品",
+            "screenshots": "截图",
+            "steam_details": "Steam 详情数据"
           },
           "size": {
             "title": "大小",
@@ -2033,9 +2001,6 @@
             "banned": "已封禁",
             "title": "状态",
             "tooltip": "项目当前状态异常。通常表示该项目已被 Steam 限制或封禁。"
-          },
-          "steam_details": {
-            "title": "Steam 详情数据"
           },
           "subscriptions": {
             "title": "订阅数",
@@ -2078,9 +2043,7 @@
           "screenshot_alt": "{title}截图"
         },
         "item": {
-          "subscribed": "已订阅",
           "subscribers_tooltip": "订阅人数",
-          "workshop_id_tooltip": "工坊ID",
           "workshop_project": "工坊项目"
         },
         "relation": {
@@ -2102,18 +2065,9 @@
         },
         "search": {
           "field": {
-            "author": "作者",
             "dependency": "模组依赖",
             "dlc": "DLC依赖",
-            "tag": "标签",
             "text": "搜索文本"
-          },
-          "help": {
-            "basic": "可直接输入关键词，或使用 类别:关键词 格式",
-            "example": "例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。",
-            "logic": "搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。",
-            "tab": "\n[[(使用 Tab 键应用输入建议)]]",
-            "title": "**输入关键词并回车确认**"
           },
           "placeholder_cache": "搜索缓存，支持 t:标签 d:DLC_AppID m:依赖工坊ID a:作者",
           "placeholder_enhanced": "搜索工坊，支持 t:标签 d:DLC_AppID m:依赖工坊ID"
@@ -2199,12 +2153,6 @@
       },
       "rules": "**[[自动备份与手动备份说明：]]**\n^^短期备份：^^每次保存或运行操作后，系统会自动备份当前配置文件(有变动才会备份)。短期备份默认保留 1 天，过期自动删除（每次启动时清理），仅保留最近一个作为当天的备份，归入长期备份。\n^^长期备份：^^默认保留最近 30 天的自动长期备份，过期将会删除。\n^^手动备份：^^用户可手动触发备份，文件将保存至指定目录，不会被自动删除。\n__自动列表备份格式：RML_YYYYMMDD_HHMMSS.rml__\n__手动导出支持：ModsConfig.xml / ModList.rml__"
     },
-    "color": {
-      "custom": "自定义颜色"
-    },
-    "command": {
-      "missing": "命令不存在：{commandId}"
-    },
     "common": {
       "sort_asc": "切换为升序排列",
       "sort_desc": "切换为降序排列"
@@ -2232,6 +2180,10 @@
       "supported_versions": "支持版本列表：{value}",
       "visit_copy_page": "访问该副本页面",
       "workshop_id": "工坊 ID：{value}"
+    },
+    "context_menu": {
+      "color_custom": "自定义颜色",
+      "command_missing": "命令不存在：{commandId}"
     },
     "dependency_graph": {
       "line": {
@@ -2644,11 +2596,9 @@
       "expansion_failed": "保存分组展开状态失败，正在还原列表状态。请稍后重试。",
       "get_failed": "获取分组失败。可能是数据库或当前环境暂时不可用，请稍后重试。",
       "remove_mods_failed": "从分组移除模组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
+      "rename_duplicate": "分组名称已存在，已添加序号 {index}",
       "reorder_failed": "保存分组排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
       "update_failed": "更新分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。"
-    },
-    "group_item": {
-      "rename_duplicate": "分组名称已存在，已添加序号 {index}"
     },
     "group_list": {
       "drop": {
@@ -2892,11 +2842,9 @@
       "download_started": "已开始下载更新包，请留意底部状态栏。",
       "install_cancelled": "已取消安装更新。",
       "partial_no_update": "部分更新源暂时不可用，当前可用来源未发现新版本。",
+      "recommend_scan": "建议执行一次全量扫描，以应用新版本的核心引擎特性！",
       "start_failed": "启动更新失败。请检查网络连接、代理设置和安装目录权限，详细原因已写入系统日志。",
       "up_to_date": "当前已是最新版本"
-    },
-    "update_modal": {
-      "recommend_scan": "建议执行一次全量扫描，以应用新版本的核心引擎特性！"
     },
     "workspace": {
       "cleanup_deleted_done": "已清理 {count} 条已删除记录",
@@ -3203,14 +3151,12 @@
         "message": "确定要删除分组「{name}」吗？\n分组记录会被移除，模组文件不会删除。",
         "title": "删除分组"
       },
-      "export": {
-        "summary": "共 {count} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。"
-      },
       "package_export": {
         "description": "可按需附带依赖、联锁项和语言包。",
         "group_title": "打包导出分组: {name}",
         "selected_title": "打包导出分组模组{countText}",
-        "source_group": "来源分组：{name}。"
+        "source_group": "来源分组：{name}。",
+        "summary": "共 {count} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。"
       },
       "recommendation_export": {
         "title": "推荐导出已选模组{countText}"
@@ -3518,9 +3464,6 @@
       "empty": "当前环境里还没有可管理的模组设置文件",
       "file_count": "文件 {count}",
       "file_path": "文件位置: {path}",
-      "filter": {
-        "all": "全部状态"
-      },
       "filtered_count": "显示 {shown} / {total} 个文件",
       "identity": {
         "class": "设置类",
@@ -3545,6 +3488,7 @@
       "source_folder": "来源文件夹: {folder}",
       "state": {
         "active": "当前激活",
+        "all": "全部状态",
         "coexist_disabled": "共存停用",
         "inactive": "未启用",
         "mod_disabled": "模组停用"
@@ -3577,9 +3521,6 @@
       "bundle_size": "压缩包大小",
       "bundle_summary": "包摘要",
       "contains_items": "包含 {count} 项",
-      "data_export": {
-        "complete_title": "软件数据导出"
-      },
       "data_import_summary": "已选择 {selected}/{total} 项",
       "data_import_summary_with_profiles": "已选择 {selected}/{total} 项，含 {profiles} 个环境",
       "data_source_desc": "包含该数据源的导入内容。",
@@ -3592,7 +3533,7 @@
       "environment_data": "环境数据",
       "expansion_ratio": "解压后约为压缩内容的 {ratio} 倍",
       "export_complete": {
-        "message": "导出路径：{path}",
+        "data_export_title": "软件数据导出",
         "title": "{title}完成"
       },
       "export_plan": "当前选中 {selected} 个模组，预计导出 {resolved} 个。",
@@ -3710,11 +3651,9 @@
     },
     "path": {
       "delete": {
+        "batch_message": "确定要删除这 {count} 个文件/文件夹吗？",
         "message": "确定要删除 {path} 吗？",
         "title": "删除确认"
-      },
-      "delete_batch": {
-        "message": "确定要删除这 {count} 个文件/文件夹吗？"
       }
     },
     "profiles": {
@@ -3741,7 +3680,6 @@
         "notes": "备注"
       },
       "body_source": "介绍内容",
-      "completed_message": "导出路径：{path}",
       "completed_title": "推荐导出完成",
       "cover_plain_desc": "纯文本和 TXT 不包含图片。",
       "cover_rich_desc": "Markdown 会复制图片，DOCX/PDF/纯图片会嵌入封面。",
@@ -3758,12 +3696,10 @@
       },
       "format_label": "导出格式",
       "image_name": {
-        "alias": "别名",
         "original": "原名"
       },
       "image_name_source": "图片文件名",
       "mod_count": "{count} 个模组",
-      "open_output_dir": "打开导出目录",
       "option": {
         "authors_desc": "导出模组作者名称。",
         "cover": "封面图",
@@ -3773,10 +3709,8 @@
         "package_id_desc": "默认隐藏，适合需要精确定位时开启。",
         "sequence": "序号",
         "sequence_desc": "在每个模组前显示 001、002 这类序号。",
-        "supported_versions": "支持版本",
         "supported_versions_desc": "导出模组支持的游戏版本。",
         "tags_desc": "导出为 #tag1 #tag2 形式。",
-        "url": "网址",
         "url_desc": "导出模组来源网址。",
         "workshop_id": "工坊 ID",
         "workshop_id_desc": "导出 Steam 创意工坊 ID。"
@@ -3802,13 +3736,9 @@
     },
     "rule_panel": {
       "delete": {
+        "dynamic_message": "确定删除该动态规则吗？",
+        "mod_message": "确定删除该 Mod 规则吗？",
         "title": "确认删除"
-      },
-      "delete_dynamic": {
-        "message": "确定删除该动态规则吗？"
-      },
-      "delete_mod": {
-        "message": "确定删除该 Mod 规则吗？"
       }
     },
     "steam": {
@@ -4011,9 +3941,6 @@
       "result_panel": "结果面板",
       "result_panel_desc": "当前任务、最近 3 次任务历史和排除规则",
       "result_summary": "成功 {success} / 失败 {failed}",
-      "scale": {
-        "none": "不缩放"
-      },
       "scale_factor_desc": "优先按当前选定的比例处理；如果某些图片不适合这个比例，会自动回退到更稳妥的比例，必要时保持原尺寸。",
       "scale_factor_label": "缩放比例",
       "scale_options": "缩放选项（进一步节省显存）",
@@ -4083,7 +4010,6 @@
       "workfile_export_failed": "导出翻译文件失败。",
       "workfile_export_unavailable": "当前运行环境不支持导出翻译文件。",
       "workfile_exported": "待翻译文件已导出。",
-      "workfile_exported_path": "导出路径：{path}",
       "workfile_import_failed": "导入翻译文件失败。请确认文件格式正确。",
       "workfile_import_unavailable": "当前运行环境不支持导入翻译文件。",
       "workfile_imported": "已导入 {count} 条译文。",
@@ -5908,7 +5834,9 @@
       "no_description": "无描述"
     },
     "entity": {
+      "drag_item": "拖拽项目",
       "file": "文件",
+      "new_group": "新分组",
       "task": "任务",
       "unknown_mod": "未知模组"
     },
@@ -5925,6 +5853,7 @@
       "id": "ID",
       "language": "语言",
       "name": "名称",
+      "operation": "操作",
       "package_id": "包名",
       "path": "路径",
       "relative_path": "相对路径",
@@ -5936,7 +5865,10 @@
       "tags": "标签",
       "type": "类型",
       "url": "网址",
-      "workshop_id": "工坊ID"
+      "workshop_id": "工坊 ID"
+    },
+    "message": {
+      "export_path": "导出路径：{path}"
     },
     "option": {
       "all": "全部"
@@ -6028,11 +5960,6 @@
           "title": "删除主题"
         }
       }
-    }
-  },
-  "error": {
-    "clipboard": {
-      "unsupported": "当前环境不支持剪贴板"
     }
   },
   "game_log": {
@@ -6695,12 +6622,9 @@
   },
   "menu": {
     "backup_list": {
-      "copy_path": "复制文件路径",
       "delete_file": "删除文件",
       "export_as": "导出为...",
       "load_file": "加载文件",
-      "open_file": "打开文件",
-      "open_folder": "打开所在目录",
       "remove_from_list": "从列表移除"
     },
     "dependency_graph": {

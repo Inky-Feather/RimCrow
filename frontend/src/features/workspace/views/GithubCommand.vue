@@ -13,7 +13,7 @@
           <div class="grid grid-cols-2 gap-1 p-1 bg-bg-inset/80 rounded-xl border border-border-base/10">
             <button @click="setListMode('subscribed')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
               :class="listMode === 'subscribed' ? 'bg-bg-contrast text-text-inverse' : 'text-text-dim hover:text-text-main'">
-              {{ t('ui.workspace.github.tabs.subscribed', '已订阅') }}
+              {{ t('ui.workspace.common.subscribed', '已订阅') }}
             </button>
             <button @click="setListMode('recommend')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
               :class="listMode === 'recommend' ? 'bg-bg-contrast text-text-inverse' : 'text-text-dim hover:text-text-main'">
@@ -77,7 +77,7 @@
             <button v-if="repo.local_path || repo.local_folder" @click.stop="openRepoLocal(repo)" v-tooltip="t('ui.workspace.github.actions.open_local', '打开本地目录')" class="p-2 rounded-lg bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <FolderOpen class="size-4" />
             </button>
-            <button @click.stop="removeRepo(repo.repo_url)" v-tooltip="t('ui.workspace.github.actions.remove_subscription', '移除订阅')" class="p-2 rounded-lg bg-accent-danger/20 text-accent-danger hover:bg-accent-danger hover:text-on-accent-danger transition-colors">
+            <button @click.stop="removeRepo(repo.repo_url)" v-tooltip="t('ui.workspace.github.remove.title', '移除订阅')" class="p-2 rounded-lg bg-accent-danger/20 text-accent-danger hover:bg-accent-danger hover:text-on-accent-danger transition-colors">
               <Trash2 class="size-4" />
             </button>
           </div>
@@ -254,7 +254,7 @@
           <div class="mb-4 rounded-lg bg-bg-muted/80 border border-border-base/10 p-3">
             <div class="grid grid-cols-4 gap-3 text-xs">
               <div class="min-w-0 flex items-center gap-2">
-                <div class="text-text-dim shrink-0">{{ t('ui.workspace.github.detail.source', '来源') }}</div>
+                <div class="text-text-dim shrink-0">{{ t('common.field.source', '来源') }}</div>
                 <div class="text-text-main font-mono truncate">{{ catalogSourceName(selectedCatalogItem.source_id) || selectedCatalogItem.source_id || '-' }}</div>
               </div>
               <div class="min-w-0 flex items-center gap-2">
@@ -266,7 +266,7 @@
                 <div class="text-text-main font-mono truncate">{{ selectedCatalogItem.branch || selectedCatalogItem.default_branch || '-' }}</div>
               </div>
               <div class="min-w-0 flex items-center gap-2">
-                <div class="text-text-dim shrink-0">{{ t('ui.workspace.github.detail.author', '作者') }}</div>
+                <div class="text-text-dim shrink-0">{{ t('common.field.author', '作者') }}</div>
                 <div class="text-text-main truncate">{{ catalogAuthorText(selectedCatalogItem) || '-' }}</div>
               </div>
             </div>
@@ -381,7 +381,7 @@
       <!-- 闲置空状态 -->
       <div v-else class="flex-1 flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-border-base/18 rounded-2xl">
         <Github class="size-24 mb-4" />
-        <span class="text-sm font-black uppercase tracking-widest">{{ t('ui.workspace.github.empty.select_or_add', 'Select or Add a Repository') }}</span>
+        <span class="text-sm font-black uppercase tracking-widest">{{ t('ui.workspace.github.empty.select_or_add', '选择或添加仓库') }}</span>
       </div>
 
     </div>
@@ -936,7 +936,7 @@ const removeRepo = async (url) => {
   )
   if (!ok) return
   const res = await window.pywebview.api.github_remove_subscription(url)
-  if (checkResult(res, t('ui.workspace.github.action.remove_subscription', '移除订阅'))) {
+  if (checkResult(res, t('ui.workspace.github.remove.title', '移除订阅'))) {
     if (workspaceStore.github.activeRepo?.repo_url === url) {
       workspaceStore.clearActiveGithubRepo()
     }

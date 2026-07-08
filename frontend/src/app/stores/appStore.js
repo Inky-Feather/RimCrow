@@ -78,7 +78,7 @@ export const useAppStore = defineStore('app', () => {
   const defaultRecommendationTitle = () => t('ui.app.recommendation_export.title', '推荐导出')
   const defaultRecommendationSourceName = () => t('ui.app.recommendation_export.source_selected_mods', '已选模组')
   const createDefaultTranslationProviders = () => [
-    { id: 'ai.default', label: t('ui.app.translation.provider_ai_default', 'AI 翻译'), type: 'ai' },
+    { id: 'ai.default', label: t('ui.translation.provider.ai_default', 'AI 翻译'), type: 'ai' },
   ]
   // 推荐导出弹窗只保存入口上下文，真正的模组详情在弹窗打开时从 modStore 读取最新值。
   const recommendationExportDialog = reactive({

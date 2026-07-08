@@ -17,10 +17,10 @@
         <CommonSwitch :label="t('common.field.tags', '标签')" v-model="form.includeTags" :description="t('dialog.recommendation_export.option.tags_desc', '导出为 #tag1 #tag2 形式。')" />
         <CommonSwitch :label="t('common.field.groups', '分组')" v-model="form.includeGroupNames" :description="t('dialog.recommendation_export.option.groups_desc', '导出该模组所属分组名称。')" />
         <CommonSwitch :label="t('common.field.author', '作者')" v-model="form.includeAuthors" :description="t('dialog.recommendation_export.option.authors_desc', '导出模组作者名称。')" />
-        <CommonSwitch :label="t('dialog.recommendation_export.option.supported_versions', '支持版本')" v-model="form.includeSupportedVersions" :description="t('dialog.recommendation_export.option.supported_versions_desc', '导出模组支持的游戏版本。')" />
+        <CommonSwitch :label="t('common.field.supported_versions', '支持版本')" v-model="form.includeSupportedVersions" :description="t('dialog.recommendation_export.option.supported_versions_desc', '导出模组支持的游戏版本。')" />
         <CommonSwitch :label="t('dialog.recommendation_export.option.language_packs', '附加语言包')" v-model="form.includeLanguagePacks" :description="t('dialog.recommendation_export.option.language_packs_desc', '把匹配的语言包名称和网址附在对应模组后。')" />
         <CommonSwitch :label="t('dialog.recommendation_export.option.workshop_id', '工坊 ID')" v-model="form.includeWorkshopId" :description="t('dialog.recommendation_export.option.workshop_id_desc', '导出 Steam 创意工坊 ID。')" />
-        <CommonSwitch :label="t('dialog.recommendation_export.option.url', '网址')" v-model="form.includeUrl" :description="t('dialog.recommendation_export.option.url_desc', '导出模组来源网址。')" />
+        <CommonSwitch :label="t('common.field.url', '网址')" v-model="form.includeUrl" :description="t('dialog.recommendation_export.option.url_desc', '导出模组来源网址。')" />
         <CommonSwitch :label="t('common.field.package_id', '包名')" v-model="form.includePackageId" :description="t('dialog.recommendation_export.option.package_id_desc', '默认隐藏，适合需要精确定位时开启。')" />
       </div>
 
@@ -104,7 +104,7 @@ const bodySourceOptions = computed(() => [
   { value: 'description', label: t('dialog.recommendation_export.body.description', '原始描述') },
 ])
 const imageNameOptions = computed(() => [
-  { value: 'alias', label: t('dialog.recommendation_export.image_name.alias', '别名') },
+  { value: 'alias', label: t('common.field.alias_name', '别名') },
   { value: 'original', label: t('dialog.recommendation_export.image_name.original', '原名') },
 ])
 
@@ -264,11 +264,11 @@ const showExportComplete = async (result) => {
   }
   const action = await confirmStore.confirmAction(
     t('dialog.recommendation_export.completed_title', '推荐导出完成'),
-    t('dialog.recommendation_export.completed_message', '导出路径：{path}', { path: targetPath }),
+    t('common.message.export_path', '导出路径：{path}', { path: targetPath }),
     {
       type: 'success',
       actionButtons: [
-        { label: t('dialog.recommendation_export.open_output_dir', '打开导出目录'), value: 'open', kind: 'primary' },
+        { label: t('common.action.open_export_dir', '打开导出目录'), value: 'open', kind: 'primary' },
         { label: t('common.action.close', '关闭'), value: 'close', kind: 'secondary' },
       ],
     }

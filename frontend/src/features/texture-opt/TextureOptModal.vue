@@ -518,7 +518,7 @@ const processModeOptions = computed(() => [
   { label: t('dialog.texture_opt.process.scaled_only_overwrite', '只处理可缩放图片（覆盖）'), value: 'scaled_only_overwrite' },
 ])
 const scaleFactorOptions = computed(() => [
-  { label: t('dialog.texture_opt.scale.none', '不缩放'), value: 1.0 },
+  { label: t('ui.texture_opt.scale.none', '不缩放'), value: 1.0 },
   { label: '80%', value: 0.8 },
   { label: '75%', value: 0.75 },
   { label: '60%', value: 0.6 },

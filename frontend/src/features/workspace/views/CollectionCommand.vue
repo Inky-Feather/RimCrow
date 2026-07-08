@@ -395,18 +395,18 @@ const collectionDescriptionHtml = computed(() => {
 const collectionSearchController = computed(() => createTagSearchController({
   schema: {
     text: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.collection.search.field.text', '搜索文本'), alias: ['q', 'text'], suggest: true, defaultSearch: true },
-    tag: { type: TAG_FIELD_TYPES.LIST, label: t('ui.workspace.collection.search.field.tag', '标签'), alias: ['t', 'tag'], suggest: true },
+    tag: { type: TAG_FIELD_TYPES.LIST, label: t('common.field.tags', '标签'), alias: ['t', 'tag'], suggest: true },
   },
   valueOptions: {
     tag: ['1.6', '1.5', '1.4', '1.3', '1.2', '1.1', '1.0'].map(version => ({ label: version, value: version })),
   },
 }))
 const collectionInputHelpText = computed(() => [
-  t('ui.workspace.collection.search.help.title', '**输入关键词并回车确认**'),
-  t('ui.workspace.collection.search.help.basic', '可直接输入关键词，或使用 类别:关键词 格式'),
-  t('ui.workspace.collection.search.help.logic', '搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。'),
-  t('ui.workspace.collection.search.help.example', '例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。'),
-  t('ui.workspace.collection.search.help.tab', '\n[[(使用 Tab 键应用输入建议)]]'),
+  t('ui.workspace.search.help.title', '**输入关键词并回车确认**'),
+  t('ui.workspace.search.help.basic', '可直接输入关键词，或使用 类别:关键词 格式'),
+  t('ui.workspace.search.help.logic', '搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。'),
+  t('ui.workspace.search.help.example', '例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。'),
+  t('ui.workspace.search.help.tab', '\n[[(使用 Tab 键应用输入建议)]]'),
 ].join('\n'))
 const isCollectionSortOptionDisabled = (option) => (
   option?.value === 'relevance'

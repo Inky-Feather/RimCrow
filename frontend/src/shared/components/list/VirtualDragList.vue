@@ -255,7 +255,7 @@ const createDragPreview = (event, item, sourceEl, pointerOffset = null) => {
     ].join(';')
     el.appendChild(card)
   } else {
-    el.textContent = String(item?.dragLabel || item?.name || item?.id || item?.[props.dataKey] || t('ui.drag.default_item', '拖拽项目'))
+    el.textContent = String(item?.dragLabel || item?.name || item?.id || item?.[props.dataKey] || t('common.entity.drag_item', '拖拽项目'))
   }
   if (count > 1) {
     // 多选时保留触发拖拽的真实卡片作为最上层，底下用卡堆表示批量操作。

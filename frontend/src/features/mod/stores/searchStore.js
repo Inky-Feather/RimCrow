@@ -17,7 +17,7 @@ export const useSearchStore = defineStore('search', () => {
     alias_name: { type: TAG_FIELD_TYPES.STRING, defaultSearch: true, label: t('common.field.alias_name', '别名') },
     author: { type: TAG_FIELD_TYPES.STRING, suggest: true, defaultSearch: true, label: t('common.field.author', '作者') },
     package_id: { type: TAG_FIELD_TYPES.STRING, label: t('common.field.package_id', '包名') },
-    workshop_id: { type: TAG_FIELD_TYPES.STRING, label: t('common.field.workshop_id', '工坊ID') },
+    workshop_id: { type: TAG_FIELD_TYPES.STRING, label: t('common.field.workshop_id', '工坊 ID') },
 
     // 用户标记
     sign_color: {

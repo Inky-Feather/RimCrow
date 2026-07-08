@@ -113,7 +113,7 @@ export const useGroupStore = defineStore('groups', () => {
     }
   }
   // 创建分组（默认名称为“新分组”，随机颜色）
-  const createGroup = async (name = t('ui.group.default_name', '新分组'), color=`#${Math.floor(Math.random() * 16777216).toString(16).padStart(6, '0')}`) => {
+  const createGroup = async (name = t('common.entity.new_group', '新分组'), color=`#${Math.floor(Math.random() * 16777216).toString(16).padStart(6, '0')}`) => {
     if (!window.pywebview) return
     return enqueueWrite(async () => {
       try {

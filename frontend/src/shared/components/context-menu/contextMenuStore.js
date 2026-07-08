@@ -26,7 +26,7 @@ const normalizeMenuItem = (item, commandStore) => {
   if (!commandId) return { ...item, children }
 
   const command = getCommand(commandId)
-  if (!command) return { ...item, children, disabled: true, tooltip: item.tooltip || t('tooltip.command.missing', '命令不存在：{commandId}', { commandId }) }
+  if (!command) return { ...item, children, disabled: true, tooltip: item.tooltip || t('tooltip.context_menu.command_missing', '命令不存在：{commandId}', { commandId }) }
 
   const args = item.args || {}
   const commandDisabled = !commandStore.isCommandEnabled(commandId, args)

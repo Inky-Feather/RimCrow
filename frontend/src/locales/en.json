@@ -1,11 +1,5 @@
 {
   "ui": {
-    "action": {
-      "operation": "Operation"
-    },
-    "drag": {
-      "default_item": "Draggable item"
-    },
     "header": {
       "debug_page": "Test",
       "folder": {
@@ -233,16 +227,13 @@
         "unnamed": "Unnamed section group"
       },
       "sort": {
-        "author": "Author",
         "default": "Default",
         "file_create_time": "Created time",
         "file_modify_time": "Modified time",
         "file_size": "File size",
         "last_active_time": "Activation time",
         "last_moved_time": "Moved time",
-        "multiplayer_compat": "Multiplayer compatibility",
-        "name": "Name",
-        "package_id": "Package ID"
+        "multiplayer_compat": "Multiplayer compatibility"
       }
     },
     "mod_sign_color": {
@@ -311,9 +302,6 @@
             "tooltip": "Author name. In enhanced mode, the public name from the author profile cache is preferred. Click to copy."
           },
           "back": "Back",
-          "collection_children": {
-            "title": "Collection items"
-          },
           "comments": {
             "title": "Comments",
             "tooltip": "Public Steam Workshop comment count."
@@ -337,9 +325,6 @@
             "unsubscribe_all": "Unsubscribe all dependencies",
             "unsubscribing": "Unsubscribing"
           },
-          "dependents": {
-            "title": "Ecosystem links"
-          },
           "empty_hint": "Search and sort state is kept on the left. Click an item to view description, dependencies, screenshots, and related items.",
           "empty_title": "Select a Workshop item to view details",
           "favorites": {
@@ -357,12 +342,6 @@
             "title": "Rating",
             "tooltip": "Overall score returned by Steam. Useful for quickly judging user feedback."
           },
-          "same_author": {
-            "title": "Same author"
-          },
-          "screenshots": {
-            "title": "Screenshots"
-          },
           "size": {
             "title": "Size",
             "tooltip": "File size returned by Steam. Useful for roughly estimating download time and disk usage."
@@ -371,9 +350,6 @@
             "banned": "Banned",
             "title": "Status",
             "tooltip": "This item has an abnormal status. It usually means Steam has restricted or banned it."
-          },
-          "steam_details": {
-            "title": "Steam details"
           },
           "subscriptions": {
             "title": "Subscribers",
@@ -404,6 +380,13 @@
           "workshop_id": {
             "title": "Workshop ID",
             "tooltip": "Unique ID of the Steam Workshop item. Click to copy."
+          },
+          "section": {
+            "collection_children": "Collection items",
+            "dependents": "Ecosystem links",
+            "same_author": "Same author",
+            "screenshots": "Screenshots",
+            "steam_details": "Steam details"
           }
         },
         "enhanced_mode": {
@@ -416,9 +399,7 @@
           "screenshot_alt": "{title} screenshot"
         },
         "item": {
-          "subscribed": "Subscribed",
           "subscribers_tooltip": "Subscribers",
-          "workshop_id_tooltip": "Workshop ID",
           "workshop_project": "Workshop item"
         },
         "relation": {
@@ -440,18 +421,9 @@
         },
         "search": {
           "field": {
-            "author": "Author",
             "dependency": "Mod dependency",
             "dlc": "DLC dependency",
-            "tag": "Tag",
             "text": "Search text"
-          },
-          "help": {
-            "basic": "Enter keywords directly, or use category:keyword format",
-            "example": "Example: (red ^^|^^ !!-!!blue) means: match red or exclude blue.",
-            "logic": "Search text supports grouping conditions with English parentheses. Use [[+]], ^^|^^, and !!-!! for [[must include]], ^^any match^^, and !!exclude match!!.",
-            "tab": "\n[[(Press Tab to apply suggestions)]]",
-            "title": "**Enter keywords and press Enter**"
           },
           "placeholder_cache": "Search cache, supports t:tag d:DLC_AppID m:dependencyWorkshopID a:author",
           "placeholder_enhanced": "Search Workshop, supports t:tag d:DLC_AppID m:dependencyWorkshopID"
@@ -547,14 +519,10 @@
           "missing_record": "Missing record"
         },
         "menu": {
-          "count_suffix": " ({count} items)",
           "jump_group_label": "{label} ({count} items)",
           "jump_target_label": "{source} · {path}",
           "copy_field": "Copy {field}{count}",
           "copy_info": "Copy info{count}",
-          "field": {
-            "workshop_id": "Workshop ID"
-          },
           "copy_to_local": "Copy to game local library",
           "copy_to_self": "Copy to manager library",
           "move_to_local": "Move to game local library",
@@ -744,15 +712,7 @@
         },
         "search": {
           "field": {
-            "tag": "Tag",
             "text": "Search text"
-          },
-          "help": {
-            "basic": "Enter keywords directly, or use category:keyword format",
-            "example": "Example: (red ^^|^^ !!-!!blue) means: match red or exclude blue.",
-            "logic": "Search text supports grouping conditions with English parentheses. Use [[+]], ^^|^^, and !!-!! for [[must include]], ^^any match^^, and !!exclude match!!.",
-            "tab": "\n[[(Press Tab to apply suggestions)]]",
-            "title": "**Enter keywords and press Enter**"
           },
           "placeholder": "Search Steam collections...",
           "sort": "Sort",
@@ -821,7 +781,6 @@
       "github": {
         "title": "Git repository subscriptions",
         "tabs": {
-          "subscribed": "Subscribed",
           "recommend": "Recommended"
         },
         "refresh": {
@@ -848,8 +807,7 @@
         },
         "actions": {
           "open_original": "Open original URL",
-          "open_local": "Open local folder",
-          "remove_subscription": "Remove subscription"
+          "open_local": "Open local folder"
         },
         "workshop": {
           "unsubscribe": "Unsubscribe from Workshop",
@@ -877,10 +835,8 @@
           "error": "Failed to read README. Check network connection, repository URL, and branch name, then try again."
         },
         "detail": {
-          "source": "Source",
           "install_type": "Install type",
           "default_branch": "Default branch",
-          "author": "Author",
           "dependencies": "Dependencies"
         },
         "install_type": {
@@ -922,7 +878,6 @@
           "parse_recommended_repo": "Parse recommended repository",
           "create_catalog_subscription": "Create catalog subscription",
           "create_subscription": "Create subscription",
-          "remove_subscription": "Remove subscription",
           "request_transfer": "Request data transfer"
         },
         "subscribe": {
@@ -971,6 +926,15 @@
             "download_failed": "Download failed: {reason}",
             "extract": "Archive fetched. Running install plan..."
           }
+        }
+      },
+      "search": {
+        "help": {
+          "basic": "Enter keywords directly, or use category:keyword syntax",
+          "example": "Example: (red ^^|^^ !!-!!blue) means matching red or excluding blue.",
+          "logic": "Search text supports English parentheses for grouped conditions. Use [[+]], ^^|^^, and !!-!! for [[required]], ^^any match^^, and !!excluded!!.",
+          "tab": "\n[[(Press Tab to apply suggestions)]]",
+          "title": "**Enter keywords and press Enter**"
         }
       }
     },
@@ -1062,9 +1026,6 @@
         "description": "The manager has switched to silent browser suspension. The main interface will restore automatically after the game exits, or you can wake it manually.",
         "title": "RimWorld is running",
         "wake": "Wake manager"
-      },
-      "translation": {
-        "provider_ai_default": "AI translation"
       }
     },
     "backup_list": {
@@ -2103,9 +2064,6 @@
         "visible_tip": "Click any visible item to hide that dependency line."
       }
     },
-    "group": {
-      "default_name": "New Group"
-    },
     "texture_opt": {
       "card": {
         "combined_share": "Combined size share",
@@ -2131,7 +2089,8 @@
         "vram_estimate": "VRAM estimate"
       },
       "scale": {
-        "original_size": "Original size"
+        "original_size": "Original size",
+        "none": "No scaling"
       }
     },
     "file_search": {
@@ -2154,22 +2113,11 @@
         "translation": "Current translation",
         "provider": "Translator"
       }
-    },
-    "common": {
-      "status": {
-        "processing": "Processing"
-      }
     }
   },
   "tooltip": {
     "action": {
       "processing": "{label} processing"
-    },
-    "color": {
-      "custom": "Custom color"
-    },
-    "command": {
-      "missing": "Command not found: {commandId}"
     },
     "diff_view": {
       "colorful_blocks": "Use different colors for different moved blocks",
@@ -2585,6 +2533,10 @@
     "translation_manager": {
       "export_workfile": "Export a full work file for the target language, including Chinese source text and current translations. Use it with external translation tools, then import it back.",
       "import_workfile": "Import an externally translated file and save valid translations into the current target language pack."
+    },
+    "context_menu": {
+      "color_custom": "Custom color",
+      "command_missing": "Command not found: {commandId}"
     }
   },
   "toast": {
@@ -2613,7 +2565,8 @@
       "install_cancelled": "Update installation cancelled.",
       "partial_no_update": "Some update sources are temporarily unavailable. No new version was found from the available sources.",
       "start_failed": "Failed to start the update. Check your network connection, proxy settings, and installation directory permissions. Details have been written to the system log.",
-      "up_to_date": "You are already on the latest version."
+      "up_to_date": "You are already on the latest version.",
+      "recommend_scan": "Run a full scan to apply the new version's core engine features."
     },
     "maintenance": {
       "external_data_failed_summary": "External library check did not finish: {summary}{remain} failed. Try again later or check your network environment.",
@@ -2707,9 +2660,6 @@
     "mod_residue": {
       "whitelist_added": "Added to whitelist. Future scans will skip it.",
       "whitelist_removed": "Removed from whitelist. Future scans will show it again."
-    },
-    "group_item": {
-      "rename_duplicate": "Group name already exists. Added suffix {index}"
     },
     "group_list": {
       "drop": {
@@ -2817,9 +2767,6 @@
       "copied": "Recommendation text copied to clipboard",
       "copy_failed": "Copy failed, possibly due to browser permission restrictions"
     },
-    "update_modal": {
-      "recommend_scan": "Run a full scan to apply the new version's core engine features."
-    },
     "log_panel": {
       "copy_failed": "Copy failed, possibly due to browser permission restrictions",
       "copy_success": "Copied {count} log entries",
@@ -2861,7 +2808,8 @@
       "get_failed": "Failed to load groups. The database or current environment may be temporarily unavailable. Try again later.",
       "remove_mods_failed": "Failed to remove mods from the group. The list state has been restored. Try again later. Details were written to the system log.",
       "reorder_failed": "Failed to save group order. The list state has been restored. Try again later. Details were written to the system log.",
-      "update_failed": "Failed to update group. The list state has been restored. Try again later. Details were written to the system log."
+      "update_failed": "Failed to update group. The list state has been restored. Try again later. Details were written to the system log.",
+      "rename_duplicate": "Group name already exists. Added suffix {index}"
     },
     "image": {
       "copied": "Image copied",
@@ -3005,14 +2953,12 @@
         "message": "Delete group “{name}”?\nThe group record will be removed. Mod files are not deleted.",
         "title": "Delete group"
       },
-      "export": {
-        "summary": "{count} mods. Coexisting items will be resolved by the currently activated version or latest version during export."
-      },
       "package_export": {
         "description": "Optionally include dependencies, linked mods, and language packs.",
         "group_title": "Package export group: {name}",
         "selected_title": "Package export group mods{countText}",
-        "source_group": "Source group: {name}."
+        "source_group": "Source group: {name}.",
+        "summary": "{count} mods. Coexisting items will be resolved by the currently activated version or latest version during export."
       },
       "recommendation_export": {
         "title": "Recommendation export for selected mods{countText}"
@@ -3032,13 +2978,9 @@
     },
     "rule_panel": {
       "delete": {
-        "title": "Confirm deletion"
-      },
-      "delete_dynamic": {
-        "message": "Delete this dynamic rule?"
-      },
-      "delete_mod": {
-        "message": "Delete this mod rule?"
+        "title": "Confirm deletion",
+        "dynamic_message": "Delete this dynamic rule?",
+        "mod_message": "Delete this mod rule?"
       }
     },
     "workspace": {
@@ -3312,9 +3254,6 @@
       "empty": "No manageable mod settings files in the current environment",
       "file_count": "Files {count}",
       "file_path": "File path: {path}",
-      "filter": {
-        "all": "All states"
-      },
       "filtered_count": "Showing {shown} / {total} files",
       "identity": {
         "class": "Settings class",
@@ -3341,7 +3280,8 @@
         "active": "Currently active",
         "coexist_disabled": "Coexist disabled",
         "inactive": "Inactive",
-        "mod_disabled": "Mod inactive"
+        "mod_disabled": "Mod inactive",
+        "all": "All states"
       },
       "status": {
         "disabled": "Deactivated",
@@ -3365,7 +3305,6 @@
         "notes": "Notes"
       },
       "body_source": "Body content",
-      "completed_message": "Export path: {path}",
       "completed_title": "Recommendation export complete",
       "cover_plain_desc": "Plain text and TXT do not include images.",
       "cover_rich_desc": "Markdown copies images; DOCX/PDF/image-only exports embed cover images.",
@@ -3381,12 +3320,10 @@
         "image": "Images only"
       },
       "image_name": {
-        "alias": "Alias",
         "original": "Original name"
       },
       "image_name_source": "Image filename",
       "mod_count": "{count} mods",
-      "open_output_dir": "Open export folder",
       "option": {
         "authors_desc": "Export mod author names.",
         "cover": "Cover image",
@@ -3396,10 +3333,8 @@
         "package_id_desc": "Hidden by default; enable when exact identification is needed.",
         "sequence": "Sequence",
         "sequence_desc": "Show 001, 002 style sequence numbers before each mod.",
-        "supported_versions": "Supported versions",
         "supported_versions_desc": "Export supported game versions for each mod.",
         "tags_desc": "Export as #tag1 #tag2.",
-        "url": "URL",
         "url_desc": "Export mod source URL.",
         "workshop_id": "Workshop ID",
         "workshop_id_desc": "Export Steam Workshop ID."
@@ -3728,12 +3663,9 @@
       "unknown_size_change": "Unable to estimate size change",
       "unpacked_size": "Estimated unpacked size",
       "use_self_mods": "Use manager mods",
-      "data_export": {
-        "complete_title": "App Data Export"
-      },
       "export_complete": {
-        "message": "Export path: {path}",
-        "title": "{title} Complete"
+        "title": "{title} Complete",
+        "data_export_title": "App Data Export"
       },
       "mod_export": {
         "description": "Optionally include dependencies, linked mods, and language packs.",
@@ -3832,9 +3764,6 @@
       "result_panel": "Result panel",
       "result_panel_desc": "Current task, last 3 task results, and exclusion rules",
       "result_summary": "Success {success} / Failed {failed}",
-      "scale": {
-        "none": "No scaling"
-      },
       "scale_factor_desc": "Use the selected ratio first. If some images are not suitable for it, automatically fall back to a safer ratio or keep the original size when needed.",
       "scale_factor_label": "Scale ratio",
       "scale_options": "Scaling options (save more VRAM)",
@@ -4057,10 +3986,8 @@
     "path": {
       "delete": {
         "message": "Delete {path}?",
-        "title": "Confirm Delete"
-      },
-      "delete_batch": {
-        "message": "Delete these {count} files/folders?"
+        "title": "Confirm Delete",
+        "batch_message": "Delete these {count} files/folders?"
       }
     },
     "translation_manager": {
@@ -4071,7 +3998,6 @@
       "empty": "No editable translation items",
       "key": "Text key",
       "language": "Target language",
-      "namespace": "Category",
       "no_user_override_hint": "Saving will write this text to the user locale override file.",
       "provider": "Translator",
       "result_count": "{count} items",
@@ -4099,9 +4025,9 @@
       "workfile_imported": "Imported {count} translation(s).",
       "workfile_export_failed": "Failed to export the translation file.",
       "workfile_export_unavailable": "This runtime does not support exporting translation files.",
-      "workfile_exported_path": "Export path: {path}",
       "workfile_import_unavailable": "This runtime does not support importing translation files.",
-      "workfile_language_mismatch": "The imported file targets {language}. Switch to that target language before importing."
+      "workfile_language_mismatch": "The imported file targets {language}. Switch to that target language before importing.",
+      "namespace": "Namespace"
     },
     "language_pack": {
       "create_hint": "After creation, this language appears in Interface language and Translation manager, but translations are not generated automatically. Edit them there one by one, or enable Translation mode and click UI text to translate it live.",
@@ -5481,11 +5407,6 @@
       }
     }
   },
-  "error": {
-    "clipboard": {
-      "unsupported": "Clipboard is not supported in the current environment"
-    }
-  },
   "history": {
     "load_order": {
       "apply_file_order": "Apply file order",
@@ -5622,12 +5543,9 @@
       }
     },
     "backup_list": {
-      "copy_path": "Copy file path",
       "delete_file": "Delete file",
       "export_as": "Export as...",
       "load_file": "Load file",
-      "open_file": "Open file",
-      "open_folder": "Open containing folder",
       "remove_from_list": "Remove from list"
     },
     "disabled_mod_list": {
@@ -5783,7 +5701,9 @@
     "entity": {
       "unknown_mod": "Unknown mod",
       "file": "File",
-      "task": "Task"
+      "task": "Task",
+      "drag_item": "Drag item",
+      "new_group": "New group"
     },
     "field": {
       "alias_name": "Alias",
@@ -5809,7 +5729,8 @@
       "explanation": "Notes",
       "full_path": "Full path",
       "id": "ID",
-      "relative_path": "Relative path"
+      "relative_path": "Relative path",
+      "operation": "Operation"
     },
     "source": {
       "core": "Game core",
@@ -5843,6 +5764,9 @@
     },
     "option": {
       "all": "All"
+    },
+    "message": {
+      "export_path": "Export path: {path}"
     }
   },
   "confirm": {
@@ -6186,11 +6110,11 @@
       "delete": "Delete file/folder",
       "delete_batch": "Batch delete files/folders",
       "empty": "Path is empty",
-      "open": "Open path",
-      "open_file": "Open file",
       "read_text_file": "Read text file",
       "select_file": "Pick file path",
-      "select_folder": "Pick folder path"
+      "select_folder": "Pick folder path",
+      "open": "Open path",
+      "open_file": "Open file"
     },
     "texture": {
       "exclude_file": "Add file exclusion",

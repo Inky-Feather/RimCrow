@@ -864,7 +864,7 @@ const saveDynamicRule = async () => {
 const deleteDynamicRule = async (rule, event) => {
   const confirm = await confirmStore.open({
     title: t('dialog.rule_panel.delete.title', '确认删除'),
-    message: t('dialog.rule_panel.delete_dynamic.message', '确定删除该动态规则吗？'),
+    message: t('dialog.rule_panel.delete.dynamic_message', '确定删除该动态规则吗？'),
     type: 'error',
     mode: 'confirm',
   },event.target)
@@ -878,7 +878,7 @@ const deleteDynamicRule = async (rule, event) => {
 const deleteUserModRule = async (ruleId, event) => {
   const confirm = await confirmStore.open({
     title: t('dialog.rule_panel.delete.title', '确认删除'),
-    message: t('dialog.rule_panel.delete_mod.message', '确定删除该 Mod 规则吗？'),
+    message: t('dialog.rule_panel.delete.mod_message', '确定删除该 Mod 规则吗？'),
     type: 'error',
     mode: 'confirm',
   },event.target)
