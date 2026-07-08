@@ -1,6 +1,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { extractSectionHeaderTitle, isSectionHeaderTitle } from '../../../shared/lib/common'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export function useModListSections({
   props,

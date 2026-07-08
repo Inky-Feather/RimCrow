@@ -1,5 +1,5 @@
 import { nextTick, ref } from 'vue'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export function useModListDrag({
   props,

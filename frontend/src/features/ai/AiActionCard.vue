@@ -31,7 +31,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // Props / Emits

@@ -526,7 +526,7 @@ import {
   getLocalizedWorkshopDayRangeOptions, getLocalizedWorkshopSortOptions, getLocalizedWorkshopTextTargetOptions,
   allowsWorkshopUntilNow, formatWorkshopSortStateLabel, hasWorkshopSearchText, resolveWorkshopSortSelection, supportsWorkshopDayRange,
 } from '../workshopSearchOptions'
-import { getCurrentLocale, t } from '../../../shared/i18n'
+import { getCurrentLocale, t } from '../../../shared/i18n.js'
 
 const appStore = useAppStore()
 const taskStore = useTaskStore()

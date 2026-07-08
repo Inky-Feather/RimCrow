@@ -19,7 +19,7 @@ import { useModStore } from '../stores/modStore'
 import { useProfileStore } from '../../profiles/profileStore'
 import { useSupplementStore } from '../../supplement/supplementStore'
 import { useMissingInstallStore } from '../../supplement/missingInstallStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   listId: { type: String, required: true },

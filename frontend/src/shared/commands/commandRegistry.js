@@ -1,5 +1,5 @@
 import { normalizeKeybindingList } from './keybindingParser'
-import { t } from '../i18n'
+import { t } from '../i18n.js'
 
 const commands = new Map()
 let registerIndex = 0

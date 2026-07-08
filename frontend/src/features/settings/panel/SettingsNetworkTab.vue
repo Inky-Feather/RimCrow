@@ -64,7 +64,7 @@ import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import CommonTagInput from '../../../shared/components/input/CommonTagInput.vue'
 import CommonKVEditor from '../../../shared/components/input/CommonKVEditor.vue'
 import { buildSteamOpenUrl, dispatchSteamUri } from '../../../shared/lib/steamUri'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   formData: { type: Object, required: true },

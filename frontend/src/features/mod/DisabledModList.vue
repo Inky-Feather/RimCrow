@@ -115,7 +115,7 @@ import { useModStore } from './stores/modStore'
 import { IconSelf, IconSteam, MOD_TYPE_ICON_MAP, getModTypeLabel, getSourceTypeLabel } from '../../shared/lib/constants'
 import { formatFileSize } from '../../shared/lib/format'
 import { buildModExternalMenuItem, copyTextToClipboard } from './lib/modContextMenuItems'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const menuStore = useContextMenuStore()

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { toast, toUserMessage } from '../../shared/lib/common'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 // 队列只接收规范化后的动作，避免不同检查模块各自拼 Confirm 参数造成弹窗行为不一致。
 const normalizeAction = (action = {}) => ({

@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { toast, checkResult } from '../../shared/lib/common'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const createEmptyOverview = () => ({
   summary: {

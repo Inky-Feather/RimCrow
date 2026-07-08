@@ -2,7 +2,7 @@ import { computed } from 'vue'
 import { deepClone, toast, checkResult, toUserMessage } from '../../../../shared/lib/common'
 import { ISSUE_LEVEL, ISSUE_TYPE, getIssueTitle } from '../../../../shared/lib/constants'
 import { useProfileStore } from '../../../profiles/profileStore'
-import { t } from '../../../../shared/i18n'
+import { t } from '../../../../shared/i18n.js'
 
 const POSITION_WEIGHT_TOP = 0
 const POSITION_WEIGHT_DEFAULT = 500

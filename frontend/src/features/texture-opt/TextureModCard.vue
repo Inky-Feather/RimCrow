@@ -85,7 +85,7 @@
 import { computed } from 'vue'
 import { FolderOpen, MoreVertical } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 import { getStoreTypeLabel } from '../../shared/lib/constants'
 
 const props = defineProps({

@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { ISSUE_TYPE } from '../../../shared/lib/constants'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export function useModListQuery({
   props,

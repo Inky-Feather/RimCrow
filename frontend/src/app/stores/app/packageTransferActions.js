@@ -2,7 +2,7 @@ import { toast, checkResult } from '../../../shared/lib/common'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { useProfileStore } from '../../../features/profiles/profileStore'
 import { useWorkspaceStore } from '../../../features/workspace/workspaceStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export const usePackageTransferActions = ({
   uiState,

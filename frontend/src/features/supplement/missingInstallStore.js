@@ -20,7 +20,7 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { useProfileStore } from '../profiles/profileStore'
 import { useWorkspaceStore } from '../workspace/workspaceStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const GROUPS = [
   ['missing_install', 'danger'],

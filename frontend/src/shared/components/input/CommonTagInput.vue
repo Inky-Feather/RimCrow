@@ -54,7 +54,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { sortByDisplayName } from '../../lib/common'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,

@@ -239,7 +239,7 @@ import { useProfileStore } from '../profiles/profileStore'
 import { formatFileSize } from '../../shared/lib/format'
 import { Copy } from 'lucide-vue-next'
 import { checkResult } from '../../shared/lib/common'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const props = defineProps({
   sourceType: { type: String, default: 'app' } // 'app' or 'game'

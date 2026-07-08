@@ -79,7 +79,7 @@
 <script setup>
 import { ref, computed, nextTick, onBeforeUpdate } from 'vue'
 import FixedPopover from '../popover/FixedPopover.vue'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,

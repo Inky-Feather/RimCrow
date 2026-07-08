@@ -53,7 +53,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useAppStore } from '../../../app/stores/appStore'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,

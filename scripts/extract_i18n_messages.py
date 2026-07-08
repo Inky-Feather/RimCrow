@@ -676,10 +676,6 @@ def flatten_string_values(payload: Mapping[str, Any], prefix: str = "") -> dict[
     return values
 
 
-def flatten_string_keys(payload: Mapping[str, Any], prefix: str = "") -> set[str]:
-    return set(flatten_string_values(payload, prefix))
-
-
 def flatten_structure_paths(payload: Mapping[str, Any], prefix: str = "") -> list[str]:
     paths: list[str] = []
     for key, value in payload.items():
@@ -694,13 +690,11 @@ def flatten_structure_paths(payload: Mapping[str, Any], prefix: str = "") -> lis
 
 def check_builtin_locale_keys(
     extracted: Mapping[str, str],
-    expected_order: list[str] | None = None,
     expected_structure_order: list[str] | None = None,
     default_values: Mapping[str, str] | None = None,
 ) -> list[str]:
     expected = set(extracted)
-    expected_order = expected_order or list(extracted)
-    expected_structure_order = expected_structure_order or expected_order
+    expected_structure_order = expected_structure_order or list(extracted)
     default_values = default_values or extracted
     errors: list[str] = []
     seen_languages: dict[str, Path] = {}
@@ -733,7 +727,6 @@ def check_builtin_locale_keys(
         actual = set(actual_values)
         actual_structure = set(actual_structure_order)
         expected_structure = set(expected_structure_order)
-        actual_order = [key for key in actual_values if key in expected]
         missing = sorted(expected - actual)
         extra = sorted(actual - expected)
         missing_structure = sorted(expected_structure - actual_structure)
@@ -746,8 +739,6 @@ def check_builtin_locale_keys(
             errors.append(f"{path.relative_to(ROOT).as_posix()} 缺少结构节点: {', '.join(missing_structure[:20])}{' ...' if len(missing_structure) > 20 else ''}")
         if extra_structure:
             errors.append(f"{path.relative_to(ROOT).as_posix()} 存在多余结构节点: {', '.join(extra_structure[:20])}{' ...' if len(extra_structure) > 20 else ''}")
-        if not missing and not extra and actual_order != expected_order:
-            errors.append(f"{path.relative_to(ROOT).as_posix()} 字段顺序未与 {DEFAULT_LOCALE_PATH.relative_to(ROOT).as_posix()} 对齐")
         if not missing_structure and not extra_structure and actual_structure_order != expected_structure_order:
             errors.append(f"{path.relative_to(ROOT).as_posix()} 结构顺序未与 {DEFAULT_LOCALE_PATH.relative_to(ROOT).as_posix()} 对齐")
         for key in sorted(expected & actual):
@@ -842,17 +833,6 @@ def sync_builtin_locales(previous_default: Mapping[str, str], extracted: Mapping
         payload, reset_count = build_translated_locale_payload(load_locale(path), previous_default, extracted, reference_payload)
         write_json(path, payload)
         results.append(f"{path.relative_to(ROOT).as_posix()}：同步 {len(extracted)} 条，重置 {reset_count} 条")
-    return results
-
-
-def align_builtin_locales(reference_payload: Mapping[str, Any]) -> list[str]:
-    results: list[str] = []
-    for path in sorted(BUILTIN_LOCALES_DIR.glob("*.json")):
-        if path.name == DEFAULT_LOCALE_PATH.name:
-            continue
-        payload = align_locale_structure(reference_payload, load_locale(path))
-        write_json(path, payload)
-        results.append(f"{path.relative_to(ROOT).as_posix()}：已对齐结构")
     return results
 
 
@@ -963,7 +943,6 @@ def report_bare_chinese(limit: int) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="扫描 t/tr 调用并增量生成默认中文语言包。")
     parser.add_argument("--check", action="store_true", help="只检查 zh-CN.json 是否已同步，不写入文件。")
-    parser.add_argument("--align-locales", action="store_true", help="按默认中文语言包对齐其它内置语言包结构和字段顺序。")
     parser.add_argument("--report-bare-chinese", action="store_true", help="报告疑似未接入 i18n 的裸中文，不阻断构建。")
     parser.add_argument("--report-limit", type=int, default=120, help="裸中文报告最多显示条数。")
     parser.add_argument("--locale-file", type=Path, default=DEFAULT_LOCALE_PATH, help="默认中文语言包路径。")
@@ -977,10 +956,6 @@ def main() -> int:
     current_locale = load_locale(locale_path)
     previous_default = flatten_string_values(current_locale)
     next_payload = build_locale_payload(current_locale, extracted)
-    if args.align_locales:
-        for item in align_builtin_locales(next_payload):
-            print(item)
-        return 0
     next_text = json.dumps(next_payload, ensure_ascii=False, indent=2) + "\n"
     current_text = locale_path.read_text(encoding="utf-8") if locale_path.exists() else ""
     if args.check:
@@ -988,7 +963,7 @@ def main() -> int:
             print(f"{locale_path.relative_to(ROOT).as_posix()} 未同步，请运行：uv run python scripts/extract_i18n_messages.py", file=sys.stderr)
             return 1
         next_values = flatten_string_values(next_payload)
-        locale_errors = check_builtin_locale_keys(extracted, list(next_values), flatten_structure_paths(next_payload), next_values)
+        locale_errors = check_builtin_locale_keys(extracted, flatten_structure_paths(next_payload), next_values)
         if locale_errors:
             print("\n".join(locale_errors), file=sys.stderr)
             return 1

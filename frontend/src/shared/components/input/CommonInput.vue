@@ -46,7 +46,7 @@
 <script setup>
 import { onUnmounted, ref, watch } from 'vue'
 import { Eye, EyeOff } from 'lucide-vue-next'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,

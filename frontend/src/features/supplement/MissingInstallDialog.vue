@@ -218,7 +218,7 @@ import { computed } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useMissingInstallStore } from './missingInstallStore.js'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const missingInstallStore = useMissingInstallStore()
 const hasActionableRows = computed(() => missingInstallStore.state.summary.actionableTotal > 0)

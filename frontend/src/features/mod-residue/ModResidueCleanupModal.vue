@@ -167,7 +167,7 @@ import { computed, ref, watch } from 'vue'
 import { CheckSquare, FileCog, FolderOpen, FolderX, Loader2, PackageCheck, RefreshCw, Shield, ShieldPlus, ShieldX, Square, Trash2 } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore'
 import { formatFileSize } from '../../shared/lib/format'
-import { getCurrentLocale, t } from '../../shared/i18n'
+import { getCurrentLocale, t } from '../../shared/i18n.js'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import { useModResidueStore } from './modResidueStore'
 

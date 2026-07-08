@@ -86,7 +86,7 @@ import { useAppStore } from '../../app/stores/appStore';
 import { useGroupStore } from './stores/groupStore';
 import { hexToRgbComponents } from '../../shared/lib/color'
 import { toast } from '../../shared/lib/common';
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const props = defineProps({
   id: { type: String, required: true },

@@ -2,7 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { checkResult, normalizeText } from '../../shared/lib/common'
 import { useAiStore } from '../ai/aiStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // 日志分析选择态 Store

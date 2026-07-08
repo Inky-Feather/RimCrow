@@ -278,7 +278,7 @@ import { useOrderStore } from './orderStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { useTaskStore } from '../../app/stores/taskStore'
 import { Download, Flag, Link, LoaderCircle, X } from 'lucide-vue-next'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 
 // 抽屉的显隐和底部操作继续复用现有 store，避免迁移后行为变化。

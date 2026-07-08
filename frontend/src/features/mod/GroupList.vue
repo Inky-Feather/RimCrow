@@ -131,7 +131,7 @@ import { useAppStore } from '../../app/stores/appStore';
 import { hexToRgbComponents } from '../../shared/lib/color'
 import { normalizePackageId } from './lib/modIdentity'
 import { toast } from '../../shared/lib/common'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const props = defineProps({
   title: { type: String, default: 'Groups' },

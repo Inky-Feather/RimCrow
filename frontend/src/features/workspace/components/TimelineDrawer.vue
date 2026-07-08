@@ -74,7 +74,7 @@
 import { ref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core' 
 import { X, History, Activity } from 'lucide-vue-next'
-import { getCurrentLocale, t } from '../../../shared/i18n'
+import { getCurrentLocale, t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   isOpen: Boolean,

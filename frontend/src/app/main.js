@@ -16,7 +16,7 @@ import { vSelectableList } from '../shared/directives/vSelection' // 引入指�
 import { imageViewerOptions } from '../shared/lib/domEffects'
 import { setupPywebviewBridge } from '../app/bridge/pywebviewBridge'
 import { startupPerfMark, startupPerfMeasure } from '../shared/lib/startupPerf'
-import { i18n } from '../shared/i18n'
+import { i18n } from '../shared/i18n.js'
 
 startupPerfMark('main_module_loaded')
 await startupPerfMeasure('setup_pywebview_bridge', () => setupPywebviewBridge())

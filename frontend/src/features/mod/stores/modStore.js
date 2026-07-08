@@ -21,7 +21,7 @@ import { useModListHistory } from './mod-store/listHistory'
 import { useModSelection } from './mod-store/selection'
 import { useModExportPlan } from './mod-store/exportPlan'
 import { useModIssues } from './mod-store/issues'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export const useModStore = defineStore('mods', () => {
   const appStore = useAppStore()

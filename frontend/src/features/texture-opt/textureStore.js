@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
 import { toast, checkResult, toUserMessage } from '../../shared/lib/common'
 import { useTaskStore } from '../../app/stores/taskStore'
-import { t, translateMessagePayload } from '../../shared/i18n'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
 
 export const useTextureStore = defineStore('texture', () => {
   const appStore = useAppStore()

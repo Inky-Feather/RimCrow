@@ -4,7 +4,7 @@
 // 这里统一生成 tooltip 文案，避免多个组件各自拼接后出现字段名、
 // 顺序和术语不一致。
 
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const numberOrZero = (value) => {
   /** 把任意输入压成安全数字，避免 tooltip 拼接时出现 NaN。 */

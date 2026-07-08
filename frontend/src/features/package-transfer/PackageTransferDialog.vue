@@ -407,7 +407,7 @@ import { toast } from '../../shared/lib/common'
 import CommonInput from '../../shared/components/input/CommonInput.vue'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const modStore = useModStore()

@@ -93,7 +93,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const props = defineProps({
   panelStyle: { type: Object, default: () => ({}) },

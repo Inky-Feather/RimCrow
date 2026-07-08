@@ -189,7 +189,7 @@ import ModItem from '../mod/ModItem.vue'
 import SimpleDropList from '../../shared/components/list/SimpleDropList.vue'
 import RuleRelationSection from './RuleRelationSection.vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({

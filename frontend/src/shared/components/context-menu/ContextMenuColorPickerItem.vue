@@ -10,7 +10,7 @@
 
 <script setup>
 import { defineAsyncComponent } from 'vue'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const ColorPicker = defineAsyncComponent(async () => {
   await import('vue3-colorpicker/style.css')

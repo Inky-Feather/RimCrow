@@ -79,7 +79,7 @@ import { computed, ref, watch } from 'vue'
 import CommonModalShell from '../../../shared/components/modal/CommonModalShell.vue'
 import { toast } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   show: Boolean,

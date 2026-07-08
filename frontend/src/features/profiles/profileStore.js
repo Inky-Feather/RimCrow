@@ -7,7 +7,7 @@ import { useGroupStore } from '../mod/stores/groupStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { toast, checkResult } from '../../shared/lib/common'
 import { useOrderStore } from '../load-order/orderStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 
 export const useProfileStore = defineStore('profile', () => {

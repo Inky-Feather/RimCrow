@@ -1,7 +1,7 @@
 import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { usePromptQueueStore } from '../../../features/ai/promptQueueStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const getUpdateDescriptionFormat = (sourceName = '') => {
   const normalized = String(sourceName || '').trim().toLowerCase()

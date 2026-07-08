@@ -1,7 +1,7 @@
 import { Copy, ExternalLink } from 'lucide-vue-next'
 import { toast } from '../../../shared/lib/common'
 import { IconSteam } from '../../../shared/lib/constants'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const normalizeText = (value = '') => String(value || '').trim()
 

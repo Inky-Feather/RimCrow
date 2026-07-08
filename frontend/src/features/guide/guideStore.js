@@ -32,7 +32,7 @@ import {
   logAnalysisGuideSteps,
 } from './guideConfig'
 import { useToast } from 'vue-toastification'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // 引导定义 (Guide Definitions)

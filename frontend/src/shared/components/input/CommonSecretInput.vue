@@ -60,7 +60,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { AlertTriangle, Eye, EyeOff, Loader2, Trash2, Undo2 } from 'lucide-vue-next'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,

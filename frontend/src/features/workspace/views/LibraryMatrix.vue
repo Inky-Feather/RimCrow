@@ -60,7 +60,7 @@ import { useWorkspaceStore } from '../workspaceStore'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useProfileStore } from '../../profiles/profileStore'
 import { formatFileSize } from '../../../shared/lib/format'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const toast = useToast()
 const workspaceStore = useWorkspaceStore()

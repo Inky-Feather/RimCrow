@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { toUserMessage } from '../../shared/lib/common'
-import { t, translateMessagePayload } from '../../shared/i18n'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
 
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'cancelled'])
 const ACTIVE_STATUSES = new Set(['pending', 'running'])

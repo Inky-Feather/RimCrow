@@ -559,7 +559,7 @@ import { useProfileStore } from '../profiles/profileStore'
 import { imageViewerOptions } from '../../shared/lib/domEffects'
 import { sortByDisplayName, sortTextByName } from '../../shared/lib/common'
 import { useToast } from 'vue-toastification'
-import { t, getCurrentLocale } from '../../shared/i18n'
+import { t, getCurrentLocale } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const aiStore = useAiStore()

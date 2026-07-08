@@ -58,7 +58,7 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { useGroupStore } from './stores/groupStore'
 import { useModStore } from './stores/modStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const props = defineProps({
   show: Boolean,

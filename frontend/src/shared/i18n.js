@@ -4,7 +4,6 @@ import { ref } from 'vue'
 export const DEFAULT_LOCALE = 'zh-CN'
 export const UNTRANSLATED_PREFIX = '[UNTRANSLATED] '
 
-const loadedUserMessages = new Map()
 const translationRegistry = new Map()
 export const localeRevision = ref(0)
 
@@ -84,10 +83,7 @@ export const i18n = createI18n({
   fallbackLocale: DEFAULT_LOCALE,
   missingWarn: false,
   fallbackWarn: false,
-  messages: {
-    [DEFAULT_LOCALE]: builtinMessages[DEFAULT_LOCALE],
-    en: builtinMessages.en,
-  },
+  messages: builtinMessages,
 })
 
 const loadUserMessages = async (locale) => {
@@ -114,7 +110,6 @@ export const setLocale = async (language = DEFAULT_LOCALE) => {
   const locale = normalizeLocale(language)
   const builtin = builtinMessages[locale] || {}
   const userMessages = await loadUserMessages(locale)
-  loadedUserMessages.set(locale, userMessages)
   i18n.global.setLocaleMessage(locale, deepMerge(builtin, userMessages))
   i18n.global.locale.value = locale
   localeRevision.value += 1

@@ -1,4 +1,4 @@
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const HEARTBEAT_INTERVAL_MS = 5000
 

@@ -2,7 +2,7 @@
 
 import { useAppStore } from "../../app/stores/appStore";
 import { useModStore } from "../mod/stores/modStore";
-import { t } from "../../shared/i18n";
+import { t } from "../../shared/i18n.js";
 
 export const GUIDE_VERSION = "v2.0"; // 修改版本号可以强制老用户重新看一遍新版引导
 

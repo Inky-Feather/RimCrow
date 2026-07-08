@@ -290,7 +290,7 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useAiStore } from './aiStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { deepClone, normalizeText } from '../../shared/lib/common'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // Store 依赖 (Stores)

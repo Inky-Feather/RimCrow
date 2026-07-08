@@ -103,7 +103,7 @@ import { computed } from 'vue'
 import { CircleAlert, Loader2 } from 'lucide-vue-next'
 import CommonModalShell from '../../../shared/components/modal/CommonModalShell.vue'
 import { useWorkspaceStore } from '../workspaceStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const workspaceStore = useWorkspaceStore()
 const dialog = workspaceStore.startupInventoryDialog

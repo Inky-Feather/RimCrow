@@ -1,5 +1,5 @@
 import { normalizeWorkshopId } from '../../mod/lib/modIdentity'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export const getMatrixFilterStateOptions = () => [
   { label: t('ui.workspace.matrix.filter.default', '显示所有'), value: 'default' },

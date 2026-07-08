@@ -41,7 +41,7 @@ import { useHoverStore } from '../../shared/components/popover/hoverStore'
 import DependencyGraphManagerPanel from './DependencyGraphManagerPanel.vue'
 import { useModStore } from './stores/modStore'
 import { CornerUpRight, Eye, EyeOff, Filter, FilterX, Focus, FolderTree, Settings2, Undo2 } from 'lucide-vue-next'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const props = defineProps({
   // 当前显示列表的 ID 数组（必须是有序的 modelValue）

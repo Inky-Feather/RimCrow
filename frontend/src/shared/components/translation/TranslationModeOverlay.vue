@@ -98,7 +98,7 @@ import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
 import { Languages, Minimize2, MousePointer2, Save, WandSparkles, X } from 'lucide-vue-next'
 import { useAppStore } from '../../../app/stores/appStore'
 import CommonSelect from '../input/CommonSelect.vue'
-import { DEFAULT_LOCALE, findTranslationEntriesForText, getCurrentLocale, setLocale, t, translateMessagePayload } from '../../i18n'
+import { DEFAULT_LOCALE, findTranslationEntriesForText, getCurrentLocale, setLocale, t, translateMessagePayload } from '../../i18n.js'
 import { toast } from '../../lib/common'
 
 const appStore = useAppStore()

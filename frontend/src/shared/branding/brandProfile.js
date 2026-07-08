@@ -1,5 +1,5 @@
 import defaultLogoUrl from '../../../../icon.svg'
-import { t } from '../i18n'
+import { t } from '../i18n.js'
 
 const privateLogoModules = import.meta.glob('./private-assets/*.svg', { eager: true, import: 'default' })
 const privateLogoUrl = Object.values(privateLogoModules)[0] || ''

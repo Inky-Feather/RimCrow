@@ -1,6 +1,6 @@
 import { normalizeText } from '../../../shared/lib/common'
 import { cleanRichText } from '../../../shared/lib/text'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 import { buildAttachmentDisplayMeta, buildDiagnosisContextAttachmentDraft } from './runtime/aiAttachmentRuntime'
 import { createAttachmentDraft, normalizeTimestamp } from './factories'
 

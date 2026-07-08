@@ -64,7 +64,7 @@ import { ChevronDown, Settings2, Folder, Quote, AlertOctagon } from 'lucide-vue-
 import { useProfileStore } from './profileStore'
 import { useAppStore } from '../../app/stores/appStore'
 import FixedPopover from '../../shared/components/popover/FixedPopover.vue'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const profileStore = useProfileStore()

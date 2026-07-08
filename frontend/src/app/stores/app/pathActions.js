@@ -1,7 +1,7 @@
 import { toast, checkResult } from '../../../shared/lib/common'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { isBrowserRuntime, openManagedSubBrowserUrl } from '../../bridge/runtimeBridge'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export const usePathActions = ({ settings, requestModScan } = {}) => {
   // 自动检测路径

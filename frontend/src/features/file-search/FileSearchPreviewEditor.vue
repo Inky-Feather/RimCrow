@@ -28,7 +28,7 @@ import { csharp } from '@replit/codemirror-lang-csharp'
 import { EditorSelection, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state'
 import { Decoration, EditorView } from '@codemirror/view'
 import { getTailwindColorRgba } from '../../shared/lib/color'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 import { buildSearchRegExp, rememberSelectedText } from '../../shared/lib/text'
 
 const props = defineProps({

@@ -48,7 +48,7 @@
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useConfirmStore } from './confirmStore'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   show: { type: Boolean, default: false },

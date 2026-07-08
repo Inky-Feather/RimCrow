@@ -228,7 +228,7 @@ import { useConfirmStore } from './confirmStore'
 import { useAppStore } from '../../../app/stores/appStore'
 import { onClickOutside, useWindowSize } from '@vueuse/core'
 import { Info, CircleAlert, CircleX, CircleCheckBig } from 'lucide-vue-next'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 // --- SVG 图标 (纯净无依赖) ---
 const Icons = {

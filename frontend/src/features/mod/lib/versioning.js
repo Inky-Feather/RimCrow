@@ -1,4 +1,4 @@
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 // 版本号统一截断到 `主版本.次版本`，避免比较时掺入补丁号噪音。
 export const normalizeVersion = (value = '') => String(value || '').trim().slice(0, 3).toLowerCase()

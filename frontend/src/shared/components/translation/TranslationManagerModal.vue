@@ -107,7 +107,7 @@ import CommonModalShell from '../modal/CommonModalShell.vue'
 import CommonSelect from '../input/CommonSelect.vue'
 import { useConfirmStore } from '../modal/confirmStore'
 import { useAppStore } from '../../../app/stores/appStore'
-import { DEFAULT_LOCALE, getCurrentLocale, getLocaleMessagesForManagement, setLocale, t, translateMessagePayload, UNTRANSLATED_PREFIX } from '../../i18n'
+import { DEFAULT_LOCALE, getCurrentLocale, getLocaleMessagesForManagement, setLocale, t, translateMessagePayload, UNTRANSLATED_PREFIX } from '../../i18n.js'
 import { toast } from '../../lib/common'
 
 const appStore = useAppStore()

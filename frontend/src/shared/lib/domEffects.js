@@ -1,7 +1,7 @@
 import { Copy, Download, Link } from 'lucide-vue-next'
 import { useContextMenuStore } from '../components/context-menu/contextMenuStore'
 import { checkResult, toast, toUserMessage } from './common'
-import { t } from '../i18n'
+import { t } from '../i18n.js'
 
 /**
  * 给元素添加一次性的强调动画，用于提示用户关注某个控件。

@@ -4,7 +4,7 @@ import { normalizeInstallSource, normalizeInstallSources } from '../../../featur
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { useTaskStore } from '../taskStore'
 import { dispatchSteamUri, openWorkshopPage } from '../../../shared/lib/steamUri'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export const useSteamWorkshopActions = ({
   openUrl,

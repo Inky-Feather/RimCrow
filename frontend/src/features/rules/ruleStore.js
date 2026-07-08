@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useModStore } from '../mod/stores/modStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { deepClone, toast, checkResult, toUserMessage } from '../../shared/lib/common'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 // 动态规则支持属性映射
 const getDynamicRuleProps = () => ({

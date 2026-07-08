@@ -65,7 +65,7 @@ import { Download, Flag, FlagOff, Link, LoaderCircle, Trash2 } from 'lucide-vue-
 import { useAppStore } from '../../app/stores/appStore'
 import { useTaskStore } from '../../app/stores/taskStore'
 import { IconSteam } from '../lib/constants'
-import { t } from '../i18n'
+import { t } from '../i18n.js'
 
 const props = defineProps({
   workshopId: { type: [String, Number], default: '' },

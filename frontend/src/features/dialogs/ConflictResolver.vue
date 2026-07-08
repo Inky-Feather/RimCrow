@@ -263,7 +263,7 @@ import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { buildModExternalMenuItem, buildModInfoCopyMenuItem, normalizeModMenuSource } from '../mod/lib/modContextMenuItems'
 import { toUserMessage } from '../../shared/lib/common'
 import { getStoreTypeLabel } from '../../shared/lib/constants'
-import { getCurrentLocale, t } from '../../shared/i18n'
+import { getCurrentLocale, t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const modStore = useModStore()

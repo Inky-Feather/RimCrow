@@ -1,5 +1,5 @@
 import { normalizeText } from '../../../../shared/lib/common'
-import { t } from '../../../../shared/i18n'
+import { t } from '../../../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // AI 附件显示与草稿构造

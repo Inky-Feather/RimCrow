@@ -116,7 +116,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import vDragScroll from '../../directives/dragScroll.js'
 import TagToken from './TagToken.vue'
 import { getDefaultTagSearchInputHelpText } from './tagSearchEngine'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   // v-model 绑定解析后的 token 数组，格式由 controller.parse 统一生成。

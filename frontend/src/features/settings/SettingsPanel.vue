@@ -133,7 +133,7 @@ import SettingsAboutTab from './panel/SettingsAboutTab.vue'
 import { DEFAULT_THEME_ID, applyTheme } from './theme/themeManager'
 import { useAppStore } from '../../app/stores/appStore'
 import { useProfileStore } from '../profiles/profileStore'
-import { t, translateMessagePayload } from '../../shared/i18n'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const profileStore = useProfileStore()

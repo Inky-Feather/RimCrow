@@ -211,7 +211,7 @@ import { extractSectionHeaderTitle, isSectionHeaderTitle, sortByDisplayName, sor
 import { normalizePackageId, normalizePackageToken } from './lib/modIdentity'
 import { isOfficialMod } from './lib/packageScope'
 import { X, FolderInput, Tag, Group, Palette, BetweenHorizontalStart, Redo2, ChevronDown, ChevronsDown, ChevronUp, ChevronsUp, ChessPawn, MessageSquareHeart, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, RefreshCw, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, Lock, SquaresExclude, Package, ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next';
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 
 const props = defineProps({

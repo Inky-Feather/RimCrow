@@ -80,7 +80,7 @@ import CommonSwitch from '../input/CommonSwitch.vue'
 import CommonTagInput from '../input/CommonTagInput.vue'
 import FixedPopover from '../popover/FixedPopover.vue'
 import { normalizeTranslationSourceDetection } from '../../lib/translationDetection'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   feature: { type: String, default: 'workshop_detail' },

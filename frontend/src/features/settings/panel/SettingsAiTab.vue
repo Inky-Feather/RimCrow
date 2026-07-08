@@ -107,7 +107,7 @@ import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import { toast, toUserMessage } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useAiStore } from '../../ai/aiStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   formData: { type: Object, required: true },

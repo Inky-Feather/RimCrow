@@ -34,7 +34,7 @@ def test_api_response_attaches_message_key_and_params():
 
 
 def test_extract_locale_payload_is_generated_from_source_keys():
-    from scripts.extract_i18n_messages import build_locale_payload, flatten_string_keys
+    from scripts.extract_i18n_messages import build_locale_payload, flatten_string_values
 
     payload = build_locale_payload(
         {"_meta": {"language": "zh-CN", "label": "简体中文"}, "ui": {"demo": {"title": "旧标题", "kept": "保留"}}},
@@ -44,19 +44,19 @@ def test_extract_locale_payload_is_generated_from_source_keys():
     assert payload["_meta"] == {"language": "zh-CN", "label": "简体中文"}
     assert payload["ui"]["demo"]["title"] == "新标题"
     assert list(payload) == ["_meta", "ui"]
-    assert "ui.demo.kept" not in flatten_string_keys(payload)
+    assert "ui.demo.kept" not in flatten_string_values(payload)
 
 
-def test_flatten_string_keys_ignores_namespace_only_nodes():
-    from scripts.extract_i18n_messages import flatten_string_keys
+def test_flatten_string_values_ignores_namespace_only_nodes():
+    from scripts.extract_i18n_messages import flatten_string_values
 
-    assert flatten_string_keys({"ui": {"title": "标题", "empty": {}}, "logs": {}}) == {"ui.title"}
+    assert set(flatten_string_values({"ui": {"title": "标题", "empty": {}}, "logs": {}})) == {"ui.title"}
 
 
-def test_flatten_string_keys_ignores_locale_meta():
-    from scripts.extract_i18n_messages import flatten_string_keys
+def test_flatten_string_values_ignores_locale_meta():
+    from scripts.extract_i18n_messages import flatten_string_values
 
-    assert flatten_string_keys({"_meta": {"language": "de", "label": "Deutsch"}, "ui": {"title": "标题"}}) == {"ui.title"}
+    assert set(flatten_string_values({"_meta": {"language": "de", "label": "Deutsch"}, "ui": {"title": "标题"}})) == {"ui.title"}
 
 
 def test_flatten_structure_paths_keeps_empty_nodes():
@@ -92,7 +92,7 @@ def test_builtin_locale_check_validates_file_meta_without_fixed_registry(tmp_pat
     monkeypatch.setattr(extractor, "BUILTIN_LOCALES_DIR", locales_dir)
     monkeypatch.setattr(extractor, "DEFAULT_LOCALE_PATH", locales_dir / "zh-CN.json")
 
-    errors = extractor.check_builtin_locale_keys({"ui.title": "标题"}, ["ui.title"], ["ui", "ui.title"], {"ui.title": "标题"})
+    errors = extractor.check_builtin_locale_keys({"ui.title": "标题"}, ["ui", "ui.title"], {"ui.title": "标题"})
 
     assert any("en.json 缺少 _meta" in error for error in errors)
     assert any("zz-copy.json _meta.language" in error and "重复" in error for error in errors)

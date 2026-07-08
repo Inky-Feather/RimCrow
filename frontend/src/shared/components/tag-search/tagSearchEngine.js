@@ -1,4 +1,4 @@
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 export const TAG_FIELD_TYPES = {
   STRING: 'string',

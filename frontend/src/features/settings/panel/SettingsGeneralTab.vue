@@ -153,7 +153,7 @@ import { DEFAULT_THEME_ID, applyTheme, createEditableThemeFrom, findThemeById, n
 import { useAppStore } from '../../../app/stores/appStore'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { useGuideStore } from '../../guide/guideStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 import { toast } from '../../../shared/lib/common'
 
 const props = defineProps({

@@ -439,7 +439,7 @@ import TextureModCard from './TextureModCard.vue'
 import { formatFileSize } from '../../shared/lib/format'
 import { toast } from '../../shared/lib/common'
 import { copyTextToClipboard } from '../mod/lib/modContextMenuItems'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const textureStore = useTextureStore()

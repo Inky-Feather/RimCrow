@@ -1,7 +1,7 @@
 import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
 import { useWorkspaceStore } from '../../../features/workspace/workspaceStore'
 import { usePromptQueueStore } from '../../../features/ai/promptQueueStore'
-import { getCurrentLocale, t } from '../../../shared/i18n'
+import { getCurrentLocale, t } from '../../../shared/i18n.js'
 
 export const useMaintenanceActions = ({
   settings,

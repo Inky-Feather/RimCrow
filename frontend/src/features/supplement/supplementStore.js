@@ -8,7 +8,7 @@ import { ISSUE_TYPE } from '../../shared/lib/constants'
 import { dedupeNormalizedPackageIds, mapUniqueDisplayNames, normalizePackageId, pushUnique } from '../mod/lib/modIdentity'
 import { DEFAULT_TOOL_PACKAGE_IDS, isCorePackageId, isOfficialDlcPackageId } from '../mod/lib/packageScope'
 import { getVersionInfo as getVersionInfoByVersions, normalizeVersion } from '../mod/lib/versioning'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const CATEGORY_DEFS = [
   ['core', 'danger'],

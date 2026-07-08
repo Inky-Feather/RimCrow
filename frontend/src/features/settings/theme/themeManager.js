@@ -1,6 +1,6 @@
 import builtinThemes from '../../../app/styles/builtinThemes.json'
 import { hexToRgbComponents, normalizeHexColor } from '../../../shared/lib/color'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export const DEFAULT_THEME_ID = 'obsidian-cyan'
 export const BUILTIN_THEMES = builtinThemes.map(theme => ({ ...theme, builtin: true }))

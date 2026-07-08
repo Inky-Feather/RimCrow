@@ -36,7 +36,7 @@ import { useAppStore } from '../../../app/stores/appStore'
 import { useWorkspaceStore } from '../workspaceStore'
 import { cleanRichText } from '../../../shared/lib/text'
 import WorkshopItemActions from '../../../shared/components/WorkshopItemActions.vue'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   mod: { type: Object, required: true }

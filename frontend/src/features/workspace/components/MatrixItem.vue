@@ -132,7 +132,7 @@ import { formatFileSize } from '../../../shared/lib/format'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useWorkspaceStore } from '../workspaceStore'
 import { getSourceTypeLabel } from '../../../shared/lib/constants'
-import { getCurrentLocale, t } from '../../../shared/i18n'
+import { getCurrentLocale, t } from '../../../shared/i18n.js'
 import { getMatrixItemState, normalizeMatrixTimestamp } from '../lib/matrixItemState'
 
 const appStore = useAppStore()

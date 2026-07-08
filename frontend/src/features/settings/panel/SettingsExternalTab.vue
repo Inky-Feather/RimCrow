@@ -126,7 +126,7 @@ import CommonInput from '../../../shared/components/input/CommonInput.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useRuleStore } from '../../rules/ruleStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   formData: { type: Object, required: true },

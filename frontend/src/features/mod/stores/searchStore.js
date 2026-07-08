@@ -4,7 +4,7 @@ import { useModStore } from './modStore'
 import { TagSearchEngine, TAG_FIELD_TYPES } from '../../../shared/components/tag-search/tagSearchEngine'
 import { getModSignColorLabel, getModTypeLabel, getSourceTypeLabel, getStoreTypeLabel } from '../../../shared/lib/constants'
 import { useAppStore } from '../../../app/stores/appStore'
-import { i18n, t } from '../../../shared/i18n'
+import { i18n, t } from '../../../shared/i18n.js'
 
 export const useSearchStore = defineStore('search', () => {
   const modStore = useModStore()

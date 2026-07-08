@@ -222,7 +222,7 @@ import { useModListDrag } from './useModListDrag'
 import { setActiveKeyScope } from '../../../shared/commands/keyScopeStore'
 import { registerModListActions } from '../../../app/commands/modListActions'
 import { Megaphone, MegaphoneOff, SearchAlert } from 'lucide-vue-next'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 // 这里 modelValue 接收纯 ID 数组
 const props = defineProps({

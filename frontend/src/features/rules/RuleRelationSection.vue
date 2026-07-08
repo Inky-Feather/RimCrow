@@ -99,7 +99,7 @@
 <script setup>
 import ModItem from '../mod/ModItem.vue'
 import SimpleDropList from '../../shared/components/list/SimpleDropList.vue'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 defineProps({
   title: { type: String, required: true },

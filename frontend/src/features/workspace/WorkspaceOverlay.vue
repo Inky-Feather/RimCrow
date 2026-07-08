@@ -67,7 +67,7 @@ import { ref, computed, onMounted, onUnmounted, defineAsyncComponent, watch } fr
 import { useAppStore } from '../../app/stores/appStore'
 import { Library, FolderArchive, Globe, Github } from 'lucide-vue-next'
 import { useWorkspaceStore } from './workspaceStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const workspaceStore = useWorkspaceStore()
 const appStore = useAppStore()

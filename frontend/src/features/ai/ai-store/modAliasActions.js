@@ -2,7 +2,7 @@ import { computed } from 'vue'
 import { checkResult, normalizeText, toast } from '../../../shared/lib/common'
 import { normalizeNumber, normalizeTimestamp } from './factories'
 import { useAppStore } from '../../../app/stores/appStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export const useModAliasActions = ({
   taskStore,

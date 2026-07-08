@@ -77,7 +77,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import GlobalColorPicker from '../../../shared/components/GlobalColorPicker.vue'
 import { createThemeTokenGroups, applyTheme, createEditableThemeFrom, normalizeTheme } from './themeManager'
 import { X } from 'lucide-vue-next'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },

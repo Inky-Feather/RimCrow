@@ -1,5 +1,5 @@
 import { checkResult, getApiResponseMessage, normalizeText, toast, toUserMessage } from '../../../shared/lib/common'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const PENDING_REASONING_CAPABILITIES = {
   supports_reasoning: false,

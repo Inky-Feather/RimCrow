@@ -203,7 +203,7 @@ import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import BrandSignature from '../../../shared/branding/BrandSignature.vue'
 import brandProfile from '../../../shared/branding/brandProfile'
 import { IconSelfOriginal } from '../../../shared/lib/constants.js'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 defineProps({
   formData: { type: Object, required: true },

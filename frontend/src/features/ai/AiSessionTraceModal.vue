@@ -217,7 +217,7 @@ import {
   formatTokenCount,
   numberOrZero,
 } from './aiUsageTooltips'
-import { getCurrentLocale, t } from '../../shared/i18n'
+import { getCurrentLocale, t } from '../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // Store 依赖 (Stores)

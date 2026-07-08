@@ -4,7 +4,7 @@ import { checkResult, toast, toUserMessage } from '../../shared/lib/common'
 
 import { useAppStore } from '../../app/stores/appStore'
 import { useTaskStore } from '../../app/stores/taskStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const DEFAULT_FILE_TYPES = ['.xml']
 const DEFAULT_EXCLUDE_OPTIONS = {

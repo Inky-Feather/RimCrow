@@ -36,7 +36,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { cancelLongPressFeedback, completeLongPressFeedback, showLongPressFeedback } from '../../directives/vLongPressFeedback'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },

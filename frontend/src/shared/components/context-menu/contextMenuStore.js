@@ -4,7 +4,7 @@ import { ref } from 'vue'
 import { getCommand } from '../../commands/commandRegistry'
 import { useCommandStore } from '../../commands/commandStore'
 import { formatKeybindingLabel } from '../../commands/keybindingParser'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 export const getVisibleMenuItems = (items = []) => (items || []).filter(item => item && !item.hidden)
 

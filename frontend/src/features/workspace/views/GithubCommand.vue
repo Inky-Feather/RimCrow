@@ -401,7 +401,7 @@ import { renderMarkdownContent } from '../../../shared/lib/markdown'
 import { isOfficialPackageId } from '../../mod/lib/packageScope'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
-import { getCurrentLocale, t } from '../../../shared/i18n'
+import { getCurrentLocale, t } from '../../../shared/i18n.js'
 
 const toast = useToast()
 const appStore = useAppStore()

@@ -149,7 +149,7 @@ import { useAppStore } from '../../../app/stores/appStore'
 import { useModStore } from '../../../features/mod/stores/modStore'
 import { useGroupStore } from '../../../features/mod/stores/groupStore';
 import { DEFAULT_ACCENT_HEX, hexToRgbComponents } from '../../lib/color'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const appStore = useAppStore()
 const hoverStore = useHoverStore()

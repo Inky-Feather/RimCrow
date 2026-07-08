@@ -1,4 +1,4 @@
-import { t } from '../i18n'
+import { t } from '../i18n.js'
 
 const MODIFIER_ORDER = ['Ctrl', 'Meta', 'Alt', 'Shift']
 

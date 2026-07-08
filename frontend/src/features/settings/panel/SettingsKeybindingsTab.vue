@@ -132,7 +132,7 @@ import { getAllCommands } from '../../../shared/commands/commandRegistry'
 import { createDefaultKeybindingConfig, detectKeybindingConflicts, getCommandDisplayKeys, getCommandEffectiveKeys } from '../../../shared/commands/keybindingConflicts'
 import { formatKeybindingLabel, normalizeKeybinding, normalizeKeybindingList } from '../../../shared/commands/keybindingParser'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   formData: { type: Object, required: true },

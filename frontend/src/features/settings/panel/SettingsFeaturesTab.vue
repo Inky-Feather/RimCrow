@@ -97,7 +97,7 @@ import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import TranslationFeatureControls from '../../../shared/components/translation/TranslationFeatureControls.vue'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 defineProps({ formData: { type: Object, required: true } })
 const showWorkshopTranslationSettings = ref(false)

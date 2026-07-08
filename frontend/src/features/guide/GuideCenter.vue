@@ -92,7 +92,7 @@ import { useGuideStore, getAllGuides } from './guideStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { Check, Play, ChevronRight } from 'lucide-vue-next'
 import { GUIDE_VERSION } from './guideConfig'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const DRAG_THRESHOLD = 4
 const PANEL_WIDTH = 320

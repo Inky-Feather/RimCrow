@@ -113,7 +113,7 @@ import AiDiagnosticSidebar from '../ai/AiDiagnosticSidebar.vue'
 import CommonSwitch from '../../shared/components/input/CommonSwitch.vue';
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import { toUserMessage } from '../../shared/lib/common'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 
 // -----------------------------------------------------------------

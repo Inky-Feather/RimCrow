@@ -148,7 +148,7 @@ import { IconSelfOriginal } from '../../shared/lib/constants'
 import { useProfileStore } from '../../features/profiles/profileStore.js';
 import { useOrderStore } from '../../features/load-order/orderStore.js';
 import { useModResidueStore } from '../../features/mod-residue/modResidueStore.js';
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const aiStore = useAiStore()

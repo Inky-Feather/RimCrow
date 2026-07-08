@@ -333,7 +333,7 @@ import GuideCenter from '../features/guide/GuideCenter.vue'
 import { applyTheme } from '../features/settings/theme/themeManager'
 import { LoaderCircle } from 'lucide-vue-next'
 import { startupPerfMark } from '../shared/lib/startupPerf'
-import { t } from '../shared/i18n'
+import { t } from '../shared/i18n.js'
 
 // 首屏只同步加载主工作区需要的组件，其余弹窗/工具面板按需拆包，减少 WebView 首轮解析时间。
 const SettingsModal = defineAsyncComponent(() => import('../features/settings/SettingsPanel.vue'))

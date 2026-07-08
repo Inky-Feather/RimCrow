@@ -239,7 +239,7 @@ import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import BackupItem from './BackupItem.vue'
 import { isBrowserRuntime as detectBrowserRuntime } from '../../app/bridge/runtimeBridge.js'
 import { copyTextToClipboard } from '../mod/lib/modContextMenuItems.js'
-import { getCurrentLocale, t } from '../../shared/i18n'
+import { getCurrentLocale, t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const orderStore = useOrderStore()

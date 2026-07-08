@@ -456,7 +456,7 @@ import { IconSteam, getModTypeLabel } from '../../shared/lib/constants'
 import { deepClone } from '../../shared/lib/common'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
-import { getCurrentLocale, t } from '../../shared/i18n'
+import { getCurrentLocale, t } from '../../shared/i18n.js'
 
 
 

@@ -279,7 +279,7 @@ import AiActionCard from './AiActionCard.vue'
 import { imageViewerOptions } from '../../shared/lib/domEffects'
 import { renderMarkdownContent } from '../../shared/lib/markdown'
 import { toUserMessage } from '../../shared/lib/common'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 import { createActionExecutorRegistry, createActionPresentationRuntime } from './ai-store/runtime/aiActionRuntime.js'
 import {
   buildAssistantMessageUsageTooltip, buildRequestTotalUsageTooltip,

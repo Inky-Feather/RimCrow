@@ -140,7 +140,7 @@ import { useToast } from 'vue-toastification'
 import { normalizeText, toUserMessage } from '../../shared/lib/common'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
-import { getCurrentLocale, t } from '../../shared/i18n'
+import { getCurrentLocale, t } from '../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // Store 依赖 (Stores)

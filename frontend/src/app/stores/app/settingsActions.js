@@ -1,6 +1,6 @@
 import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
 import { useProfileStore } from '../../../features/profiles/profileStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const SETTING_KEYS_REQUIRING_LIST_SCAN = [
   'workshop_mods_path',

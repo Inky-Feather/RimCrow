@@ -99,7 +99,7 @@ import CommonTagInput from '../../../shared/components/input/CommonTagInput.vue'
 import { getRunCommandTags } from '../../../shared/lib/constants'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useProfileStore } from '../../profiles/profileStore'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   formData: { type: Object, required: true },

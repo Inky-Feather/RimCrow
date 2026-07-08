@@ -5,7 +5,7 @@ import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPer
 import { useAiStore } from '../../features/ai/aiStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
 import { useWorkspaceStore } from '../../features/workspace/workspaceStore'
-import { t, translateMessagePayload } from '../../shared/i18n'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
 
 // 启动编排只负责“先后顺序”和“阻塞/后台”的取舍，具体业务仍由各自 store/API 执行。
 export const useStartupStore = defineStore('startup', () => {

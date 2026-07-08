@@ -127,7 +127,7 @@ import { useAppStore } from '../stores/appStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
 import { useTaskStore } from '../stores/taskStore'
 import { formatDate } from '../../shared/lib/format'
-import { t, translateMessagePayload } from '../../shared/i18n'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
 
 const modStore = useModStore()
 const appStore = useAppStore()

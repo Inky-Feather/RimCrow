@@ -1,5 +1,5 @@
 import { normalizeText } from '../../../shared/lib/common'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export const normalizeTimestamp = (value, fallback = Date.now()) => {
   /** 把任意时间戳输入规整成可比较的毫秒值。 */

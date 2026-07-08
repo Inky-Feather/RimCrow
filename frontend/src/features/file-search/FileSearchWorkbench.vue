@@ -235,7 +235,7 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { buildSearchRegExp, escapeHtml } from '../../shared/lib/text'
 import { buildModExternalMenuItem, buildModInfoCopyMenuItem, copyTextToClipboard } from '../mod/lib/modContextMenuItems'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const fileSearchStore = useFileSearchStore()

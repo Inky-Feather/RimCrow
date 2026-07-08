@@ -200,7 +200,7 @@ import CommonSwitch from '../../shared/components/input/CommonSwitch.vue'
 import CommonTagInput from '../../shared/components/input/CommonTagInput.vue'
 import { getRunCommandTags } from '../../shared/lib/constants'
 import { formatDate } from '../../shared/lib/format'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const profileStore = useProfileStore()
 const modStore = useModStore()

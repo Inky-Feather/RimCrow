@@ -308,7 +308,7 @@ import {
   allowsWorkshopUntilNow, formatWorkshopSortStateLabel, hasWorkshopSearchText, resolveWorkshopSortSelection, supportsWorkshopDayRange,
 } from '../workshopSearchOptions'
 import WorkshopItemActions from '../../../shared/components/WorkshopItemActions.vue'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const toast = useToast()
 const wsStore = useWorkspaceStore()

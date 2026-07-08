@@ -1,5 +1,5 @@
 import { createToastInterface, globalEventBus } from 'vue-toastification'
-import { t, translateMessagePayload } from '../i18n'
+import { t, translateMessagePayload } from '../i18n.js'
 
 // -----------------------------------------------------------------
 // 文本与列表工具 (Text / Collection Utils)

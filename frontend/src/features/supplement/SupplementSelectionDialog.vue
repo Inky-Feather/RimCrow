@@ -167,7 +167,7 @@
 import { X } from 'lucide-vue-next'
 import { useSupplementStore } from './supplementStore'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 const supplementStore = useSupplementStore()
 

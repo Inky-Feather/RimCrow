@@ -134,7 +134,7 @@ import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { useProfileStore } from '../../profiles/profileStore'
 import { useModStore } from '../../mod/stores/modStore'
 import DataBundleExportModal from './DataBundleExportModal.vue'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   formData: { type: Object, required: true },

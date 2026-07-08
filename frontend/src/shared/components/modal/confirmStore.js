@@ -1,7 +1,7 @@
 // stores/confirmStore.js
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 export const useConfirmStore = defineStore('confirm', () => {
   const isVisible = ref(false)

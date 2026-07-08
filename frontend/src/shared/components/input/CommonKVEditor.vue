@@ -32,7 +32,7 @@
 
 <script setup>
 import { Trash2 } from 'lucide-vue-next'
-import { t } from '../../i18n'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,

@@ -12,7 +12,7 @@
 import { computed } from 'vue'
 import LuxBreatheIcon from '../decorations/LuxBreatheIcon.vue'
 import brandProfile from './brandProfile'
-import { t } from '../i18n'
+import { t } from '../i18n.js'
 
 const props = defineProps({
   logoClass: { type: String, default: 'size-60' },

@@ -58,7 +58,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import FixedPopover from '../../../shared/components/popover/FixedPopover.vue'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },

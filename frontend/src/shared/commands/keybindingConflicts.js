@@ -1,6 +1,6 @@
 import { getAllCommands } from './commandRegistry'
 import { normalizeKeybindingList } from './keybindingParser'
-import { t } from '../i18n'
+import { t } from '../i18n.js'
 
 export const createDefaultKeybindingConfig = () => ({
   version: 1,

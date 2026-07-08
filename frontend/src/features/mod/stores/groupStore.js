@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { checkResult, toast, toUserMessage } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
 import { normalizePackageId } from '../lib/modIdentity'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 export const useGroupStore = defineStore('groups', () => {
   const appStore = useAppStore()

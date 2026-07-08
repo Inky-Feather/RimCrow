@@ -7,7 +7,7 @@ import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { useMissingInstallStore } from '../supplement/missingInstallStore'
 import { useSupplementStore } from '../supplement/supplementStore'
 import { normalizeInstallSource, normalizePackageId, normalizePackageToken } from '../mod/lib/modIdentity'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 export const useOrderStore = defineStore('order', () => {
   const appStore = useAppStore()

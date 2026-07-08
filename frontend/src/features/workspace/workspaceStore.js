@@ -7,7 +7,7 @@ import { buildWorkshopSteamUri, buildWorkshopWebUrl, dispatchSteamUri } from '..
 import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPerf'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { getSourceTypeLabel, RIMWORLD_STEAM_APP_ID } from '../../shared/lib/constants'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 import { matchesTranslationSourceDetection } from '../../shared/lib/translationDetection'
 import { openWorkshopPage } from '../../shared/lib/steamUri'
 import {

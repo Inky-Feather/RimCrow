@@ -22,7 +22,7 @@ import { usePackageTransferActions } from './app/packageTransferActions'
 import { useSteamWorkshopActions } from './app/steamWorkshopActions'
 import { useMaintenanceActions } from './app/maintenanceActions'
 import { useUpdateActions } from './app/updateActions'
-import { DEFAULT_LOCALE, getBuiltinLocaleOptions, getLocaleMessagesForManagement, setLocale, t, translateMessagePayload } from '../../shared/i18n'
+import { DEFAULT_LOCALE, getBuiltinLocaleOptions, getLocaleMessagesForManagement, setLocale, t, translateMessagePayload } from '../../shared/i18n.js'
 
 export const useAppStore = defineStore('app', () => {
   const taskStore = useTaskStore()

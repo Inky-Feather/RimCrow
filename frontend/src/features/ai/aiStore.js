@@ -13,7 +13,7 @@ import { useAttachmentActions } from './ai-store/attachmentActions'
 import { useModAliasActions } from './ai-store/modAliasActions'
 import { useAppStore } from '../../app/stores/appStore'
 import { useTaskStore } from '../../app/stores/taskStore'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // 工具函数 (Utils)

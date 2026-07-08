@@ -1,4 +1,4 @@
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 export const getLocalizedWorkshopSortOptions = () => [
   { label: t('ui.workspace.workshop.sort.relevance', '最相关'), value: 'relevance' },

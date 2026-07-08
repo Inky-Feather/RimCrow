@@ -2,7 +2,7 @@
 
 import { h, markRaw } from 'vue'
 import defaultLogoUrl from '../../../../icon.svg'
-import { t } from '../i18n'
+import { t } from '../i18n.js'
 
 export const RIMWORLD_STEAM_APP_ID = 294100
 

@@ -60,7 +60,7 @@
 
 <script setup>
 import { MoreHorizontal } from 'lucide-vue-next'
-import { t } from '../../shared/i18n'
+import { t } from '../../shared/i18n.js'
 
 defineProps({
   item: { type: Object, required: true },

@@ -119,7 +119,7 @@ import { checkResult, toast } from '../../../shared/lib/common'
 import { getMatrixItemState, getMatrixMeaningfulChangeTime, getMatrixReplacementTargets, getMatrixFilterStateOptions, isMatrixModAvailable, isMatrixModUnavailable, matchesMatrixFilter } from '../lib/matrixItemState'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import { buildModExternalMenuItem, copyTextToClipboard } from '../../mod/lib/modContextMenuItems'
-import { t } from '../../../shared/i18n'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   title: String,
