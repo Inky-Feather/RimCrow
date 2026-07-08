@@ -430,7 +430,7 @@
           <div v-if="relatedCollectionChildren.length > 0 || (selectedMod?.item_type === 'collection' && workspaceStore.workshopSearch.relatedLoading.dependencies)" class="mt-4 space-y-3 rounded-2xl border border-border-base/10 bg-bg-inset/45 p-4">
             <div class="flex items-center justify-between gap-2">
               <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-accent-tip">
-                <Link class="size-3" /> {{ t('ui.workspace.workshop.detail.section.collection_children', '合集子项') }}
+                <Link class="size-3" /> {{ t('ui.workspace.workshop.relation.collection_children', '合集子项') }}
               </h4>
               <span v-if="workspaceStore.workshopSearch.relatedLoading.dependencies" class="text-[0.65rem] text-text-dim">{{ t('common.status.loading', '加载中...') }}</span>
             </div>
@@ -447,7 +447,7 @@
           <div v-if="relatedDependents.length > 0 || workspaceStore.workshopSearch.relatedLoading.dependents || workspaceStore.workshopSearch.relatedErrors.dependents" class="mt-4 space-y-3 rounded-2xl border border-border-base/10 bg-bg-inset/45 p-4">
             <div class="flex items-center justify-between gap-2">
               <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-accent-primary">
-                <Network class="size-3" /> {{ t('ui.workspace.workshop.detail.section.dependents', '生态关联') }}
+                <Network class="size-3" /> {{ t('ui.workspace.workshop.relation.dependents', '生态关联') }}
               </h4>
               <button v-if="workspaceStore.workshopSearch.relatedMeta.dependents.total > relatedDependents.length"
                 @click="showRelatedList('dependents')" class="rounded-lg border border-border-base/10 bg-bg-inset px-2 py-1 text-[0.65rem] font-bold text-text-dim hover:text-accent-primary">
@@ -466,7 +466,7 @@
           <div v-if="relatedSameAuthor.length > 0 || workspaceStore.workshopSearch.relatedLoading.same_author || workspaceStore.workshopSearch.relatedErrors.same_author" class="mt-4 space-y-3 rounded-2xl border border-border-base/10 bg-bg-inset/45 p-4">
             <div class="flex items-center justify-between gap-2">
               <h4 class="flex items-center gap-1.5 text-[0.72rem] font-black text-accent-success">
-                <User class="size-3" /> {{ t('ui.workspace.workshop.detail.section.same_author', '同作者作品') }}
+                <User class="size-3" /> {{ t('ui.workspace.workshop.relation.same_author', '同作者作品') }}
               </h4>
               <button v-if="workspaceStore.workshopSearch.relatedMeta.same_author.total > relatedSameAuthor.length"
                 @click="showRelatedList('same_author')" class="rounded-lg border border-border-base/10 bg-bg-inset px-2 py-1 text-[0.65rem] font-bold text-text-dim hover:text-accent-success">
@@ -549,10 +549,10 @@ const setDependencyActionPending = (action, pending) => {
 }
 const versionTagPattern = /^\d+(?:\.\d+)+$/
 const normalSortOptions = computed(() => [
-  { label: t('ui.workspace.workshop.cache_sort.latest', '最近更新'), value: 'latest' },
-  { label: t('ui.workspace.workshop.cache_sort.subscriptions', '最多订阅'), value: 'subscriptions' },
-  { label: t('ui.workspace.workshop.cache_sort.name', '名称排序'), value: 'name' },
-  { label: t('ui.workspace.workshop.cache_sort.author', '作者排序'), value: 'author' },
+  { label: t('ui.workspace.workshop.sort.latest', '最近更新'), value: 'latest' },
+  { label: t('ui.workspace.workshop.sort.subscriptions', '最多订阅'), value: 'subscriptions' },
+  { label: t('ui.workspace.workshop.sort.name', '名称排序'), value: 'name' },
+  { label: t('ui.workspace.workshop.sort.author', '作者排序'), value: 'author' },
 ])
 const workshopSortOptions = computed(() => getLocalizedWorkshopSortOptions())
 const workshopDayRangeOptions = computed(() => getLocalizedWorkshopDayRangeOptions())
@@ -592,7 +592,7 @@ const workshopSearchPlaceholder = computed(() => (
 ))
 const workshopTokenSchema = computed(() => {
   const schema = {
-    text: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.workshop.search.field.text', '搜索文本'), alias: ['q', 'text'], suggest: true, defaultSearch: true },
+    text: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.search.field.text', '搜索文本'), alias: ['q', 'text'], suggest: true, defaultSearch: true },
     tag: { type: TAG_FIELD_TYPES.LIST, label: t('common.field.tags', '标签'), alias: ['t', 'tag'], suggest: true },
     dlc: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.workshop.search.field.dlc', 'DLC依赖'), alias: ['d', 'dlc'], suggest: true },
     dependency: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.workshop.search.field.dependency', '模组依赖'), alias: ['m', 'mod', 'dep'], suggest: false },
@@ -844,7 +844,7 @@ const workshopActiveSortValue = computed(() => (
 const workshopSortStateLabel = computed(() => (
   workspaceStore.workshopSearch.isEnhancedMode
     ? formatWorkshopSortStateLabel(workspaceStore.workshopSearch.sort, workspaceStore.workshopSearch.days, workshopHasSearchText.value)
-    : normalSortOptions.value.find(option => option.value === workspaceStore.workshopSearch.sort)?.label || t('ui.workspace.workshop.cache_sort.latest', '最近更新')
+    : normalSortOptions.value.find(option => option.value === workspaceStore.workshopSearch.sort)?.label || t('ui.workspace.workshop.sort.latest', '最近更新')
 ))
 const isWorkshopSortOptionDisabled = (option) => (
   workspaceStore.workshopSearch.isEnhancedMode

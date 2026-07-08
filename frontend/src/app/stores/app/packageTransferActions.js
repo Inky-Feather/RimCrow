@@ -88,7 +88,7 @@ export const usePackageTransferActions = ({
       mod_ids: normalizedModIds,
       allowExtraOptions: true,
       export_scope: 'custom',
-      summary: summary || t('dialog.package_transfer.mod_export.selected_summary', '已选 {count} 个模组。', { count: normalizedModIds.length }),
+      summary: summary || t('dialog.package_transfer.selected_mod_count', '已选 {count} 个模组。', { count: normalizedModIds.length }),
     })
   }
 

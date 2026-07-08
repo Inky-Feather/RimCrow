@@ -59,7 +59,7 @@
       "use_custom_value": "Use \"{value}\""
     },
     "status_bar": {
-      "mods_actived": "Actived",
+      "mods_actived": "Active",
       "history": "History",
       "last_app_run": "Last app run",
       "last_game_run": "Last game run",
@@ -138,7 +138,7 @@
     },
     "issue": {
       "default": "Other issue",
-      "inactive_dependency": "Deactivated dependency",
+      "inactive_dependency": "Inactive dependency",
       "incompatible": "Mod conflict",
       "info_alternative_used": "Dependency replacement used",
       "link_mod_missing": "Linked mod missing",
@@ -149,8 +149,8 @@
       "multiplayer_incompatible": "Incompatible with Multiplayer",
       "multiplayer_unknown": "Multiplayer compatibility unknown",
       "version_mismatch": "Version mismatch",
-      "warn_inactive_language_pack": "Language pack deactivated",
-      "warn_inactive_target": "Language pack target deactivated",
+      "warn_inactive_language_pack": "Language pack inactive",
+      "warn_inactive_target": "Language pack target inactive",
       "warn_missing_language": "Missing language support",
       "warn_multiplayer_compatibility": "Multiplayer compatibility",
       "warn_unknown_target": "Language pack target unknown",
@@ -178,7 +178,7 @@
         "load_after": "Load after",
         "load_before": "Load before"
       },
-      "shadow_paths": "Deactivated mods with the same package ID",
+      "shadow_paths": "Inactive mods with the same package ID",
       "sign_color": "Color marker*",
       "tags": "Tags*",
       "time": {
@@ -211,8 +211,8 @@
         "placeholder": "Enter keywords to filter mods..."
       },
       "list": {
-        "active": "Actived list",
-        "inactive": "Deactivated list",
+        "active": "Active list",
+        "inactive": "Inactive list",
         "temp": "Temp list"
       },
       "quick_action": {
@@ -335,7 +335,7 @@
           "no_description": "This mod did not provide a detailed description.",
           "original_name": "Original name",
           "package_id": {
-            "tooltip": "Mod package identifier. Usually used for local rule matching and same-mod recognition. Click to copy."
+            "tooltip": "Mod package identifier. Usually used for local rule matching and recognizing the same mod. Click to copy."
           },
           "project_name": "Item name",
           "rating": {
@@ -366,7 +366,7 @@
           },
           "version": {
             "title": "Version",
-            "tooltip": "RimWorld versions marked for this item. This merges backend cache and version tags."
+            "tooltip": "RimWorld versions marked for this item. This merges app cache and version tags."
           },
           "view_all": "View all",
           "votes_down": {
@@ -382,9 +382,6 @@
             "tooltip": "Unique ID of the Steam Workshop item. Click to copy."
           },
           "section": {
-            "collection_children": "Collection items",
-            "dependents": "Ecosystem links",
-            "same_author": "Same author",
             "screenshots": "Screenshots",
             "steam_details": "Steam details"
           }
@@ -422,8 +419,7 @@
         "search": {
           "field": {
             "dependency": "Mod dependency",
-            "dlc": "DLC dependency",
-            "text": "Search text"
+            "dlc": "DLC dependency"
           },
           "placeholder_cache": "Search cache, supports t:tag d:DLC_AppID m:dependencyWorkshopID a:author",
           "placeholder_enhanced": "Search Workshop, supports t:tag d:DLC_AppID m:dependencyWorkshopID"
@@ -449,12 +445,6 @@
           "stale_prefix": "^^Original text has changed; retranslation is available.^^\n",
           "translate": "Translate"
         },
-        "cache_sort": {
-          "author": "Sort by author",
-          "latest": "Recently updated",
-          "name": "Sort by name",
-          "subscriptions": "Most subscribed"
-        },
         "sort": {
           "created": "Recently published",
           "latest": "Recently updated",
@@ -462,7 +452,9 @@
           "rating": "Highest rated",
           "relevance": "Most relevant",
           "subscriptions": "Most subscribed",
-          "votes_up": "Most upvoted"
+          "votes_up": "Most upvoted",
+          "author": "Sort by author",
+          "name": "Sort by name"
         }
       },
       "library": {
@@ -515,9 +507,6 @@
           "placeholder": "Search in this library..."
         },
         "empty": "No data in this library",
-        "path": {
-          "missing_record": "Missing record"
-        },
         "menu": {
           "jump_group_label": "{label} ({count} items)",
           "jump_target_label": "{source} · {path}",
@@ -590,19 +579,28 @@
           "same": "Only same items across libraries",
           "conflict": "Only conflicts in same library",
           "replace": "Only replacements",
-          "disabled": "Only deactivated",
+          "disabled": "Only inactive",
           "missing": "Only missing",
           "deleted": "Only deleted"
         },
         "badge": {
           "changed": "Changed",
           "deleted": "Inventory record exists, but the local mod folder was deleted or is invalid",
-          "disabled": "Deactivated",
+          "disabled": "Inactive",
           "missing": "Workshop record exists, but there is no valid local mod file",
           "new": "New",
           "unavailable": "Unavailable",
           "unavailable_tooltip": "Steam can no longer fetch this Workshop item. It may be removed or inaccessible.",
-          "update": "Updatable"
+          "update": "Updatable",
+          "changed_short": "CHG",
+          "conflict_short": "CONFLICT",
+          "deleted_short": "DELETED",
+          "disabled_short": "OFF",
+          "missing_short": "MISSING",
+          "new_short": "NEW",
+          "replace_short": "REPLACE",
+          "same_short": "SAME",
+          "update_short": "UPDATE"
         },
         "context_hint": "Right-click a card to view the change timeline and more actions",
         "detail": {
@@ -632,7 +630,8 @@
           "mtime": "By modified time",
           "name": "Name A-Z",
           "size": "By file size"
-        }
+        },
+        "no_image": "NO IMG"
       },
       "collection": {
         "actions": {
@@ -658,13 +657,12 @@
           "duplicate_skipped": "Skipped {count} duplicate package IDs to avoid duplicate load nodes.",
           "history_label": "Override active list by collection order",
           "missing_message": "This collection has {count} uninstalled mods.\nForcing this order may create ghost nodes (empty items). Downloading missing items first is strongly recommended.\nContinue anyway?",
-          "no_package_id": "Could not extract package IDs. The backend may not have returned package_id.",
+          "no_package_id": "Could not extract package IDs. No package_id was returned.",
           "success": "Current active list has been overridden by collection order.\nOfficial Core/DLC entries are kept according to the current active state. Return to the main page and click Save to apply.",
           "unresolved_skipped": "{count} collection items could not resolve package IDs, possibly because cache is missing or they are not installed locally. They were skipped.",
           "warning_title": "Warning"
         },
         "card": {
-          "delete_record": "Delete record",
           "missing_short": "Missing {count}",
           "no_description": "No description",
           "not_synced": "Not synced",
@@ -711,9 +709,6 @@
           "title": "Delete record"
         },
         "search": {
-          "field": {
-            "text": "Search text"
-          },
           "placeholder": "Search Steam collections...",
           "sort": "Sort",
           "sort_tooltip": "Sort and time range",
@@ -803,7 +798,9 @@
           "not_recommended_tooltip": "This item may be temporarily incompatible. Check the description before adding it.",
           "unsupported_tooltip": "This item has no usable download URL",
           "add_zip_subscription": "Add as Git subscription and deploy zip",
-          "add_git_subscription": "Add as Git subscription"
+          "add_git_subscription": "Add as Git subscription",
+          "branch": "Branch: {branch}",
+          "workshop_badge": "Workshop"
         },
         "actions": {
           "open_original": "Open original URL",
@@ -828,7 +825,8 @@
             "title": "Fetch release build (Release)",
             "description": "Fetch the stable package published by the author.",
             "none": "This repository has no Release yet"
-          }
+          },
+          "latest_release": "Latest: {version}"
         },
         "readme": {
           "loading": "Reading README...",
@@ -837,7 +835,8 @@
         "detail": {
           "install_type": "Install type",
           "default_branch": "Default branch",
-          "dependencies": "Dependencies"
+          "dependencies": "Dependencies",
+          "rimworld_versions": "RimWorld:"
         },
         "install_type": {
           "zip_link": "Zip direct link",
@@ -935,6 +934,9 @@
           "logic": "Search text supports English parentheses for grouped conditions. Use [[+]], ^^|^^, and !!-!! for [[required]], ^^any match^^, and !!excluded!!.",
           "tab": "\n[[(Press Tab to apply suggestions)]]",
           "title": "**Enter keywords and press Enter**"
+        },
+        "field": {
+          "text": "Search text"
         }
       }
     },
@@ -952,7 +954,7 @@
       },
       "diff": {
         "compare_file": "Comparison file",
-        "current_active": "Currently actived"
+        "current_active": "Currently active"
       },
       "layout": {
         "details": {
@@ -983,16 +985,16 @@
         },
         "main": {
           "active": {
-            "desc": "Show or hide the actived Mod list on the main screen.",
-            "label": "Actived list"
+            "desc": "Show or hide the active Mod list on the main screen.",
+            "label": "Active list"
           },
           "details": {
             "desc": "Show or hide the Mod details panel on the main screen.",
             "label": "Mod details"
           },
           "library": {
-            "desc": "Show or hide the deactivated Mod list on the main screen.",
-            "label": "Deactivated list"
+            "desc": "Show or hide the inactive Mod list on the main screen.",
+            "label": "Inactive list"
           },
           "sidebar": {
             "desc": "Show or hide the side tools column on the main screen.",
@@ -1001,11 +1003,11 @@
         }
       },
       "main_list": {
-        "active": "Actived",
+        "active": "Active",
         "group": "Groups",
         "rules": "Rules",
         "temp": "Temp",
-        "deactivated": "Deactivated"
+        "deactivated": "Inactive"
       },
       "recommendation_export": {
         "source_selected_mods": "Selected mods",
@@ -1088,8 +1090,8 @@
     },
     "disabled_mod_list": {
       "empty": {
-        "filtered": "No deactivated mods match the filter",
-        "no_disabled": "No deactivated mods in this profile"
+        "filtered": "No inactive mods match the filter",
+        "no_disabled": "No inactive mods in this profile"
       },
       "restore_failure": {
         "default_reason": "File operation failed"
@@ -1101,7 +1103,7 @@
         "self": "Manager library",
         "workshop": "Workshop"
       },
-      "title": "Deactivated",
+      "title": "Inactive",
       "sort": {
         "ctime": "By created time",
         "mtime": "By modified time",
@@ -1254,7 +1256,12 @@
       "workshop": {
         "description": "Community-maintained offline Workshop mod data, updated regularly.",
         "title": "Workshop offline database"
-      }
+      },
+      "logic": {
+        "if": "IF",
+        "then": "THEN"
+      },
+      "priority_prefix": "Priority: {value}"
     },
     "rule_relation": {
       "community_rules": "Community rules ({count})",
@@ -1289,10 +1296,10 @@
         "title_prefix": "Profile "
       },
       "export": {
-        "active_desc": "Export mods currently actived in this profile.",
-        "active_loading_desc": "Reading actived mod count for this profile.",
-        "active_mods": "Actived mods in current profile",
-        "description": "Choose effective mods or currently actived mods from this profile, and optionally include profile data.",
+        "active_desc": "Export active mods in this profile.",
+        "active_loading_desc": "Reading active mod count for this profile.",
+        "active_mods": "Active mods in current profile",
+        "description": "Choose effective or active mods from this profile, and optionally include profile data.",
         "effective_desc": "Export mods that can be used normally in this profile.",
         "effective_loading_desc": "Reading exportable mod count for this profile.",
         "effective_mods": "Effective mods in current profile",
@@ -1346,7 +1353,11 @@
       },
       "unknown_version": "Unknown version",
       "unnamed_profile": "Unnamed profile",
-      "version_unknown": "Version unknown"
+      "version_unknown": "Version unknown",
+      "path_badge": {
+        "data": "Data",
+        "game": "Game"
+      }
     },
     "settings": {
       "paths": {
@@ -1392,19 +1403,19 @@
         "use_workshop_mods": "Use Workshop mods",
         "use_workshop_mods_desc": "Connect Workshop mods to the current profile's local Mods directory. Unavailable directories will warn you, but the switch can still be enabled manually.",
         "user_data_path": "User data directory",
-        "user_data_path_desc": "User data directory containing game settings, saves, and logs. Location differs by system. You can auto-detect or choose manually.\nOn Windows the default data path is usually:\nC:/Users/{用户名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
+        "user_data_path_desc": "User data directory containing game settings, saves, and logs. Location differs by system. You can auto-detect or choose manually.\nOn Windows the default data path is usually:\nC:/Users/USERNAME/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
         "workshop_mods_path": "Workshop directory",
         "workshop_mods_path_desc": "Directory containing mods downloaded by Steam Workshop. This setting is shared by all profiles."
       },
       "general": {
-        "active_section_support": "\"Actived list\" section group support",
-        "active_section_support_desc": "When enabled, the actived list supports section group collapsing, dragging whole groups, and moving section groups from the context menu.",
-        "default_collapse_active_sections": "Collapse actived list section groups by default",
-        "default_collapse_active_sections_desc": "When enabled, section groups in the actived list are collapsed on initial display.",
-        "default_collapse_inactive_sections": "Collapse deactivated list section groups by default",
-        "default_collapse_inactive_sections_desc": "When enabled, section groups in the deactivated list are collapsed on initial display.",
+        "active_section_support": "\"Active list\" section group support",
+        "active_section_support_desc": "When enabled, the active list supports section group collapsing, dragging whole groups, and moving section groups from the context menu.",
+        "default_collapse_active_sections": "Collapse active list section groups by default",
+        "default_collapse_active_sections_desc": "When enabled, section groups in the active list are collapsed on initial display.",
+        "default_collapse_inactive_sections": "Collapse inactive list section groups by default",
+        "default_collapse_inactive_sections_desc": "When enabled, section groups in the inactive list are collapsed on initial display.",
         "dependency_graph": "Dependency graph",
-        "dependency_graph_desc": "Controls whether the dependency graph is shown in the actived list.",
+        "dependency_graph_desc": "Controls whether the dependency graph is shown in the active list.",
         "detail_delay": "Details loading delay",
         "detail_delay_desc": "Controls the delay before loading Mod details, in milliseconds. Default is 200 ms.",
         "double_click_toggle_mod": "Double-click to activate/deactivate Mod",
@@ -1421,8 +1432,8 @@
         "home_layout": "Home layout",
         "icons_cloud": "Animated icon cloud",
         "icons_cloud_desc": "Controls the animated icon cloud shown on the details page when idle.",
-        "inactive_section_support": "\"Deactivated list\" section group support",
-        "inactive_section_support_desc": "When enabled, the deactivated list supports section group collapsing, dragging whole groups, and moving section groups from the context menu.",
+        "inactive_section_support": "\"Inactive list\" section group support",
+        "inactive_section_support_desc": "When enabled, the inactive list supports section group collapsing, dragging whole groups, and moving section groups from the context menu.",
         "interface_language": "Interface language",
         "list_icons": "List icons",
         "list_icons_desc": "Controls all icons in lists, including simple and detailed views.",
@@ -1458,7 +1469,7 @@
       },
       "features": {
         "action_prechecks": "Required checks before key actions",
-        "action_prechecks_desc": "When enabled, saving, launching, and auto-sorting check for uninstalled and unactived items first. When disabled, actions run directly without the check dialog.",
+        "action_prechecks_desc": "When enabled, saving, launching, and auto-sorting check for uninstalled and inactive items first. When disabled, actions run directly without the check dialog.",
         "auto_scan_on_startup": "Auto-scan Mod directories on startup",
         "auto_scan_on_startup_desc": "When disabled, you need to click the scan button manually to update the Mod list.",
         "auto_sort_logic": "Auto-sort logic",
@@ -1493,7 +1504,7 @@
           "workshop_id": "By Workshop ID"
         },
         "language_packs_follow_targets": "Place language packs next to targets",
-        "language_packs_follow_targets_desc": "When enabled, auto-sort tries to place language packs after their last actived prerequisite or dependency. If no target is found, the original default lower position is kept.",
+        "language_packs_follow_targets_desc": "When enabled, auto-sort tries to place language packs after their last active prerequisite or dependency. If no target is found, the original default lower position is kept.",
         "launch_profile_quick_scan": "Check sync before direct profile launch",
         "launch_profile_quick_scan_desc": "When launching a non-current profile directly from the profile list, required links are checked and synced first. When enabled, a lightweight scan runs before syncing; when disabled, sync is forced from the current database cache and profile config.",
         "link_deployment": {
@@ -1514,9 +1525,9 @@
           "package_id": "By package ID"
         },
         "persist_temp_mod_list": "Save temporary list",
-        "persist_temp_mod_list_desc": "When enabled, the temporary list is saved per profile and restored next time you enter that profile. When disabled, Mods in the temporary list are returned to the top of the deactivated list when saving.",
+        "persist_temp_mod_list_desc": "When enabled, the temporary list is saved per profile and restored next time you enter that profile. When disabled, Mods in the temporary list are returned to the top of the inactive list when saving.",
         "regular_mods_follow_dependencies": "Keep regular Mods near dependencies",
-        "regular_mods_follow_dependencies_desc": "When enabled, auto-sort tries to place regular Mods after the last actived dependency within the same weight tier, keeping related series closer together.",
+        "regular_mods_follow_dependencies_desc": "When enabled, auto-sort tries to place regular Mods after the last active dependency within the same weight tier, keeping related series closer together.",
         "scan_maintenance": "Scan and data maintenance",
         "scan_maintenance_desc": "Controls Mod list refresh, file change detection, and missing data handling.",
         "show_coexistence_message": "Show coexisting conflict hints",
@@ -1528,7 +1539,7 @@
         "startup_prompt_new_only": "Only warn about new startup issues",
         "startup_prompt_new_only_desc": "When enabled, startup inventory reminders show only newly found changes, missing items, and deleted items. When disabled, existing unresolved issues continue to be shown.",
         "strict_disabled_mode": "Strict deactivation mode",
-        "strict_disabled_mode_desc": "When enabled, scans keep Mods deactivated according to manager records. Mods reactivated externally are automatically deactivated again. Manual deactivation removal is not affected.",
+        "strict_disabled_mode_desc": "When enabled, scans keep Mods inactive based on manager records. Mods reactivated externally are automatically deactivated again. Manually removing a deactivation record is not affected.",
         "title": "Feature settings",
         "translation": "Translation",
         "translation_desc": "Set default translation preferences and separate behavior for Workshop description translation.",
@@ -1645,7 +1656,9 @@
         "tieba_thread": "Tieba thread",
         "tieba_thread_note": "View centralized notes and public discussion.",
         "title": "About",
-        "view_donate_qr": "View donation QR code"
+        "view_donate_qr": "View donation QR code",
+        "copy_group_number": "Copy group number",
+        "copy_password": "Copy password"
       },
       "ai": {
         "api_key_placeholder": "Enter an API Key if the endpoint requires one. Local deployments can usually leave this empty.",
@@ -1670,7 +1683,7 @@
         "model": "Model",
         "model_placeholder": "Select from the list or enter a model name manually",
         "provider": "API protocol",
-        "provider_desc": "Most relay services, local runtimes, and domestic model platforms prefer OpenAI-compatible APIs. Switch to a native protocol only when the target service has no stable OpenAI-compatible API.",
+        "provider_desc": "Most relays, local runtimes, and model platforms work best with OpenAI-compatible APIs. Use a native protocol only when needed.",
         "response_result": "AI response:",
         "start_test": "Run test",
         "temperature": "Output randomness",
@@ -1678,7 +1691,12 @@
         "test_prompt": "Test prompt",
         "test_prompt_placeholder": "Enter a simple sentence to test the connection, e.g. hello",
         "title": "Artificial intelligence",
-        "view_raw_response": "View raw response"
+        "view_raw_response": "View raw response",
+        "api_key": "API Key",
+        "base_url": "Base URL",
+        "endpoint_mode_auto": "Auto",
+        "endpoint_mode_chat_completions": "Chat Completions API",
+        "endpoint_mode_responses": "Responses API"
       },
       "data_export": {
         "description": "Select the data to package. If profile data is selected, the full directory of each selected profile is included.",
@@ -1716,7 +1734,7 @@
         "debug_mode_desc": "After debug mode is enabled, restarting the app opens developer tools so you can inspect problem details.",
         "default_silent_page": "Default page",
         "default_silent_page_desc": "Controls whether silent mode opens the home page first or goes directly to the log page.",
-        "export_current_profile_mods_desc": "Before export, choose effective Mods or currently actived Mods from the current profile, and optionally include profile data.",
+        "export_current_profile_mods_desc": "Before export, choose effective or active Mods from the current profile, with optional profile data.",
         "export_current_profile_mods_title": "Export current profile Mods",
         "export_data_bundle": "Export app data",
         "export_profile_mods": "Export profile Mods",
@@ -1735,13 +1753,13 @@
         "log_level": "Log level",
         "log_retention_days": "Log retention days",
         "profile_mod_package": "Profile and Mod packaging",
-        "profile_mod_package_desc": "Import and export physical Mod packages. Supports exporting effective Mods or currently actived Mods from the current profile, and importing Mod packages with profile data.",
+        "profile_mod_package_desc": "Import and export physical Mod packages. Supports effective or active Mods, plus optional profile data.",
         "remote_image_cache": "Remote image cache",
         "remote_image_cache_desc": "Remote cover images, screenshots, and rich text images are written to local cache first, then read by the frontend through the local asset service.",
         "reset_database_now": "Reset local database now",
         "scope": {
-          "profile_active": "Current profile actived Mods ({count})",
-          "profile_active_desc": "Export only Mods already actived in the current profile.",
+          "profile_active": "Active Mods in current profile ({count})",
+          "profile_active_desc": "Export only active Mods in the current profile.",
           "profile_effective": "Current profile effective Mods ({count})",
           "profile_effective_desc": "Export Mods that can be used normally in the current profile."
         },
@@ -1797,11 +1815,8 @@
         "settings": "Settings",
         "system": "System",
         "tab": {
-          "about": "About",
           "ai": "AI integration",
-          "community": "External dependencies",
           "dev": "Development",
-          "features": "Feature settings",
           "general": "Interface",
           "keybindings": "Keybindings",
           "network": "Network",
@@ -2113,6 +2128,11 @@
         "translation": "Current translation",
         "provider": "Translator"
       }
+    },
+    "hover": {
+      "preview": {
+        "no_description": "No description available."
+      }
     }
   },
   "tooltip": {
@@ -2249,7 +2269,7 @@
         "no_conclusion": "The official compatibility table has no clear conclusion yet.",
         "notes": "Notes: {notes}",
         "official": "From the official Multiplayer compatibility table.",
-        "patch_active": "A matching patch exists in Multiplayer Compatibility and is active because this mod is activated.",
+        "patch_active": "A matching patch exists in Multiplayer Compatibility and is active because this mod is active.",
         "patch_available": "A matching patch exists in Multiplayer Compatibility and will take effect after this mod is activated.",
         "title": "Multiplayer compatibility: {status}",
         "xml_only": "No assembly detected; treated as fully compatible by Multiplayer XML-only rules."
@@ -2305,7 +2325,7 @@
         "supplement": {
           "danger": "!!{count} items need handling!!",
           "danger_item": "- Required: {count}",
-          "empty": "No deactivated mods available to add",
+          "empty": "No inactive mods available to add",
           "found": "Found {count} items that can be added",
           "group_item": "• {title}: {count} items",
           "open": "__[[(Click to open add-missing-mods dialog)]]__",
@@ -2330,7 +2350,7 @@
     },
     "app": {
       "actions": {
-        "autosort": "Automatically sort all actived mods by rules. If the result is worse than the old behavior, switch back to the legacy sorting logic in Settings.",
+        "autosort": "Automatically sort all active mods by rules. If the result is worse than the old behavior, switch back to the legacy sorting logic in Settings.",
         "force_scan": "Recheck all files, including unchanged files. This may take longer.",
         "scan": "Scan file changes and sync the current profile mod list"
       }
@@ -2345,7 +2365,7 @@
         "loading": "Exporting RML"
       },
       "export_share_code": {
-        "ready": "Generate a share code for the current activated list and copy it to clipboard",
+        "ready": "Generate a share code for the current active list and copy it to clipboard",
         "loading": "Generating share code"
       },
       "import_file": {
@@ -2379,17 +2399,17 @@
       "package_export": "Package export group mods"
     },
     "group_list": {
-      "active_mod": "Activated",
+      "active_mod": "Active",
       "collapse_all": "Collapse all groups",
       "create": "Create group",
       "expand_all": "Expand all groups",
-      "help": "**Group management**\nDrag mods from lists into any group.\nRight-click a list to quickly move mods into or out of existing groups.\nOn the mod details page, you can manage all groups that contain that mod.\n\nGroups work like a clipboard. Moving into or out of groups is a [[copy]] operation:\n - ^^Removing^^ from a group does not remove the mod itself;\n - Dragging mods between groups copies them and skips members already in the target group.\n\nWhole groups can also be dragged:\n - Drag a group into the activated list to activate every mod in it;\n - Drag a group into the deactivated list to deactivate every mod in it.",
+      "help": "**Group management**\nDrag mods from lists into any group.\nRight-click a list to quickly move mods into or out of existing groups.\nOn the mod details page, you can manage all groups that contain that mod.\n\nGroups work like a clipboard. Moving into or out of groups is a [[copy]] operation:\n - ^^Removing^^ from a group does not remove the mod itself;\n - Dragging mods between groups copies them and skips members already in the target group.\n\nWhole groups can also be dragged:\n - Drag a group into the active list to activate every mod in it;\n - Drag a group into the inactive list to deactivate every mod in it.",
       "remove_from_group": "Remove",
       "search_next": "Search and locate the next matching result"
     },
     "mod_rule_editor": {
-      "language_owner": "Detected owners come from backend analysis by default. You can set owners manually. The right-side switch controls override or merge mode: when override is on, user owners replace detected owners; when off, they are merged with detected owners.",
-      "load_position": "Force this mod to the top or bottom of the activated list."
+      "language_owner": "Detected owners come from app analysis by default. You can set owners manually. The right-side switch controls override or merge mode: when override is on, user owners replace detected owners; when off, they are merged with detected owners.",
+      "load_position": "Force this mod to the top or bottom of the active list."
     },
     "rule_panel": {
       "disable_rule": "Disable rule",
@@ -2413,7 +2433,7 @@
       "game_version": "Game version",
       "run": "Run profile",
       "runtime_current": "The game is running with this profile.",
-      "runtime_external": "The game was started externally. The backend has taken over with the default profile.",
+      "runtime_external": "The game was started externally. The app switched to the default profile.",
       "steam_managed": "The game is managed by Steam.",
       "steam_profile": "This is a Steam-version profile.",
       "unavailable": "Current profile is unavailable:\n^^{message}^^",
@@ -2563,15 +2583,15 @@
     "update": {
       "download_started": "Update download started. Watch the status bar for progress.",
       "install_cancelled": "Update installation cancelled.",
-      "partial_no_update": "Some update sources are temporarily unavailable. No new version was found from the available sources.",
-      "start_failed": "Failed to start the update. Check your network connection, proxy settings, and installation directory permissions. Details have been written to the system log.",
+      "partial_no_update": "Some update sources are unavailable. No new version was found from the available sources.",
+      "start_failed": "Failed to start the update. Check your network connection, proxy settings, and installation directory permissions. See system log for details.",
       "up_to_date": "You are already on the latest version.",
       "recommend_scan": "Run a full scan to apply the new version's core engine features."
     },
     "maintenance": {
       "external_data_failed_summary": "External library check did not finish: {summary}{remain} failed. Try again later or check your network environment.",
       "external_data_up_to_date": "External library check completed. Everything is up to date.",
-      "external_data_update_failed": "Failed to update external libraries. Check network connection, proxy settings, and local file write permissions. Details have been written to the system log.",
+      "external_data_update_failed": "Failed to update external libraries. Check network connection, proxy settings, and local file write permissions. See system log for details.",
       "git_catalog_refreshed": "Git recommendations refreshed.",
       "git_deploy_started": "Git repository deployment task started. Watch the status bar.",
       "managed_mods_up_to_date": "Manager mod check completed. Everything is up to date.",
@@ -2582,12 +2602,12 @@
     },
     "steam": {
       "connecting": "Connecting to Steam.",
-      "details_temporarily_unavailable": "Steam cannot query Workshop details right now. Make sure Steam is logged in and the network is available, then try again later.",
+      "details_temporarily_unavailable": "Steam cannot query Workshop details now. Make sure Steam is logged in and the network is available, then try again later.",
       "download_failed": "Steam Workshop download request failed. Make sure Steam is logged in, the network is available, and the target Workshop item is still accessible.",
       "download_incomplete": "Steam download did not finish. Make sure Steam is logged in and online, or check Steam's download queue later.",
       "download_started": "Started downloading {count} Workshop items",
       "download_submitted_waiting": "Submitted {count} Workshop download requests to Steam. Waiting for the download to finish.",
-      "download_temporarily_unavailable": "Steam cannot process Workshop download requests right now. Make sure Steam is logged in and the network is available, then try again later.",
+      "download_temporarily_unavailable": "Steam cannot process Workshop download requests now. Make sure Steam is logged in and the network is available, then try again later.",
       "subscribe_failed": "Subscription failed. Make sure Steam is logged in, the network is available, and the target Workshop item is still accessible.",
       "subscribe_submitted": "Sent subscription requests for {count} Workshop items",
       "unsubscribe_cleaned_records": "Unsubscribed and cleaned {count} inventory records",
@@ -2625,7 +2645,7 @@
     "backup_list": {
       "backup_no_exportable_order": "This backup has no package ID sequence to export",
       "drop_busy": "The previous dropped file is still being processed. Please wait.",
-      "empty_share_code": "Backend did not return a valid share code",
+      "empty_share_code": "No valid share code returned",
       "exported_modlist": "Backup exported as ModList",
       "exported_rml": "Backup exported as RML",
       "name_sanitized": "Special characters in the file name were replaced with underscores",
@@ -2641,20 +2661,20 @@
       "backup_renamed": "Backup renamed",
       "backup_saved_as": "Backup saved as:\n{path}",
       "disk_changed_handle_conflict": "The disk load order changed. Resolve the conflict first.",
-      "empty_share_code": "Backend did not return a valid share code",
-      "export_failed": "Failed to export the Mod order. Check target folder permissions, disk space, and the current actived list. Details were written to the system log.",
+      "empty_share_code": "No valid share code returned",
+      "export_failed": "Failed to export the Mod order. Check target folder permissions, disk space, and the current active list. See system log for details.",
       "exported": "Mod order exported",
       "import_items_removed": "Removed {count} imported items",
       "imported_with_warnings": "Imported with {count} warnings",
       "loaded": "Mod order loaded",
       "no_downloadable_sources": "No downloadable target sources in the current filtered result",
-      "no_shareable_active_order": "There is no actived order to share",
+      "no_shareable_active_order": "There is no active order to share",
       "no_subscribable_workshop_items": "No subscribable Workshop items in the current filtered result",
       "runtime_refreshed_diff": "After the game exited, the disk load order differed from the manager working order, so the comparison view was opened.",
       "runtime_refreshed_unsaved": "After the game exited, the disk load order refreshed and unsaved changes were moved into the comparison view.",
       "save_skipped_disk_changed": "The disk load order was changed externally. Save was skipped.",
       "share_code_empty": "Share code cannot be empty",
-      "share_code_failed": "Failed to generate the share code. Check whether the current actived list is valid, or try again later. Details were written to the system log.",
+      "share_code_failed": "Failed to generate the share code. Check whether the current active list is valid, or try again later. See system log for details.",
       "share_code_imported": "Share code imported"
     },
     "mod_residue": {
@@ -2676,9 +2696,9 @@
       "cleanup_deleted_done": "Cleaned {count} deleted records",
       "collection_duplicate": "This collection is already in your records.",
       "collection_invalid_id": "Collection ID or link is invalid. Enter a numeric ID, or paste a Steam collection link containing id=xxx.",
-      "collection_load_failed": "Failed to load collection. Network, Steam service, or local cache may be temporarily unavailable. Try again later.",
+      "collection_load_failed": "Failed to load collection. Network, Steam service, or local cache may be unavailable. Try again later.",
       "collection_parsing": "Parsing and connecting collection data.",
-      "collection_remove_failed": "Failed to remove collection. The backend may be unavailable or local records could not be written. Details were written to the system log.",
+      "collection_remove_failed": "Failed to remove collection. The app service may be unavailable or local records could not be written. See system log for details.",
       "collection_removed": "Collection removed from records",
       "collection_search_need_key": "Collection search requires a Steam Web API Key",
       "enable_workshop_enhanced_first": "Enable enhanced Workshop info and fill in the Steam Web API Key in Settings first",
@@ -2746,11 +2766,13 @@
         "workshop_path_missing": "Workshop directory is empty. Workshop Mods may not load.",
         "workshop_path_problem": "Workshop directory may not work: {message}\nThis switch will keep your choice. If loading fails, come back here to fix the path."
       },
-      "apply_failed": "Failed to apply settings. The configuration may be invalid, a path may be inaccessible, or the configuration file may not be writable. Details have been written to the system log.",
-      "save_failed": "Failed to save settings. The backend service may be unavailable, the configuration file may not be writable, or the current path may not have sufficient permissions. Please try again later."
+      "apply_failed": "Failed to apply settings. The configuration may be invalid, a path may be inaccessible, or the configuration file may not be writable. See system log for details.",
+      "save_failed": "Failed to save settings. The app service may be unavailable, the configuration file may not be writable, or the current path may not have sufficient permissions. Please try again later.",
+      "secret_storage_warning": "Some keys could not be written to secure storage, so they are temporarily kept in the config file. Check the system credential service and save the keys again.",
+      "self_mods_path_reset": "The manager-downloaded Mods folder cannot be the same as the Workshop directory, so it has been restored to the default folder."
     },
     "log_viewer": {
-      "global_scan_failed": "Global log scan failed. The log file may be temporarily unreadable, too large, or AI diagnosis context generation may have failed. Details were written to the system log.",
+      "global_scan_failed": "Global log scan failed. The log file may be unreadable, too large, or AI diagnosis context generation may have failed. See system log for details.",
       "no_log_file_selected": "No log file selected.",
       "scan_complete_notice": "Compression complete: kept {tocCount} error summaries covering {repeatCount} errors; current usage is about {tokenText}.",
       "scanning_all_logs": "Scanning the full log, please wait.",
@@ -2789,7 +2811,7 @@
       "empty_scope": "There are no conflict groups to process in the current scope",
       "no_operations": "There are no copies to process",
       "recommended_restored": "Recommended handling plan restored",
-      "resolve_exception": "Conflict handling request failed. Make sure the backend service is still running, then rescan and try again.",
+      "resolve_exception": "Conflict handling request failed. Make sure the app service is still running, then rescan and try again.",
       "resolve_failed": "Conflict handling failed. The target file may be in use, permissions may be insufficient, or the list state may have changed. Rescan and try again.",
       "resolved_partial": "Processed {successCount} items, {errorCount} failed. Remaining issues will be shown again after the rescan.",
       "resolved_success": "Processed {count} conflict copies. Rescanning now."
@@ -2800,15 +2822,15 @@
       "restored_line": "Dependency line restored: {name}"
     },
     "group": {
-      "add_mods_failed": "Failed to add mods to the group. The list state has been restored. Try again later. Details were written to the system log.",
-      "content_reorder_failed": "Failed to save group content order. The list state has been restored. Try again later. Details were written to the system log.",
-      "create_failed": "Failed to create group. The list state has been restored. Try again later. Details were written to the system log.",
-      "delete_failed": "Failed to delete group. The list state has been restored. Try again later. Details were written to the system log.",
+      "add_mods_failed": "Failed to add mods to the group. The list state has been restored. Try again later. See system log for details.",
+      "content_reorder_failed": "Failed to save group content order. The list state has been restored. Try again later. See system log for details.",
+      "create_failed": "Failed to create group. The list state has been restored. Try again later. See system log for details.",
+      "delete_failed": "Failed to delete group. The list state has been restored. Try again later. See system log for details.",
       "expansion_failed": "Failed to save group expansion states. The list state has been restored. Try again later.",
-      "get_failed": "Failed to load groups. The database or current environment may be temporarily unavailable. Try again later.",
-      "remove_mods_failed": "Failed to remove mods from the group. The list state has been restored. Try again later. Details were written to the system log.",
-      "reorder_failed": "Failed to save group order. The list state has been restored. Try again later. Details were written to the system log.",
-      "update_failed": "Failed to update group. The list state has been restored. Try again later. Details were written to the system log.",
+      "get_failed": "Failed to load groups. The database or current environment may be unavailable. Try again later.",
+      "remove_mods_failed": "Failed to remove mods from the group. The list state has been restored. Try again later. See system log for details.",
+      "reorder_failed": "Failed to save group order. The list state has been restored. Try again later. See system log for details.",
+      "update_failed": "Failed to update group. The list state has been restored. Try again later. See system log for details.",
       "rename_duplicate": "Group name already exists. Added suffix {index}"
     },
     "image": {
@@ -2820,7 +2842,7 @@
     },
     "mod": {
       "auto_sort_done": "Auto-sort completed",
-      "auto_sort_failed": "Auto-sort failed. Rule data, missing-item handling, or the backend sorter may be temporarily unavailable. Details were written to the system log.",
+      "auto_sort_failed": "Auto-sort failed. Rule data, missing-item handling, or the sorter may be unavailable. See system log for details.",
       "auto_sort_rule_warning_intro": "Check whether the following mod rules are correct:\n",
       "auto_sort_rule_warning_item": "{mod} may have a problem in its {type} rule: ({target})\n",
       "batch_add_tags_failed": "Failed to batch add tags. Local state has been restored. Try again later.",
@@ -2829,9 +2851,9 @@
       "batch_remove_tags_failed": "Failed to batch remove tags. Local state has been restored. Try again later.",
       "batch_set_color_failed": "Failed to batch set color. Local state has been restored. Try again later.",
       "batch_set_type_failed": "Failed to batch set type. Local state has been restored. Try again later.",
-      "batch_update_data_failed": "Failed to batch update mod data. Local state has been restored. Try again later. Details were written to the system log.",
+      "batch_update_data_failed": "Failed to batch update mod data. Local state has been restored. Try again later. See system log for details.",
       "failed_suffix": ", {count} failed",
-      "link_failed": "Failed to link mods. Try again later. Details were written to the system log.",
+      "link_failed": "Failed to link mods. Try again later. See system log for details.",
       "localize_no_workshop_items": "No selected mods come from Workshop",
       "scan_already_running": "A scan task is already running. Wait for the current scan to finish.",
       "scan_cancelled": "Scan cancelled",
@@ -2839,13 +2861,13 @@
       "scan_done": "Scan completed. Scanned {total} mods: {added} added, {updated} updated, {removed} removed, {skipped} known.{extra}",
       "scan_done_with_restore_warning": "Scan completed. Scanned {total} mods: {added} added, {updated} updated, {removed} removed, {skipped} known.\n{extra}",
       "scan_external_enabled_count": "{count} externally re-enabled",
-      "scan_failed": "Scan failed. Path permission, file locking, or scanner state may be unavailable. Details were written to the system log.",
-      "scan_request_failed": "Scan request failed. The backend may be temporarily unavailable or the current environment paths may be invalid. Details were written to the system log.",
-      "scan_start_failed": "Failed to start scan. The current environment path may be invalid, the scanner may not be initialized, or background tasks may be temporarily unavailable. Details were written to the system log.",
+      "scan_failed": "Scan failed. Path permission, file locking, or scanner state may be unavailable. See system log for details.",
+      "scan_request_failed": "Scan request failed. The app service may be unavailable or the current environment paths may be invalid. See system log for details.",
+      "scan_start_failed": "Failed to start scan. The current environment path may be invalid, the scanner may not be initialized, or background tasks may be unavailable. See system log for details.",
       "scan_strict_restore_failed_count": "{count} restore failed",
       "scan_strict_restored_count": "{count} re-disabled",
-      "update_time_failed": "Failed to update mod operation time. Mod data is being resynced. Details were written to the system log.",
-      "update_user_data_failed": "Failed to update mod user data. Local state has been restored. Try again later. Details were written to the system log."
+      "update_time_failed": "Failed to update mod operation time. Mod data is being resynced. See system log for details.",
+      "update_user_data_failed": "Failed to update mod user data. Local state has been restored. Try again later. See system log for details."
     },
     "mod_issues": {
       "batch_ignore_failed": "Failed to batch update issue ignore state. The local list state has been restored. Try again later.",
@@ -2864,6 +2886,9 @@
       "moved_to_trash": "Moved to Trash:\n{path}",
       "no_openable_url": "No openable URL. Make sure the current item contains a valid link.",
       "updated": "Path updated"
+    },
+    "rules": {
+      "community_reload_unavailable": "The rule engine is not initialized, so the community rule database cannot be reloaded now."
     }
   },
   "dialog": {
@@ -2892,7 +2917,7 @@
     "mod_item": {
       "export_package": {
         "description": "Optionally include dependencies, linked items, and language packs. Items missing disk files will be skipped and reported.",
-        "summary": "{count} mods selected. Coexisting items will be resolved to the currently actived copy or the latest copy during export.",
+        "summary": "{count} mods selected. Coexisting items will be resolved to the active copy or the latest copy during export.",
         "title": "Export selected mods{count}"
       },
       "export_recommendation": {
@@ -2925,9 +2950,9 @@
         "title": "Import share code"
       },
       "import_stripping": {
-        "blocked_message": "This file contains {count} WorkshopID-only entries.\nThe game load order only accepts package IDs, so these entries would be stripped automatically.\nAfter stripping, there are no package ID entries to import. Handle subscription or download actions in the comparison list first.",
+        "blocked_message": "This file contains {count} Workshop ID-only entries.\nThe game load order only accepts package IDs, so these entries would be stripped automatically.\nAfter stripping, there are no package ID entries to import. Handle subscription or download actions in the comparison list first.",
         "blocked_title": "Cannot import directly",
-        "message": "This file contains {count} WorkshopID-only entries.\nThese entries are only used for comparison, subscription, and download hints. They will not be written into the game load order.\nIf you continue, they will be stripped automatically. Continue?",
+        "message": "This file contains {count} Workshop ID-only entries.\nThese entries are only used for comparison, subscription, and download hints. They will not be written into the game load order.\nIf you continue, they will be stripped automatically. Continue?",
         "title": "Import notice"
       },
       "share_code": {
@@ -2958,7 +2983,7 @@
         "group_title": "Package export group: {name}",
         "selected_title": "Package export group mods{countText}",
         "source_group": "Source group: {name}.",
-        "summary": "{count} mods. Coexisting items will be resolved by the currently activated version or latest version during export."
+        "summary": "{count} mods. Coexisting items will be resolved by the current active copy or latest copy during export."
       },
       "recommendation_export": {
         "title": "Recommendation export for selected mods{countText}"
@@ -3150,7 +3175,7 @@
       "unknown_dependency_details": "Unknown dependencies: {items}",
       "unknown_items": "Unknown items",
       "unknown_items_desc": "These items do not currently have an available source or dependency target.",
-      "unknown_only_desc": "These items cannot be handled directly right now.",
+      "unknown_only_desc": "These items cannot be handled directly now.",
       "unknown_only_title": "Only unknown items"
     },
     "mod_alias_review": {
@@ -3284,11 +3309,11 @@
         "all": "All states"
       },
       "status": {
-        "disabled": "Deactivated",
-        "enabled": "Activated",
+        "disabled": "Inactive",
+        "enabled": "Active",
         "uninstalled": "Uninstalled"
       },
-      "sync_failed": "Failed to overwrite mod settings file. Check whether the target file is in use by the game or path permissions allow writing.",
+      "sync_failed": "Failed to overwrite the mod settings file. Check whether the target file is in use by the game or whether path permissions allow writing.",
       "sync_success": "Current active file overwritten",
       "title": "Mod settings files",
       "tooltip": {
@@ -3626,8 +3651,8 @@
       "profile_conflicts_found": "{count} same-name local environments found",
       "profile_data_count_desc": "Contains {count} environment data entries.",
       "profile_data_handling": "Environment data handling",
-      "profile_data_handling_desc": "Same-name environments are matched by name. Overwrite only replaces actual data, and creating a new one keeps package environment information where possible.",
-      "profile_import_conflict_desc": "Handle all same-name environments here. Overwrite only replaces actual environment data; create keeps package environment information where possible.",
+      "profile_data_handling_desc": "Same-name environments are matched by name. Overwrite only replaces actual data, and creating a new one keeps package metadata when possible.",
+      "profile_import_conflict_desc": "Handle all same-name environments here. Overwrite only replaces actual environment data; create keeps package metadata when possible.",
       "profile_import_conflict_handling": "Environment import conflict handling",
       "profile_import_hint": "This package includes {count} environments. Enable “Apply environment data too” and then choose how to handle same-name environments here.",
       "profile_mode": {
@@ -3669,7 +3694,6 @@
       },
       "mod_export": {
         "description": "Optionally include dependencies, linked mods, and language packs.",
-        "selected_summary": "{count} mods selected.",
         "title": "Export Mods"
       }
     },
@@ -3854,8 +3878,8 @@
     "prompt_queue": {
       "system_title": "System Notice",
       "submitted": "Submitted",
-      "item_failed": "Processing failed. Check network connection and file permissions, or try again later. Details were written to the system log.",
-      "bulk_failed": "{label} failed. Check network connection and file permissions, or try again later. Details were written to the system log."
+      "item_failed": "Processing failed. Check network connection and file permissions, or try again later. See system log for details.",
+      "bulk_failed": "{label} failed. Check network connection and file permissions, or try again later. See system log for details."
     },
     "conflict": {
       "action": {
@@ -3895,7 +3919,7 @@
       "feedback_error": "Processing Failed",
       "feedback_warning": "Processing Notice",
       "footer_delete_disable_desc": "Deleting removes files directly to the recycle bin and cannot be undone here. Deactivating renames the load file (About.xml) so the game cannot detect it while keeping the files.",
-      "footer_disabled_hint": "After deactivating a mod, you can find or reactivate it from the Disabled filter in the Inventory Hub.",
+      "footer_disabled_hint": "After deactivating a mod, you can find or reactivate it from the Inactive filter in the Inventory Hub.",
       "footer_workshop_warning": "Note: Steam may download Workshop mods again after you delete them directly.",
       "group_type": {
         "hard": "Hard Conflict",
@@ -3964,7 +3988,7 @@
         "title": "Confirm Delete"
       },
       "disable": {
-        "message": "Deactivate {target}?\nAfter deactivation, it will not be available in game. You can activate it again from the Deactivated list.",
+        "message": "Deactivate {target}?\nAfter deactivation, it will not be available in game. You can activate it again from the inactive list.",
         "selected_count": "the selected {count} mods",
         "this_mod": "this mod",
         "title": "Confirm Deactivation"
@@ -4011,7 +4035,7 @@
       "user_override_hint": "This key already has a user override.",
       "auto_translate_batch": "Translate missing ({count})",
       "batch_save_unavailable": "Batch saving translations is not supported in the current runtime.",
-      "batch_saved": "Translated and saved {count} item(s).",
+      "batch_saved": "Translated and saved {count} items.",
       "no_batch_targets": "There are no untranslated items in the current filter.",
       "batch_empty_result": "The translator did not return any text that can be saved.",
       "blank_resets_hint": "Saving a blank value resets this item to the built-in translation.",
@@ -4057,33 +4081,68 @@
     },
     "data_bundle": {
       "inspect_failed": "Failed to read the data bundle summary. Make sure the file exists, uses the correct format, and is not being used by another program.",
-      "schema_failed": "Failed to read data bundle settings. Check whether the app data folder is accessible; details were written to the system log.",
+      "schema_failed": "Failed to read data bundle settings. Check whether the app data folder is accessible; see system log for details.",
       "export_done": "Export complete",
-      "export_failed": "Failed to export data bundle. Check the target folder permissions, disk space, and selected data modules; details were written to the system log.",
+      "export_failed": "Failed to export data bundle. Check the target folder permissions, disk space, and selected data modules; see system log for details.",
       "import_done": "Import complete",
-      "import_done_with_warnings": "Import complete with {count} warning(s)",
-      "import_failed": "Failed to import data bundle. Make sure the file is complete, uses the correct format, and the target folder permissions are valid; details were written to the system log."
+      "import_done_with_warnings": "Import complete with {count} warnings",
+      "import_failed": "Failed to import data bundle. Make sure the file is complete, uses the correct format, and the target folder permissions are valid; see system log for details.",
+      "modules": {
+        "ai_definitions": {
+          "description": "Includes AI templates, assistant settings, and task settings. Importing replaces the current AI definitions.",
+          "label": "AI definitions"
+        },
+        "groups": {
+          "description": "Includes groups and their Mod links. Import merges when possible.",
+          "label": "Groups"
+        },
+        "profiles": {
+          "description": "Exports the complete user data folder for each selected environment, with basic environment information.",
+          "label": "Environment data"
+        },
+        "rules": {
+          "description": "Includes user rules, dynamic rules, and rule settings. Import merges when possible.",
+          "label": "Rules"
+        },
+        "settings": {
+          "description": "Exports global app settings. Directory paths, sensitive data, and the active environment are not included.",
+          "label": "App settings"
+        },
+        "subscriptions": {
+          "description": "Includes Git repository subscriptions and Steam collection records, excluding cache and history state.",
+          "label": "Subscription data"
+        },
+        "user_custom": {
+          "description": "Includes aliases, notes, tags, colors, custom types, and interlock data. Import merges when possible.",
+          "label": "User custom data"
+        }
+      },
+      "presets": {
+        "rules": {
+          "label": "Rule Center preset"
+        }
+      }
     },
     "database": {
       "background_busy": "A background database refresh is still running. Try again later.",
       "cleanup_done": "Database cleanup complete",
-      "cleanup_failed": "Database cleanup failed. Close programs that may be using data files and try again; details were written to the system log.",
+      "cleanup_failed": "Database cleanup failed. Close programs that may be using data files and try again; see system log for details.",
       "maintenance_busy": "A database operation is already running. Try again later.",
       "recreated_missing": "No local database was found, so a new one has been created.",
       "repair_done_restart": "Repair complete. Restart the app to apply it.",
-      "repair_failed": "Database repair failed. Check database file permissions and disk space; details were written to the system log.",
+      "repair_failed": "Database repair failed. Check database file permissions and disk space; see system log for details.",
       "repair_failed_retry": "Repair failed. Try again later.",
       "reset_close_busy": "Reset failed. Close related operations and try again.",
       "reset_done": "Database reset complete.",
-      "reset_failed": "Database reset failed. Close operations that may be using data files and try again; details were written to the system log.",
+      "reset_failed": "Database reset failed. Close operations that may be using data files and try again; see system log for details.",
       "reset_recreate_failed": "Reset failed. The database could not be recreated.",
       "restarting": "The app will restart now.",
       "scan_busy": "A scan task is currently running. Try again later.",
       "texture_busy": "A texture task is currently running. Try again later."
     },
     "errors": {
-      "internal_api_failed": "The operation could not finish because an internal app API failed. Details were written to the system log. Try again later or restart the app.",
-      "operation_unfinished": "The operation could not finish. Network, path permissions, settings, or the runtime environment may be temporarily unavailable. Details were written to the system log."
+      "internal_api_failed": "The operation could not finish because an internal app API failed. See system log for details. Try again later or restart the app.",
+      "operation_unfinished": "The operation could not finish. Network, path permissions, settings, or the runtime environment may be unavailable. See system log for details."
     },
     "paths": {
       "auto_detect_failed": "Could not automatically detect the game path. Set it manually.",
@@ -4091,18 +4150,18 @@
     },
     "settings": {
       "save_done": "Settings saved",
-      "save_failed": "Failed to save settings. Check the settings, path permissions, and whether the config file is writable; details were written to the system log.",
-      "secret_clear_failed": "Could not delete the saved secret. Make sure secure storage is available on this machine and try again; details were written to the system log.",
+      "save_failed": "Failed to save settings. Check the settings, path permissions, and whether the config file is writable; see system log for details.",
+      "secret_clear_failed": "Could not delete the saved secret. Make sure secure storage is available on this machine and try again; see system log for details.",
       "secret_cleared": "Secret cleared",
-      "secret_reveal_failed": "Could not read the saved secret. Make sure secure storage is available on this machine and try again; details were written to the system log.",
+      "secret_reveal_failed": "Could not read the saved secret. Make sure secure storage is available on this machine and try again; see system log for details.",
       "update_failed": "Failed to update settings"
     },
     "theme": {
-      "delete_failed": "Failed to delete the user theme. Check whether the theme file is in use or cannot be deleted due to permissions; details were written to the system log.",
+      "delete_failed": "Failed to delete the user theme. Check whether the theme file is in use or cannot be deleted due to permissions; see system log for details.",
       "deleted": "Theme deleted",
-      "load_failed": "Failed to read user themes. Check whether the theme file is accessible; details were written to the system log.",
+      "load_failed": "Failed to read user themes. Check whether the theme file is accessible; see system log for details.",
       "not_found": "Theme not found",
-      "save_failed": "Failed to save the user theme. Check the theme content and file write permissions; details were written to the system log.",
+      "save_failed": "Failed to save the user theme. Check the theme content and file write permissions; see system log for details.",
       "saved": "Theme saved"
     },
     "warnings": {
@@ -4127,15 +4186,15 @@
       "unknown_action": "Unknown action: {action}"
     },
     "guide": {
-      "mark_done_failed": "Failed to save guide state. Check whether the config file is writable; details were written to the system log.",
-      "reset_failed": "Failed to reset guide state. Check whether the config file is writable; details were written to the system log."
+      "mark_done_failed": "Failed to save guide state. Check whether the config file is writable; see system log for details.",
+      "reset_failed": "Failed to reset guide state. Check whether the config file is writable; see system log for details."
     },
     "mod_package": {
-      "export_failed": "Failed to export mod package. Check target folder permissions, disk space, and the files for the selected mods; details were written to the system log.",
+      "export_failed": "Failed to export mod package. Check target folder permissions, disk space, and the files for the selected mods; see system log for details.",
       "export_started": "Export task started",
-      "import_failed": "Failed to import mod package. Make sure the file is complete, the target folder is writable, and disk space is sufficient; details were written to the system log.",
+      "import_failed": "Failed to import mod package. Make sure the file is complete, the target folder is writable, and disk space is sufficient; see system log for details.",
       "import_started": "Import task started",
-      "prepare_import_failed": "Failed to precheck mod package. Make sure the file is complete, uses the correct format, and is not being used by another program.",
+      "prepare_import_failed": "Failed to check the mod package before import. Make sure the file is complete, uses the correct format, and is not being used by another program.",
       "profile_summary_failed": "Failed to read profile export stats. Make sure the profile still exists and its paths are accessible.",
       "schema_failed": "Failed to read mod package settings. Check whether the current profile and app data folder are accessible."
     },
@@ -4143,20 +4202,20 @@
       "no_active_profile": "No active profile, so Mods cannot be scanned",
       "no_scan_paths": "No valid scan paths are configured",
       "scan_busy": "A scan is already running",
-      "scan_failed": "Mod scan failed. Check whether game, Workshop, and local Mod paths exist and are accessible; details were written to the system log.",
+      "scan_failed": "Mod scan failed. Check whether game, Workshop, and local Mod paths exist and are accessible; see system log for details.",
       "scan_started": "Background scan started",
       "scanner_not_ready": "Scanner is not initialized",
       "action_activate": "activate",
       "action_deactivate": "deactivate",
-      "activate_state_done": "Mod {action} completed for {count} item(s)",
-      "activate_state_done_with_failed": "Mod {action} completed for {success_count} item(s), failed {failed_count} item(s)",
+      "activate_state_done": "Mod {action} completed for {count} items",
+      "activate_state_done_with_failed": "Mod {action} completed for {success_count} items, failed {failed_count} items",
       "activate_state_failed": "Mod {action} failed: {reason}",
       "color_updated": "Color updated",
-      "conflict_item_failed": "This item could not be processed. Details were written to the system log.",
+      "conflict_item_failed": "This item could not be processed. See system log for details.",
       "conflict_missing_target_hash": "Missing target_path_hash, so this duplicate cannot be deleted",
       "conflict_no_deletable_record": "No deletable mod record was found",
       "conflict_no_operation": "No operation can be applied",
-      "conflict_resolve_partial_failed": "Some operations failed: {count} item(s) were not processed, and the rest were applied.",
+      "conflict_resolve_partial_failed": "Some operations failed: {count} items were not processed, and the rest were applied.",
       "conflict_resolved": "Conflict processing complete",
       "conflict_unsupported_action": "Unsupported action type: {action}",
       "interlock_healed": "Interlock repaired",
@@ -4165,12 +4224,12 @@
       "tags_removed": "Tags removed",
       "time_updated": "Last operation time updated",
       "type_updated": "Type updated",
-      "user_data_applied": "Applied {count} item(s) successfully",
+      "user_data_applied": "Applied {count} items successfully",
       "user_data_updated": "User data updated"
     },
     "delete": {
       "no_target": "No {target} selected for deletion",
-      "partial_failed": "Some {target} deletion failed: {count} item(s) were not deleted"
+      "partial_failed": "Some {target} deletion failed: {count} items were not deleted"
     },
     "native_drag": {
       "drop_zone_not_ready": "Drop area is not mounted yet. It will retry shortly.",
@@ -4249,11 +4308,11 @@
       "activate_failed_fallback": "Failed to switch to profile {profile_id}; reverted to default: {reason}",
       "activate_failed_fallback_failed": "Failed to switch to profile {profile_id}, and reverting to default also failed: {reason}; fallback error: {fallback_error}",
       "activated": "Switched to profile: {profile_id}",
-      "create_failed": "Failed to create the profile. Check the profile name, path settings, and file permissions. Details have been written to the system log.",
+      "create_failed": "Failed to create the profile. Check the profile name, path settings, and file permissions. See system log for details.",
       "created": "Profile created",
-      "delete_failed": "Failed to delete the profile. Make sure it has no running tasks. Details have been written to the system log.",
+      "delete_failed": "Failed to delete the profile. Make sure it has no running tasks. See system log for details.",
       "deleted": "Profile deleted",
-      "update_failed": "Failed to update the profile. Check the path settings and file permissions. Details have been written to the system log.",
+      "update_failed": "Failed to update the profile. Check the path settings and file permissions. See system log for details.",
       "updated": "Settings updated"
     },
     "steam": {
@@ -4266,7 +4325,7 @@
         "not_running_title": "Steam Not Running",
         "ready_message": "Steam client is running and logged in. You can continue the current action.",
         "ready_title": "Steam Ready",
-        "unknown_message": "Steam status cannot be determined accurately right now. Try again later, or check Steam login status and client integrity if the issue continues.",
+        "unknown_message": "Steam status cannot be determined accurately now. Try again later, or check Steam login status and client integrity if the issue continues.",
         "unknown_title": "Steam Status Unknown",
         "waiting_ready_message": "Steam has started and is waiting to become available. If it takes too long, check whether Steam is stuck at login or initialization.",
         "waiting_ready_title": "Waiting for Steam"
@@ -4277,7 +4336,7 @@
       "subscribe_submitted": "Subscription request submitted to Steam.",
       "unsubscribe_submitted": "Unsubscribe request submitted to Steam",
       "workshop_details_loaded": "Workshop details loaded",
-      "workshop_details_not_ready": "Steam client cannot query Workshop details right now",
+      "workshop_details_not_ready": "Steam client cannot query Workshop details now",
       "workshop_download_submitted": "Workshop download request submitted to Steam"
     },
     "export": {
@@ -4301,10 +4360,10 @@
       "engine_not_initialized": "Rule engine is not initialized",
       "invalid_rule_type": "Operation failed: invalid Rule Type",
       "import_done": "Rule package imported successfully",
-      "import_done_with_warnings": "Rule package imported successfully with {count} warning(s)."
+      "import_done_with_warnings": "Rule package imported successfully with {count} warnings."
     },
     "sort": {
-      "auto_activated_suffix": " (automatically activated {count} interlock item(s))",
+      "auto_activated_suffix": " (automatically activated {count} interlock items)",
       "done": "Sorting complete",
       "engine_not_initialized": "Sorting failed, sort engine is not initialized",
       "smart_insert_failed": "Insert failed",
@@ -4316,7 +4375,7 @@
       "no_localizable_mods": "No {store} mods available to sync",
       "transfer_action_copy": "copy mods",
       "transfer_action_move": "move mods",
-      "transfer_done": "Transferred {count} mod(s) successfully.",
+      "transfer_done": "Transferred {count} mods successfully.",
       "transfer_failed_suffix": " {count} failed.",
       "transfer_preparing": "Preparing to {action}...",
       "transfer_running": "{action}: {name}",
@@ -4328,20 +4387,20 @@
       "cancel_failed": "Cancel failed. The request may have already completed or no longer exist.",
       "config_saved": "AI configuration saved",
       "app_log_requires_debug": "Application log analysis is available only in Debug mode.",
-      "assistant_estimate_failed": "AI request estimation failed. The log content, attachments, or model settings may not be processable right now. Details have been written to the system log.",
-      "assistant_session_failed": "The AI assistant session did not complete. Check the model settings, network connection, proxy settings, and API key. Details have been written to the system log.",
+      "assistant_estimate_failed": "AI request estimation failed. The log content, attachments, or model settings may not be processable now. See system log for details.",
+      "assistant_session_failed": "The AI assistant session did not complete. Check the model settings, network connection, proxy settings, and API key. See system log for details.",
       "default_task_title": "AI task",
-      "definition_assistant_save_failed": "Failed to save the AI assistant. Check that the tools, prompt, and output format settings are complete. Details have been written to the system log.",
-      "definition_prompt_delete_failed": "Failed to delete the AI prompt. Make sure the prompt still exists. Details have been written to the system log.",
-      "definition_prompt_save_failed": "Failed to save the AI prompt. Check that the content format is valid. Details have been written to the system log.",
-      "definition_task_save_failed": "Failed to save the AI task. Check that the task input, prompt, and output format settings are complete. Details have been written to the system log.",
+      "definition_assistant_save_failed": "Failed to save the AI assistant. Check that the tools, prompt, and output format settings are complete. See system log for details.",
+      "definition_prompt_delete_failed": "Failed to delete the AI prompt. Make sure the prompt still exists. See system log for details.",
+      "definition_prompt_save_failed": "Failed to save the AI prompt. Check that the content format is valid. See system log for details.",
+      "definition_task_save_failed": "Failed to save the AI task. Check that the task input, prompt, and output format settings are complete. See system log for details.",
       "invalid_analysis_request": "Invalid analysis request: missing log line numbers or file name.",
       "selected_log_unavailable": "Could not read the selected log content. The file may have been cleaned up.",
-      "task_failed": "AI task failed. Check the model settings, network connection, and API key. Details have been written to the system log.",
+      "task_failed": "AI task failed. Check the model settings, network connection, and API key. See system log for details.",
       "task_failed_title": "AI task failed",
       "task_queued": "Task added to the background queue",
       "task_started": "AI task started in the background",
-      "trace_load_failed": "Failed to read AI request trace records. Try again later. Details have been written to the system log."
+      "trace_load_failed": "Failed to read AI request trace records. Try again later. See system log for details."
     },
     "download": {
       "task_added": "Download task added"
@@ -4353,7 +4412,7 @@
       "filename_required": "File name is required",
       "global_scan_not_supported": "The current log reader does not support global scanning",
       "no_analyzable_content": "The current log file has no content available for analysis.",
-      "read_failed_refresh": "Failed to read the log. The file may have been cleaned up, moved, or be temporarily unavailable. Refresh the log list and try again.",
+      "read_failed_refresh": "Failed to read the log. The file may have been cleaned up, moved, or be unavailable. Refresh the log list and try again.",
       "reader_not_initialized": "Log reader is not initialized"
     },
     "scan": {
@@ -4375,14 +4434,14 @@
       "cancel_texture_requested": "Texture task cancellation requested",
       "cancel_type_unsupported": "This task type does not support cancellation: {type}",
       "id_missing": "Task ID is missing",
-      "no_ai_task_to_cancel": "There is no AI task to cancel right now",
-      "no_file_search_task_to_cancel": "There is no file search task to cancel right now",
-      "no_localize_task_to_cancel": "There is no local coexist task to cancel right now",
-      "no_mod_export_task_to_cancel": "There is no mod export task to cancel right now",
-      "no_mod_import_task_to_cancel": "There is no mod import task to cancel right now",
-      "no_scan_task_to_cancel": "There is no scan task to cancel right now",
-      "no_steam_task_to_cancel": "There is no Steam task to cancel right now",
-      "no_steamcmd_task_to_cancel": "There is no SteamCMD task to cancel right now"
+      "no_ai_task_to_cancel": "There is no AI task to cancel now",
+      "no_file_search_task_to_cancel": "There is no file search task to cancel now",
+      "no_localize_task_to_cancel": "There is no local coexist task to cancel now",
+      "no_mod_export_task_to_cancel": "There is no mod export task to cancel now",
+      "no_mod_import_task_to_cancel": "There is no mod import task to cancel now",
+      "no_scan_task_to_cancel": "There is no scan task to cancel now",
+      "no_steam_task_to_cancel": "There is no Steam task to cancel now",
+      "no_steamcmd_task_to_cancel": "There is no SteamCMD task to cancel now"
     },
     "update": {
       "download_started": "Started downloading update package",
@@ -4415,14 +4474,14 @@
       "detail_not_found": "Mod details not found",
       "developer_metadata_failed": "Failed to set Workshop developer metadata. Make sure the current account can manage this item and check the network connection.",
       "developer_metadata_invalid": "Invalid Workshop developer metadata parameters. Check the metadata, Workshop item ID, and Steam Web API key, then try again.",
-      "install_source_map_failed": "Failed to read install sources. Check whether the external Workshop database is complete. Details have been written to the system log.",
+      "install_source_map_failed": "Failed to read install sources. Check whether the external Workshop database is complete. See system log for details.",
       "invalid_id": "Workshop ID is required or has an invalid format",
       "invalid_package_id": "Invalid PackageID",
       "invalid_workshop_id": "Invalid Workshop ID",
       "no_replacement_suggestion": "Mod {package_id} has no replacement suggestion",
       "no_translatable_detail": "This Workshop item has no title or description available for translation",
-      "package_detail_map_failed": "Failed to read Workshop mapping details. Check whether the external Workshop database is complete. Details have been written to the system log.",
-      "publish_failed": "Failed to publish the Workshop file. Check Steam login status, network connection, file permissions, and the Workshop form. Details have been written to the system log.",
+      "package_detail_map_failed": "Failed to read Workshop mapping details. Check whether the external Workshop database is complete. See system log for details.",
+      "publish_failed": "Failed to publish the Workshop file. Check Steam login status, network connection, file permissions, and the Workshop form. See system log for details.",
       "publish_invalid": "Invalid Workshop file publishing parameters. Check the Workshop form, file paths, and Steam Web API key, then try again.",
       "same_author_failed": "Failed to get works by the same author. Check the network connection or external Workshop database status and try again.",
       "same_author_invalid": "Invalid author works request. Check the author information, filters, or Steam Web API key and try again.",
@@ -4432,11 +4491,11 @@
       "steam_detail_unavailable": "Could not get this Mod detail from Steam",
       "subscribe_check_failed": "Failed to check subscription permission. Make sure Steam is signed in, the network is available, and the Workshop item is still accessible.",
       "subscribe_check_invalid": "Invalid subscription permission check request. Check the Workshop ID, Steam login status, or Steam Web API key and try again.",
-      "translation_clear_failed": "Failed to clear the Workshop translation cache. Try again later. Details have been written to the system log.",
+      "translation_clear_failed": "Failed to clear the Workshop translation cache. Try again later. See system log for details.",
       "translation_clear_invalid": "Invalid Workshop translation cache cleanup parameters. Check the Workshop ID and target language, then try again.",
-      "translation_failed": "Workshop detail translation failed. Check the translation service settings, AI settings, or network connection. Details have been written to the system log.",
+      "translation_failed": "Workshop detail translation failed. Check the translation service settings, AI settings, or network connection. See system log for details.",
       "translation_invalid": "Invalid Workshop detail translation parameters. Make sure this item has translatable content and check the target language and translation service settings.",
-      "update_file_failed": "Failed to update the Workshop file. Check Steam login status, network connection, file permissions, and the Workshop form. Details have been written to the system log.",
+      "update_file_failed": "Failed to update the Workshop file. Check Steam login status, network connection, file permissions, and the Workshop form. See system log for details.",
       "update_file_invalid": "Invalid Workshop file update parameters. Check the Workshop form, file paths, and Steam Web API key, then try again.",
       "update_key_value_tags_failed": "Failed to update Workshop key-value tags. Make sure the current account can manage this item and check the network connection.",
       "update_key_value_tags_invalid": "Invalid Workshop key-value tag parameters. Check the tags, Workshop item ID, and Steam Web API key, then try again.",
@@ -4452,7 +4511,7 @@
       "webapi_subscribe_invalid": "Invalid WebAPI subscription request. Check the Workshop ID, Steam login status, or Steam Web API key and try again.",
       "webapi_unsubscribe_failed": "WebAPI unsubscribe failed. Make sure Steam is signed in, the network is available, then try again later.",
       "webapi_unsubscribe_invalid": "Invalid WebAPI unsubscribe request. Check the Workshop ID, Steam login status, or Steam Web API key and try again.",
-      "workshop_id_not_found": "Matching WorkshopID not found"
+      "workshop_id_not_found": "Matching Workshop ID not found"
     },
     "collection": {
       "invalid_or_empty": "Invalid collection, empty collection, or collection details could not be retrieved",
@@ -4478,17 +4537,17 @@
       "multiplayer_compatibility_started": "Multiplayer compatibility table update started",
       "path_or_url_missing": "Update URL or target path is not configured",
       "reload_failed_after_success": "{message} Cache reload failed. Refresh manually later.",
-      "update_start_failed": "Failed to start the external data update. Check the update URL, network connection, proxy settings, and target folder write permissions. Details have been written to the system log.",
+      "update_start_failed": "Failed to start the external data update. Check the update URL, network connection, proxy settings, and target folder write permissions. See system log for details.",
       "workshop_db_done": "Community Workshop database updated.",
       "workshop_db_failed": "Failed to update the community Workshop database.",
       "workshop_db_started": "Community Workshop database update started"
     },
     "file_search": {
       "manager_not_initialized": "File search manager is not initialized",
-      "ripgrep_download_failed": "Failed to start downloading the file search tool. Check the network connection, proxy settings, and tool folder write permissions. Details have been written to the system log.",
+      "ripgrep_download_failed": "Failed to start downloading the file search tool. Check the network connection, proxy settings, and tool folder write permissions. See system log for details.",
       "ripgrep_download_started": "ripgrep download task started",
       "search_started": "Search task started",
-      "start_failed": "Failed to start file search. Check the search paths, ripgrep status, and file access permissions. Details have been written to the system log.",
+      "start_failed": "Failed to start file search. Check the search paths, ripgrep status, and file access permissions. See system log for details.",
       "tool_ready": "Tool is already ready"
     },
     "github": {
@@ -4499,19 +4558,19 @@
       "url_required": "URL is required"
     },
     "translation": {
-      "document_failed": "Translation failed. Check the translation service settings, network connection, and target language. Details have been written to the system log.",
+      "document_failed": "Translation failed. Check the translation service settings, network connection, and target language. See system log for details.",
       "document_invalid": "Invalid translation request. Check the text to translate, target language, and translation service settings.",
       "empty_result": "The translator did not return a valid translation",
       "target_language_required": "Target language is required"
     },
     "i18n": {
       "user_locale_message_invalid": "Failed to save the user locale text. Check that the text key is valid.",
-      "user_locale_message_save_failed": "Failed to save the user locale text. Check that the data/locales directory is writable. Details were written to the system log.",
+      "user_locale_message_save_failed": "Failed to save the user locale text. Check that the data/locales directory is writable. See system log for details.",
       "user_locale_message_saved": "Saved translation: {key}",
       "user_locale_messages_invalid": "Failed to batch save user locale text. Check that the text keys and translations are valid.",
-      "user_locale_messages_save_failed": "Failed to batch save user locale text. Check that the data/locales directory is writable. Details were written to the system log.",
+      "user_locale_messages_save_failed": "Failed to batch save user locale text. Check that the data/locales directory is writable. See system log for details.",
       "user_locale_messages_saved": "Saved {count} translation(s)",
-      "user_locale_message_delete_failed": "Failed to reset the user locale text. Check that the data/locales directory is writable. Details were written to the system log.",
+      "user_locale_message_delete_failed": "Failed to reset the user locale text. Check that the data/locales directory is writable. See system log for details.",
       "user_locale_message_delete_invalid": "Failed to reset the user locale text. Check that the text key is valid.",
       "user_locale_message_deleted": "Reset translation: {key}",
       "user_locale_create_failed": "Failed to create the language pack. Check whether the data/locales directory is writable.",
@@ -4525,9 +4584,9 @@
   },
   "errors": {
     "fallback": {
-      "operation_unfinished": "The operation did not complete. Network, path permission, configuration, or runtime environment may be unavailable. Details were written to the system log.",
-      "operation_warning": "The operation completed, but some items need attention. Details were written to the system log.",
-      "work_failed": "{workname} did not complete. Network, path permission, configuration, or runtime environment may be unavailable. Details were written to the system log."
+      "operation_unfinished": "The operation did not complete. Network, path permissions, configuration, or runtime environment may be unavailable. See system log for details.",
+      "operation_warning": "The operation completed, but some items need attention. See system log for details.",
+      "work_failed": "{workname} did not complete. Network, path permissions, configuration, or runtime environment may be unavailable. See system log for details."
     },
     "i18n": {
       "user_locale_load_failed": "Failed to read the user language file. Check the language file format under data/locales."
@@ -4536,91 +4595,91 @@
       "reveal_failed_preserve": "Could not read the saved secret. The saved value will be kept when saving."
     },
     "texture": {
-      "analysis_start_failed": "Failed to start texture analysis. Check the selected mod paths, tool status, and file permissions. Details were written to the system log.",
+      "analysis_start_failed": "Failed to start texture analysis. Check the selected mod paths, tool status, and file permissions. See system log for details.",
       "no_analysis_targets": "No mods selected for analysis",
       "no_residue_targets": "No uninstalled residue mod folders containing {format} were found",
       "no_valid_mod_paths": "No valid physical paths were found for the selected mods",
-      "prepare_tool_failed": "Failed to prepare the texture tool. Check network connection, proxy settings, tool directory permissions, and disk space. Details were written to the system log.",
-      "status_failed": "Failed to read texture tool status. Check the tool path and runtime environment. Details were written to the system log.",
-      "task_start_failed": "Failed to start the texture task. Check selected mod paths, tool status, disk space, and file permissions. Details were written to the system log.",
-      "tool_download_failed": "Failed to start texture tool download. Check network connection, proxy settings, and tool directory write permission. Details were written to the system log.",
-      "exclusions_load_failed": "Failed to read texture exclusion rules. Check whether the configuration file is accessible. Details have been written to the system log.",
-      "file_exclusion_save_failed": "Failed to save the file texture exclusion rule. Check configuration file permissions. Details have been written to the system log.",
-      "history_load_failed": "Failed to read texture task history. Try again later. Details have been written to the system log.",
-      "mod_exclusion_save_failed": "Failed to save the Mod texture exclusion rule. Check configuration file permissions. Details have been written to the system log."
+      "prepare_tool_failed": "Failed to prepare the texture tool. Check network connection, proxy settings, tool directory permissions, and disk space. See system log for details.",
+      "status_failed": "Failed to read texture tool status. Check the tool path and runtime environment. See system log for details.",
+      "task_start_failed": "Failed to start the texture task. Check selected mod paths, tool status, disk space, and file permissions. See system log for details.",
+      "tool_download_failed": "Failed to start texture tool download. Check network connection, proxy settings, and tool directory write permissions. See system log for details.",
+      "exclusions_load_failed": "Failed to read texture exclusion rules. Check whether the configuration file is accessible. See system log for details.",
+      "file_exclusion_save_failed": "Failed to save the file texture exclusion rule. Check configuration file permissions. See system log for details.",
+      "history_load_failed": "Failed to read texture task history. Try again later. See system log for details.",
+      "mod_exclusion_save_failed": "Failed to save the Mod texture exclusion rule. Check configuration file permissions. See system log for details."
     },
     "mods": {
       "color_update_failed": "Failed to set the mod color. The previous state was kept. Please try again later.",
-      "conflict_resolve_failed": "Failed to process scan conflicts. Refresh the mod list and try again. Details were written to the system log.",
+      "conflict_resolve_failed": "Failed to process scan conflicts. Refresh the mod list and try again. See system log for details.",
       "conflict_resolve_failed_with_reason": "Failed to process scan conflicts: {reason}. Check whether the related mod files still exist, or refresh and try again later.",
-      "delete_failed": "Failed to delete the mod. Check whether files are in use and whether path permissions are valid. Details were written to the system log.",
-      "enable_disable_failed": "Failed to activate or deactivate mods in batch. The current list state was kept where possible. Refresh and try again later. Details were written to the system log.",
-      "interlock_heal_failed": "Failed to repair the mod interlock. Refresh the list and try again. Details were written to the system log.",
+      "delete_failed": "Failed to delete the mod. Check whether files are in use and whether path permissions are valid. See system log for details.",
+      "enable_disable_failed": "Failed to activate or deactivate mods in batch. The current list state was kept when possible. Refresh and try again later. See system log for details.",
+      "interlock_heal_failed": "Failed to repair the mod interlock. Refresh the list and try again. See system log for details.",
       "interlock_link_failed": "Failed to create the mod interlock. Make sure the selected mods are still in the current list, then try again later.",
-      "interlock_missing_load_failed": "Failed to load missing interlock items. Refresh the list and try again. Details were written to the system log.",
+      "interlock_missing_load_failed": "Failed to load missing interlock items. Refresh the list and try again. See system log for details.",
       "interlock_unlink_failed": "Failed to remove the mod interlock. Make sure the selected mods are still in the current list, then try again later.",
-      "issue_ignore_update_failed": "Failed to update ignored issue state. Refresh the list and try again later. Details were written to the system log.",
+      "issue_ignore_update_failed": "Failed to update ignored issue state. Refresh the list and try again later. See system log for details.",
       "tags_add_failed": "Failed to add mod tags. The previous state was kept. Please try again later.",
       "tags_remove_failed": "Failed to remove mod tags. The previous state was kept. Please try again later.",
-      "time_update_failed": "Failed to update the mod last operation time. Check the database state and try again. Details were written to the system log.",
+      "time_update_failed": "Failed to update the mod last operation time. Check the database state and try again. See system log for details.",
       "type_update_failed": "Failed to set the mod type. The previous state was kept. Please try again later.",
-      "user_data_update_failed": "Failed to update mod user data. Refresh the list and try again later. Details were written to the system log.",
-      "user_data_batch_update_failed": "Failed to update mod user data in batch. Refresh the list and try again later. Details were written to the system log."
+      "user_data_update_failed": "Failed to update mod user data. Refresh the list and try again later. See system log for details.",
+      "user_data_batch_update_failed": "Failed to update mod user data in batch. Refresh the list and try again later. See system log for details."
     },
     "backup": {
-      "list_failed": "Failed to get backup files. Check whether the backup folder is accessible. Details were written to the system log.",
-      "pick_save_dir_failed": "Failed to choose the save folder. Try again later. Details were written to the system log.",
+      "list_failed": "Failed to get backup files. Check whether the backup folder is accessible. See system log for details.",
+      "pick_save_dir_failed": "Failed to choose the save folder. Try again later. See system log for details.",
       "rename_failed": "Failed to rename the backup. Check the backup name, file usage state, and folder permissions.",
-      "save_as_failed": "Failed to save the backup as a copy. Check target folder permissions and disk space. Details were written to the system log."
+      "save_as_failed": "Failed to save the backup as a copy. Check target folder permissions and disk space. See system log for details."
     },
     "game": {
-      "launch_failed": "Failed to launch the game. Check the game path, launch arguments, and current environment link state. Details were written to the system log.",
+      "launch_failed": "Failed to launch the game. Check the game path, launch arguments, and current environment link state. See system log for details.",
       "launch_warning_resolve_failed": "Failed to handle the launch confirmation. Try launching again, or refresh the current environment state first.",
-      "steam_url_launch_failed": "Failed to launch through Steam URL. Make sure Steam is installed and the system protocol association works. Details were written to the system log."
+      "steam_url_launch_failed": "Failed to launch through Steam URL. Make sure Steam is installed and the system protocol association works. See system log for details."
     },
     "group": {
       "create_failed": "Failed to create the group. Check whether the group name is valid, then try again later."
     },
     "load_order": {
       "export_failed": "Failed to export the load order. Check target folder permissions, disk space, and the current active list state.",
-      "export_pick_path_failed": "Failed to choose the export path. Try again later. Details were written to the system log.",
-      "inactive_save_failed": "Failed to save inactive list order. Check whether the environment config file is writable. Details were written to the system log.",
-      "read_failed": "Failed to read load order. Make sure the game config file exists and is accessible. Details were written to the system log.",
+      "export_pick_path_failed": "Failed to choose the export path. Try again later. See system log for details.",
+      "inactive_save_failed": "Failed to save inactive list order. Check whether the environment config file is writable. See system log for details.",
+      "read_failed": "Failed to read load order. Make sure the game config file exists and is accessible. See system log for details.",
       "save_failed": "Failed to save load order. Make sure the game is not using the config file and check folder write permissions.",
       "share_export_failed": "Failed to generate the share code. Check whether the current active list is valid, or try again later.",
       "share_import_failed": "Failed to parse the share code. Make sure the share code is complete and correctly formatted."
     },
     "mod_residue": {
-      "overview_failed": "Failed to read the uninstalled residue list. Check current environment paths and file permissions. Details were written to the system log.",
-      "whitelist_add_failed": "Failed to add to whitelist. Check config file permissions and try again. Details were written to the system log.",
-      "whitelist_remove_failed": "Failed to remove from whitelist. Check config file permissions and try again. Details were written to the system log."
+      "overview_failed": "Failed to read the uninstalled residue list. Check current environment paths and file permissions. See system log for details.",
+      "whitelist_add_failed": "Failed to add to whitelist. Check config file permissions and try again. See system log for details.",
+      "whitelist_remove_failed": "Failed to remove from whitelist. Check config file permissions and try again. See system log for details."
     },
     "mod_settings": {
       "overview_failed": "Failed to read mod settings overview. Make sure the game user data folder is accessible and check current environment path settings.",
-      "sync_failed": "Failed to overwrite mod settings. Check whether the target file is used by the game and whether path permissions allow writing.",
+      "sync_failed": "Failed to overwrite mod settings. Check whether the target file is in use by the game and whether path permissions allow writing.",
       "workshop_detail_failed": "Failed to get Workshop information. Check network connection and Steam service status, or try again later."
     },
     "profile": {
       "shortcut_create_failed": "Failed to create the environment shortcut. Check desktop folder permissions and environment path settings."
     },
     "steam": {
-      "client_status_failed": "Failed to get Steam status. Make sure Steam client can start normally. Details were written to the system log.",
-      "process_status_failed": "Failed to get Steam process status. Try again later. Details were written to the system log.",
+      "client_status_failed": "Failed to get Steam status. Make sure Steam client can start normally. See system log for details.",
+      "process_status_failed": "Failed to get Steam process status. Try again later. See system log for details.",
       "shortcut_finalize_failed": "Failed to confirm the Steam shortcut. Make sure Steam is running and logged in, then try again later.",
       "shortcut_register_failed": "Failed to write Steam shortcut configuration. Make sure Steam is closed or the config file is not in use, and check file permissions.",
       "subscribe_api_not_ready": "Subscription request was not sent. Make sure Steam is running and logged in, then try again.",
-      "subscribe_failed": "Steam subscription request failed. Make sure Steam is logged in, network is available, and the Workshop item is still accessible.",
+      "subscribe_failed": "Steam subscription request failed. Make sure Steam is logged in, the network is available, and the Workshop item is still accessible.",
       "unsubscribe_api_not_ready": "Unsubscribe request was not sent. Make sure Steam is running and logged in, then try again.",
-      "unsubscribe_failed": "Steam unsubscribe request failed. Make sure Steam is logged in and network is available, then try again later.",
-      "workshop_details_failed": "Failed to query Steam Workshop details. Make sure Steam is logged in and network is available, then try again later.",
-      "workshop_download_failed": "Steam Workshop download request failed. Make sure Steam is logged in and network is available, then try again later.",
-      "workshop_download_rejected": "Steam did not accept the Workshop download request. Make sure Steam is logged in, network is available, and the target Workshop item is still accessible.",
+      "unsubscribe_failed": "Steam unsubscribe request failed. Make sure Steam is logged in and the network is available, then try again later.",
+      "workshop_details_failed": "Failed to query Steam Workshop details. Make sure Steam is logged in and the network is available, then try again later.",
+      "workshop_download_failed": "Steam Workshop download request failed. Make sure Steam is logged in and the network is available, then try again later.",
+      "workshop_download_rejected": "Steam did not accept the Workshop download request. Make sure Steam is logged in, the network is available, and the target Workshop item is still accessible.",
       "workshop_status_failed": "Failed to check Steam Workshop install status. Make sure Steam is running and logged in, then try again later."
     },
     "dialog": {
-      "file_save_failed": "Failed to choose the save file. Try again later. Details were written to the system log.",
-      "file_select_failed": "Failed to choose the file. Try again later. Details were written to the system log.",
-      "folder_select_failed": "Failed to choose the folder. Try again later. Details were written to the system log."
+      "file_save_failed": "Failed to choose the save file. Try again later. See system log for details.",
+      "file_select_failed": "Failed to choose the file. Try again later. See system log for details.",
+      "folder_select_failed": "Failed to choose the folder. Try again later. See system log for details."
     },
     "image": {
       "save_as_failed": "Failed to save the image. Check target folder permissions, disk space, or whether the file name is valid.",
@@ -4647,21 +4706,21 @@
       "export_failed": "Recommendation export failed. Check target folder permissions, disk space, and selected mod data state."
     },
     "rule": {
-      "dynamic_delete_failed": "Failed to delete the dynamic rule. Check whether the rule config file is writable. Details were written to the system log.",
-      "dynamic_save_failed": "Failed to save the dynamic rule. Check rule content and rule file permissions. Details were written to the system log.",
-      "dynamic_toggle_failed": "Failed to toggle the dynamic rule. Check whether the rule config file is writable. Details were written to the system log.",
-      "global_enable_failed": "Failed to save the rule switch. Check whether the rule config file is writable. Details were written to the system log.",
-      "language_pack_owner_failed": "Failed to save language pack owner rules. Check whether the rule config file is writable. Details were written to the system log.",
-      "mod_toggle_failed": "Failed to toggle mod rule state. Check whether the rule config file is writable. Details were written to the system log.",
-      "source_priority_failed": "Failed to save rule source priority. Check whether the rule config file is writable. Details were written to the system log.",
-      "user_mod_delete_failed": "Failed to delete the user rule. Check whether the rule config file is writable. Details were written to the system log.",
-      "user_mod_position_failed": "Failed to save fixed position rule. Check whether the rule config file is writable. Details were written to the system log.",
-      "user_mod_save_failed": "Failed to save the user rule. Check rule content and rule file permissions. Details were written to the system log.",
-      "import_failed": "Failed to import rule package. Make sure the file is complete and correctly formatted. Details were written to the system log."
+      "dynamic_delete_failed": "Failed to delete the dynamic rule. Check whether the rule config file is writable. See system log for details.",
+      "dynamic_save_failed": "Failed to save the dynamic rule. Check rule content and rule file permissions. See system log for details.",
+      "dynamic_toggle_failed": "Failed to toggle the dynamic rule. Check whether the rule config file is writable. See system log for details.",
+      "global_enable_failed": "Failed to save the rule switch. Check whether the rule config file is writable. See system log for details.",
+      "language_pack_owner_failed": "Failed to save language pack owner rules. Check whether the rule config file is writable. See system log for details.",
+      "mod_toggle_failed": "Failed to toggle mod rule state. Check whether the rule config file is writable. See system log for details.",
+      "source_priority_failed": "Failed to save rule source priority. Check whether the rule config file is writable. See system log for details.",
+      "user_mod_delete_failed": "Failed to delete the user rule. Check whether the rule config file is writable. See system log for details.",
+      "user_mod_position_failed": "Failed to save fixed position rule. Check whether the rule config file is writable. See system log for details.",
+      "user_mod_save_failed": "Failed to save the user rule. Check rule content and rule file permissions. See system log for details.",
+      "import_failed": "Failed to import rule package. Make sure the file is complete and correctly formatted. See system log for details."
     },
     "sort": {
-      "auto_sort_failed": "Auto sort failed. Check rule configuration and current active list state. Details were written to the system log.",
-      "smart_insert_failed": "Smart insert failed. Check target Mod IDs, current active list, and rule configuration. Details were written to the system log."
+      "auto_sort_failed": "Auto sort failed. Check rule configuration and current active list state. See system log for details.",
+      "smart_insert_failed": "Smart insert failed. Check target Mod IDs, current active list, and rule configuration. See system log for details."
     },
     "workspace": {
       "localize_failed": "Failed to start the local coexist task. Check target library path, file permissions, and disk space.",
@@ -4672,17 +4731,19 @@
       "disabled": "AI is not enabled. Turn on AI in Settings and complete model configuration first.",
       "model_capability_load_failed": "Failed to load AI model capabilities. You can still configure the model manually, but reasoning mode and API compatibility may need manual confirmation.",
       "models_load_failed": "Failed to load AI model list. Make sure the model service is running, Base URL is reachable, API Key is valid, and proxy settings are correct.",
-      "providers_load_failed": "Failed to load AI protocol list. Local configuration or AI definition files may be temporarily unavailable. Details were written to the system log."
+      "providers_load_failed": "Failed to load AI protocol list. Local configuration or AI definition files may be unavailable. See system log for details.",
+      "api_key_required": "The current protocol requires an API Key.",
+      "config_incomplete": "AI configuration is incomplete. Please check the settings."
     },
     "log": {
-      "files_load_failed": "Failed to load log file list. Make sure the log folder is accessible. Details were written to the system log.",
-      "page_read_failed": "Failed to read logs. The file may have been cleaned up, moved, or temporarily unavailable. Refresh the log list and try again."
+      "files_load_failed": "Failed to load log file list. Make sure the log folder is accessible. See system log for details.",
+      "page_read_failed": "Failed to read logs. The file may have been cleaned up, moved, or unavailable. Refresh the log list and try again."
     },
     "maintenance": {
       "external_data_check_failed": "Failed to check external library updates. Check network connection, proxy settings, and external data source status.",
       "managed_mod_check_failed": "Failed to check manager mod updates. Check network connection, Git/Steam service status, and local folder permissions.",
       "steamcmd_mod_check_failed": "Failed to check SteamCMD mod updates. Check network connection, SteamCMD status, and manager mod folder.",
-      "tools_check_failed": "Failed to check tool environment. Check tool folder permissions and network connection. Details were written to the system log."
+      "tools_check_failed": "Failed to check tool environment. Check tool folder permissions and network connection. See system log for details."
     },
     "steamcmd": {
       "download_start_failed": "Failed to start SteamCMD download. Check network connection, proxy settings, SteamCMD status, and target folder permissions.",
@@ -4692,7 +4753,7 @@
       "texture_cancel_failed": "Failed to cancel the texture task. The task may have already finished. Refresh status later."
     },
     "update": {
-      "action_failed": "Failed to execute update action. Check network connection, disk space, and install folder permissions. Details were written to the system log.",
+      "action_failed": "Failed to execute update action. Check network connection, disk space, and install folder permissions. See system log for details.",
       "check_failed": "Failed to check for updates. Check network connection, proxy settings, and update source status, then try again later."
     },
     "uri": {
@@ -4703,8 +4764,8 @@
     },
     "rules": {
       "add_user_rule_failed": "Failed to add the user rule. The rule content may be invalid or the local rule file may be temporarily unwritable. Rules have been reloaded.",
-      "fetch_failed_retry": "Failed to fetch rules. Try again later. Details have been written to the system log.",
-      "update_community_failed": "Failed to update the community rule database. Check the network connection, proxy settings, and local file permissions. Details have been written to the system log."
+      "fetch_failed_retry": "Failed to fetch rules. Try again later. See system log for details.",
+      "update_community_failed": "Failed to update the community rule database. Check the network connection, proxy settings, and local file permissions. See system log for details."
     }
   },
   "maintenance": {
@@ -4842,7 +4903,7 @@
       "update_short": "Update"
     },
     "file_search": {
-      "no_task_id": "Backend did not return a task ID",
+      "no_task_id": "No task ID returned",
       "queued": "Search task has been queued",
       "ready": "Ready to search",
       "start_failed_short": "Failed to start",
@@ -4893,7 +4954,7 @@
       "cancelled_no_changes": "Scan was cancelled by the user. No database changes were made."
     },
     "error": {
-      "not_completed": "Task did not complete successfully. Check your network connection, file permissions, or try again later. Details were written to the system log.",
+      "not_completed": "Task did not complete successfully. Check your network connection, file permissions, or try again later. See system log for details.",
       "timeout": "Task timed out"
     }
   },
@@ -4902,7 +4963,7 @@
       "attachments": {
         "diagnosis_context": {
           "label": "Selected Log",
-          "description": "Diagnostic context compressed by the backend for the selected log.",
+          "description": "Diagnostic context prepared by the app for the selected log.",
           "prompt_variables": {
             "diagnosis_context": {
               "source_type": {
@@ -5330,15 +5391,19 @@
       "session_total_empty": "Session total: none",
       "session_total_tokens": "Session total {count}k tokens",
       "unsupported_action_type": "Unsupported action type: {type}",
-      "action_failed": "Action failed. Current data may have changed, the target item may be unavailable, or the backend may be unable to process it. Refresh and try again.",
-      "request_failed": "AI request failed. Check model configuration, network connection, proxy settings, and API key. Details were written to the system log.",
+      "action_failed": "Action failed. Current data may have changed, the target item may be unavailable, or the app service may be unable to process it. Refresh and try again.",
+      "request_failed": "AI request failed. Check model configuration, network connection, proxy settings, and API key. See system log for details.",
       "cancelled_tip": "🛑 This analysis was manually interrupted by the user.",
       "cancel_requested": "Requested interruption of this AI analysis",
-      "cancel_not_confirmed": "Stopped waiting for this reply, but the backend did not confirm cancellation. Refresh the session status later."
+      "cancel_not_confirmed": "Stopped waiting for this reply, but the app service did not confirm cancellation. Refresh the session status later."
     },
     "reasoning": {
       "off": "Off",
-      "auto": "Auto"
+      "auto": "Auto",
+      "high": "High",
+      "low": "Low",
+      "medium": "Medium",
+      "xhigh": "Very high"
     },
     "session": {
       "default_global_scan_question": "Start troubleshooting from this global scan result and provide the most likely root cause, evidence, and fix suggestions.",
@@ -5347,10 +5412,10 @@
       "fetch_trace_action": "Fetch AI Request Trace",
       "disabled_warning": "AI is not enabled. Enable AI in Settings and finish model configuration first.",
       "send_action": "Send AI Chat",
-      "run_failed": "AI assistant session failed. The backend may be unavailable, the model service may not respond, or the network request may have been interrupted. Try again later.",
-      "request_failed_message": "AI request failed. Check the model service, API key, Base URL, proxy settings, and current network status. Details were written to the system log.",
+      "run_failed": "AI assistant session failed. The app service may be unavailable, the model service may not respond, or the network request may have been interrupted. Try again later.",
+      "request_failed_message": "AI request failed. Check the model service, API key, Base URL, proxy settings, and current network status. See system log for details.",
       "cancelled_message": "This analysis was interrupted.",
-      "analysis_failed_message": "An error occurred during analysis. The model service, network connection, or internal app state may be temporarily unavailable. Details were written to the system log.",
+      "analysis_failed_message": "An error occurred during analysis. The model service, network connection, or internal app state may be unavailable. See system log for details.",
       "cancel_action": "Cancel AI Reply",
       "new_session": "New Session"
     },
@@ -5391,8 +5456,8 @@
       "ui_not_ready": "The UI has not finished initializing",
       "test_reply_action": "Test AI Reply",
       "empty_reply": "The model returned, but the content is empty",
-      "test_failed": "AI test request failed. Check the model name, Base URL, API key, proxy settings, and service status. Details were written to the system log.",
-      "test_exception": "AI test request failed unexpectedly. The backend may be unavailable, the network may be down, or the model service may not respond. Try again later."
+      "test_failed": "AI test request failed. Check the model name, Base URL, API key, proxy settings, and service status. See system log for details.",
+      "test_exception": "AI test request failed unexpectedly. The app service may be unavailable, the network may be down, or the model service may not respond. Try again later."
     },
     "attachments": {
       "token_estimate": "About {count}k tokens",
@@ -5405,6 +5470,12 @@
       "mod_selection": {
         "count_summary": "{count} selected mods"
       }
+    },
+    "providers": {
+      "anthropic": "Anthropic native protocol",
+      "gemini": "Google Gemini native protocol",
+      "ollama": "Ollama native protocol",
+      "openai_compatible": "OpenAI-compatible protocol (OpenAI, proxies, or local services)"
     }
   },
   "history": {
@@ -5535,9 +5606,9 @@
         "restore_all": "Restore all warnings"
       },
       "move": {
-        "active_section_groups": "Actived list section groups...",
+        "active_section_groups": "Active list section groups...",
         "current_other_groups": "Other section groups in this list...",
-        "inactive_section_groups": "Deactivated list section groups...",
+        "inactive_section_groups": "Inactive list section groups...",
         "other_groups": "Other section groups...",
         "other_section_groups": "Other list section groups..."
       }
@@ -5599,8 +5670,8 @@
   },
   "bridge": {
     "browser": {
-      "connect_failed": "Could not connect to the backend service. The backend process may have exited, the browser bridge port may be unavailable, or local security software may have blocked it. Restart the app and try again.",
-      "request_failed_with_status": "Browser bridge request failed with status {status}. Make sure the backend service is still running, or restart the app and try again.",
+      "connect_failed": "Could not connect to the app service. The app service may have stopped, the browser bridge port may be unavailable, or local security software may have blocked it. Restart the app and try again.",
+      "request_failed_with_status": "Browser bridge request failed with status {status}. Make sure the app service is still running, or restart the app and try again.",
       "session_create_failed": "Failed to create a browser bridge session. Restart the app and try again."
     }
   },
@@ -5611,8 +5682,6 @@
       "cancel": "Cancel",
       "clear": "Clear",
       "close": "Close",
-      "copy_group_number": "Copy group number",
-      "copy_password": "Copy password",
       "copy_url": "Copy URL",
       "delete": "Delete",
       "edit": "Edit",
@@ -5730,7 +5799,9 @@
       "full_path": "Full path",
       "id": "ID",
       "relative_path": "Relative path",
-      "operation": "Operation"
+      "operation": "Operation",
+      "id_prefix": "ID: {value}",
+      "workshop_id_prefix": "Workshop ID: {value}"
     },
     "source": {
       "core": "Game core",
@@ -5825,7 +5896,7 @@
         "restart_application": "Restart application",
         "run_game": "Run",
         "startup_inventory_check": "Check startup inventory",
-        "sync_mod_core_data": "Sync mod core data",
+        "sync_mod_core_data": "Sync core Mod data",
         "sync_mod_data": "Sync mod data",
         "sync_after_inventory_cleanup": "Sync mod data after cleaning inventory records",
         "create_user_locale": "Create language pack",
@@ -5840,17 +5911,17 @@
       },
       "download": {
         "complete": "Download complete: {filename}",
-        "failed": "{filename} download failed. Check your network connection, proxy settings, download source, or disk permissions. Details were written to the system log."
+        "failed": "{filename} download failed. Check your network connection, proxy settings, download source, or disk permissions. See system log for details."
       },
       "error": {
-        "cancel_task_failed": "Failed to cancel the task. The task may already be finished or the backend may be unavailable. Refresh the status and try again.",
-        "game_status_failed": "Game launch state is abnormal. The game path, launch arguments, or runtime environment may be unavailable. Details were written to the system log.",
-        "initialize_failed": "Initialization failed. Configuration, database, or runtime environment may be unavailable. Details were written to the system log.",
+        "cancel_task_failed": "Failed to cancel the task. The task may already be finished or the app service may be unavailable. Refresh the status and try again.",
+        "game_status_failed": "Game launch state is abnormal. The game path, launch arguments, or runtime environment may be unavailable. See system log for details.",
+        "initialize_failed": "Initialization failed. Configuration, database, or runtime environment may be unavailable. See system log for details.",
         "refresh_data_failed": "Failed to refresh data. The scanner, database, or current profile may be unavailable. Try again later.",
         "refresh_mod_enrichment_failed": "Failed to refresh list markers. Some issue hints, replacements, or online compatibility status may not appear for now.",
-        "resume_failed": "Failed to restore the interface. Refresh the interface or restart the app, then try again. Details were written to the system log.",
-        "sync_mod_core_data_failed": "Failed to sync mod core data. Database, scan results, or runtime environment may be unavailable. Details were written to the system log.",
-        "sync_mod_data_failed": "Failed to sync mod data. Database, scan results, or runtime environment may be unavailable. Details were written to the system log."
+        "resume_failed": "Failed to restore the interface. Refresh the interface or restart the app, then try again. See system log for details.",
+        "sync_mod_core_data_failed": "Failed to sync core Mod data. Database, scan results, or runtime environment may be unavailable. See system log for details.",
+        "sync_mod_data_failed": "Failed to sync mod data. Database, scan results, or runtime environment may be unavailable. See system log for details."
       },
       "game": {
         "launching_profile": "Launching “{profile}” environment. Waiting for the game process to confirm."
@@ -5869,7 +5940,7 @@
         "steam_not_ready": {
           "fallback": "Steam did not become available.",
           "message": "{message}\nYou can launch directly for this run, check Steam status, or disable this option and save.",
-          "title": "Steam is temporarily unavailable"
+          "title": "Steam is unavailable"
         },
         "steam_path_invalid": {
           "message": "This environment is set to launch through Steam first, but no valid Steam executable path was detected.\nYou can launch directly for this run, check Steam status, or disable this option and save.",
@@ -5889,24 +5960,24 @@
         "refresh_disk_state": "Refresh disk state",
         "startup_load_core_data": "Load startup core data",
         "sync_after_database_cleanup": "Sync mod data after invalid data cleanup",
-        "sync_mod_core_data": "Sync mod core data",
+        "sync_mod_core_data": "Sync core Mod data",
         "sync_mods_after_scan": "Sync mod data after scan"
       },
       "localize": {
         "cancelled": "{title} cancelled",
         "complete_log": "{title} completed. {success} succeeded, {failed} failed.",
         "complete_success": "{title} completed: {count} mods",
-        "complete_with_errors": "{title} completed. {success} succeeded, {failed} failed. Failure details were written to the system log."
+        "complete_with_errors": "{title} completed. {success} succeeded, {failed} failed. See system log for failed items."
       },
       "mod_export": {
         "cancelled": "Mod package export cancelled",
-        "failed": "Mod package export failed. Check export folder permissions, disk space, and selected mod status. Details were written to the system log.",
+        "failed": "Mod package export failed. Check export folder permissions, disk space, and selected mod status. See system log for details.",
         "title": "Mod package export"
       },
       "mod_import": {
         "cancelled": "Mod package import cancelled",
         "complete": "Mod package import completed",
-        "failed": "Mod package import failed. Check whether the file is complete, target folder permissions, and disk space. Details were written to the system log."
+        "failed": "Mod package import failed. Check whether the file is complete, target folder permissions, and disk space. See system log for details."
       },
       "mod_residue": {
         "check_incomplete": "Uninstall leftovers check did not finish. You can open residue cleanup manually later."
@@ -5930,7 +6001,7 @@
         "failed": "Steam download failed. Make sure Steam is logged in and online, or check proxy settings and Workshop item status."
       },
       "steamcmd_download": {
-        "failed": "SteamCMD download failed. Check network connection, proxy settings, source availability, and target folder permissions. Details were written to the system log."
+        "failed": "SteamCMD download failed. Check network connection, proxy settings, source availability, and target folder permissions. See system log for details."
       },
       "suspend": {
         "cleared_scan_tasks": "Cleared scan tasks left before suspension. Refresh again if needed."
@@ -5975,7 +6046,7 @@
       "pick_save_dir": "Choose save folder",
       "rename_backup": "Rename backup",
       "save_backup_as": "Save backup as",
-      "save_inactive_order": "Save deactivated list order",
+      "save_inactive_order": "Save inactive list order",
       "save_mod_order": "Save Mod load order"
     },
     "workspace": {
@@ -6112,9 +6183,7 @@
       "empty": "Path is empty",
       "read_text_file": "Read text file",
       "select_file": "Pick file path",
-      "select_folder": "Pick folder path",
-      "open": "Open path",
-      "open_file": "Open file"
+      "select_folder": "Pick folder path"
     },
     "texture": {
       "exclude_file": "Add file exclusion",
@@ -6274,7 +6343,7 @@
       },
       "toggle_selected_active": {
         "title": "Activate or deactivate selected Mods",
-        "description": "Switch selected items between the active and deactivated lists based on their current state."
+        "description": "Switch selected items between the active and inactive lists based on their current state."
       },
       "toggle_selected_coexistence_source": {
         "title": "Switch selected Mod Workshop/local version",
@@ -6588,7 +6657,7 @@
           "title": "AI Analysis Sidebar"
         },
         "6": {
-          "description": "This controls whether AI may actively read log context, mod data, sorting rules, and other backend information. For complex problems, keep the default enabled.",
+          "description": "This controls whether AI may actively read log context, mod data, sorting rules, and other app data. For complex problems, keep the default enabled.",
           "title": "Tool Permissions"
         },
         "7": {
@@ -6596,7 +6665,7 @@
           "title": "Add Your Question"
         },
         "8": {
-          "description": "After attaching logs or entering a clear question, click send. A disabled send button usually means no log is selected or token precheck has not finished.",
+          "description": "After attaching logs or entering a clear question, click send. A disabled send button usually means no log is selected or the token check has not finished.",
           "title": "Send Analysis Request"
         }
       },
@@ -6764,7 +6833,7 @@
           "title": "Workshop Inventory"
         },
         "1": {
-          "description": "Search, filter, sort, missing checks, and update checks are here. This is the main workspace for daily inventory review. For example, filter all deactivated mods, select several, then activate them in batch.",
+          "description": "Search, filter, sort, missing checks, and update checks are here. This is the main workspace for daily inventory review. For example, filter all inactive mods, select several, then activate them in batch.",
           "title": "Inventory Toolbar"
         },
         "2": {
@@ -6901,7 +6970,7 @@
       "background_cache_failed": "Background data cache loading failed. The main UI has continued opening; dependency, replacement, or DLC text may be incomplete for now."
     },
     "message": {
-      "database_load_failed": "Database failed to load. Some features may be temporarily unavailable.",
+      "database_load_failed": "Database failed to load. Some features may be unavailable.",
       "duplicate_groups_renamed": "Duplicate group names were detected and {count} items were automatically renamed.",
       "relocation_partial_failed": "Manager directory changes were detected, but some internal path migrations failed. Check the path settings."
     },
@@ -6967,8 +7036,8 @@
   },
   "browser": {
     "api": {
-      "call_failed": "Backend API execution failed. The runtime environment, path permissions, or internal state may be temporarily unavailable. Details were written to the system log.",
-      "method_missing": "The requested backend API does not exist. Refresh the page or restart the app and try again."
+      "call_failed": "App API call failed. The runtime environment, path permissions, or internal state may be unavailable. See system log for details.",
+      "method_missing": "The requested app API does not exist. Refresh the page or restart the app and try again."
     },
     "session": {
       "expired": "The browser session has expired. Refresh the page or restart the app.",

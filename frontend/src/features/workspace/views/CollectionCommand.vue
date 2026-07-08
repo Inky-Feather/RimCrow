@@ -76,7 +76,7 @@
             <div class="flex-1 min-w-0">
               <div class="text-xs font-bold truncate" :class="(mod.is_workshop || mod.is_self || mod.is_local) ? 'text-text-main' : 'text-accent-danger'">{{ mod.title }}</div>
               <div class="text-[0.6rem] font-mono text-text-dim opacity-60 flex gap-2">
-                <span>ID: {{ mod.workshop_id }}</span>
+                <span>{{ t('common.field.id_prefix', 'ID：{value}', { value: mod.workshop_id }) }}</span>
                 <span v-if="(!mod.is_workshop && !mod.is_self && !mod.is_local)" class="text-accent-danger animate-pulse">{{ t('ui.workspace.collection.child.pending', '待补充') }}</span>
               </div>
             </div>
@@ -217,7 +217,7 @@
                   <div class="absolute inset-0 bg-linear-to-t from-bg-deep/96 via-bg-deep/56 to-transparent"></div>
                   <h4 class="absolute inset-x-2 top-2 right-11 z-1 overflow-hidden text-ellipsis whitespace-nowrap text-[0.9rem] font-black leading-tight text-text-main [text-shadow:0_1px_4px_rgba(0,0,0,0.55)]">{{ coll.title || t('ui.workspace.collection.card.unknown', '未知合集') }}</h4>
                   <button v-if="coll.source === 'saved'" @click.stop="confirmRemove(coll.raw)"
-                    class="absolute right-2 top-2 z-2 rounded-lg border border-border-base/10 bg-bg-inset/90 p-1.5 text-text-dim opacity-0 backdrop-blur-sm transition-[opacity,background-color,color,border-color] duration-200 group-hover:opacity-100 hover:bg-accent-danger hover:text-on-accent-danger hover:border-accent-danger/50" v-tooltip="t('ui.workspace.collection.card.delete_record', '删除记录')">
+                    class="absolute right-2 top-2 z-2 rounded-lg border border-border-base/10 bg-bg-inset/90 p-1.5 text-text-dim opacity-0 backdrop-blur-sm transition-[opacity,background-color,color,border-color] duration-200 group-hover:opacity-100 hover:bg-accent-danger hover:text-on-accent-danger hover:border-accent-danger/50" v-tooltip="t('ui.workspace.collection.remove.title', '删除记录')">
                     <Trash2 class="size-4" />
                   </button>
                   <button v-else @click.stop="saveOnlineCollection(coll.raw)"
@@ -227,7 +227,7 @@
                   <div class="pointer-events-none absolute inset-x-0 bottom-0 z-1 flex flex-col justify-end gap-1.5 p-2 pb-2">
                     <span class="mt-auto overflow-hidden text-[0.75rem] font-black leading-tight text-text-soft [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [text-shadow:0_1px_4px_rgba(0,0,0,0.55)]">{{ coll.displayDescription || t('ui.workspace.collection.card.no_description', '暂无说明') }}</span>
                     <div class="flex items-center justify-between gap-2">
-                      <span class="max-w-[45%] overflow-hidden text-ellipsis whitespace-nowrap rounded-[0.45rem] border border-border-base/10 bg-bg-inset/90 px-1.5 py-1 text-[0.62rem] leading-tight text-text-dim/95">ID: {{ coll.id }}</span>
+                      <span class="max-w-[45%] overflow-hidden text-ellipsis whitespace-nowrap rounded-[0.45rem] border border-border-base/10 bg-bg-inset/90 px-1.5 py-1 text-[0.62rem] leading-tight text-text-dim/95">{{ t('common.field.id_prefix', 'ID：{value}', { value: coll.id }) }}</span>
                       <div class="flex shrink-0 gap-1.5">
                         <span v-if="coll.missingCount > 0" class="flex items-center gap-1 rounded-[0.45rem] border border-accent-danger/30 bg-accent-danger/20 px-1.5 py-1 text-[0.6rem] font-extrabold text-accent-danger">
                           <AlertCircle class="size-2.5"/> {{ t('ui.workspace.collection.card.missing_short', '缺 {count}', { count: coll.missingCount }) }}
@@ -394,7 +394,7 @@ const collectionDescriptionHtml = computed(() => {
 })
 const collectionSearchController = computed(() => createTagSearchController({
   schema: {
-    text: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.collection.search.field.text', '搜索文本'), alias: ['q', 'text'], suggest: true, defaultSearch: true },
+    text: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.search.field.text', '搜索文本'), alias: ['q', 'text'], suggest: true, defaultSearch: true },
     tag: { type: TAG_FIELD_TYPES.LIST, label: t('common.field.tags', '标签'), alias: ['t', 'tag'], suggest: true },
   },
   valueOptions: {

@@ -88,12 +88,12 @@
 
                   <!-- 路径 -->
                   <span class="flex items-center" v-tooltip="t('tooltip.profiles.game_install_path', '游戏安装路径:\n{path}', { path: p.game_install_path || '' })">
-                    <span class="text-[0.7rem] py-0.5 px-1 w-10 shrink-0 text-center bg-accent-cool/70 rounded-2xl">Game</span>
+                    <span class="text-[0.7rem] py-0.5 px-1 w-10 shrink-0 text-center bg-accent-cool/70 rounded-2xl">{{ t('ui.profiles.path_badge.game', '游戏') }}</span>
                     <span class="text-[0.7rem] px-1 text-text-dim font-mono opacity-50 truncate">{{ p.game_install_path }}</span>
                   </span>
 
                   <span class="flex items-center" v-tooltip="t('tooltip.profiles.user_data_path', '用户数据路径:\n{path}', { path: p.user_data_path || '' })">
-                    <span class="text-[0.7rem] py-0.5 px-1 w-10 shrink-0 text-center bg-accent-tip/70 rounded-2xl">Data</span>
+                    <span class="text-[0.7rem] py-0.5 px-1 w-10 shrink-0 text-center bg-accent-tip/70 rounded-2xl">{{ t('ui.profiles.path_badge.data', '数据') }}</span>
                     <span class="text-[0.7rem] px-1 text-text-dim font-mono opacity-50 truncate">{{ p.user_data_path }}</span>
                   </span>
 

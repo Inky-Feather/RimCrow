@@ -12,7 +12,7 @@
               {{ t('ui.workspace.timeline.title_prefix', '变动') }}<span class="text-accent-primary">{{ t('ui.workspace.timeline.title_highlight', '时间线') }}</span>
             </h3>
             <p class="text-xs text-text-dim mt-1 max-w-50 truncate" v-tooltip="modName">{{ modName }}</p>
-            <p class="text-[0.7rem] font-mono text-text-disabled mt-0.5">ID: {{ workshopId }}</p>
+            <p class="text-[0.7rem] font-mono text-text-disabled mt-0.5">{{ t('common.field.id_prefix', 'ID：{value}', { value: workshopId }) }}</p>
           </div>
           <button @click="$emit('close')" class="p-2 bg-bg-overlay/5 hover:bg-accent-danger/20 hover:text-accent-danger rounded-xl transition-colors">
             <X class="size-5"/>

@@ -41,6 +41,7 @@ from backend.ai.def_model_capabilities import (
     normalize_reasoning_mode as _normalize_reasoning_mode,
 )
 from backend.settings import settings
+from backend.i18n.messages import tr
 from backend.managers.mgr_network import network_mgr
 from backend.utils.logger import logger
 from backend.utils.redaction import fingerprint_secret, redact_sensitive_data
@@ -125,10 +126,10 @@ def validate_ai_connection_config(config: Any) -> tuple[bool, str]:
     api_key = str(getter("api_key", "") or "").strip()
 
     if not provider or not base_url or not model:
-        return False, "AI 配置不完整，请检查配置"
+        return False, tr("errors.ai.config_incomplete", "AI 配置不完整，请检查配置")
 
     if ai_provider_requires_api_key(provider, base_url) and not api_key:
-        return False, "当前协议要求填写 API Key。"
+        return False, tr("errors.ai.api_key_required", "当前协议要求填写 API Key。")
 
     return True, ""
 
@@ -261,6 +262,18 @@ class LiteLLMGateway:
 
     def _build_reasoning_mode_meta(self, provider: str, policy: ModelCapabilityPolicy | None) -> dict[str, Any]:
         """把后端内部能力策略规整成前端可直接消费的统一元数据。"""
+        reasoning_option_meta = {
+            "off": {"value": "off", "label_key": "ai.reasoning.off", "default_label": "关闭", "label": tr("ai.reasoning.off", "关闭")},
+            "auto": {"value": "auto", "label_key": "ai.reasoning.auto", "default_label": "自动", "label": tr("ai.reasoning.auto", "自动")},
+            "low": {"value": "low", "label_key": "ai.reasoning.low", "default_label": "低", "label": tr("ai.reasoning.low", "低")},
+            "medium": {"value": "medium", "label_key": "ai.reasoning.medium", "default_label": "中", "label": tr("ai.reasoning.medium", "中")},
+            "high": {"value": "high", "label_key": "ai.reasoning.high", "default_label": "高", "label": tr("ai.reasoning.high", "高")},
+            "xhigh": {"value": "xhigh", "label_key": "ai.reasoning.xhigh", "default_label": "极高", "label": tr("ai.reasoning.xhigh", "极高")},
+        }
+
+        def reasoning_option(value: str) -> dict[str, Any]:
+            return dict(reasoning_option_meta[value])
+
         supports_reasoning = bool(provider == "openai_compatible" and policy and policy.supports_reasoning)
         supports_reasoning_effort = bool(
             policy and policy.supports_reasoning and (
@@ -270,24 +283,24 @@ class LiteLLMGateway:
         )
         if supports_reasoning_effort:
             reasoning_options = [
-                {"value": "off", "label": "关闭"},
-                {"value": "auto", "label": "自动"},
-                {"value": "high", "label": "高"},
-                {"value": "xhigh", "label": "极高"},
+                reasoning_option("off"),
+                reasoning_option("auto"),
+                reasoning_option("high"),
+                reasoning_option("xhigh"),
             ]
             if policy and policy.name != "deepseek-thinking":
-                reasoning_options.insert(2, {"value": "low", "label": "低"})
-                reasoning_options.insert(3, {"value": "medium", "label": "中"})
+                reasoning_options.insert(2, reasoning_option("low"))
+                reasoning_options.insert(3, reasoning_option("medium"))
             reasoning_mode_kind = "leveled"
         elif supports_reasoning:
             reasoning_options = [
-                {"value": "off", "label": "关闭"},
-                {"value": "auto", "label": "自动"},
+                reasoning_option("off"),
+                reasoning_option("auto"),
             ]
             reasoning_mode_kind = "toggle"
         else:
             reasoning_options = [
-                {"value": "off", "label": "关闭"},
+                reasoning_option("off"),
             ]
             reasoning_mode_kind = "unsupported"
 
@@ -449,10 +462,10 @@ class LiteLLMGateway:
     def get_providers(self) -> List[Dict[str, str]]:
         """返回前端设置页使用的协议类型列表。"""
         return [
-            {"value": "openai_compatible", "label": "OpenAI 兼容协议（含 OpenAI 官方 / 中转 / 本地服务）"},
-            {"value": "anthropic", "label": "Anthropic 原生协议"},
-            {"value": "gemini", "label": "Google Gemini 原生协议"},
-            {"value": "ollama", "label": "Ollama 原生协议"},
+            {"value": "openai_compatible", "label_key": "ai.providers.openai_compatible", "default_label": "OpenAI 兼容协议（含 OpenAI 官方 / 中转 / 本地服务）", "label": tr("ai.providers.openai_compatible", "OpenAI 兼容协议（含 OpenAI 官方 / 中转 / 本地服务）")},
+            {"value": "anthropic", "label_key": "ai.providers.anthropic", "default_label": "Anthropic 原生协议", "label": tr("ai.providers.anthropic", "Anthropic 原生协议")},
+            {"value": "gemini", "label_key": "ai.providers.gemini", "default_label": "Google Gemini 原生协议", "label": tr("ai.providers.gemini", "Google Gemini 原生协议")},
+            {"value": "ollama", "label_key": "ai.providers.ollama", "default_label": "Ollama 原生协议", "label": tr("ai.providers.ollama", "Ollama 原生协议")},
         ]
 
     # =========================================================================

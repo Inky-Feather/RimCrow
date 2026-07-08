@@ -64,11 +64,11 @@
           <div class="grid grid-cols-2 gap-4">
             <div class="rounded-xl border border-border-base/10 bg-bg-deep/60 p-3">
               <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.translation_manager.source_text', '中文原文') }}</div>
-              <p class="whitespace-pre-wrap break-words text-sm leading-6 text-text-main">{{ selectedRow.sourceText }}</p>
+              <p class="whitespace-pre-wrap wrap-break-words text-sm leading-6 text-text-main">{{ selectedRow.sourceText }}</p>
             </div>
             <div class="rounded-xl border border-border-base/10 bg-bg-deep/60 p-3">
               <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.translation_manager.current_builtin', '内置译文') }}</div>
-              <p class="whitespace-pre-wrap break-words text-sm leading-6 text-text-main">{{ selectedRow.builtinText || '-' }}</p>
+              <p class="whitespace-pre-wrap wrap-break-words text-sm leading-6 text-text-main">{{ selectedRow.builtinText || '-' }}</p>
             </div>
           </div>
 

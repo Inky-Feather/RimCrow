@@ -18,7 +18,7 @@
       <!-- 图标 -->
       <img v-if="mod.preview_path" :src="appStore.getThumbUrl(mod.package_id, mod.preview_path)" loading="lazy" class="size-10 rounded object-cover border border-border-base/10 shadow-sm opacity-80 group-hover:opacity-100" />
       <div v-else class="size-10 rounded bg-bg-inset/80 border border-border-base/10 flex items-center justify-center">
-        <span class="text-[0.6rem] text-text-disabled font-bold uppercase">NO IMG</span>
+        <span class="text-[0.6rem] text-text-disabled font-bold uppercase">{{ t('ui.workspace.matrix.no_image', '无图') }}</span>
       </div>
 
       <!-- 信息 -->
@@ -50,31 +50,31 @@
       <!-- 状态角标 -->
       <div class="absolute top-0 left-1 z-100 scale-90 flex items-center justify-center gap-1">
         <span v-if="matrixState.isNew" :title="t('ui.workspace.matrix.badge.new', '新增')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-primary bg-accent-primary animate-pulse">
-          NEW
+          {{ t('ui.workspace.matrix.badge.new_short', '新增') }}
         </span>
         <span v-if="matrixState.isChange" :title="t('ui.workspace.matrix.badge.changed', '变更')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-success bg-accent-success animate-pulse">
-          CHANGE
+          {{ t('ui.workspace.matrix.badge.changed_short', '变更') }}
         </span>
         <span v-if="matrixState.isUpdate" :title="t('ui.workspace.matrix.badge.update', '可更新')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-warn bg-accent-warn animate-pulse">
-          UPDATE
+          {{ t('ui.workspace.matrix.badge.update_short', '更新') }}
         </span>
         <span v-if="matrixState.isSame" :title="sameItemsTooltip" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-special bg-accent-special animate-pulse">
-          SAME
+          {{ t('ui.workspace.matrix.badge.same_short', '相同') }}
         </span>
         <span v-if="matrixState.isConflict" :title="conflictItemsTooltip" class="px-1.5 py-0.5 rounded-md text-[0.55rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
-          CONFLICT
+          {{ t('ui.workspace.matrix.badge.conflict_short', '冲突') }}
         </span>
         <span v-if="matrixState.isReplace" :title="replacementItemsTooltip" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-tip bg-accent-tip animate-pulse">
-          REPLACE
+          {{ t('ui.workspace.matrix.badge.replace_short', '替代') }}
         </span>
         <span v-if="matrixState.isDisabled" :title="t('ui.workspace.matrix.badge.disabled', '已禁用')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-warn bg-accent-warning animate-pulse">
-          DISABLED
+          {{ t('ui.workspace.matrix.badge.disabled_short', '禁用') }}
         </span>
         <span v-if="matrixState.isMissing" :title="t('ui.workspace.matrix.badge.missing', '工坊记录存在，但本地没有有效模组文件')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
-          MISSING
+          {{ t('ui.workspace.matrix.badge.missing_short', '缺失') }}
         </span>
         <span v-if="matrixState.isDeleted" :title="t('ui.workspace.matrix.badge.deleted', '库存记录存在，但本地模组目录已删除或失效')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
-          DELETED
+          {{ t('ui.workspace.matrix.badge.deleted_short', '删除') }}
         </span>
         <span v-if="matrixState.isWorkshopUnavailable" :title="t('ui.workspace.matrix.badge.unavailable_tooltip', 'Steam 已无法获取该工坊项目详情，可能已下架或不可访问')" class="px-1.5 py-0.5 rounded-md text-[0.6rem] font-black text-on-accent-danger bg-accent-danger animate-pulse">
           {{ t('ui.workspace.matrix.badge.unavailable', '失效') }}
@@ -97,7 +97,7 @@
             <component :is="sourceIcon" class="size-5" :class="sourceColor" />
             <div class="min-w-0">
               <div class="text-sm font-black text-text-main truncate">{{ mod.name }}</div>
-              <div class="text-xs text-text-dim font-mono">v {{ mod.version || 'Unknown' }}</div>
+              <div class="text-xs text-text-dim font-mono">v {{ mod.version || t('common.status.unknown_version', '版本未知') }}</div>
             </div>
           </div>
           

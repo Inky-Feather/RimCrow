@@ -78,8 +78,12 @@ export const useAppStore = defineStore('app', () => {
   const defaultRecommendationTitle = () => t('ui.app.recommendation_export.title', '推荐导出')
   const defaultRecommendationSourceName = () => t('ui.app.recommendation_export.source_selected_mods', '已选模组')
   const createDefaultTranslationProviders = () => [
-    { id: 'ai.default', label: t('ui.translation.provider.ai_default', 'AI 翻译'), type: 'ai' },
+    { id: 'ai.default', label: t('ui.translation.provider.ai_default', 'AI 翻译'), label_key: 'ui.translation.provider.ai_default', default_label: 'AI 翻译', type: 'ai' },
   ]
+  const normalizeTranslationProvider = (item = {}) => ({
+    ...item,
+    label: t(item?.label_key || '', item?.default_label || item?.label || item?.id || ''),
+  })
   // 推荐导出弹窗只保存入口上下文，真正的模组详情在弹窗打开时从 modStore 读取最新值。
   const recommendationExportDialog = reactive({
     title: defaultRecommendationTitle(),
@@ -728,7 +732,7 @@ export const useAppStore = defineStore('app', () => {
       toast.warning(t('messages.app.startup.first_db_init', '数据库正在进行首次初始化，此过程可能需要您等待一段时间，请您耐心等候。'), {position: "top-center",timeout: 10000})
     }
 
-    appVersion.value = payload.app_version || 'Unknown'
+    appVersion.value = payload.app_version || ''
     buildMode.value = payload.build_mode || ''
     setRuntimeSession(payload.runtime_session)
 
@@ -762,7 +766,7 @@ export const useAppStore = defineStore('app', () => {
     }
     applyCurrentTheme()
     syncRemoteImageCache(payload.remote_image_cache)
-    appVersion.value = payload.app_version || 'Unknown'
+    appVersion.value = payload.app_version || ''
     buildMode.value = payload.build_mode || ''
     setRuntimeSession(payload.runtime_session)
 
@@ -1737,7 +1741,7 @@ export const useAppStore = defineStore('app', () => {
     if (!window.pywebview || isTranslationProvidersLoaded.value) return translationProviders.value
     const res = await window.pywebview.api.translation_get_providers()
     if (checkResult(res, t('messages.app.action.get_translation_providers', '获取翻译器列表'), false, { silent: true })) {
-      translationProviders.value = Array.isArray(res.data) && res.data.length ? res.data : createDefaultTranslationProviders()
+      translationProviders.value = (Array.isArray(res.data) && res.data.length ? res.data : createDefaultTranslationProviders()).map(normalizeTranslationProvider)
       isTranslationProvidersLoaded.value = true
     }
     return translationProviders.value

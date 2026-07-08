@@ -24,6 +24,7 @@ from backend.managers.mgr_game_install import GameInstallRegistry
 from backend.managers.mgr_profile import ProfileManager
 from backend.utils.profile_runtime import normalize_profile_runtime_flags
 from backend.settings import DATA_DIR, settings
+from backend.i18n.messages import localized_key, tr
 from backend.utils.tools import normalize_path_for_compare, normalize_path_for_storage
 
 if TYPE_CHECKING:
@@ -50,50 +51,50 @@ class DataBundleManager:
     MODULE_DEFINITIONS = [
         {
             "key": "settings",
-            "label": "软件设置",
-            "description": "导出软件的全局设置。不会包含目录路径、敏感信息和当前激活环境。",
+            "label": tr("api.data_bundle.modules.settings.label", "软件设置"),
+            "description": tr("api.data_bundle.modules.settings.description", "导出软件的全局设置。不会包含目录路径、敏感信息和当前激活环境。"),
             "dependencies": [],
             "supports_profiles": False,
         },
         {
             "key": "ai_definitions",
-            "label": "AI 定义",
-            "description": "包含 AI 模板、助手设置和任务设置。导入后会替换当前 AI 定义。",
+            "label": tr("api.data_bundle.modules.ai_definitions.label", "AI 定义"),
+            "description": tr("api.data_bundle.modules.ai_definitions.description", "包含 AI 模板、助手设置和任务设置。导入后会替换当前 AI 定义。"),
             "dependencies": [],
             "supports_profiles": False,
         },
         {
             "key": "rules",
-            "label": "规则",
-            "description": "包含用户规则、动态规则和规则设置。导入时会尽量合并。",
+            "label": tr("api.data_bundle.modules.rules.label", "规则"),
+            "description": tr("api.data_bundle.modules.rules.description", "包含用户规则、动态规则和规则设置。导入时会尽量合并。"),
             "dependencies": ["user_custom", "groups"],
             "supports_profiles": False,
         },
         {
             "key": "user_custom",
-            "label": "用户自定义信息",
-            "description": "包含别名、备注、标签、颜色、自定义类型和联锁数据。导入时会尽量合并。",
+            "label": tr("api.data_bundle.modules.user_custom.label", "用户自定义信息"),
+            "description": tr("api.data_bundle.modules.user_custom.description", "包含别名、备注、标签、颜色、自定义类型和联锁数据。导入时会尽量合并。"),
             "dependencies": [],
             "supports_profiles": False,
         },
         {
             "key": "groups",
-            "label": "分组",
-            "description": "包含分组本身和分组里的模组关系。导入时会尽量合并。",
+            "label": tr("api.data_bundle.modules.groups.label", "分组"),
+            "description": tr("api.data_bundle.modules.groups.description", "包含分组本身和分组里的模组关系。导入时会尽量合并。"),
             "dependencies": [],
             "supports_profiles": False,
         },
         {
             "key": "profiles",
-            "label": "环境数据",
-            "description": "按环境导出完整的用户数据目录，并附带环境基本信息。",
+            "label": tr("api.data_bundle.modules.profiles.label", "环境数据"),
+            "description": tr("api.data_bundle.modules.profiles.description", "按环境导出完整的用户数据目录，并附带环境基本信息。"),
             "dependencies": [],
             "supports_profiles": True,
         },
         {
             "key": "subscriptions",
-            "label": "订阅数据",
-            "description": "包含 Git 仓库订阅记录和 Steam 合集记录，不包含缓存和历史状态。",
+            "label": tr("api.data_bundle.modules.subscriptions.label", "订阅数据"),
+            "description": tr("api.data_bundle.modules.subscriptions.description", "包含 Git 仓库订阅记录和 Steam 合集记录，不包含缓存和历史状态。"),
             "dependencies": [],
             "supports_profiles": False,
         },
@@ -139,7 +140,15 @@ class DataBundleManager:
 
     @classmethod
     def module_definitions(cls) -> list[dict[str, Any]]:
-        return deepcopy(cls.MODULE_DEFINITIONS)
+        definitions = deepcopy(cls.MODULE_DEFINITIONS)
+        for item in definitions:
+            label = item.get("label")
+            description = item.get("description")
+            item["label_key"] = localized_key(label)
+            item["default_label"] = str(label or "")
+            item["description_key"] = localized_key(description)
+            item["default_description"] = str(description or "")
+        return definitions
 
     @classmethod
     def get_module_definition(cls, key: str) -> dict[str, Any] | None:
@@ -193,7 +202,9 @@ class DataBundleManager:
             "modules": self.module_definitions(),
             "presets": {
                 "rules": {
-                    "label": "规则中心预设",
+                    "label": tr("api.data_bundle.presets.rules.label", "规则中心预设"),
+                    "label_key": "api.data_bundle.presets.rules.label",
+                    "default_label": "规则中心预设",
                     "module_keys": list(self.RULE_PRESET),
                 }
             },

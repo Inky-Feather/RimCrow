@@ -234,6 +234,11 @@
       },
       "workspace_hub": "库存枢纽"
     },
+    "hover": {
+      "preview": {
+        "no_description": "暂无介绍"
+      }
+    },
     "i18n": {
       "translation_mode": {
         "auto_translate": "自动翻译",
@@ -483,6 +488,10 @@
       },
       "last_played": "上次运行：{time}",
       "never_played": "未运行",
+      "path_badge": {
+        "data": "数据",
+        "game": "游戏"
+      },
       "running": "运行中",
       "shortcut": {
         "step": {
@@ -577,10 +586,15 @@
       "filter": {
         "installed_only": "仅显示已安装"
       },
+      "logic": {
+        "if": "如果",
+        "then": "则"
+      },
       "priority": {
         "hint": "* 生效优先级：从上到下，优先级从高到低。",
         "title": "生效优先级"
       },
+      "priority_prefix": "优先级：{value}",
       "relation": {
         "dependencies": "依赖:",
         "incompatible": "冲突:",
@@ -654,6 +668,8 @@
         "changelog": "更新日志",
         "check_update": "检查更新",
         "close_donate_modal": "关闭打赏弹窗",
+        "copy_group_number": "复制群号",
+        "copy_password": "复制密码",
         "credits": "致谢",
         "donate_desc": "感谢支持！微信和支付宝都可以扫 ~",
         "donate_qr_alt": "打赏收款码",
@@ -681,7 +697,9 @@
         "view_donate_qr": "查看收款码"
       },
       "ai": {
+        "api_key": "API Key",
         "api_key_placeholder": "接口需要时填写 API Key；本地部署通常可以留空。",
+        "base_url": "Base URL",
         "base_url_desc": "留空时使用当前协议的默认地址。Ollama 默认连接本机 127.0.0.1:11434；中转服务或非默认本地地址需要手动填写。",
         "base_url_placeholder": "留空使用协议默认地址；也可填写 http://127.0.0.1:11434 或 https://api.deepseek.com/v1",
         "context_window_tokens": "上下文窗口",
@@ -692,7 +710,10 @@
         "enable": "启用 AI 功能",
         "enable_desc": "用于日志分析、模组说明和 AI 助手对话等功能。",
         "endpoint_mode": "接口模式",
+        "endpoint_mode_auto": "Auto",
+        "endpoint_mode_chat_completions": "Chat Completions API",
         "endpoint_mode_desc": "用于指定 OpenAI-compatible 接口应走哪一类 endpoint。`Auto` 会根据模型能力和请求结构自动选择更稳妥的路径；只有在排查特定中转服务或本地运行时兼容问题时，才建议手动切换。",
+        "endpoint_mode_responses": "Responses API",
         "experimental": "实验性",
         "max_concurrency": "最大并发数",
         "max_concurrency_desc": "同时发出的请求数量。大多数情况下设为 3 到 5 就够了。",
@@ -1049,11 +1070,8 @@
         "settings": "设置",
         "system": "系统",
         "tab": {
-          "about": "关于项目",
           "ai": "AI 集成",
-          "community": "外部依赖",
           "dev": "开发调试",
-          "features": "功能设置",
           "general": "界面设置",
           "keybindings": "快捷键",
           "network": "网络连接",
@@ -1464,7 +1482,6 @@
           "warning_title": "警示"
         },
         "card": {
-          "delete_record": "删除记录",
           "missing_short": "缺 {count}",
           "no_description": "暂无说明",
           "not_synced": "未同步",
@@ -1511,9 +1528,6 @@
           "title": "删除记录"
         },
         "search": {
-          "field": {
-            "text": "搜索文本"
-          },
           "placeholder": "搜索 Steam 合集...",
           "sort": "排序",
           "sort_tooltip": "排序与时间范围",
@@ -1559,6 +1573,7 @@
         "catalog": {
           "add_git_subscription": "添加为 Git 订阅",
           "add_zip_subscription": "添加为 Git 订阅并部署 zip",
+          "branch": "分支：{branch}",
           "cache_badge": "缓存",
           "empty": "没有匹配的推荐项",
           "filter_placeholder": "筛选名称、包名、作者或版本",
@@ -1573,6 +1588,7 @@
           "source_summary": "推荐来源: {total} 项 / {sourceCount} 个来源",
           "unsupported": "暂不支持",
           "unsupported_tooltip": "该项目缺少可用下载地址",
+          "workshop_badge": "工坊",
           "workshop_subscribed": "已订阅创意工坊"
         },
         "dependency": {
@@ -1594,7 +1610,8 @@
         "detail": {
           "default_branch": "默认分支",
           "dependencies": "依赖项",
-          "install_type": "安装类型"
+          "install_type": "安装类型",
+          "rimworld_versions": "RimWorld："
         },
         "empty": {
           "select_or_add": "选择或添加仓库"
@@ -1609,6 +1626,7 @@
           "zip_link": "Zip 直链"
         },
         "preview": {
+          "latest_release": "最新：{version}",
           "meta": "作者: {owner} | 默认分支: {branch}",
           "release": {
             "description": "获取作者打包的稳定版。",
@@ -1725,13 +1743,22 @@
         },
         "badge": {
           "changed": "变更",
+          "changed_short": "变更",
+          "conflict_short": "冲突",
           "deleted": "库存记录存在，但本地模组目录已删除或失效",
+          "deleted_short": "删除",
           "disabled": "已禁用",
+          "disabled_short": "禁用",
           "missing": "工坊记录存在，但本地没有有效模组文件",
+          "missing_short": "缺失",
           "new": "新增",
+          "new_short": "新增",
+          "replace_short": "替代",
+          "same_short": "相同",
           "unavailable": "失效",
           "unavailable_tooltip": "Steam 已无法获取该工坊项目详情，可能已下架或不可访问",
-          "update": "可更新"
+          "update": "可更新",
+          "update_short": "更新"
         },
         "clean_records": {
           "message": "确定要清理选中异常项的数据记录吗？（{count} 项）\n这不会取消 Steam 订阅，也不会删除任何仍存在的文件。",
@@ -1803,9 +1830,7 @@
           "update_resubscribe": "更新模组[再次订阅]{count}",
           "view_timeline": "查看变动"
         },
-        "path": {
-          "missing_record": "缺失记录"
-        },
+        "no_image": "无图",
         "refresh_after_clean_missing_records": "清理缺失记录后同步模组数据",
         "refresh_after_clean_records": "清理库存记录后同步模组数据",
         "refresh_after_inventory_change": "库存变更后同步模组数据",
@@ -1855,6 +1880,9 @@
         }
       },
       "search": {
+        "field": {
+          "text": "搜索文本"
+        },
         "help": {
           "basic": "可直接输入关键词，或使用 类别:关键词 格式",
           "example": "例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。",
@@ -1923,12 +1951,6 @@
           "time": "时间",
           "tooltip": "排序与高级搜索"
         },
-        "cache_sort": {
-          "author": "作者排序",
-          "latest": "最近更新",
-          "name": "名称排序",
-          "subscriptions": "最多订阅"
-        },
         "days": {
           "0": "至今",
           "0_short": "至今",
@@ -1987,9 +2009,6 @@
             "tooltip": "Steam 返回的综合评分。适合快速判断整体用户反馈。"
           },
           "section": {
-            "collection_children": "合集子项",
-            "dependents": "生态关联",
-            "same_author": "同作者作品",
             "screenshots": "截图",
             "steam_details": "Steam 详情数据"
           },
@@ -2066,15 +2085,16 @@
         "search": {
           "field": {
             "dependency": "模组依赖",
-            "dlc": "DLC依赖",
-            "text": "搜索文本"
+            "dlc": "DLC依赖"
           },
           "placeholder_cache": "搜索缓存，支持 t:标签 d:DLC_AppID m:依赖工坊ID a:作者",
           "placeholder_enhanced": "搜索工坊，支持 t:标签 d:DLC_AppID m:依赖工坊ID"
         },
         "sort": {
+          "author": "作者排序",
           "created": "最近发布",
           "latest": "最近更新",
+          "name": "名称排序",
           "popular": "最热门",
           "rating": "最高评分",
           "relevance": "最相关",
@@ -2765,6 +2785,9 @@
       "name_required": "请输入规则名称",
       "weight_clamped": "动态权重已自动限制到允许范围内（权重 {weightMin}-{weightMax}，偏移 {shiftMin} 到 {shiftMax}）。"
     },
+    "rules": {
+      "community_reload_unavailable": "规则引擎未初始化，无法立即重载社区规则库。"
+    },
     "settings": {
       "about": {
         "copied": "已复制：{text}",
@@ -2800,7 +2823,9 @@
         "workshop_path_missing": "未填写创意工坊目录，工坊 Mod 可能无法加载",
         "workshop_path_problem": "创意工坊目录可能无法使用：{message}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。"
       },
-      "save_failed": "保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。"
+      "save_failed": "保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。",
+      "secret_storage_warning": "部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。",
+      "self_mods_path_reset": "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。"
     },
     "startup": {
       "auxiliary_warmup_failed": "部分后台数据暂时未能预热，相关提示可能稍后才会出现。",
@@ -3589,7 +3614,6 @@
       "mod_count": "模组数量",
       "mod_export": {
         "description": "可按需附带依赖、联锁项和语言包。",
-        "selected_summary": "已选 {count} 个模组。",
         "title": "导出模组"
       },
       "mode": {
@@ -4090,6 +4114,41 @@
       "import_done_with_warnings": "导入完成，附带 {count} 条提示",
       "import_failed": "导入数据包失败。请确认文件完整、格式正确，并检查目标目录权限，详细原因已写入系统日志。",
       "inspect_failed": "读取数据包摘要失败。请确认文件存在、格式正确且未被其它程序占用。",
+      "modules": {
+        "ai_definitions": {
+          "description": "包含 AI 模板、助手设置和任务设置。导入后会替换当前 AI 定义。",
+          "label": "AI 定义"
+        },
+        "groups": {
+          "description": "包含分组本身和分组里的模组关系。导入时会尽量合并。",
+          "label": "分组"
+        },
+        "profiles": {
+          "description": "按环境导出完整的用户数据目录，并附带环境基本信息。",
+          "label": "环境数据"
+        },
+        "rules": {
+          "description": "包含用户规则、动态规则和规则设置。导入时会尽量合并。",
+          "label": "规则"
+        },
+        "settings": {
+          "description": "导出软件的全局设置。不会包含目录路径、敏感信息和当前激活环境。",
+          "label": "软件设置"
+        },
+        "subscriptions": {
+          "description": "包含 Git 仓库订阅记录和 Steam 合集记录，不包含缓存和历史状态。",
+          "label": "订阅数据"
+        },
+        "user_custom": {
+          "description": "包含别名、备注、标签、颜色、自定义类型和联锁数据。导入时会尽量合并。",
+          "label": "用户自定义信息"
+        }
+      },
+      "presets": {
+        "rules": {
+          "label": "规则中心预设"
+        }
+      },
       "schema_failed": "读取数据包配置失败。请检查软件数据目录是否可访问，详细原因已写入系统日志。"
     },
     "database": {
@@ -4525,6 +4584,8 @@
   },
   "errors": {
     "ai": {
+      "api_key_required": "当前协议要求填写 API Key。",
+      "config_incomplete": "AI 配置不完整，请检查配置",
       "config_save_failed": "保存 AI 配置失败。请检查配置内容、密钥存储状态和配置文件写入权限。",
       "disabled": "AI 功能未启用。请先在设置中开启 AI 功能，并完成模型配置。",
       "model_capability_load_failed": "获取 AI 模型能力失败。当前模型仍可手动配置，但推理模式和接口兼容性可能需要自行确认。",
@@ -5298,9 +5359,19 @@
       "unsupported_action_type": "暂不支持的操作类型: {type}",
       "view_trace": "查看请求记录"
     },
+    "providers": {
+      "anthropic": "Anthropic 原生协议",
+      "gemini": "Google Gemini 原生协议",
+      "ollama": "Ollama 原生协议",
+      "openai_compatible": "OpenAI 兼容协议（含 OpenAI 官方 / 中转 / 本地服务）"
+    },
     "reasoning": {
       "auto": "自动",
-      "off": "关闭"
+      "high": "高",
+      "low": "低",
+      "medium": "中",
+      "off": "关闭",
+      "xhigh": "极高"
     },
     "session": {
       "analysis_failed_message": "分析过程中发生错误。可能是模型服务、网络连接或软件内部状态暂时不可用，详细原因已写入系统日志。",
@@ -5496,8 +5567,6 @@
       "delete": "删除文件/文件夹",
       "delete_batch": "批量删除文件/文件夹",
       "empty": "未填写路径",
-      "open": "打开路径",
-      "open_file": "打开文件",
       "read_text_file": "读取文本文件",
       "select_file": "获取文件路径",
       "select_folder": "获取文件夹路径"
@@ -5777,8 +5846,6 @@
       "copy": "复制",
       "copy_file_path": "复制文件路径",
       "copy_full_path": "复制完整路径",
-      "copy_group_number": "复制群号",
-      "copy_password": "复制密码",
       "copy_relative_path": "复制相对路径",
       "copy_url": "复制地址",
       "create": "创建",
@@ -5851,6 +5918,7 @@
       "full_path": "完整路径",
       "groups": "分组",
       "id": "ID",
+      "id_prefix": "ID：{value}",
       "language": "语言",
       "name": "名称",
       "operation": "操作",
@@ -5865,7 +5933,8 @@
       "tags": "标签",
       "type": "类型",
       "url": "网址",
-      "workshop_id": "工坊 ID"
+      "workshop_id": "工坊 ID",
+      "workshop_id_prefix": "工坊 ID：{value}"
     },
     "message": {
       "export_path": "导出路径：{path}"

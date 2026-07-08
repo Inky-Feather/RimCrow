@@ -776,6 +776,8 @@ class SettingsManager:
         payload["_secret_status"] = self.get_secret_status()
         if secret_store.fallback_keys:
             payload["_secret_storage_warning"] = "部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。"
+            payload["_secret_storage_warning_key"] = "toast.settings.secret_storage_warning"
+            payload["_secret_storage_warning_params"] = {}
         return payload
 
     def _clear_secret_fields(self, payload: Dict[str, Any], preserve_keys: Set[str] | None = None) -> None:

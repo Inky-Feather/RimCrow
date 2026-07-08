@@ -360,6 +360,8 @@ class ApiResponse:
     def serialize_data(cls, obj):
         if obj is None: return None
         """递归将模型和日期转换为 JSON 可接受的类型"""
+        # LocalizedText 是 str 子类，直接进入 dataclasses.asdict 会被 deepcopy 重建失败；API 数据只需要普通字符串。
+        if isinstance(obj, str): return str(obj)
         # 1. 检查对象是否自带 to_dict 方法 (这会覆盖 dataclass 的默认行为)
         if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
             return cls.serialize_data(obj.to_dict())
@@ -610,6 +612,12 @@ class API:
 
     def _settings_payload(self) -> dict[str, Any]:
         return settings.to_public_dict()
+
+    def _localized_settings_warning(self, warning: Any) -> Any:
+        text = str(warning or "").strip()
+        if text == "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。":
+            return tr("toast.settings.self_mods_path_reset", "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。")
+        return warning
 
     def _resolve_ai_request_config(self, config_data: dict | None) -> dict:
         resolved = dict(config_data or {})
@@ -2280,7 +2288,9 @@ class API:
             if steam_mgr and any(key in global_data for key in ["steam_path", "steamcmd_path"]):
                 steam_mgr.reload_paths_from_settings()
             if normalization_warnings:
-                EventBus.send_toast("\n".join(normalization_warnings), type="warning", duration=5000)
+                localized_warnings = [self._localized_settings_warning(item) for item in normalization_warnings]
+                message = localized_warnings[0] if len(localized_warnings) == 1 else "\n".join(str(item) for item in localized_warnings)
+                EventBus.send_toast(message, type="warning", duration=5000)
 
             return ApiResponse.success({
                 "settings": self._settings_payload(),
@@ -6560,7 +6570,7 @@ class API:
     def _reload_community_rules(self):
         """外部规则文件更新后，立即把内存中的规则缓存切到新版本。"""
         if not self.sorter or not self.sorter.rule_mgr:
-            EventBus.send_toast("规则引擎未初始化，无法立即重载社区规则库。", type="warning")
+            EventBus.send_toast(tr("toast.rules.community_reload_unavailable", "规则引擎未初始化，无法立即重载社区规则库。"), type="warning")
             return
         logger.info("社区规则库已下载完成，正在重载规则缓存。")
         self.sorter.rule_mgr.load_all()
@@ -6658,10 +6668,10 @@ class API:
             generator = spec.get("generator")
             if callable(generator):
                 result = generator(source_url=url, target_path=full_path)
-                EventBus.send_toast(str(spec["success_message"]), type="success")
+                EventBus.send_toast(spec["success_message"], type="success")
                 return ApiResponse.success(
                     data={"completed": True, **(result if isinstance(result, dict) else {})},
-                    message=str(spec["success_message"]),
+                    message=spec["success_message"],
                 )
 
             def on_db_ready(task):
@@ -6669,7 +6679,7 @@ class API:
                     reload_fn = spec.get("reload")
                     if callable(reload_fn):
                         reload_fn()
-                    EventBus.send_toast(str(spec["success_message"]), type="success")
+                    EventBus.send_toast(spec["success_message"], type="success")
                 except Exception as reload_error:
                     logger.error(
                         "外部数据下载完成，但重载缓存失败。type=%s",
@@ -6705,7 +6715,7 @@ class API:
                 on_error=on_db_error
             )
 
-            return ApiResponse.success(data={"task_id": task_id}, message=str(spec["start_message"]))
+            return ApiResponse.success(data={"task_id": task_id}, message=spec["start_message"])
         except Exception as e:
             logger.error(
                 "启动外部数据更新失败。type=%s",

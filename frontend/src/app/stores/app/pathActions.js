@@ -69,14 +69,14 @@ export const usePathActions = ({ settings, requestModScan } = {}) => {
     if(!path) return
     console.debug("准备打开路径:", path)
     const res = await window.pywebview.api.path_open(path)
-    checkResult(res, t('check.path.open', '打开路径'))
+    checkResult(res, t('common.action.open_path', '打开路径'))
   }
 
   const openFile = async (path) => {
     if (!window.pywebview) return
     if (!path) return
     const res = await window.pywebview.api.path_open_file(path)
-    checkResult(res, t('check.path.open_file', '打开文件'))
+    checkResult(res, t('common.action.open_file', '打开文件'))
   }
 
   const readTextFile = async (path, maxBytes = 2 * 1024 * 1024) => {

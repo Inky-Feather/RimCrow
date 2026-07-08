@@ -38,12 +38,12 @@
                         </div>
 
                         <!-- Base URL (自定义必填，官方高级选填) -->
-                        <CommonInput label="Base URL" v-model="formData.ai.base_url" class="col-span-2"
+                        <CommonInput :label="t('ui.settings.ai.base_url', 'Base URL')" v-model="formData.ai.base_url" class="col-span-2"
                           :placeholder="t('ui.settings.ai.base_url_placeholder', '留空使用协议默认地址；也可填写 http://127.0.0.1:11434 或 https://api.deepseek.com/v1')"
                           :description="t('ui.settings.ai.base_url_desc', '留空时使用当前协议的默认地址。Ollama 默认连接本机 127.0.0.1:11434；中转服务或非默认本地地址需要手动填写。')"
                         />
                         <!-- API Key -->
-                        <CommonSecretInput label="API Key" v-model="formData.ai.api_key" class="col-span-2"
+                        <CommonSecretInput :label="t('ui.settings.ai.api_key', 'API Key')" v-model="formData.ai.api_key" class="col-span-2"
                           secret-key="ai.api_key" :secret-status="aiSecretStatus" :preserved="isSecretPreserved('ai.api_key')" :reveal-secret="revealSecret"
                           :placeholder="t('ui.settings.ai.api_key_placeholder', '接口需要时填写 API Key；本地部署通常可以留空。')"
                           @preserve="$emit('preserve-secret', $event)" @clear="$emit('clear-secret', $event)"
@@ -137,9 +137,9 @@ const DEFAULT_AI_BASE_URLS = {
 
 const currentAiProviders = computed(() => aiStore.listAiProviders())
 const endpointModeOptions = computed(() => [
-  { label: 'Auto', value: 'auto' },
-  { label: 'Chat Completions API', value: 'chat_completions' },
-  { label: 'Responses API', value: 'responses' },
+  { label: t('ui.settings.ai.endpoint_mode_auto', 'Auto'), value: 'auto' },
+  { label: t('ui.settings.ai.endpoint_mode_chat_completions', 'Chat Completions API'), value: 'chat_completions' },
+  { label: t('ui.settings.ai.endpoint_mode_responses', 'Responses API'), value: 'responses' },
 ])
 const aiSecretStatus = computed(() => props.formData?._secret_status?.['ai.api_key'] || {})
 const aiModelQuery = computed(() => ({

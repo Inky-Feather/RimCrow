@@ -11,7 +11,7 @@
           <span class="text-accent-primary animate-breathe ">RIM</span> CROW
         </h1>
       </div>
-      <span class="px-2 py-0.5 rounded text-xs bg-bg-overlay/5 text-text-dim border border-border-base/5 ">v {{ appStore.appVersion }}</span>
+      <span class="px-2 py-0.5 rounded text-xs bg-bg-overlay/5 text-text-dim border border-border-base/5 ">v {{ appStore.appVersion || t('common.status.unknown_version', '版本未知') }}</span>
       <!-- 环境切换器 -->
       <div data-tour="profile-switcher">
         <ProfileSwitcher />

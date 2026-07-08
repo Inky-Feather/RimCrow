@@ -202,7 +202,7 @@ const getModsData = (pathHashes, type = null) => {
   return []
 }
 
-const getShortPathLabel = (path, fallback = t('ui.workspace.matrix.path.missing_record', '缺失记录')) => {
+const getShortPathLabel = (path, fallback = t('ui.workspace.common.missing_record', '缺失记录')) => {
   if (!path) return fallback
   const parts = String(path).split(/[\\/]/).filter(Boolean)
   return parts.slice(-2).join('\\') || path

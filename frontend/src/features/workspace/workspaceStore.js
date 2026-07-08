@@ -524,8 +524,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return {
       id: `${status}:${item?.pathHash || workshopId || index}`,
       title: item?.name || workshopId || t('common.entity.unknown_mod', '未知模组'),
-      description: item?.path || (workshopId ? `Workshop ID: ${workshopId}` : ''),
-      meta: [getStartupEventGroupLabel(status), workshopId ? `Workshop ID: ${workshopId}` : ''].filter(Boolean),
+      description: item?.path || (workshopId ? t('common.field.workshop_id_prefix', '工坊 ID：{value}', { value: workshopId }) : ''),
+      meta: [getStartupEventGroupLabel(status), workshopId ? t('common.field.workshop_id_prefix', '工坊 ID：{value}', { value: workshopId }) : ''].filter(Boolean),
       status,
       workshopId,
       raw: item,
@@ -1872,7 +1872,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!window.pywebview || workshopSearch.isLanguageOptionsLoaded) return
     const res = await window.pywebview.api.workshop_get_language_options()
     if (checkResult(res, t('check.workspace.steam_languages', '获取 Steam 语言列表'))) {
-      workshopSearch.languageOptions = Array.isArray(res.data) && res.data.length ? res.data : workshopSearch.languageOptions
+      workshopSearch.languageOptions = Array.isArray(res.data) && res.data.length
+        ? res.data.map(item => ({ ...item, label: t(item?.label_key || '', item?.default_label || item?.label || item?.name || item?.code || item?.value || '') }))
+        : workshopSearch.languageOptions
       workshopSearch.isLanguageOptionsLoaded = true
     }
   }

@@ -116,7 +116,10 @@ export const useModelConfigActions = ({
     }
   }
 
-  const listAiProviders = () => providerDefinitions.value || []
+  const listAiProviders = () => (providerDefinitions.value || []).map(item => ({
+    ...item,
+    label: t(item?.label_key || '', item?.default_label || item?.label || item?.value || ''),
+  }))
 
   const getCachedAiModels = (tempConfig = {}) => {
     const cacheKey = buildAiModelCacheKey(tempConfig)

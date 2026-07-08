@@ -153,14 +153,14 @@
                     <div class="flex-1">
                       <div class="flex items-center gap-2">
                         <span class="text-sm font-bold text-text-main">{{ rule.name }}</span>
-                        <span class="text-xs px-2 py-0.5 rounded bg-bg-inset/70 text-text-dim border border-border-base/5">Priority: {{ rule.priority }}</span>
+                        <span class="text-xs px-2 py-0.5 rounded bg-bg-inset/70 text-text-dim border border-border-base/5">{{ t('ui.rule_panel.priority_prefix', '优先级：{value}', { value: rule.priority }) }}</span>
                         <span v-if="!rule.enabled" class="text-xs px-2 py-0.5 rounded bg-accent-danger/10 text-accent-danger border border-accent-danger/20">{{ t('ui.rule_panel.rule.disabled', '已禁用') }}</span>
                         <span v-if="rule.description" :title="rule.description" class="flex-1 text-xs px-1 py-0.5 text-text-dim ">{{ rule.description }}</span>
                       </div>
                       
                       <!-- 逻辑可视化 -->
                       <div class="mt-3 flex flex-wrap gap-2 items-center text-sm">
-                        <span class="text-accent-secondary font-bold font-mono">IF</span>
+                        <span class="text-accent-secondary font-bold font-mono">{{ t('ui.rule_panel.logic.if', '如果') }}</span>
                         <div class="flex items-center flex-wrap gap-1">
                           <span v-for="(f, i) in rule.filters" :key="i">
                             <span v-if="i>0" class="text-accent-cool mr-1">{{ rule.logic }}</span>
@@ -171,7 +171,7 @@
                             </span>
                           </span>
                         </div>
-                        <span class="text-accent-primary font-bold font-mono ml-2">THEN</span>
+                        <span class="text-accent-primary font-bold font-mono ml-2">{{ t('ui.rule_panel.logic.then', '则') }}</span>
                         <span class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary border border-accent-primary/20">
                           {{ formatAction(rule.action) }}
                         </span>

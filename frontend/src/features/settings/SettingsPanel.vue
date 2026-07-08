@@ -39,7 +39,7 @@
 
           <!-- 底部版本号 -->
           <div class="mt-auto px-4 py-2 border-t border-border-base/5 opacity-30">
-            <p class="text-xs font-mono text-text-dim">V{{ appStore.appVersion }}</p>
+            <p class="text-xs font-mono text-text-dim">V{{ appStore.appVersion || t('common.status.unknown_version', '版本未知') }}</p>
           </div>
         </aside>
 
@@ -133,7 +133,7 @@ import SettingsAboutTab from './panel/SettingsAboutTab.vue'
 import { DEFAULT_THEME_ID, applyTheme } from './theme/themeManager'
 import { useAppStore } from '../../app/stores/appStore'
 import { useProfileStore } from '../profiles/profileStore'
-import { t } from '../../shared/i18n'
+import { t, translateMessagePayload } from '../../shared/i18n'
 
 const appStore = useAppStore()
 const profileStore = useProfileStore()
@@ -149,13 +149,13 @@ const Steam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" },
 const tabs = computed(() => [
   { id: 'paths', label: t('ui.settings.panel.tab.paths', '路径配置'), icon: FolderTree },
   { id: 'general', label: t('ui.settings.panel.tab.general', '界面设置'), icon: AppWindow },
-  { id: 'features', label: t('ui.settings.panel.tab.features', '功能设置'), icon: Component },
+  { id: 'features', label: t('ui.settings.features.title', '功能设置'), icon: Component },
   { id: 'keybindings', label: t('ui.settings.panel.tab.keybindings', '快捷键'), icon: Keyboard },
-  { id: 'community', label: t('ui.settings.panel.tab.community', '外部依赖'), icon: Steam },
+  { id: 'community', label: t('ui.settings.external.title', '外部依赖'), icon: Steam },
   { id: 'network', label: t('ui.settings.panel.tab.network', '网络连接'), icon: Globe },
   { id: 'ai', label: t('ui.settings.panel.tab.ai', 'AI 集成'), icon: Cpu },
   { id: 'dev', label: t('ui.settings.panel.tab.dev', '开发调试'), icon: Terminal },
-  { id: 'about', label: t('ui.settings.panel.tab.about', '关于项目'), icon: Info },
+  { id: 'about', label: t('ui.settings.about.title', '关于项目'), icon: Info },
 ])
 const SECRET_FIELD_PATHS = {
   'ai.api_key': 'ai.api_key',
@@ -389,7 +389,11 @@ const clearFormSecret = (secretKey) => {
 
 const showSecretStorageWarning = (target) => {
   if (!target?._secret_storage_warning) return
-  toast.warning(target._secret_storage_warning, { timeout: 9000 })
+  toast.warning(translateMessagePayload({
+    message: target._secret_storage_warning,
+    message_key: target._secret_storage_warning_key,
+    message_params: target._secret_storage_warning_params,
+  }, t('toast.settings.secret_storage_warning', '部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。')), { timeout: 9000 })
 }
 
 // 数据同步：打开时立即生成表单副本；路径检测只在后台补充 check_info，不阻塞设置页渲染。

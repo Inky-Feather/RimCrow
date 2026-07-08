@@ -112,13 +112,13 @@
               <div class="mt-1 flex flex-wrap gap-1 text-[0.6rem] font-mono text-text-dim">
                 <span class="px-1.5 py-0.5 rounded bg-bg-inset/90 border border-border-base/10">{{ item.category }}</span>
                 <span class="px-1.5 py-0.5 rounded bg-bg-inset/90 border border-border-base/10">{{ catalogHostLabel(item) }}</span>
-                <span v-if="item.branch" class="px-1.5 py-0.5 rounded bg-accent-secondary/10 text-accent-secondary">branch: {{ item.branch }}</span>
+                <span v-if="item.branch" class="px-1.5 py-0.5 rounded bg-accent-secondary/10 text-accent-secondary">{{ t('ui.workspace.github.catalog.branch', '分支：{branch}', { branch: item.branch }) }}</span>
                 <span v-for="version in catalogDisplayVersions(item.game_versions)" :key="`${item.key}:${version}`"
                   class="px-1.5 py-0.5 rounded border"
                   :class="catalogVersionClass(version)">
                   {{ version }}
                 </span>
-                <span v-if="item.workshop_url" class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary">Workshop</span>
+                <span v-if="item.workshop_url" class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary">{{ t('ui.workspace.github.catalog.workshop_badge', '工坊') }}</span>
                 <span v-if="subscribedRepoUrls.has(item.url)" class="px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success">{{ t('ui.workspace.github.catalog.git_subscribed', '已添加 Git 订阅') }}</span>
                 <span v-if="item.workshop_url && isWorkshopSubscribed(item)" class="px-1.5 py-0.5 rounded bg-accent-secondary/10 text-accent-secondary">{{ t('ui.workspace.github.catalog.workshop_subscribed', '已订阅创意工坊') }}</span>
               </div>
@@ -193,7 +193,7 @@
             <div class="font-bold text-accent-success mb-1">{{ t('ui.workspace.github.preview.release.title', '获取发行版 (Release)') }}</div>
             <div class="text-xs text-text-dim mb-2">{{ t('ui.workspace.github.preview.release.description', '获取作者打包的稳定版。') }}</div>
             <div v-if="workspaceStore.github.previewInfo.has_release" class="inline-block px-2 py-0.5 bg-bg-inset/80 rounded text-[0.65rem] font-mono text-text-main">
-              Latest: {{ workspaceStore.github.previewInfo.latest_release_tag }}
+              {{ t('ui.workspace.github.preview.latest_release', '最新：{version}', { version: workspaceStore.github.previewInfo.latest_release_tag }) }}
             </div>
             <div v-else class="text-xs text-accent-warn">{{ t('ui.workspace.github.preview.release.none', '该仓库尚未发布任何 Release') }}</div>
           </button>
@@ -213,7 +213,7 @@
             <div class="flex flex-wrap gap-2 mt-2">
               <span class="px-2 py-1 rounded bg-bg-inset/90 text-[0.65rem] font-mono text-text-dim">{{ catalogSourceName(selectedCatalogItem.source_id) || selectedCatalogItem.category }}</span>
               <span class="px-2 py-1 rounded bg-bg-inset/90 text-[0.65rem] font-mono text-text-dim">{{ catalogHostLabel(selectedCatalogItem) }}</span>
-              <span v-if="selectedCatalogItem.workshop_url" class="px-2 py-1 rounded bg-accent-primary/10 text-[0.65rem] text-accent-primary">Workshop</span>
+              <span v-if="selectedCatalogItem.workshop_url" class="px-2 py-1 rounded bg-accent-primary/10 text-[0.65rem] text-accent-primary">{{ t('ui.workspace.github.catalog.workshop_badge', '工坊') }}</span>
               <span v-if="isOfficialCatalogItem(selectedCatalogItem)" v-tooltip="availabilityTooltip(selectedCatalogItem)" class="px-2 py-1 rounded bg-accent-primary/10 text-[0.65rem] text-accent-primary">{{ t('ui.workspace.github.catalog.official', '官方内容') }}</span>
               <span v-if="selectedCatalogItem.not_recommended" v-tooltip="availabilityTooltip(selectedCatalogItem)" class="px-2 py-1 rounded bg-accent-warn/10 text-[0.65rem] text-accent-warn">{{ t('ui.workspace.github.catalog.not_recommended', '当前不建议使用') }}</span>
               <span v-if="catalogUpdatedText(selectedCatalogItem)" class="px-2 py-1 rounded bg-bg-inset/90 text-[0.65rem] font-mono text-text-dim">{{ catalogUpdatedText(selectedCatalogItem) }}</span>
@@ -244,7 +244,7 @@
         <div class="flex-1 overflow-y-auto custom-scrollbar p-6">
           <p v-if="selectedCatalogItem.description" class="text-sm text-text-dim leading-relaxed mb-4">{{ selectedCatalogItem.description }}</p>
           <div v-if="selectedCatalogItem.game_versions?.length" class="mb-4 flex flex-wrap items-center gap-1 text-[0.65rem]">
-            <span class="text-text-dim mr-1">RimWorld:</span>
+            <span class="text-text-dim mr-1">{{ t('ui.workspace.github.detail.rimworld_versions', 'RimWorld：') }}</span>
             <span v-for="version in catalogDisplayVersions(selectedCatalogItem.game_versions)" :key="version"
               class="px-2 py-1 rounded border"
               :class="catalogVersionClass(version)">

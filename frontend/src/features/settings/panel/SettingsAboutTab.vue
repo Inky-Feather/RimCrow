@@ -10,7 +10,7 @@
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
                 <h4 class="text-sm font-bold text-text-main">{{ aboutMeta.project.name }}</h4>
-                <span class="font-mono text-xs text-text-dim">v{{ appStore.appVersion || 'Unknown' }}</span>
+                <span class="font-mono text-xs text-text-dim">v{{ appStore.appVersion || t('common.status.unknown_version', '版本未知') }}</span>
               </div>
               <p class="mt-1 text-xs leading-relaxed text-text-dim">{{ aboutMeta.project.description }}</p>
             </div>
@@ -63,7 +63,7 @@
                   <button type="button" @click="copyText(item.url)" class="about-icon-button" :title="t('common.action.copy_url', '复制地址')">
                     <Copy class="size-3.5" />
                   </button>
-                  <button v-if="item.password" type="button" @click="copyText(item.password)" class="about-icon-button" :title="t('common.action.copy_password', '复制密码')">
+                  <button v-if="item.password" type="button" @click="copyText(item.password)" class="about-icon-button" :title="t('ui.settings.about.copy_password', '复制密码')">
                     <KeyRound class="size-3.5" />
                   </button>
                 </div>
@@ -349,7 +349,7 @@ const feedbackItems = computed(() => [
     label: t('ui.settings.about.qq_group', 'QQ群'),
     value: aboutMeta.value.feedback.qqGroup,
     copyValue: aboutMeta.value.feedback.qqGroup,
-    copyTitle: t('common.action.copy_group_number', '复制群号'),
+    copyTitle: t('ui.settings.about.copy_group_number', '复制群号'),
     note: aboutMeta.value.feedback.qqDescription || t('ui.settings.about.qq_group_note', '适合快速反馈和补充截图。'),
   },
   {

@@ -86,19 +86,19 @@
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xs text-text-dim flex items-center gap-1">
                 <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                {{ hoverStore.data.author?.join(', ') || 'Unknown' }}
+                {{ hoverStore.data.author?.join(', ') || t('common.status.unknown', '未知') }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xs text-text-dim flex items-center gap-1">
                 <svg class="size-3.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                {{ hoverStore.data.supported_languages?.join(', ') || 'Unknown' }}
+                {{ hoverStore.data.supported_languages?.join(', ') || t('common.status.unknown', '未知') }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xs text-text-dim flex items-center gap-1">
                 <Milestone class="size-3.5"/>
-                {{ hoverStore.data.supported_versions?.join(', ') || 'Unknown' }}
+                {{ hoverStore.data.supported_versions?.join(', ') || t('common.status.unknown', '未知') }}
               </span>
             </div>
           </div>
@@ -149,6 +149,7 @@ import { useAppStore } from '../../../app/stores/appStore'
 import { useModStore } from '../../../features/mod/stores/modStore'
 import { useGroupStore } from '../../../features/mod/stores/groupStore';
 import { DEFAULT_ACCENT_HEX, hexToRgbComponents } from '../../lib/color'
+import { t } from '../../i18n'
 
 const appStore = useAppStore()
 const hoverStore = useHoverStore()
@@ -456,7 +457,7 @@ const MOD_TYPE_SHORT_LABELS = {
 
 // 清理描述文本 (移除 HTML 标签，只留纯文本做预览)
 const cleanDescription = computed(() => {
-  const desc = hoverStore.data?.description || 'No description available.'
+  const desc = hoverStore.data?.description || t('ui.hover.preview.no_description', '暂无介绍')
   return desc.replace(/<[^>]+>/g, '') // 简单移除 HTML 标签
 })
 

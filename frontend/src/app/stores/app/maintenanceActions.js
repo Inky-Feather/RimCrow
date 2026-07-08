@@ -385,7 +385,7 @@ export const useMaintenanceActions = ({
       items: updates.map(item => ({
         id: `${item.source || 'mod'}:${item.workshop_id || item.repo_url || item.title}`,
         title: item.title || item.workshop_id || t('common.entity.unknown_mod', '未知模组'),
-        description: item.message || (item.workshop_id ? `Workshop ID: ${item.workshop_id}` : item.repo_url || ''),
+        description: item.message || (item.workshop_id ? t('common.field.workshop_id_prefix', '工坊 ID：{value}', { value: item.workshop_id }) : item.repo_url || ''),
         meta: [
           item.source_label || item.source,
           item.installed_version ? t('maintenance.common.current_version', '当前版本 {version}', { version: item.installed_version }) : '',

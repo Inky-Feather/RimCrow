@@ -15,7 +15,7 @@
             <input :checked="!!dataBundleModuleSelection[module.key]" type="checkbox" class="accent-accent-primary"
               @change="toggleDataBundleModule(module.key, $event.target.checked)"
             >
-            <span class="text-sm font-bold text-text-main">{{ module.label }}</span>
+            <span class="text-sm font-bold text-text-main">{{ bundleModuleLabel(module) }}</span>
             <button v-if="buildBundleModuleTooltip(module)" type="button" v-tooltip="buildBundleModuleTooltip(module)" @click.prevent
               class="ml-auto size-5 rounded-full border border-border-base/10 text-xs font-bold text-text-dim hover:text-text-main hover:border-border-base/18 transition-all"
             >?
@@ -95,6 +95,8 @@ const dataBundleProfileSelection = ref([])
 
 const bundleModuleDefs = computed(() => props.schema?.modules || [])
 const bundleProfileDefs = computed(() => props.schema?.profiles || [])
+const bundleModuleLabel = (module = {}) => t(module?.label_key || '', module?.default_label || module?.label || module?.key || '')
+const bundleModuleDescription = (module = {}) => t(module?.description_key || '', module?.default_description || module?.description || '')
 const selectedBundleModuleKeys = computed(() => (
   bundleModuleDefs.value
     .filter(module => !!dataBundleModuleSelection.value?.[module.key])
@@ -156,11 +158,12 @@ const toggleDataBundleProfile = (profileId, enabled) => {
 
 const buildBundleModuleTooltip = (module) => {
   const lines = []
-  if (module?.description) {
-    lines.push(module.description)
+  const description = bundleModuleDescription(module)
+  if (description) {
+    lines.push(description)
   }
   const dependencyLabels = (module?.dependencies || [])
-    .map(key => bundleModuleDefs.value.find(item => item.key === key)?.label || key)
+    .map(key => bundleModuleLabel(bundleModuleDefs.value.find(item => item.key === key)) || key)
   if (dependencyLabels.length) {
     lines.push(t('tooltip.settings.data_export.dependencies', '依赖：{dependencies}', { dependencies: dependencyLabels.join('、') }))
   }
