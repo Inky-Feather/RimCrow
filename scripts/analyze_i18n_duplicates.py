@@ -19,8 +19,11 @@ PLACEHOLDER_RE = re.compile(r"\{([A-Za-z_][\w.-]*)\}")
 def configure_stdout() -> None:
     """避免 Windows GBK 控制台输出多语言文本时报 UnicodeEncodeError。"""
     for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
+            reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
 
@@ -28,6 +31,8 @@ def configure_stdout() -> None:
 def flatten_strings(payload: Mapping[str, Any], prefix: str = "") -> dict[str, str]:
     result: dict[str, str] = {}
     for key, value in payload.items():
+        if not prefix and key == "_meta":
+            continue
         dotted = f"{prefix}.{key}" if prefix else str(key)
         if isinstance(value, str):
             result[dotted] = value
@@ -155,6 +160,16 @@ def build_analysis(locale_path: Path, similar_threshold: float) -> dict[str, Any
 def analyze(locale_path: Path, limit: int, similar_limit: int, similar_threshold: float, as_json: bool) -> None:
     result = build_analysis(locale_path, similar_threshold)
     if as_json:
+        result = dict(result)
+        for key in (
+            "exact_duplicate_groups",
+            "normalized_duplicate_groups",
+            "common_reuse_candidates",
+            "cross_domain_exact_duplicates",
+            "same_domain_exact_duplicates",
+        ):
+            result[key] = result[key][:limit]
+        result["similar_pairs"] = result["similar_pairs"][:similar_limit]
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 

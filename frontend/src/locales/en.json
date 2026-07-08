@@ -359,8 +359,7 @@
       "generation_title": "AI Alias Generation",
       "no_mod_input": "No mod input to process",
       "review_title": "Mod Alias Batch Review",
-      "start_task_action": "Start AI alias generation task",
-      "task_queued": "Task added to the background queue"
+      "start_task_action": "Start AI alias generation task"
     },
     "panel": {
       "action_failed": "Action failed. Current data may have changed, the target item may be unavailable, or the app service may be unable to process it. Refresh and try again.",
@@ -538,10 +537,12 @@
       "definition_prompt_save_failed": "Failed to save the AI prompt. Check that the content format is valid. See system log for details.",
       "definition_task_save_failed": "Failed to save the AI task. Check that the task input, prompt, and output format settings are complete. See system log for details.",
       "invalid_analysis_request": "Invalid analysis request: missing log line numbers or file name.",
+      "mod_alias_missing_input": "The mod alias task has no valid mod input",
       "selected_log_unavailable": "Could not read the selected log content. The file may have been cleaned up.",
+      "task_empty_result": "The AI task returned no valid content",
       "task_failed": "AI task failed. Check the model settings, network connection, and API key. See system log for details.",
       "task_failed_title": "AI task failed",
-      "task_queued": "Task added to the background queue",
+      "task_invalid_result": "The AI task returned an invalid format",
       "task_started": "AI task started in the background",
       "trace_load_failed": "Failed to read AI request trace records. Try again later. See system log for details."
     },
@@ -780,11 +781,12 @@
       "sync_done": "Configuration overwrite complete"
     },
     "mods": {
-      "action_activate": "activate",
-      "action_deactivate": "deactivate",
-      "activate_state_done": "Mod {action} completed for {count} items",
-      "activate_state_done_with_failed": "Mod {action} completed for {success_count} items, failed {failed_count} items",
-      "activate_state_failed": "Mod {action} failed: {reason}",
+      "about_cleanup_failed": "Failed to clean up leftover About files: {reason}",
+      "about_file_missing": "About.xml or About.xml.disabled was not found, so the disabled state cannot be changed",
+      "about_file_operation_failed": "File operation failed: {reason}",
+      "activate_done": "{count} Mods activated",
+      "activate_done_with_failed": "{success_count} Mods activated, {failed_count} failed",
+      "activate_failed": "Failed to activate Mod: {reason}",
       "color_updated": "Color updated",
       "conflict_item_failed": "This item could not be processed. See system log for details.",
       "conflict_missing_target_hash": "Missing target_path_hash, so this duplicate cannot be deleted",
@@ -793,9 +795,17 @@
       "conflict_resolve_partial_failed": "Some operations failed: {count} items were not processed, and the rest were applied.",
       "conflict_resolved": "Conflict processing complete",
       "conflict_unsupported_action": "Unsupported action type: {action}",
+      "database_cleanup_failed_with_reason": "Failed to clean up database records: {reason}",
+      "deactivate_done": "{count} Mods deactivated",
+      "deactivate_done_with_failed": "{success_count} Mods deactivated, {failed_count} failed",
+      "deactivate_failed": "Failed to deactivate Mod: {reason}",
+      "disabled_state_changed": "State updated",
+      "disabled_state_synced": "State synced",
+      "force_delete_file_failed": "Failed to permanently delete file ({filename}): {reason}",
       "interlock_healed": "Interlock repaired",
       "no_active_profile": "No active profile, so Mods cannot be scanned",
       "no_scan_paths": "No valid scan paths are configured",
+      "no_valid_records": "No valid Mod records found",
       "record_not_found": "Mod record not found",
       "scan_busy": "A scan is already running",
       "scan_failed": "Mod scan failed. Check whether game, Workshop, and local Mod paths exist and are accessible; see system log for details.",
@@ -804,6 +814,7 @@
       "tags_added": "Tags added",
       "tags_removed": "Tags removed",
       "time_updated": "Last operation time updated",
+      "trash_file_failed": "Failed to move file to Recycle Bin ({filename}): {reason}",
       "type_updated": "Type updated",
       "user_data_applied": "Applied {count} items successfully",
       "user_data_updated": "User data updated"
@@ -813,10 +824,59 @@
       "main_window_not_ready": "Main window is not ready yet"
     },
     "path": {
+      "check_passed": "Check passed",
+      "empty": "Path is required",
+      "executable_missing_under_path": "{expected} was not found under this path",
+      "game_executable_missing": "Game executable was not found",
+      "game_install_empty": "Game install path is required",
+      "game_install_missing": "Game install path does not exist.",
+      "game_install_non_steam": "Non-Steam version",
+      "game_install_not_steam_managed": "Main game is not managed by Steam",
+      "game_install_path": "Game install path: {path}",
+      "game_install_steam": "Steam version",
+      "game_install_steam_managed": "Main game managed by Steam",
+      "game_install_summary": "Game executable: {exe}\nGame version: {version}\n{steam_text}\n{managed_text}",
+      "mods_config_file": "Mods config file: {path}",
+      "mods_config_missing": "ModsConfig.xml was not found",
       "no_paths": "No path information was provided",
+      "not_exists": "{path}\nPath does not exist.",
       "not_found_or_not_deletable": "Path does not exist or cannot be deleted",
+      "not_steam_workshop_content": "Path is not under the Steam Workshop {app_id} directory",
+      "parent_dir_missing": "Parent directory does not exist: {path}",
+      "parent_dir_not_writable": "Directory is not writable. Run as administrator or choose another path.",
+      "parent_exists_file_will_be_created": "The file does not exist under the parent path. The app will create it when needed.",
+      "parent_missing": "{path}\nParent path does not exist.",
+      "ripgrep_choose_executable_or_dir": "Select rg.exe or its containing folder",
+      "ripgrep_empty": "ripgrep folder is required",
+      "ripgrep_executable": "ripgrep：{path}",
+      "ripgrep_missing": "ripgrep path does not exist",
+      "ripgrep_missing_executable": "rg.exe was not found in this folder. You can install it from External Tools.",
+      "ripgrep_not_dir": "ripgrep path must be a folder",
+      "steam_client": "Steam client: {path}",
+      "steam_empty": "Steam path is required",
+      "steam_macos_executable_missing": "Steam.app/Contents/MacOS/steam_osx was not found under this path",
+      "steam_missing": "Steam path does not exist",
+      "steam_root": "Steam root: {path}",
+      "steam_windows_executable_missing": "steam.exe was not found under this path",
+      "steamcmd_client": "SteamCMD client: {path}",
+      "steamcmd_contains_chinese": "SteamCMD path cannot contain Chinese characters",
+      "steamcmd_empty": "SteamCMD path is required",
       "target_name": "path",
-      "type_or_path_missing": "Path type or path is not specified"
+      "texture_tools_empty": "Texture tool folder is required",
+      "texture_tools_executable": "Texture tool: {path}",
+      "texture_tools_missing": "Texture tool folder does not exist",
+      "texture_tools_not_dir": "Texture tool path must be a folder",
+      "texture_tools_windows_only": "todds automation is currently supported only on Windows",
+      "todds_missing": "todds.exe was not found in this folder. You can install it from External Tools.",
+      "type_or_path_missing": "Path type or path is not specified",
+      "user_data_config_missing": "User data path {path} has no Config folder. The app will generate it after saving or activating the environment.",
+      "user_data_empty": "User data path is required",
+      "user_data_mods_config_missing": "User data path {path} has no Config/ModsConfig.xml. The path can still be used; the game will create it after first writing config.",
+      "user_data_will_be_created": "User data folder {path} does not exist, but the parent is writable. The app will create it after saving or activating the environment.",
+      "valid": "Path is valid: {path}",
+      "workshop_missing": "Workshop path does not exist",
+      "workshop_path": "Workshop path: {path}",
+      "workshop_will_be_created": "RimWorld Workshop folder has not been created yet: {path}\nIt usually appears after subscribing to or downloading Workshop content."
     },
     "paths": {
       "auto_detect_failed": "Could not automatically detect the game path. Set it manually.",
@@ -834,8 +894,13 @@
       "delete_failed": "Failed to delete the profile. Make sure it has no running tasks. See system log for details.",
       "deleted": "Profile deleted",
       "id_missing": "Profile ID is not specified",
-      "shortcut_created": "Environment shortcut created on the desktop ({mode})",
-      "shortcut_created_after_steam_fallback": "No valid Steam path was found, so the environment shortcut was created as a direct game shortcut ({mode})",
+      "launch_mode": {
+        "game_executable": "game executable",
+        "steam_appid": "official Steam AppID"
+      },
+      "shortcut_created_after_steam_fallback_game_executable": "No valid Steam path was detected. Created an environment shortcut using the game executable instead.",
+      "shortcut_created_game_executable": "Environment desktop shortcut created using the game executable",
+      "shortcut_created_steam_appid": "Environment desktop shortcut created using the official Steam AppID",
       "shortcut_invalid_paths": "Environment paths are invalid, so the shortcut cannot be created",
       "steam_desktop_shortcut_created": "Steam desktop shortcut created",
       "steam_shortcut_finalize_timeout": "Steam has started, but no usable shortcut ID was generated within the time limit. Try again later, or check Steam custom games and create a desktop shortcut manually.",
@@ -1720,14 +1785,10 @@
       "user_template_hint": "Input format used for each send"
     },
     "ai_trace": {
-      "answer_body": "Answer body",
       "assistant": "Assistant: {assistant}",
       "attachments": "Attachments",
       "extra_metrics": "Extra metrics",
-      "forced_summary": "Forced summary",
       "loading": "Loading trace...",
-      "main_completion_output": "Main response output",
-      "main_prompt_input": "Main conversation input",
       "message_input_total": "Total message input",
       "message_output_total": "Total message output",
       "message_usage": "Message usage",
@@ -1742,20 +1803,15 @@
       "reasoning_stream": "Reasoning stream",
       "request_count": "Requests: {count}",
       "request_total_usage": "Total request usage",
-      "session_memory": "Session memory",
       "session_overview": "Session overview",
       "status": "Session status: {status}",
-      "system_prompt": "System prompt",
       "temperature": "Current randomness: {temperature}",
       "timeline": "Unified timeline",
       "timeline_empty": "No trace data to show for this session",
       "title": "Session request trace",
-      "tool_calls": "Tool calls",
-      "tool_context": "Tool calls",
       "tool_rounds": "Tool rounds",
       "unknown_time": "Unknown time",
       "untitled_session": "Untitled session",
-      "user_input": "User input",
       "view_raw_data": "View raw data"
     },
     "backup_list": {
@@ -2348,12 +2404,6 @@
       "export_with_current_settings": "Export with the current settings.",
       "exported_at": "Exported at",
       "extra_export_options": "Additional export options",
-      "folder_name": {
-        "alias": "By alias",
-        "original": "By original mod name",
-        "package_id": "By package ID",
-        "workshop_id": "By Workshop ID"
-      },
       "folder_name_type": "Mod folder names inside package",
       "folder_name_type_desc": "Only affects folder names inside the exported package. Original mod directories are not changed. Invalid filename characters are replaced and duplicates get a suffix.",
       "footer": {
@@ -2789,16 +2839,13 @@
       "export_workfile": "Export translation file",
       "import_workfile": "Import translation file",
       "key": "Text key",
-      "language": "Target language",
       "namespace": "Namespace",
       "no_batch_targets": "There are no untranslated items in the current filter.",
       "no_user_override_hint": "Saving will write this text to the user locale override file.",
-      "provider": "Translator",
       "reset_saved": "Translation reset and reloaded.",
       "reset_unavailable": "Resetting translations is not supported in the current runtime.",
       "result_count": "{count} items",
       "search_placeholder": "Search key / source / translation",
-      "source_text": "Chinese source text",
       "status": "Status",
       "status_builtin": "Built-in",
       "status_overridden": "Overridden",
@@ -2812,7 +2859,11 @@
       "workfile_import_failed": "Failed to import the translation file. Check that the file format is valid.",
       "workfile_import_unavailable": "This runtime does not support importing translation files.",
       "workfile_imported": "Imported {count} translation(s).",
-      "workfile_language_mismatch": "The imported file targets {language}. Switch to that target language before importing."
+      "workfile_invalid": "The import file has {count} format issues: {detail}",
+      "workfile_language_mismatch": "The imported file targets {language}. Switch to that target language before importing.",
+      "workfile_marker_mismatch": "Format markers do not match: {key}",
+      "workfile_param_mismatch": "Parameters do not match: {key}",
+      "workfile_unknown_key": "Unknown key: {key}"
     },
     "update": {
       "confirm_install": "Install",
@@ -3929,7 +3980,7 @@
       },
       "language": {
         "empty_locale": "Switched to {language}. This language pack has no translations yet, so the interface will temporarily use default Chinese text.",
-        "partial_locale": "Switched to {language}. This language pack is about {progress}% translated; untranslated text will use default Chinese."
+        "partial_locale": "Switched to {language}. Current user language pack coverage is about {coverage}%; uncovered text will use default Chinese."
       },
       "localize": {
         "cancelled": "{title} cancelled",
@@ -4043,9 +4094,23 @@
     }
   },
   "tasks": {
+    "ai": {
+      "cancelled": "AI task cancelled",
+      "fallback_title": "AI task",
+      "finished": "Reasoning finished. Success: {success}, failed: {failed}",
+      "reasoning_progress": "Reasoning... [round {attempt}] Success: {success}/{total}",
+      "truncated_suffix": "...(truncated)"
+    },
     "error": {
       "not_completed": "Task did not complete successfully. Check your network connection, file permissions, or try again later. See system log for details.",
       "timeout": "Task timed out"
+    },
+    "file_delete": {
+      "completed": "Delete complete: {success_count} succeeded, {failed_count} failed",
+      "database_cleanup_failed": "Failed to clean up database records",
+      "deleting_path": "Deleting: {filename}",
+      "prepare_mods": "Preparing to delete {count} Mods...",
+      "title": "Delete Mod files"
     },
     "file_search": {
       "building_roots": "Preparing {stage} {processed}/{total}: {name}",
@@ -5203,10 +5268,8 @@
         "candidate_key": "Candidate text key",
         "pick_text": "Pick again",
         "picking": "Click interface text to translate it",
-        "provider": "Translator",
         "saving": "Saving...",
         "shortcut_hint": "Ctrl + Shift + L toggle",
-        "source_text": "Chinese source text",
         "title": "Translation mode",
         "translation": "Current translation"
       }
@@ -5260,7 +5323,14 @@
         "description": "This mod was not found locally. It may not be downloaded, or it may have been deleted manually.",
         "name_with_id": "⚠ Unknown mod ({id})"
       },
-      "name": "Mod"
+      "name": "Mod",
+      "option": {
+        "by_alias": "By alias",
+        "by_name": "By original Mod name",
+        "by_name_short": "By original name",
+        "by_package_id": "By package ID",
+        "by_workshop_id": "By Workshop ID"
+      }
     },
     "mod_details": {
       "ai_generate": "Generate with AI",
@@ -5732,11 +5802,7 @@
         "export_data_bundle": "Export app data",
         "export_profile_mods": "Export profile Mods",
         "folder_name": {
-          "alias": "By alias",
-          "default": "Default",
-          "name": "By original Mod name",
-          "package_id": "By package ID",
-          "workshop_id": "By Workshop ID"
+          "default": "Default"
         },
         "force_repair_database": "Force repair local database",
         "import_data_bundle": "Import data package",
@@ -5842,12 +5908,6 @@
         "file_generation_deploy_desc": "Controls coexisting Mod folder naming and link deployment before launch.",
         "file_size_scan": "Check file size during scan",
         "file_size_scan_desc": "When enabled, scans automatically check Mod file sizes to detect new or updated content. This increases scan time but significantly improves file change detection.",
-        "folder_name": {
-          "alias": "By alias",
-          "name": "By original name",
-          "package_id": "By package ID",
-          "workshop_id": "By Workshop ID"
-        },
         "language_packs_follow_targets": "Place language packs next to targets",
         "language_packs_follow_targets_desc": "When enabled, auto-sort tries to place language packs after their last active prerequisite or dependency. If no target is found, the original default lower position is kept.",
         "launch_profile_quick_scan": "Check sync before direct profile launch",
@@ -5864,11 +5924,6 @@
         "mod_residue_scan_desc": "When enabled, a full scan checks in the background for folders and settings left after uninstalls. When disabled, residues are checked only when you open residue cleanup manually.",
         "multiplayer_compatibility_check": "Check Multiplayer compatibility",
         "multiplayer_compatibility_check_desc": "When enabled, if Multiplayer is found in the inventory, the Mod list shows compatibility levels and helper fix hints.",
-        "name_sort": {
-          "alias": "By alias",
-          "name": "By original name",
-          "package_id": "By package ID"
-        },
         "persist_temp_mod_list": "Save temporary list",
         "persist_temp_mod_list_desc": "When enabled, the temporary list is saved per profile and restored next time you enter that profile. When disabled, Mods in the temporary list are returned to the top of the inactive list when saving.",
         "regular_mods_follow_dependencies": "Keep regular Mods near dependencies",
@@ -6359,6 +6414,7 @@
         "source_detection_terms": "Source detection terms",
         "source_detection_terms_desc": "These characters or phrases are matched literally. When matched, the source text is treated as not needing auto-translation.",
         "source_detection_terms_placeholder": "Enter a term and press Enter, e.g. the, mod, .",
+        "source_text": "Chinese source",
         "target_language": "Target language",
         "translate": "Translate",
         "use_default_provider": "Use default provider",

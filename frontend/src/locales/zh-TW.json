@@ -15,44 +15,44 @@
         "unsupported_message": "目前前端暫不支持執行這種模組規則動作。",
         "variants": {
           "incompatibleWith": {
-            "confirm_confirm_text": "應用規則",
+            "confirm_confirm_text": "套用規則",
             "confirm_message": "{target_id_display} 將被設定為 {mod_id_display} 的衝突模組",
             "confirm_title": "確認應用衝突規則",
             "description": "建議建立一條衝突規則。",
             "execute_label": "應用衝突規則",
             "label": "模組規則",
-            "missing_payload_message": "這條規則動作缺少必要字段，已跳過。",
+            "missing_payload_message": "這條規則動作缺少必要欄位，已跳過。",
             "post_success_confirm_text": "立即排序",
             "post_success_message": "是否立即重新執行自動排序以使規則生效？",
-            "post_success_title": "規則已應用",
+            "post_success_title": "規則已套用",
             "preview_template": "建議將 {target_id_display} 設定為 {mod_id_display} 的衝突模組。",
             "title": "衝突規則"
           },
           "loadAfter": {
-            "confirm_confirm_text": "應用規則",
+            "confirm_confirm_text": "套用規則",
             "confirm_message": "{target_id_display} 將被設定為 {mod_id_display} 的前置模組",
             "confirm_title": "確認應用前置規則",
             "description": "建議建立一條前置規則。",
             "execute_label": "應用前置規則",
             "label": "模組規則",
-            "missing_payload_message": "這條規則動作缺少必要字段，已跳過。",
+            "missing_payload_message": "這條規則動作缺少必要欄位，已跳過。",
             "post_success_confirm_text": "立即排序",
             "post_success_message": "是否立即重新執行自動排序以使規則生效？",
-            "post_success_title": "規則已應用",
+            "post_success_title": "規則已套用",
             "preview_template": "建議將 {target_id_display} 設定為 {mod_id_display} 的前置模組。",
             "title": "前置規則"
           },
           "loadBefore": {
-            "confirm_confirm_text": "應用規則",
+            "confirm_confirm_text": "套用規則",
             "confirm_message": "{target_id_display} 將被設定為 {mod_id_display} 的後置模組",
             "confirm_title": "確認應用後置規則",
             "description": "建議建立一條後置規則。",
             "execute_label": "應用後置規則",
             "label": "模組規則",
-            "missing_payload_message": "這條規則動作缺少必要字段，已跳過。",
+            "missing_payload_message": "這條規則動作缺少必要欄位，已跳過。",
             "post_success_confirm_text": "立即排序",
             "post_success_message": "是否立即重新執行自動排序以使規則生效？",
-            "post_success_title": "規則已應用",
+            "post_success_title": "規則已套用",
             "preview_template": "建議將 {target_id_display} 設定為 {mod_id_display} 的後置模組。",
             "title": "後置規則"
           }
@@ -95,7 +95,7 @@
           "set_value": {
             "blocked_message": "不允許通過 AI 修改該設定項: {setting_key}",
             "description": "建議修改一個已註冊且允許 AI 觸發的設定項。",
-            "execute_label": "應用設定修改",
+            "execute_label": "套用設定修改",
             "label": "設定更新",
             "missing_payload_message": "這條設定動作缺少 setting_key，已跳過。",
             "preview_template": "{setting_key} => {value_json}",
@@ -359,8 +359,7 @@
       "generation_title": "AI 別名生成",
       "no_mod_input": "沒有可供處理的模組輸入",
       "review_title": "模組別名批量檢閱",
-      "start_task_action": "啟動 AI 別名生成任務",
-      "task_queued": "任務已加入背景佇列"
+      "start_task_action": "啟動 AI 別名生成任務"
     },
     "panel": {
       "action_failed": "操作執行失敗。可能是目前資料已變化、目標項目不可用或後端暫時無法處理，請重新整理後重試。",
@@ -538,10 +537,12 @@
       "definition_prompt_save_failed": "儲存 AI 提示詞失敗。請檢查內容格式是否正確，詳細原因已寫入系統日誌。",
       "definition_task_save_failed": "儲存 AI 任務失敗。請檢查任務輸入、提示詞和輸出格式配置是否完整，詳細原因已寫入系統日誌。",
       "invalid_analysis_request": "無效的分析請求：缺失日誌行號或檔案名。",
+      "mod_alias_missing_input": "模組別名任務缺少有效的模組輸入",
       "selected_log_unavailable": "無法讀取指定的日誌內容，檔案可能已被清理。",
+      "task_empty_result": "AI 任務沒有返回有效內容",
       "task_failed": "AI 任務執行失敗。請檢查模型配置、網路連接和 API Key，詳細原因已寫入系統日誌。",
       "task_failed_title": "AI 任務執行失敗",
-      "task_queued": "任務已加入背景佇列",
+      "task_invalid_result": "AI 任務返回格式無效",
       "task_started": "AI 任務已在背景啟動",
       "trace_load_failed": "讀取 AI 請求鏈記錄失敗。請稍後重試，詳細原因已寫入系統日誌。"
     },
@@ -780,11 +781,12 @@
       "sync_done": "已完成配置覆蓋"
     },
     "mods": {
-      "action_activate": "啟用",
-      "action_deactivate": "禁用",
-      "activate_state_done": "Mod 已{action} {count} 項",
-      "activate_state_done_with_failed": "Mod 已{action} {success_count} 項，失敗 {failed_count} 項",
-      "activate_state_failed": "Mod {action}失敗：{reason}",
+      "about_cleanup_failed": "清理 About 檔案殘留失敗：{reason}",
+      "about_file_missing": "未找到 About.xml 或 About.xml.disabled，無法切換禁用狀態",
+      "about_file_operation_failed": "檔案操作失敗：{reason}",
+      "activate_done": "Mod 已啟用 {count} 項",
+      "activate_done_with_failed": "Mod 已啟用 {success_count} 項，失敗 {failed_count} 項",
+      "activate_failed": "Mod 啟用失敗：{reason}",
       "color_updated": "顏色已設定",
       "conflict_item_failed": "處理該項時出錯，詳細原因已寫入系統日誌",
       "conflict_missing_target_hash": "缺少 target_path_hash，無法刪除該副本",
@@ -793,9 +795,17 @@
       "conflict_resolve_partial_failed": "部分操作失敗：{count} 項未處理成功，其餘操作已應用。",
       "conflict_resolved": "衝突處理完成",
       "conflict_unsupported_action": "不支持的操作類型：{action}",
+      "database_cleanup_failed_with_reason": "資料庫記錄清理失敗：{reason}",
+      "deactivate_done": "Mod 已禁用 {count} 項",
+      "deactivate_done_with_failed": "Mod 已禁用 {success_count} 項，失敗 {failed_count} 項",
+      "deactivate_failed": "Mod 禁用失敗：{reason}",
+      "disabled_state_changed": "狀態已更新",
+      "disabled_state_synced": "狀態已同步",
+      "force_delete_file_failed": "物理檔案徹底刪除失敗（{filename}）：{reason}",
       "interlock_healed": "聯鎖修復完成",
       "no_active_profile": "目前環境未激活，無法掃描 Mods",
       "no_scan_paths": "沒有配置有效的掃描路徑",
+      "no_valid_records": "未找到有效的 Mod 記錄",
       "record_not_found": "未找到 Mod 記錄",
       "scan_busy": "掃描已在進行中",
       "scan_failed": "掃描模組失敗。請檢查遊戲、工坊和本地 Mod 路徑是否存在且可訪問，詳細原因已寫入系統日誌。",
@@ -804,6 +814,7 @@
       "tags_added": "標籤已添加",
       "tags_removed": "標籤已移除",
       "time_updated": "最後操作時間已更新",
+      "trash_file_failed": "物理檔案移入回收站失敗（{filename}）：{reason}",
       "type_updated": "類型已設定",
       "user_data_applied": "已成功應用 {count} 項資料",
       "user_data_updated": "使用者資料已更新"
@@ -813,10 +824,59 @@
       "main_window_not_ready": "主視窗尚未就緒"
     },
     "path": {
+      "check_passed": "校驗通過",
+      "empty": "路徑不能為空",
+      "executable_missing_under_path": "路徑下未找到 {expected}",
+      "game_executable_missing": "無法偵測到遊戲程式",
+      "game_install_empty": "安裝路徑不能為空",
+      "game_install_missing": "遊戲安裝路徑不存在！",
+      "game_install_non_steam": "非 Steam 版",
+      "game_install_not_steam_managed": "非 Steam 管理主版本",
+      "game_install_path": "遊戲安裝路徑: {path}",
+      "game_install_steam": "Steam 版",
+      "game_install_steam_managed": "受 Steam 管理主版本",
+      "game_install_summary": "遊戲本體：{exe}\n遊戲版本：{version}\n{steam_text}\n{managed_text}",
+      "mods_config_file": "Mods 設定檔：{path}",
+      "mods_config_missing": "未找到 ModsConfig.xml",
       "no_paths": "未指定任何路徑資訊",
+      "not_exists": "{path}\n路徑不存在！",
       "not_found_or_not_deletable": "路徑不存在或無法刪除",
+      "not_steam_workshop_content": "路徑不在 Steam Workshop {app_id} 目錄中",
+      "parent_dir_missing": "父目錄不存在: {path}",
+      "parent_dir_not_writable": "目錄無寫入權限，請以管理員身份執行或更換路徑",
+      "parent_exists_file_will_be_created": "父路徑下不存在該檔案，軟體會按需生成該檔案。",
+      "parent_missing": "{path}\n父路徑不存在！",
+      "ripgrep_choose_executable_or_dir": "請選擇 rg.exe 或其所在目錄",
+      "ripgrep_empty": "未指定 ripgrep 目錄",
+      "ripgrep_executable": "ripgrep：{path}",
+      "ripgrep_missing": "ripgrep 路徑不存在",
+      "ripgrep_missing_executable": "目錄下未找到 rg.exe，可在外部工具檢查中下載安裝",
+      "ripgrep_not_dir": "ripgrep 路徑必須是目錄",
+      "steam_client": "Steam 用戶端：{path}",
+      "steam_empty": "未指定 Steam 路徑",
+      "steam_macos_executable_missing": "路徑下未找到 Steam.app/Contents/MacOS/steam_osx",
+      "steam_missing": "Steam 路徑不存在",
+      "steam_root": "Steam 根目錄：{path}",
+      "steam_windows_executable_missing": "路徑下未找到 steam.exe",
+      "steamcmd_client": "SteamCMD 用戶端：{path}",
+      "steamcmd_contains_chinese": "SteamCMD 路徑不能包含中文",
+      "steamcmd_empty": "未指定 SteamCMD 路徑",
       "target_name": "路徑",
-      "type_or_path_missing": "未指定路徑類型或路徑"
+      "texture_tools_empty": "未指定貼圖工具目錄",
+      "texture_tools_executable": "貼圖工具：{path}",
+      "texture_tools_missing": "貼圖工具目錄不存在",
+      "texture_tools_not_dir": "貼圖工具路徑必須是目錄",
+      "texture_tools_windows_only": "目前核心執行範圍不包含 macOS/Linux 的 todds 自動化支援",
+      "todds_missing": "目錄下未找到 todds.exe，可在外部工具檢查中下載安裝",
+      "type_or_path_missing": "未指定路徑類型或路徑",
+      "user_data_config_missing": "使用者資料路徑 {path} 下無 Config 目錄；軟體會在儲存或啟用環境時自動生成。",
+      "user_data_empty": "使用者資料路徑不能為空",
+      "user_data_mods_config_missing": "使用者資料路徑 {path} 下未偵測到 Config/ModsConfig.xml；路徑仍可使用，遊戲首次寫入設定後會自動生成。",
+      "user_data_will_be_created": "使用者資料目錄 {path} 目前不存在，但父目錄可寫；儲存或啟用環境時會自動建立目錄結構。",
+      "valid": "路徑有效：{path}",
+      "workshop_missing": "Workshop 路徑不存在",
+      "workshop_path": "Workshop 路徑：{path}",
+      "workshop_will_be_created": "RimWorld 工坊目錄尚未生成：{path}\n訂閱或下載工坊內容後通常會自動出現。"
     },
     "paths": {
       "auto_detect_failed": "無法自動檢測到遊戲路徑，請手動設定！",
@@ -834,8 +894,13 @@
       "delete_failed": "刪除環境失敗。請確認該環境沒有正在運行的任務，詳細原因已寫入系統日誌。",
       "deleted": "環境已刪除",
       "id_missing": "未指定 Profile ID",
-      "shortcut_created": "已在桌面創建環境快捷方式（{mode}）",
-      "shortcut_created_after_steam_fallback": "目前未檢測到有效 Steam 路徑，已回退為環境快捷方式（{mode}）",
+      "launch_mode": {
+        "game_executable": "遊戲本體",
+        "steam_appid": "Steam 官方 AppID"
+      },
+      "shortcut_created_after_steam_fallback_game_executable": "目前未檢測到有效 Steam 路徑，已回退為環境快捷方式（遊戲本體）",
+      "shortcut_created_game_executable": "已在桌面創建環境快捷方式（遊戲本體）",
+      "shortcut_created_steam_appid": "已在桌面創建環境快捷方式（Steam 官方 AppID）",
       "shortcut_invalid_paths": "環境路徑無效，無法創建快捷方式",
       "steam_desktop_shortcut_created": "已創建 Steam 桌面快捷方式",
       "steam_shortcut_finalize_timeout": "Steam 已啟動，但在限定時間內仍未生成可用的快捷方式 ID。可稍後重試，或檢查 Steam 自定義遊戲列表手動生成桌面快捷方式。",
@@ -1720,14 +1785,10 @@
       "user_template_hint": "每次發送時的輸入格式"
     },
     "ai_trace": {
-      "answer_body": "回覆正文",
       "assistant": "所屬助手：{assistant}",
       "attachments": "附件資訊",
       "extra_metrics": "補充指標",
-      "forced_summary": "總結補充",
       "loading": "正在載入鏈路...",
-      "main_completion_output": "主回覆輸出",
-      "main_prompt_input": "主對話輸入",
       "message_input_total": "消息輸入總計",
       "message_output_total": "消息輸出總計",
       "message_usage": "消息累計",
@@ -1742,20 +1803,15 @@
       "reasoning_stream": "思考流",
       "request_count": "請求數量：{count}",
       "request_total_usage": "總請求消耗",
-      "session_memory": "會話記憶",
       "session_overview": "會話概覽",
       "status": "會話狀態：{status}",
-      "system_prompt": "系統提示",
       "temperature": "目前隨機性：{temperature}",
       "timeline": "統一時間軸",
       "timeline_empty": "目前會話沒有可展示的鏈路資料",
       "title": "會話請求鏈路",
-      "tool_calls": "工具調用",
-      "tool_context": "工具調用",
       "tool_rounds": "工具輪次",
       "unknown_time": "未知時間",
       "untitled_session": "未命名會話",
-      "user_input": "使用者輸入",
       "view_raw_data": "查看原始資料"
     },
     "backup_list": {
@@ -2348,12 +2404,6 @@
       "export_with_current_settings": "將按目前設定導出。",
       "exported_at": "導出時間",
       "extra_export_options": "附加導出選項",
-      "folder_name": {
-        "alias": "按別名",
-        "original": "按原模組名",
-        "package_id": "按包名",
-        "workshop_id": "按工坊ID"
-      },
       "folder_name_type": "包內Mod資料夾命名",
       "folder_name_type_desc": "隻影響導出包裡的資料夾名稱，不會改動原始Mod目錄。遇到不適合作為檔案名的字符會自動替換，重名會自動追加序號。",
       "footer": {
@@ -2789,16 +2839,13 @@
       "export_workfile": "導出待翻譯檔案",
       "import_workfile": "導入翻譯檔案",
       "key": "文字 key",
-      "language": "目標語言",
       "namespace": "分類",
       "no_batch_targets": "目前篩選範圍內沒有未翻譯項。",
       "no_user_override_hint": "儲存後會寫入使用者語言覆蓋檔案。",
-      "provider": "翻譯器",
       "reset_saved": "翻譯已重置並重新載入。",
       "reset_unavailable": "目前運行環境不支持重置翻譯。",
       "result_count": "{count} 條",
       "search_placeholder": "搜尋 key / 原文 / 譯文",
-      "source_text": "中文原文",
       "status": "狀態",
       "status_builtin": "內置",
       "status_overridden": "已覆蓋",
@@ -2812,7 +2859,11 @@
       "workfile_import_failed": "導入翻譯檔案失敗。請確認檔案格式正確。",
       "workfile_import_unavailable": "目前運行環境不支持導入翻譯檔案。",
       "workfile_imported": "已導入 {count} 條譯文。",
-      "workfile_language_mismatch": "導入檔案的目標語言是 {language}，請先切換到對應目標語言後再導入。"
+      "workfile_invalid": "匯入檔案存在 {count} 個格式問題：{detail}",
+      "workfile_language_mismatch": "導入檔案的目標語言是 {language}，請先切換到對應目標語言後再導入。",
+      "workfile_marker_mismatch": "格式標記不一致：{key}",
+      "workfile_param_mismatch": "參數不一致：{key}",
+      "workfile_unknown_key": "未知 key：{key}"
     },
     "update": {
       "confirm_install": "確認安裝",
@@ -3929,7 +3980,7 @@
       },
       "language": {
         "empty_locale": "已切換到 {language}，該語言包暫無翻譯，介面將暫時顯示預設中文。",
-        "partial_locale": "已切換到 {language}，目前語言包約完成 {progress}%，未翻譯內容將顯示預設中文。"
+        "partial_locale": "已切換到 {language}，目前使用者語言包覆蓋率約 {coverage}%，未覆蓋內容將顯示預設中文。"
       },
       "localize": {
         "cancelled": "{title}已取消",
@@ -4043,9 +4094,23 @@
     }
   },
   "tasks": {
+    "ai": {
+      "cancelled": "AI 任務已取消",
+      "fallback_title": "AI 任務",
+      "finished": "推理結束！成功: {success}, 失敗: {failed}",
+      "reasoning_progress": "正在推理... [第{attempt}輪] 成功: {success}/{total}",
+      "truncated_suffix": "...(截斷)"
+    },
     "error": {
       "not_completed": "任務未成功完成。請檢查網路連接、檔案權限或稍後重試，詳細原因已寫入系統日誌。",
       "timeout": "任務超時"
+    },
+    "file_delete": {
+      "completed": "刪除完成：成功 {success_count} 個，失敗 {failed_count} 個",
+      "database_cleanup_failed": "資料庫記錄清理失敗",
+      "deleting_path": "正在刪除：{filename}",
+      "prepare_mods": "準備刪除 {count} 個模組...",
+      "title": "刪除模組檔案"
     },
     "file_search": {
       "building_roots": "正在整理{stage} {processed}/{total}: {name}",
@@ -5203,10 +5268,8 @@
         "candidate_key": "候選文字 key",
         "pick_text": "重新拾取",
         "picking": "點擊介面文字進行翻譯",
-        "provider": "翻譯器",
         "saving": "儲存中...",
         "shortcut_hint": "Ctrl + Shift + L 開關",
-        "source_text": "中文原文",
         "title": "翻譯模式",
         "translation": "目前譯文"
       }
@@ -5260,7 +5323,14 @@
         "description": "該模組在本地未找到，可能未下載，或已被手動刪除。",
         "name_with_id": "⚠ 未知模組 ({id})"
       },
-      "name": "模組"
+      "name": "模組",
+      "option": {
+        "by_alias": "按別名",
+        "by_name": "按原模組名",
+        "by_name_short": "按原名",
+        "by_package_id": "按包名",
+        "by_workshop_id": "按工坊 ID"
+      }
     },
     "mod_details": {
       "ai_generate": "AI生成",
@@ -5732,11 +5802,7 @@
         "export_data_bundle": "導出軟體資料",
         "export_profile_mods": "導出環境模組",
         "folder_name": {
-          "alias": "按別名",
-          "default": "預設",
-          "name": "按原模組名",
-          "package_id": "按包名",
-          "workshop_id": "按工坊 ID"
+          "default": "預設"
         },
         "force_repair_database": "強制修復本地資料庫",
         "import_data_bundle": "導入資料包",
@@ -5842,12 +5908,6 @@
         "file_generation_deploy_desc": "控制共存 Mod 的資料夾命名，以及運行前連結部署方式。",
         "file_size_scan": "掃描時檢查檔案大小",
         "file_size_scan_desc": "開啟後，掃描時會自動檢查 Mod 的檔案大小，以此識別新增或更新的內容。該功能會增加掃描耗時，但能顯著提高檔案變動的識別精度。",
-        "folder_name": {
-          "alias": "按別名",
-          "name": "按原名",
-          "package_id": "按包名",
-          "workshop_id": "按工坊 ID"
-        },
         "language_packs_follow_targets": "語言包貼緊前置",
         "language_packs_follow_targets_desc": "開啟後，自動排序會盡量讓語言包緊跟在它已啟用的最後一個前置/依賴模組後方；如果找不到目標，就保持原來的預設底層位置。",
         "launch_profile_quick_scan": "環境直啟前檢查同步",
@@ -5864,11 +5924,6 @@
         "mod_residue_scan_desc": "開啟後，全量掃描結束會在背景檢查卸載後留下的資料夾和設定檔案；關閉後只在手動打開殘留清理時檢查。",
         "multiplayer_compatibility_check": "檢查 Multiplayer 聯機兼容性",
         "multiplayer_compatibility_check_desc": "開啟後，在庫存中檢測到 Multiplayer 時，會為 Mod 列表顯示聯機兼容等級和輔助修正提示。",
-        "name_sort": {
-          "alias": "按別名",
-          "name": "按原名",
-          "package_id": "按包名"
-        },
         "persist_temp_mod_list": "儲存臨時列表",
         "persist_temp_mod_list_desc": "開啟後，臨時列表會按目前環境儲存，下次進入該環境時自動恢復；關閉後，儲存時會把臨時列表裡的 Mod 放回停用列表頂部。",
         "regular_mods_follow_dependencies": "普通模組貼緊依賴",
@@ -6359,6 +6414,7 @@
         "source_detection_terms": "原文識別詞",
         "source_detection_terms_desc": "這些字符或短語會按字面量匹配，命中後認為原文不需要自動翻譯。",
         "source_detection_terms_placeholder": "輸入並回車，例如：的、模組、。",
+        "source_text": "中文原文",
         "target_language": "目標語言",
         "translate": "翻譯",
         "use_default_provider": "使用預設翻譯器",

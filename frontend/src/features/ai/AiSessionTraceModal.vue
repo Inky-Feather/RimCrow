@@ -52,16 +52,16 @@
                   </div>
                   <div class="space-y-1">
                     <div class="flex items-center justify-between pl-4">
-	                      <span>{{ t('dialog.ai_trace.main_prompt_input', '主对话输入') }}</span>
+	                      <span>{{ t('ai.usage.main_prompt_input_label', '主对话输入') }}</span>
                       <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.mainPromptTokens) }}</span>
                     </div>
                     <div class="text-[0.7rem] text-text-dim -mt-1">
                       <div v-if="sessionTokenSummary.promptTemplateTokens > 0" class="flex items-center justify-between pl-8">
-	                        <span>{{ t('dialog.ai_trace.system_prompt', '系统提示') }}</span>
+		                        <span>{{ t('ai.usage.system_prompt', '系统提示') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.promptTemplateTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.memoryTokens > 0" class="flex items-center justify-between pl-8">
-	                        <span>{{ t('dialog.ai_trace.session_memory', '会话记忆') }}</span>
+	                        <span>{{ t('ai.usage.session_memory', '会话记忆') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.memoryTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.attachmentTokens > 0" class="flex items-center justify-between pl-8">
@@ -69,15 +69,15 @@
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.attachmentTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.userInputTokens > 0" class="flex items-center justify-between pl-8">
-	                        <span>{{ t('dialog.ai_trace.user_input', '用户输入') }}</span>
+		                        <span>{{ t('ai.usage.user_input', '用户输入') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.userInputTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.toolContextTokens > 0" class="flex items-center justify-between pl-8">
-	                        <span>{{ t('dialog.ai_trace.tool_context', '工具调用') }}</span>
+		                        <span>{{ t('ai.usage.tool_context', '工具调用') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.toolContextTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.forcedSummaryTokens > 0" class="flex items-center justify-between pl-8">
-	                        <span>{{ t('dialog.ai_trace.forced_summary', '总结补充') }}</span>
+	                        <span>{{ t('ai.usage.forced_summary', '总结补充') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.forcedSummaryTokens) }}</span>
                       </div>
                     </div>
@@ -94,7 +94,7 @@
                   </div>
                   <div class="space-y-1">
                     <div class="flex items-center justify-between pl-4">
-	                      <span>{{ t('dialog.ai_trace.main_completion_output', '主回复输出') }}</span>
+	                      <span>{{ t('ai.usage.main_completion_output_label', '主回复输出') }}</span>
                       <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.mainCompletionTokens) }}</span>
                     </div>
                     <div class="text-[0.7rem] text-text-dim -mt-1">
@@ -103,11 +103,11 @@
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.reasoningTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.toolCallTokens > 0" class="flex items-center justify-between pl-8 ">
-	                        <span>{{ t('dialog.ai_trace.tool_calls', '工具调用') }}</span>
+		                        <span>{{ t('ai.usage.tool_calls', '工具调用') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.toolCallTokens) }}</span>
                       </div>
                       <div v-if="sessionTokenSummary.answerTokens > 0" class="flex items-center justify-between pl-8 ">
-	                        <span>{{ t('dialog.ai_trace.answer_body', '回复正文') }}</span>
+	                        <span>{{ t('ai.usage.answer_body', '回复正文') }}</span>
                         <span class="font-mono">{{ formatTokenMetric(sessionTokenSummary.answerTokens) }}</span>
                       </div>
                     </div>
@@ -326,7 +326,7 @@ const decorateTimelineItem = (item) => {
   } else if (normalizedItem.kind === 'response') {
     normalizedItem.metrics = [
 	      {
-	        label: t('dialog.ai_trace.main_completion_output', '主回复输出'),
+	        label: t('ai.usage.main_completion_output_label', '主回复输出'),
 	        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_completion_tokens)),
 	      },
 	      {
@@ -334,11 +334,11 @@ const decorateTimelineItem = (item) => {
 	        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_reasoning_completion_tokens)),
 	      },
 	      {
-	        label: t('dialog.ai_trace.tool_calls', '工具调用'),
+	        label: t('ai.usage.tool_calls', '工具调用'),
 	        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_tool_call_completion_tokens)),
 	      },
 	      {
-	        label: t('dialog.ai_trace.answer_body', '回复正文'),
+	        label: t('ai.usage.answer_body', '回复正文'),
 	        value: formatTokenMetric(numberOrZero(tokenUsage?.estimated_answer_completion_tokens)),
 	      },
 	      {

@@ -51,7 +51,7 @@
 
           <div class="rounded-lg bg-bg-deep/70 border border-border-base/10 p-2 space-y-1">
             <p class="text-[0.7rem] text-text-disabled font-mono break-all">{{ selectedEntry?.key }}</p>
-            <p class="text-xs text-text-dim">{{ t('ui.i18n.translation_mode.source_text', '中文原文') }}</p>
+            <p class="text-xs text-text-dim">{{ t('ui.translation.controls.source_text', '中文原文') }}</p>
             <p class="text-sm text-text-main whitespace-pre-wrap wrap-break-words">{{ selectedEntry?.defaultText }}</p>
           </div>
 
@@ -65,7 +65,7 @@
           <CommonSelect
             v-model="selectedProvider"
             class="w-full"
-            :label="t('ui.i18n.translation_mode.provider', '翻译器')"
+            :label="t('ui.translation.controls.provider', '翻译器')"
             :options="providerOptions"
             :popover-z-index="translationPopoverZIndex"
             show-bottom
@@ -98,7 +98,7 @@ import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
 import { Languages, Minimize2, MousePointer2, Save, WandSparkles, X } from 'lucide-vue-next'
 import { useAppStore } from '../../../app/stores/appStore'
 import CommonSelect from '../input/CommonSelect.vue'
-import { DEFAULT_LOCALE, findTranslationEntriesForText, getCurrentLocale, setLocale, t, translateMessagePayload } from '../../i18n.js'
+import { DEFAULT_LOCALE, findTranslationEntriesForText, findTranslationEntryByKey, getCurrentLocale, setLocale, t, translateMessagePayload } from '../../i18n.js'
 import { toast } from '../../lib/common'
 
 const appStore = useAppStore()
@@ -195,9 +195,10 @@ const getTooltipText = (node) => {
   return ''
 }
 
-const readElementText = (target) => {
+const readElementTranslationTarget = (target) => {
   let node = target
   for (let depth = 0; node && node !== document.body && depth < 5; depth += 1) {
+    const key = node.getAttribute?.('data-i18n-key') || node.closest?.('[data-i18n-key]')?.getAttribute?.('data-i18n-key')
     const text = [
       getTooltipText(node),
       node.getAttribute?.('aria-label'),
@@ -206,10 +207,10 @@ const readElementText = (target) => {
       node.innerText,
       node.value,
     ].map(value => String(value || '').trim()).find(Boolean)
-    if (text) return text
+    if (key || text) return { key: String(key || '').trim(), text: text || '' }
     node = node.parentElement
   }
-  return ''
+  return { key: '', text: '' }
 }
 
 const updateHoverBox = (target) => {
@@ -255,7 +256,9 @@ const pickElement = (event) => {
   if (!pickerActive.value || overlayRef.value?.contains(event.target)) return
   event.preventDefault()
   event.stopPropagation()
-  const entries = findTranslationEntriesForText(readElementText(event.target))
+  const target = readElementTranslationTarget(event.target)
+  const keyEntry = target.key ? findTranslationEntryByKey(target.key) : null
+  const entries = keyEntry ? [keyEntry] : findTranslationEntriesForText(target.text)
   if (!entries.length) {
     toast.warning(t('messages.i18n.translation_mode.no_match', '未找到可翻译文本。请确认该文本已经接入多语言结构。'))
     return

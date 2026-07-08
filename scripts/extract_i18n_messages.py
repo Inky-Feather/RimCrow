@@ -69,15 +69,25 @@ UNTRANSLATED_PREFIX = "[UNTRANSLATED] "
 BARE_CHINESE_EXCLUDED_PARTS = {
     "frontend/src/locales/",
     "frontend/src/dev/",
+    # AI Prompt / 工具定义正文已有专用提取规则或暂不进入界面语言包。
     "backend/ai/ai_tools.py",
     "backend/ai/assistant_runtime.py",
     "backend/ai/def_output_contracts.py",
     "backend/ai/def_actions.py",
     "backend/ai/def_attachments.py",
     "backend/ai/def_entries.py",
+    "backend/ai/prompt_builder.py",
+    "backend/ai/prompts/",
 }
 BARE_CHINESE_EXCLUDED_FILES = {
     "backend/_version.py",
+    # 数据库完整性检查返回的是启动修复诊断细节，界面只展示汇总提示。
+    "backend/database/runtime.py",
+    # 语言注册表保存各语言原生名称，不能按当前界面语言翻译。
+    "backend/i18n/language_registry.py",
+    # 日志分析正文属于诊断结果，不跟随 UI 语言；LogViewer 外壳和错误标题单独本地化。
+    "backend/managers/mgr_game_logs.py",
+    # 命令和教程配置由专用提取规则进入语言包，裸中文扫描不重复报告。
     "frontend/src/app/commands/builtinCommands.js",
     "frontend/src/features/guide/guideConfig.js",
     "frontend/src/features/guide/guideStore.js",
@@ -94,6 +104,7 @@ BARE_CHINESE_LOG_MARKERS = (
     "logging.",
     "console.",
     "print(",
+    "self.log_step(",
     "_log_startup_perf(",
 )
 BARE_CHINESE_CONTEXT_SKIP_MARKERS = (
@@ -104,14 +115,24 @@ BARE_CHINESE_CONTEXT_SKIP_MARKERS = (
     "mark_launch_failed(",
     "logStartupCheck(",
     "logMaintenanceCheck(",
+    "self.log_step(",
+)
+BARE_CHINESE_SPECIAL_SKIP_MARKERS = (
+    # 第三方网页解析用的固定中文片段，不是应用界面文案。
+    "re.search(",
+    "re.findall(",
+    "re.match(",
 )
 
 
 def configure_stdout() -> None:
     """Windows 默认 GBK 控制台输出韩文、俄文会失败；脚本统一用 UTF-8 容错输出。"""
     for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
         try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
+            reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
 
@@ -328,6 +349,11 @@ AI_ACTION_FIELDS = {
     "execute_label",
     "unsupported_message",
     "execution_failed_message",
+    "missing_payload_message",
+    "confirm_confirm_text",
+    "post_success_title",
+    "post_success_message",
+    "post_success_confirm_text",
 }
 AI_ACTION_VARIANT_FIELDS = {
     "label",
@@ -699,11 +725,10 @@ def flatten_structure_paths(payload: Mapping[str, Any], prefix: str = "") -> lis
 
 def check_builtin_locale_keys(
     extracted: Mapping[str, str],
-    expected_structure_order: list[str] | None = None,
     default_values: Mapping[str, str] | None = None,
 ) -> list[str]:
     expected = set(extracted)
-    expected_structure_order = expected_structure_order or list(extracted)
+    expected_structure = set(flatten_structure_paths(build_locale_payload({}, extracted)))
     default_values = default_values or extracted
     errors: list[str] = []
     seen_languages: dict[str, Path] = {}
@@ -732,10 +757,8 @@ def check_builtin_locale_keys(
         if path.name == DEFAULT_LOCALE_PATH.name:
             continue
         actual_values = flatten_string_values(locale_payload)
-        actual_structure_order = flatten_structure_paths(locale_payload)
+        actual_structure = set(flatten_structure_paths(locale_payload))
         actual = set(actual_values)
-        actual_structure = set(actual_structure_order)
-        expected_structure = set(expected_structure_order)
         missing = sorted(expected - actual)
         extra = sorted(actual - expected)
         missing_structure = sorted(expected_structure - actual_structure)
@@ -748,8 +771,6 @@ def check_builtin_locale_keys(
             errors.append(f"{path.relative_to(ROOT).as_posix()} 缺少结构节点: {', '.join(missing_structure[:20])}{' ...' if len(missing_structure) > 20 else ''}")
         if extra_structure:
             errors.append(f"{path.relative_to(ROOT).as_posix()} 存在多余结构节点: {', '.join(extra_structure[:20])}{' ...' if len(extra_structure) > 20 else ''}")
-        if not missing_structure and not extra_structure and actual_structure_order != expected_structure_order:
-            errors.append(f"{path.relative_to(ROOT).as_posix()} 结构顺序未与 {DEFAULT_LOCALE_PATH.relative_to(ROOT).as_posix()} 对齐")
         for key in sorted(expected & actual):
             default_params = extract_placeholders(extracted[key])
             locale_params = extract_placeholders(actual_values[key])
@@ -771,6 +792,30 @@ def check_builtin_locale_keys(
 def copy_locale_meta(existing: Mapping[str, Any]) -> dict[str, Any]:
     meta = existing.get("_meta") if isinstance(existing, Mapping) else {}
     return {"_meta": dict(meta)} if isinstance(meta, Mapping) else {}
+
+
+def ensure_builtin_locale_meta(path: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
+    raw_meta = payload.get("_meta")
+    meta: dict[str, Any] = dict(raw_meta) if isinstance(raw_meta, Mapping) else {}
+    code = str(meta.get("language") or path.stem).strip()
+    label = str(meta.get("label") or code).strip() or code
+    name = str(meta.get("name") or code).strip() or code
+    try:
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from backend.i18n.language_registry import get_language_spec, normalize_language_code
+
+        code = normalize_language_code(code) or code
+        spec = get_language_spec(code)
+        if spec is not None:
+            code = spec.code
+            label = str(meta.get("label") or spec.label or code).strip() or code
+            name = str(meta.get("name") or spec.english_name or code).strip() or code
+    except Exception:
+        pass
+    output = {"_meta": {**meta, "type": "builtin_locale", "language": code, "label": label, "name": name}}
+    output.update({key: value for key, value in payload.items() if key != "_meta"})
+    return output
 
 
 def build_locale_payload(existing: Mapping[str, Any], extracted: Mapping[str, str]) -> dict[str, Any]:
@@ -809,12 +854,12 @@ def build_translated_locale_payload(
     existing: Mapping[str, Any],
     previous_default: Mapping[str, str],
     extracted: Mapping[str, str],
-    reference_payload: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], int]:
     existing_values = flatten_string_values(existing)
     payload = copy_locale_meta(existing)
     reset_count = 0
-    ordered_keys = [key for key in previous_default if key in extracted]
+    # 普通同步只保留已有语言包顺序并追加新 key，避免日常生成产生大面积无意义 diff。
+    ordered_keys = [key for key in existing_values if key in extracted]
     written_keys = set(ordered_keys)
     ordered_keys.extend(key for key in sorted(extracted) if key not in written_keys)
     for key in ordered_keys:
@@ -822,25 +867,21 @@ def build_translated_locale_payload(
         translated = existing_values.get(key)
         source_changed = previous_default.get(key) != source_text
         params_changed = translated is not None and extract_placeholders(translated) != extract_placeholders(source_text)
-        if translated is None or source_changed or params_changed:
-            translated = untranslated_fallback(source_text)
-            reset_count += 1
-        elif translated == source_text and CHINESE_PATTERN.search(source_text):
+        marker_changed = translated is not None and extract_locale_markers(translated) != extract_locale_markers(source_text)
+        if translated is None or source_changed or params_changed or marker_changed:
             translated = untranslated_fallback(source_text)
             reset_count += 1
         set_nested(payload, key, translated)
-    if reference_payload is not None:
-        payload = align_locale_structure(reference_payload, payload)
     return payload, reset_count
 
 
-def sync_builtin_locales(previous_default: Mapping[str, str], extracted: Mapping[str, str], reference_payload: Mapping[str, Any]) -> list[str]:
+def sync_builtin_locales(previous_default: Mapping[str, str], extracted: Mapping[str, str]) -> list[str]:
     results: list[str] = []
     for path in sorted(BUILTIN_LOCALES_DIR.glob("*.json")):
         if path.name == DEFAULT_LOCALE_PATH.name:
             continue
-        payload, reset_count = build_translated_locale_payload(load_locale(path), previous_default, extracted, reference_payload)
-        write_json(path, payload)
+        payload, reset_count = build_translated_locale_payload(load_locale(path), previous_default, extracted)
+        write_json(path, ensure_builtin_locale_meta(path, payload))
         results.append(f"{path.relative_to(ROOT).as_posix()}：同步 {len(extracted)} 条，重置 {reset_count} 条")
     return results
 
@@ -850,7 +891,7 @@ def align_builtin_locales(reference_payload: Mapping[str, Any]) -> list[str]:
     for path in sorted(BUILTIN_LOCALES_DIR.glob("*.json")):
         if path.name == DEFAULT_LOCALE_PATH.name:
             continue
-        write_json(path, align_locale_structure(reference_payload, load_locale(path)))
+        write_json(path, ensure_builtin_locale_meta(path, align_locale_structure(reference_payload, load_locale(path))))
         results.append(f"{path.relative_to(ROOT).as_posix()}：已对齐结构")
     return results
 
@@ -880,7 +921,7 @@ def strip_inline_comment(line: str, suffix: str) -> str:
         elif any(line.startswith(marker, index) for marker in markers):
             return line[:index]
         index += 1
-    return line
+    return re.sub(r"/\*.*?\*/", "", line)
 
 
 def paren_delta(line: str) -> int:
@@ -905,6 +946,8 @@ def is_bare_chinese_candidate(path: Path, line: str) -> bool:
         return False
     if "text.startswith(" in code_line or "text ==" in code_line:
         return False
+    if any(marker in code_line for marker in BARE_CHINESE_SPECIAL_SKIP_MARKERS):
+        return False
     if any(marker in code_line for marker in BARE_CHINESE_LOG_MARKERS):
         return False
     if path.suffix in {".py", ".js"} and not any(quote in code_line for quote in ("'", '"', "`")):
@@ -924,6 +967,9 @@ def report_bare_chinese(limit: int) -> int:
                 skip_call_depth = max(0, skip_call_depth + paren_delta(line))
                 continue
             if any(marker in line for marker in BARE_CHINESE_CONTEXT_SKIP_MARKERS):
+                skip_call_depth = max(0, paren_delta(line))
+                continue
+            if I18N_CALL_LINE_PATTERN.search(line):
                 skip_call_depth = max(0, paren_delta(line))
                 continue
             if in_block_comment:
@@ -991,14 +1037,14 @@ def main() -> int:
             print(f"{locale_path.relative_to(ROOT).as_posix()} 未同步，请运行：uv run python scripts/extract_i18n_messages.py", file=sys.stderr)
             return 1
         next_values = flatten_string_values(next_payload)
-        locale_errors = check_builtin_locale_keys(extracted, flatten_structure_paths(next_payload), next_values)
+        locale_errors = check_builtin_locale_keys(extracted, next_values)
         if locale_errors:
             print("\n".join(locale_errors), file=sys.stderr)
             return 1
         print(f"i18n 默认语言包已同步，共 {len(extracted)} 条。")
         return 0
     write_json(locale_path, next_payload)
-    synced_locales = sync_builtin_locales(previous_default, extracted, next_payload) if locale_path.resolve() == DEFAULT_LOCALE_PATH.resolve() else []
+    synced_locales = sync_builtin_locales(previous_default, extracted) if locale_path.resolve() == DEFAULT_LOCALE_PATH.resolve() else []
     print(f"已更新 {locale_path.relative_to(ROOT).as_posix()}，共 {len(extracted)} 条。")
     for item in synced_locales:
         print(item)

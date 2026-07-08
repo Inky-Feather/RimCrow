@@ -24,6 +24,7 @@ from backend.database.models import (
     UserModData,
     db,
 )
+from backend.i18n.messages import tr
 from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_profile import ProfileContext
 from backend.scanner.analyzer import ModAnalyzer
@@ -1243,14 +1244,14 @@ class ModMaintenanceDAO:
         try:
             about_state = ModAnalyzer.resolve_mod_about_state(path, cleanup_dual_files=True)
         except Exception as exc:
-            return False, f"清理 About 文件残留失败: {exc}"
+            return False, tr("api.mods.about_cleanup_failed", "清理 About 文件残留失败：{reason}", reason=exc)
 
         if not about_state.resolved_path:
-            return False, "未找到 About.xml 或 About.xml.disabled，无法切换禁用状态"
+            return False, tr("api.mods.about_file_missing", "未找到 About.xml 或 About.xml.disabled，无法切换禁用状态")
 
         if about_state.is_disabled == disable:
             ModAsset.update(disabled=disable).where(ModAsset.path == path).execute()
-            return True, "状态已同步"
+            return True, tr("api.mods.disabled_state_synced", "状态已同步")
 
         source_path = about_state.resolved_path
         target_path = about_state.disabled_xml if disable else about_state.about_xml
@@ -1259,10 +1260,10 @@ class ModMaintenanceDAO:
                 os.remove(target_path)
             os.replace(source_path, target_path)
         except Exception as exc:
-            return False, f"文件操作失败: {exc}"
+            return False, tr("api.mods.about_file_operation_failed", "文件操作失败：{reason}", reason=exc)
 
         ModAsset.update(disabled=disable).where(ModAsset.path == path).execute()
-        return True, "成功"
+        return True, tr("api.mods.disabled_state_changed", "状态已更新")
 
     @staticmethod
     def delete_mods_physically(path_hashes: List[str] | str, force: bool = False):
@@ -1280,7 +1281,7 @@ class ModMaintenanceDAO:
             .where(ModAsset.path_hash.in_(normalized_hashes))  # type: ignore
             .dicts()
         )
-        if not assets: return {"success_count": 0, "errors": ["未找到有效的模组记录"]}
+        if not assets: return {"success_count": 0, "errors": [str(tr("api.mods.no_valid_records", "未找到有效的模组记录"))]}
 
         target_paths: list[str] = []
         valid_hashes = [asset["path_hash"] for asset in assets]
@@ -1293,8 +1294,8 @@ class ModMaintenanceDAO:
             "file-delete",
             status="pending",
             progress=0,
-            message=f"准备删除 {len(assets)} 个模组...",
-            metrics={"title": "删除模组文件", "current": 0, "total": len(assets)},
+            message=tr("tasks.file_delete.prepare_mods", "准备删除 {count} 个模组...", count=len(assets)),
+            metrics={"title": str(tr("tasks.file_delete.title", "删除模组文件")), "current": 0, "total": len(assets)},
         )
 
         for asset in assets:
@@ -1310,8 +1311,15 @@ class ModMaintenanceDAO:
                 ModAsset.delete().where(ModAsset.path_hash << valid_hashes).execute()  # type: ignore
         except Exception as exc:
             logger.error(f"数据库删除失败：{exc}")
-            EventBus.emit_progress(task_id, "file-delete", status="failed", progress=0, message="数据库记录清理失败", metrics={"title": "删除模组文件"})
-            return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
+            EventBus.emit_progress(
+                task_id,
+                "file-delete",
+                status="failed",
+                progress=0,
+                message=tr("tasks.file_delete.database_cleanup_failed", "数据库记录清理失败"),
+                metrics={"title": str(tr("tasks.file_delete.title", "删除模组文件"))},
+            )
+            return {"success_count": 0, "errors": [str(tr("api.mods.database_cleanup_failed_with_reason", "数据库记录清理失败：{reason}", reason=exc))]}
 
         total_paths = max(len(target_paths), 1)
         for index, path in enumerate(target_paths, start=1):
@@ -1320,15 +1328,20 @@ class ModMaintenanceDAO:
                 "file-delete",
                 status="running",
                 progress=min(95, int((index - 1) / total_paths * 90) + 5),
-                message=f"正在删除: {os.path.basename(path)}",
-                metrics={"title": "删除模组文件", "current": index, "total": len(target_paths)},
+                message=tr("tasks.file_delete.deleting_path", "正在删除：{filename}", filename=os.path.basename(path)),
+                metrics={"title": str(tr("tasks.file_delete.title", "删除模组文件")), "current": index, "total": len(target_paths)},
             )
             try:
                 delete_fs_path(path, force=force)
                 success_count += 1
             except Exception as exc:
-                delete_mode = "彻底删除" if force else "移入回收站"
-                errors.append(f"物理文件{delete_mode}失败 ({os.path.basename(path)}): {exc}")
+                filename = os.path.basename(path)
+                error_message = (
+                    tr("api.mods.force_delete_file_failed", "物理文件彻底删除失败（{filename}）：{reason}", filename=filename, reason=exc)
+                    if force
+                    else tr("api.mods.trash_file_failed", "物理文件移入回收站失败（{filename}）：{reason}", filename=filename, reason=exc)
+                )
+                errors.append(str(error_message))
 
         final_status = "failed" if success_count <= 0 and errors else "success"
         EventBus.emit_progress(
@@ -1336,8 +1349,8 @@ class ModMaintenanceDAO:
             "file-delete",
             status=final_status,
             progress=100,
-            message=f"删除完成：成功 {success_count} 个，失败 {len(errors)} 个",
-            metrics={"title": "删除模组文件", "current": len(target_paths), "total": len(target_paths), "success_count": success_count, "error_count": len(errors)},
+            message=tr("tasks.file_delete.completed", "删除完成：成功 {success_count} 个，失败 {failed_count} 个", success_count=success_count, failed_count=len(errors)),
+            metrics={"title": str(tr("tasks.file_delete.title", "删除模组文件")), "current": len(target_paths), "total": len(target_paths), "success_count": success_count, "error_count": len(errors)},
         )
         return {"success_count": success_count, "errors": errors}
 
@@ -1353,14 +1366,14 @@ class ModMaintenanceDAO:
                 .where(ModAsset.path_hash.in_(normalized_hashes))  # type: ignore
                 .dicts()
         ]
-        if not existing_hashes: return {"success_count": 0, "errors": ["未找到有效的模组记录"]}
+        if not existing_hashes: return {"success_count": 0, "errors": [str(tr("api.mods.no_valid_records", "未找到有效的模组记录"))]}
 
         try:
             with db.atomic():
                 deleted_count = ModAsset.delete().where(ModAsset.path_hash << existing_hashes).execute()  # type: ignore
         except Exception as exc:
             logger.error(f"数据库记录删除失败：{exc}")
-            return {"success_count": 0, "errors": [f"数据库记录清理失败: {exc}"]}
+            return {"success_count": 0, "errors": [str(tr("api.mods.database_cleanup_failed_with_reason", "数据库记录清理失败：{reason}", reason=exc))]}
 
         return {"success_count": int(deleted_count or 0), "errors": []}
 

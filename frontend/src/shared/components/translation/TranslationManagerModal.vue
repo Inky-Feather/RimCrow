@@ -10,11 +10,11 @@
     @close="close"
   >
     <div class="grid grid-cols-12 gap-3 border-b border-border-base/8 p-4">
-      <CommonSelect class="col-span-2" v-model="selectedLanguage" :label="t('dialog.translation_manager.language', '目标语言')" :options="languageOptions" show-bottom />
+      <CommonSelect class="col-span-2" v-model="selectedLanguage" :label="t('ui.translation.controls.target_language', '目标语言')" :options="languageOptions" show-bottom />
       <CommonSelect class="col-span-2" v-model="selectedNamespace" :label="t('dialog.translation_manager.namespace', '分类')" :options="namespaceOptions" show-bottom />
       <CommonSelect class="col-span-2" v-model="statusFilter" :label="t('dialog.translation_manager.status', '状态')" :options="statusOptions" show-bottom />
       <CommonInput class="col-span-4" v-model="searchText" :label="t('common.action.search', '搜索')" :placeholder="t('dialog.translation_manager.search_placeholder', '搜索 key / 原文 / 译文')" />
-      <CommonSelect class="col-span-2" v-model="selectedProvider" :label="t('dialog.translation_manager.provider', '翻译器')" :options="providerOptions" show-bottom />
+      <CommonSelect class="col-span-2" v-model="selectedProvider" :label="t('ui.translation.controls.provider', '翻译器')" :options="providerOptions" show-bottom />
     </div>
 
     <div class="grid min-h-0 flex-1 grid-cols-[minmax(18rem,28rem)_1fr]">
@@ -63,7 +63,7 @@
 
           <div class="grid grid-cols-2 gap-4">
             <div class="rounded-xl border border-border-base/10 bg-bg-deep/60 p-3">
-              <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.translation_manager.source_text', '中文原文') }}</div>
+              <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('ui.translation.controls.source_text', '中文原文') }}</div>
               <p class="whitespace-pre-wrap wrap-break-words text-sm leading-6 text-text-main">{{ selectedRow.sourceText }}</p>
             </div>
             <div class="rounded-xl border border-border-base/10 bg-bg-deep/60 p-3">
@@ -126,6 +126,8 @@ const flatMerged = ref({})
 const flatUser = ref({})
 const listScrollRef = ref(null)
 const BATCH_TRANSLATE_SIZE = 100
+const PLACEHOLDER_RE = /\{([A-Za-z_][\w.-]*)\}/g
+const LOCALE_MARKER_RE = /\[\[|\]\]|\^\^|!!|__|··/g
 
 const flattenMessages = (value, prefix = '', output = {}) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -220,6 +222,23 @@ const statusLabel = (status) => ({
   overridden: t('dialog.translation_manager.status_overridden', '已覆盖'),
   builtin: t('dialog.translation_manager.status_builtin', '内置'),
 }[status] || status)
+
+const extractPlaceholders = (text) => new Set([...String(text ?? '').matchAll(PLACEHOLDER_RE)].map(item => item[1]))
+const extractLocaleMarkers = (text) => String(text ?? '').match(LOCALE_MARKER_RE) || []
+const sameSet = (left, right) => left.size === right.size && [...left].every(item => right.has(item))
+const sameList = (left, right) => left.length === right.length && left.every((item, index) => item === right[index])
+
+const validateImportedMessage = (key, text) => {
+  const source = flatBase.value[key]
+  if (source === undefined) return t('dialog.translation_manager.workfile_unknown_key', '未知 key：{key}', { key })
+  const sourceParams = extractPlaceholders(source)
+  const targetParams = extractPlaceholders(text)
+  if (!sameSet(sourceParams, targetParams)) return t('dialog.translation_manager.workfile_param_mismatch', '参数不一致：{key}', { key })
+  const sourceMarkers = extractLocaleMarkers(source)
+  const targetMarkers = extractLocaleMarkers(text)
+  if (!sameList(sourceMarkers, targetMarkers)) return t('dialog.translation_manager.workfile_marker_mismatch', '格式标记不一致：{key}', { key })
+  return ''
+}
 
 const statusClass = (status) => ({
   untranslated: 'bg-accent-warn/15 text-accent-warn',
@@ -407,14 +426,21 @@ const exportWorkfile = async () => {
 
 const extractWorkfileMessages = (payload) => {
   const source = payload?.messages && typeof payload.messages === 'object' ? payload.messages : payload
-  return Object.fromEntries(Object.entries(source || {}).map(([key, value]) => {
+  const errors = []
+  const messages = Object.fromEntries(Object.entries(source || {}).map(([key, value]) => {
     const target = value && typeof value === 'object' ? value.target : value
     const sourceText = value && typeof value === 'object' ? value.source : ''
     const text = String(target ?? '').trim()
     if (!key || !text || text.startsWith(UNTRANSLATED_PREFIX)) return null
     if (selectedLanguage.value !== DEFAULT_LOCALE && sourceText && text === String(sourceText).trim()) return null
+    const error = validateImportedMessage(key, target)
+    if (error) {
+      errors.push(error)
+      return null
+    }
     return [key, target]
   }).filter(Boolean))
+  return { messages, errors }
 }
 
 const importWorkfile = async () => {
@@ -436,7 +462,12 @@ const importWorkfile = async () => {
       toast.warning(t('dialog.translation_manager.workfile_language_mismatch', '导入文件的目标语言是 {language}，请先切换到对应目标语言后再导入。', { language: fileLanguage }))
       return
     }
-    const messages = extractWorkfileMessages(payload)
+    if (!Object.keys(flatBase.value).length) await loadMessages()
+    const { messages, errors } = extractWorkfileMessages(payload)
+    if (errors.length) {
+      toast.error(t('dialog.translation_manager.workfile_invalid', '导入文件存在 {count} 个格式问题：{detail}', { count: errors.length, detail: errors.slice(0, 3).join('；') }))
+      return
+    }
     if (!Object.keys(messages).length) {
       toast.warning(t('dialog.translation_manager.workfile_empty', '没有可导入的有效译文。'))
       return

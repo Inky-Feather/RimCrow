@@ -611,11 +611,14 @@ class API:
         return {}
 
     def _settings_payload(self) -> dict[str, Any]:
-        return settings.to_public_dict()
+        payload = settings.to_public_dict()
+        if payload.get("_secret_storage_warning_key") == "toast.settings.secret_storage_warning":
+            payload["_secret_storage_warning"] = str(tr("toast.settings.secret_storage_warning", "部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。"))
+        return payload
 
     def _localized_settings_warning(self, warning: Any) -> Any:
         text = str(warning or "").strip()
-        if text == "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。":
+        if text == "self_mods_path_reset":
             return tr("toast.settings.self_mods_path_reset", "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。")
         return warning
 
@@ -2767,24 +2770,22 @@ class API:
                     success_items.append(item)
                 else:
                     failed_items.append(item)
-            action_text = tr("api.mods.action_deactivate", "禁用") if disabled else tr("api.mods.action_activate", "启用")
             if not success_items and failed_items:
-                return ApiResponse.error(tr("api.mods.activate_state_failed", "Mod {action}失败：{reason}", action=action_text, reason=failed_items[0].get('message')), {
+                reason = failed_items[0].get('message')
+                failed_message = tr("api.mods.deactivate_failed", "Mod 禁用失败：{reason}", reason=reason) if disabled else tr("api.mods.activate_failed", "Mod 启用失败：{reason}", reason=reason)
+                return ApiResponse.error(failed_message, {
                     "success_count": 0,
                     "error_count": len(failed_items),
                     "errors": failed_items,
                 })
-            success_message = (
-                tr(
-                    "api.mods.activate_state_done_with_failed",
-                    "Mod 已{action} {success_count} 项，失败 {failed_count} 项",
-                    action=action_text,
-                    success_count=len(success_items),
-                    failed_count=len(failed_items),
+            if failed_items:
+                success_message = (
+                    tr("api.mods.deactivate_done_with_failed", "Mod 已禁用 {success_count} 项，失败 {failed_count} 项", success_count=len(success_items), failed_count=len(failed_items))
+                    if disabled
+                    else tr("api.mods.activate_done_with_failed", "Mod 已启用 {success_count} 项，失败 {failed_count} 项", success_count=len(success_items), failed_count=len(failed_items))
                 )
-                if failed_items
-                else tr("api.mods.activate_state_done", "Mod 已{action} {count} 项", action=action_text, count=len(success_items))
-            )
+            else:
+                success_message = tr("api.mods.deactivate_done", "Mod 已禁用 {count} 项", count=len(success_items)) if disabled else tr("api.mods.activate_done", "Mod 已启用 {count} 项", count=len(success_items))
             return ApiResponse.success({
                 "success_count": len(success_items),
                 "error_count": len(failed_items),
@@ -4241,7 +4242,7 @@ class API:
                         steam_app_id=RIMWORLD_STEAM_APP_ID_STR,
                     )
                     self.file_mgr.remove_existing_shortcut_variants(shortcut.get("shortcut_path", ""))
-                    launch_mode = "Steam 官方 AppID"
+                    launch_mode = "steam_appid"
                     return ApiResponse.success(
                         data={
                             "profile_id": profile_id,
@@ -4249,10 +4250,11 @@ class API:
                             "target_path": shortcut.get("target_path"),
                             "arguments": shortcut.get("arguments", ""),
                             "launch_mode": launch_mode,
+                            "launch_mode_label": str(tr("api.profile.launch_mode.steam_appid", "Steam 官方 AppID")),
                             "steam_path_valid": steam_path_valid,
                             "shortcut_kind": shortcut.get("shortcut_kind", "lnk"),
                         },
-                        message=tr("api.profile.shortcut_created", "已在桌面创建环境快捷方式（{mode}）", mode=launch_mode),
+                        message=tr("api.profile.shortcut_created_steam_appid", "已在桌面创建环境快捷方式（Steam 官方 AppID）"),
                     )
                 return ApiResponse.warning(
                     tr("api.profile.steam_shortcut_flow_required", "当前环境需要先注册 Steam 非 Steam 游戏条目，再由前端按流程等待 Steam 退出、写入配置并在 Steam 启动后确认稳定快捷方式 ID。"),
@@ -4272,7 +4274,7 @@ class API:
                 steam_app_id=RIMWORLD_STEAM_APP_ID_STR,
             )
             self.file_mgr.remove_existing_shortcut_variants(shortcut.get("shortcut_path", ""))
-            launch_mode = "游戏本体"
+            launch_mode = "game_executable"
             return ApiResponse.success(
                 data={
                     "profile_id": profile_id,
@@ -4280,13 +4282,14 @@ class API:
                     "target_path": shortcut.get("target_path"),
                     "arguments": shortcut.get("arguments", ""),
                     "launch_mode": launch_mode,
+                    "launch_mode_label": str(tr("api.profile.launch_mode.game_executable", "游戏本体")),
                     "steam_path_valid": steam_path_valid,
                     "shortcut_kind": shortcut.get("shortcut_kind", "lnk"),
                 },
                 message=(
-                    tr("api.profile.shortcut_created_after_steam_fallback", "当前未检测到有效 Steam 路径，已回退为环境快捷方式（{mode}）", mode=launch_mode)
+                    tr("api.profile.shortcut_created_after_steam_fallback_game_executable", "当前未检测到有效 Steam 路径，已回退为环境快捷方式（游戏本体）")
                     if prefer_steam_launch and not steam_path_valid
-                    else tr("api.profile.shortcut_created", "已在桌面创建环境快捷方式（{mode}）", mode=launch_mode)
+                    else tr("api.profile.shortcut_created_game_executable", "已在桌面创建环境快捷方式（游戏本体）")
                 ),
             )
         except Exception as e:
@@ -6210,7 +6213,7 @@ class API:
             "ai-task",
             status="pending",
             progress=0,
-            message=tr("api.ai.task_queued", "任务已加入后台队列"),
+            message=tr("tasks.message.queued", "任务已加入后台队列"),
             metrics={
                 "task_id": task_id,
                 "task_key": task_key,
@@ -7040,7 +7043,7 @@ class API:
                 "workshopId": normalize_workshop_id(mod.get("workshop_id")),
                 "pathHash": str(mod.get("path_hash") or "").strip(),
                 "path": str(mod.get("path") or "").strip(),
-                "name": str(mod.get("name") or mod.get("package_id") or mod.get("workshop_id") or "未知模组").strip(),
+                "name": str(mod.get("name") or mod.get("package_id") or mod.get("workshop_id") or "").strip(),
                 "downloadTime": 0,
                 "scannedTime": normalize_timestamp(mod.get("last_scanned_at")),
             }
@@ -7225,7 +7228,7 @@ class API:
             return {
                 "workshop_id": wid,
                 "package_id": f"ghost.{wid}", # 临时包名防止前端 key 报错
-                "name": meta.get('name') or f"未知/已下架模组 ({wid})",
+                "name": meta.get('name') or "",
                 "preview_url": meta.get('preview_url'),
                 "path": "", # 路径为空
                 "path_hash": f"ghost_{store_type}_{wid}", # 临时唯一哈希

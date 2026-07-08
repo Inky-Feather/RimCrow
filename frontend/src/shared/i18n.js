@@ -9,7 +9,7 @@ export const localeRevision = ref(0)
 
 const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value)
 
-const localeModules = import.meta.glob('../../locales/*.json', { eager: true, import: 'default' })
+const localeModules = import.meta.glob('../locales/*.json', { eager: true, import: 'default' })
 const builtinMessages = Object.fromEntries(Object.values(localeModules)
   .map(messages => [String(messages?._meta?.language || '').trim(), messages])
   .filter(([code, messages]) => code && isPlainObject(messages)))
@@ -146,6 +146,8 @@ export const findTranslationEntriesForText = (text = '') => {
     })
     .sort((left, right) => right.displayText.length - left.displayText.length)
 }
+
+export const findTranslationEntryByKey = (key = '') => translationRegistry.get(String(key || '').trim()) || null
 
 export const translateMessagePayload = (payload = {}, fallback = '') => {
   const key = String(payload?.message_key || '').trim()

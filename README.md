@@ -196,27 +196,57 @@ uv run pytest -q tests
 
 ## 多语言文本维护
 
-项目内置语言包位于：
+RimCrow 当前内置以下界面语言：
+
+- 简体中文：`zh-CN`
+- 繁體中文：`zh-TW`
+- English：`en`
+- Deutsch：`de`
+- 한국어：`ko`
+- Русский：`ru`
+
+### 翻译质量说明
+
+除简体中文外，当前内置翻译主要由 GPT 辅助生成，并经过脚本同步与基础校验。它们可能仍存在语法不自然、词义不准确、操作语境理解偏差或个别漏译。如果发现问题，可以提交反馈，或者通过应用内翻译管理、翻译模式或 `data/locales/<language>.json` 覆盖文件修正。
+
+语言包分为两类：
 
 ```text
-frontend/src/locales/
+frontend/src/locales/          # 内置语言包，随程序发布
+data/locales/<language>.json   # 用户覆盖语言包，运行时读取
 ```
 
-默认中文文案以代码里的 `t(...)` / `tr(...)` 默认文本为准，`zh-CN.json` 由脚本生成，不建议手动改语言包里的中文源文。需要调整中文文案时，优先改对应代码里的默认文本。
+默认中文文案以代码里的 `t(...)` / `tr(...)` 默认文本为准，`zh-CN.json` 由脚本生成，不建议直接手动改内置中文语言包。需要调整中文源文时，优先修改对应代码里的默认文本，再运行生成脚本同步语言包。
 
-生成或同步语言包：
+用户覆盖语言包按深度合并覆盖内置语言包，只需要写想覆盖的 key。切换语言时程序会重新读取 `data/locales/<language>.json`，适合用户自行修正翻译、补充新语言或临时覆盖个别文案。
+
+### 常用维护脚本
+
+生成或同步默认中文语言包：
 
 ```powershell
 uv run python scripts/extract_i18n_messages.py
 ```
 
-检查语言包是否和代码同步：
+检查 `zh-CN.json` 是否和代码默认文本同步，不写入文件：
 
 ```powershell
 uv run python scripts/extract_i18n_messages.py --check
 ```
 
-运行生成脚本时会执行这些处理：
+按 `zh-CN.json` 对齐其它内置语言包的字段结构和顺序：
+
+```powershell
+uv run python scripts/extract_i18n_messages.py --align-locales
+```
+
+报告疑似未接入多语言结构的裸中文：
+
+```powershell
+uv run python scripts/extract_i18n_messages.py --report-bare-chinese --report-limit 200
+```
+
+生成脚本会处理这些内容：
 
 - 扫描前端 `t('key', '默认中文')`、后端 `tr('key', '默认中文')` / `_tr(...)`，以及命令、引导、AI 定义元数据等专用表结构。
 - 重建 `frontend/src/locales/zh-CN.json`。
@@ -224,24 +254,44 @@ uv run python scripts/extract_i18n_messages.py --check
 - 新增 key 会自动补到其它语言包。
 - 删除 key 会从其它语言包移除。
 - 如果中文源文变化，或占位符 `{name}` 不一致，其它语言包对应文本会重置。
-- 其它语言包中自动补入的中文兜底会带上 `[UNTRANSLATED] ` 前缀，便于搜索待翻译内容。
+- 其它语言包中自动补入的待翻译文本会带上 `[UNTRANSLATED] ` 前缀，便于在文件中机械识别；正常界面不应把这个标记显示给用户。
 - 同步只处理 `frontend/src/locales/*.json`，不会修改用户的 `data/locales/*.json` 覆盖文件。
 
-检查疑似未接入多语言结构的裸中文：
+检查非中文语言包质量：
 
 ```powershell
-uv run python scripts/extract_i18n_messages.py --report-bare-chinese --report-limit 200
+uv run python scripts/validate_locale_quality.py --limit 200
 ```
 
-这个报告会过滤注释、日志、教程、命令表和暂不纳入语言包的 AI Prompt 正文；剩余结果通常需要人工判断是否属于用户可见文本。
+该脚本会检查非中文语言包中常见问题，包括残留中文、`[UNTRANSLATED]` 标记、占位符不一致、tooltip 标记不一致、空译文等。
 
-用户自定义语言包可放在运行目录：
+分析重复或相似文案，辅助精简 key 和调整作用域：
 
-```text
-data/locales/<language>.json
+```powershell
+uv run python scripts/analyze_i18n_duplicates.py --json
 ```
 
-用户语言包按深度合并覆盖内置语言包，只需要写想覆盖的 key。切换语言时会重新读取用户语言包。
+创建一个完整的新语言包骨架：
+
+```powershell
+uv run python scripts/create_locale.py --lang <language-code> --from en --mode untranslated
+```
+
+`create_locale.py` 只生成结构，不负责高质量翻译。`--mode empty` 会把译文留空，`--mode untranslated` 会写入未翻译标记，`--mode source` 会复制参考语言文本。
+
+校验外部翻译工作文件：
+
+```powershell
+uv run python scripts/locale_workfile.py <workfile>
+```
+
+校验通过后导入外部翻译工作文件：
+
+```powershell
+uv run python scripts/locale_workfile.py <workfile> --import
+```
+
+导入只会写入 `data/locales/<language>.json`，不会覆盖内置语言包。外部翻译文件适合先导出完整中文或其它参考语言，再交给翻译工具、人工校对或第三方协作处理。
 
 ## 打包
 

@@ -92,23 +92,71 @@ def test_builtin_locale_check_validates_file_meta_without_fixed_registry(tmp_pat
     monkeypatch.setattr(extractor, "BUILTIN_LOCALES_DIR", locales_dir)
     monkeypatch.setattr(extractor, "DEFAULT_LOCALE_PATH", locales_dir / "zh-CN.json")
 
-    errors = extractor.check_builtin_locale_keys({"ui.title": "标题"}, ["ui", "ui.title"], {"ui.title": "标题"})
+    errors = extractor.check_builtin_locale_keys({"ui.title": "标题"}, {"ui.title": "标题"})
 
     assert any("en.json 缺少 _meta" in error for error in errors)
     assert any("zz-copy.json _meta.language" in error and "重复" in error for error in errors)
 
 
-def test_translated_locale_payload_follows_default_order():
+def test_translated_locale_payload_preserves_existing_order_and_appends_new_keys():
     from scripts.extract_i18n_messages import build_translated_locale_payload, flatten_string_values
 
     payload, reset_count = build_translated_locale_payload(
         {"_meta": {"language": "en"}, "ui": {"second": "Second", "first": "First"}},
         {"ui.first": "第一", "ui.second": "第二"},
-        {"ui.first": "第一", "ui.second": "第二"},
+        {"ui.first": "第一", "ui.second": "第二", "ui.third": "第三"},
+    )
+
+    assert reset_count == 1
+    assert list(flatten_string_values(payload)) == ["ui.second", "ui.first", "ui.third"]
+
+
+def test_translated_locale_payload_resets_marker_mismatch():
+    from scripts.extract_i18n_messages import UNTRANSLATED_PREFIX, build_translated_locale_payload
+
+    payload, reset_count = build_translated_locale_payload(
+        {"ui": {"tip": "^^Broken"}},
+        {"ui.tip": "^^提示^^"},
+        {"ui.tip": "^^提示^^"},
+    )
+
+    assert reset_count == 1
+    assert payload["ui"]["tip"] == f"{UNTRANSLATED_PREFIX}^^提示^^"
+
+
+def test_translated_locale_payload_keeps_same_text_as_valid_translation():
+    from scripts.extract_i18n_messages import build_translated_locale_payload
+
+    payload, reset_count = build_translated_locale_payload(
+        {"ui": {"symbol": "^^|^^", "title": "简体中文"}},
+        {"ui.symbol": "^^|^^", "ui.title": "简体中文"},
+        {"ui.symbol": "^^|^^", "ui.title": "简体中文"},
     )
 
     assert reset_count == 0
-    assert list(flatten_string_values(payload)) == ["ui.first", "ui.second"]
+    assert payload["ui"]["symbol"] == "^^|^^"
+    assert payload["ui"]["title"] == "简体中文"
+
+
+def test_ensure_builtin_locale_meta_uses_language_registry(tmp_path):
+    from scripts.extract_i18n_messages import ensure_builtin_locale_meta
+
+    payload = ensure_builtin_locale_meta(tmp_path / "ko.json", {"ui": {"title": "Title"}})
+
+    assert payload["_meta"] == {
+        "type": "builtin_locale",
+        "language": "ko",
+        "label": "한국어",
+        "name": "Korean",
+    }
+
+
+def test_ensure_builtin_locale_meta_keeps_meta_first(tmp_path):
+    from scripts.extract_i18n_messages import ensure_builtin_locale_meta
+
+    payload = ensure_builtin_locale_meta(tmp_path / "en.json", {"ui": {"title": "Title"}, "_meta": {"language": "en"}})
+
+    assert list(payload)[:2] == ["_meta", "ui"]
 
 
 def test_extract_placeholders_reads_named_params():
@@ -123,7 +171,53 @@ def test_extract_locale_markers_reads_text_markers_without_visible_placeholders(
     assert extract_locale_markers("C:/Users/{用户名} ^^提示^^ [[复制]]") == ["^^", "^^", "[[", "]]"]
 
 
-def test_user_locale_options_skip_translation_workfiles(tmp_path, monkeypatch):
+def test_bare_chinese_report_ignores_inline_block_comment():
+    from scripts.extract_i18n_messages import CHINESE_PATTERN, strip_inline_comment
+
+    code_line = strip_inline_comment("width: 0; /* 初始宽度 */", ".vue")
+
+    assert not CHINESE_PATTERN.search(code_line)
+
+
+def test_bare_chinese_report_ignores_language_registry():
+    from scripts.extract_i18n_messages import ROOT, is_bare_chinese_candidate
+
+    path = ROOT / "backend" / "i18n" / "language_registry.py"
+
+    assert not is_bare_chinese_candidate(path, 'LanguageSpec("zh-CN", "ChineseSimplified", "简体中文")')
+
+
+def test_bare_chinese_report_ignores_diagnostic_files():
+    from scripts.extract_i18n_messages import ROOT, is_bare_chinese_candidate
+
+    assert not is_bare_chinese_candidate(ROOT / "backend" / "database" / "runtime.py", 'return False, "数据库文件不存在"')
+    assert not is_bare_chinese_candidate(ROOT / "backend" / "managers" / "mgr_game_logs.py", 'return {"error": "文件不存在"}')
+
+
+def test_bare_chinese_report_tracks_multiline_i18n_call_depth():
+    from scripts.extract_i18n_messages import I18N_CALL_LINE_PATTERN, paren_delta
+
+    lines = [
+        'message = tr(',
+        '    "api.example",',
+        '    "已经接入多语言",',
+        ')',
+    ]
+    depth = 0
+    reported = []
+    for line in lines:
+        if depth > 0:
+            depth = max(0, depth + paren_delta(line))
+            continue
+        if I18N_CALL_LINE_PATTERN.search(line):
+            depth = max(0, paren_delta(line))
+            continue
+        reported.append(line)
+
+    assert reported == []
+
+
+def test_user_locale_options_only_accept_user_locale_files(tmp_path, monkeypatch):
     import backend.i18n.messages as messages
 
     locales_dir = tmp_path / "locales"
@@ -136,5 +230,5 @@ def test_user_locale_options_skip_translation_workfiles(tmp_path, monkeypatch):
 
     values = {item["value"] for item in messages.list_user_locale_options()}
     assert "ja" in values
-    assert "legacy" in values
+    assert "legacy" not in values
     assert "ko" not in values

@@ -27,6 +27,7 @@ from backend.ai.ai_definitions import AIDefinitionManager
 from json_repair import repair_json
 
 from backend.settings import DATA_DIR, AIConfig, settings
+from backend.i18n.messages import tr
 from backend.utils.logger import logger
 from backend.utils.constants import get_lang_by_code
 from backend.utils.event_bus import EventBus
@@ -483,12 +484,12 @@ class AIManager:
         response = self.llm.completion(messages=messages, llm_kwargs=llm_kwargs)
         choices = getattr(response, "choices", None) or []
         if not choices:
-            raise ValueError("AI 任务没有返回有效内容")
+            raise ValueError(tr("api.ai.task_empty_result", "AI 任务没有返回有效内容"))
         message_obj = choices[0].message  # type: ignore
         result_text = self._message_text(getattr(message_obj, "content", ""))
         parsed_json = self._parse_structured_output(task_key, result_text)
         if parsed_json is None:
-            raise ValueError("AI 任务返回格式无效")
+            raise ValueError(tr("api.ai.task_invalid_result", "AI 任务返回格式无效"))
         return parsed_json
 
     # =========================================================================
@@ -562,7 +563,7 @@ class AIManager:
             runtime_variables,
         )
         if not items:
-            raise ValueError("模组别名任务缺少有效的模组输入")
+            raise ValueError(tr("api.ai.mod_alias_missing_input", "模组别名任务缺少有效的模组输入"))
 
         raw_cfg = settings.config.ai
         cfg = AIConfig(**raw_cfg) if isinstance(raw_cfg, dict) else raw_cfg
@@ -574,7 +575,7 @@ class AIManager:
         task_meta = {
             "task_id": str(task_id or "").strip(),
             "task_key": task_key,
-            "title": str(task_definition.name or "AI 任务").strip() or "AI 任务",
+            "title": str(task_definition.name or tr("tasks.ai.fallback_title", "AI 任务")).strip() or str(tr("tasks.ai.fallback_title", "AI 任务")),
             "created_at": int(time.time() * 1000),
             "input_total": len(items),
             "max_attempts": max_attempts,
@@ -603,7 +604,7 @@ class AIManager:
             description = str(item.get("description") or "").strip()
             if not description: return item
 
-            suffix = "...(截断)"
+            suffix = str(tr("tasks.ai.truncated_suffix", "...(截断)"))
             low, high = 0, len(description)
             best_description = ""
             while low <= high:
@@ -718,7 +719,7 @@ class AIManager:
                         "ai-task",
                         status="running",
                         progress=progress,
-                        message=f"正在推理... [第{attempt_count}轮] 成功: {len(successful_ids)}/{len(items)}",
+                        message=tr("tasks.ai.reasoning_progress", "正在推理... [第{attempt}轮] 成功: {success}/{total}", attempt=attempt_count, success=len(successful_ids), total=len(items)),
                         metrics={
                             **task_meta,
                             "attempt_count": attempt_count,
@@ -752,7 +753,7 @@ class AIManager:
                 "ai-task",
                 status="cancelled",
                 progress=0,
-                message="AI 任务已取消",
+                message=tr("tasks.ai.cancelled", "AI 任务已取消"),
                 metrics={
                     **task_meta,
                     "attempt_count": attempt_count,
@@ -802,7 +803,7 @@ class AIManager:
             "ai-task",
             status="success",
             progress=100,
-            message=f"推理结束！成功: {len(successful_ids)}, 失败: {failed_count}",
+            message=tr("tasks.ai.finished", "推理结束！成功: {success}, 失败: {failed}", success=len(successful_ids), failed=failed_count),
             metrics={
                 **task_meta,
                 "attempt_count": attempt_count,

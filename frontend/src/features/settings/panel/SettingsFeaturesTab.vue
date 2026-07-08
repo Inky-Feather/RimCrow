@@ -107,15 +107,15 @@ const autoSortStrategyOptions = computed(() => [
   { label: t('ui.settings.features.auto_sort_strategy.edge_enhanced', '两端强化排序（新版）'), value: 'edge_enhanced_sort_logic' },
 ])
 const modNameSortOptions = computed(() => [
-  { label: t('ui.settings.features.name_sort.alias', '按别名'), value: 'alias_name' },
-  { label: t('ui.settings.features.name_sort.name', '按原名'), value: 'name' },
-  { label: t('ui.settings.features.name_sort.package_id', '按包名'), value: 'id' },
+  { label: t('ui.mod.option.by_alias', '按别名'), value: 'alias_name' },
+  { label: t('ui.mod.option.by_name_short', '按原名'), value: 'name' },
+  { label: t('ui.mod.option.by_package_id', '按包名'), value: 'id' },
 ])
 const coexistFolderNameOptions = computed(() => [
-  { label: t('ui.settings.features.folder_name.workshop_id', '按工坊 ID'), value: 'workshop_id' },
-  { label: t('ui.settings.features.folder_name.package_id', '按包名'), value: 'package_id' },
-  { label: t('ui.settings.features.folder_name.name', '按原名'), value: 'name' },
-  { label: t('ui.settings.features.folder_name.alias', '按别名'), value: 'alias_name' },
+  { label: t('ui.mod.option.by_workshop_id', '按工坊 ID'), value: 'workshop_id' },
+  { label: t('ui.mod.option.by_package_id', '按包名'), value: 'package_id' },
+  { label: t('ui.mod.option.by_name_short', '按原名'), value: 'name' },
+  { label: t('ui.mod.option.by_alias', '按别名'), value: 'alias_name' },
 ])
 const linkDeploymentOptions = computed(() => [
   { label: t('ui.settings.features.link_deployment.incremental', '增量部署（默认）'), value: 'incremental' },

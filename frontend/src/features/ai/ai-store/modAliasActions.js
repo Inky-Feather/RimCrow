@@ -77,7 +77,7 @@ export const useModAliasActions = ({
       type: 'ai-task',
       status: 'pending',
       progress: 0,
-      message: t('ai.mod_alias.task_queued', '任务已加入后台队列'),
+      message: t('tasks.message.queued', '任务已加入后台队列'),
       metrics: {
         task_id: taskId,
         task_key: 'task.mod_alias_generation',

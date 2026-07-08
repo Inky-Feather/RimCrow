@@ -83,7 +83,7 @@ def _locale_meta(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 def _is_user_locale_payload(payload: Mapping[str, Any]) -> bool:
     meta_type = str(_locale_meta(payload).get("type") or "").strip()
-    return meta_type in {"", "user_locale"}
+    return meta_type == "user_locale"
 
 
 def list_user_locale_options() -> list[dict[str, Any]]:

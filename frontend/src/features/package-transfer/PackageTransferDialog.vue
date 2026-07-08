@@ -437,10 +437,10 @@ const exportForm = reactive({
 
 const modFolderNameTypeOptions = computed(() => [
   { label: t('common.status.default', '默认'), value: 'default' },
-  { label: t('dialog.package_transfer.folder_name.alias', '按别名'), value: 'alias_name' },
-  { label: t('dialog.package_transfer.folder_name.original', '按原模组名'), value: 'name' },
-  { label: t('dialog.package_transfer.folder_name.workshop_id', '按工坊ID'), value: 'workshop_id' },
-  { label: t('dialog.package_transfer.folder_name.package_id', '按包名'), value: 'package_id' },
+  { label: t('ui.mod.option.by_alias', '按别名'), value: 'alias_name' },
+  { label: t('ui.mod.option.by_name', '按原模组名'), value: 'name' },
+  { label: t('ui.mod.option.by_workshop_id', '按工坊 ID'), value: 'workshop_id' },
+  { label: t('ui.mod.option.by_package_id', '按包名'), value: 'package_id' },
 ])
 const profileStrategyOptions = computed(() => [
   { value: 'overwrite_all', label: t('dialog.package_transfer.strategy.overwrite_all', '全部覆盖') },

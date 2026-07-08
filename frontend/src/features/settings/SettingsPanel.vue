@@ -133,7 +133,7 @@ import SettingsAboutTab from './panel/SettingsAboutTab.vue'
 import { DEFAULT_THEME_ID, applyTheme } from './theme/themeManager'
 import { useAppStore } from '../../app/stores/appStore'
 import { useProfileStore } from '../profiles/profileStore'
-import { t, translateMessagePayload } from '../../shared/i18n.js'
+import { setLocale, t, translateMessagePayload } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const profileStore = useProfileStore()
@@ -164,6 +164,8 @@ const SECRET_FIELD_PATHS = {
   'network.proxy.password': 'network.proxy.password',
 }
 let settingsPanelOpenVersion = 0
+let settingsPanelLanguageSnapshot = ''
+let isApplyingSettings = false
 
 const currentTabLabel = computed(() => (
   tabs.value.find(item => item.id === currentTab.value)?.label || currentTab.value
@@ -401,6 +403,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   if (val) {
     const openVersion = ++settingsPanelOpenVersion
     formData.value = buildSettingsFormData()
+    settingsPanelLanguageSnapshot = appStore.settings.language || 'zh-CN'
     markSavedSecretsPreserved(formData.value)
     showSecretStorageWarning(formData.value)
     void (async () => {
@@ -415,9 +418,16 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   } else {
     settingsPanelOpenVersion += 1
     if (!appStore.themeEditor.isOpen) applyTheme(appStore.currentTheme)
+    if (!isApplyingSettings && settingsPanelLanguageSnapshot) void setLocale(settingsPanelLanguageSnapshot)
     clearFormSecrets(formData.value)
+    settingsPanelLanguageSnapshot = ''
   }
 }, { immediate: true })
+
+watch(() => formData.value?.language, (language) => {
+  if (!appStore.uiState.showSettingsPanel || !language) return
+  void setLocale(language)
+})
 
 // 手动选择其他路径
 const handleBrowse = async (pathKey, fileTypes, checkTarget = undefined) => {
@@ -442,6 +452,7 @@ const handleBrowse = async (pathKey, fileTypes, checkTarget = undefined) => {
 const save = async () => {
   if (saving.value) return
   saving.value = true
+  isApplyingSettings = true
   try {
     await validateEnabledLaunchOptions()
     // 校验拦截
@@ -455,6 +466,7 @@ const save = async () => {
     }
     await appStore.applySettings(formData.value)
   } finally {
+    isApplyingSettings = false
     saving.value = false
   }
 }

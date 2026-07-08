@@ -479,7 +479,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
   const formatStartupEventNames = (changes = [], status = '', limit = 8) => {
     const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.status === status)
-    const shown = targets.slice(0, limit).map(item => `· ${item.name}`).join('\n')
+    const shown = targets.slice(0, limit).map((item) => {
+      const workshopId = normalizeWorkshopId(item?.workshopId)
+      return `· ${item?.name || workshopId || t('common.entity.unknown_mod', '未知模组')}`
+    }).join('\n')
     const more = targets.length > limit ? t('ui.workspace.startup.more_items', '\n等 {count} 个模组。', { count: targets.length }) : ''
     return shown ? `${shown}${more}` : ''
   }

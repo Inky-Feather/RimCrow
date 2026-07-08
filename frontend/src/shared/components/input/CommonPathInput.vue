@@ -53,7 +53,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useAppStore } from '../../../app/stores/appStore'
-import { t } from '../../i18n.js'
+import { t, translateMessagePayload } from '../../i18n.js'
 
 const props = defineProps({
   label: String,
@@ -79,7 +79,7 @@ const openInExplorer = () => {
 const checkMsg = computed(() => {
   if (props.check) {
     // console.log(props.check)
-    let msg = props.check['msg'] || ''
+    let msg = translateMessagePayload(props.check, props.check['msg'] || '')
     if (props.check['type'] === 'success') msg='##'+msg+'##'
     else if (props.check['type'] === 'error') msg='!!'+msg+'\n'+t('tooltip.path.check_valid', '请检查路径是否有效！')+'!!'
     else if (props.check['type'] === 'warn') msg='^^'+msg+'\n'+t('tooltip.path.check_correct', '请检查路径是否正确！')+'^^'

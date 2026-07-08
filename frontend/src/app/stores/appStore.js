@@ -623,10 +623,10 @@ export const useAppStore = defineStore('app', () => {
       if (locale !== DEFAULT_LOCALE && languageInfo?.user && !languageInfo?.builtin) {
         const data = await getLocaleMessagesForManagement(locale)
         const total = countLocaleStrings(data.base)
-        const translated = countLocaleStrings(data.user)
-        const progress = total > 0 ? Math.round((translated / total) * 100) : 0
-        const message = translated > 0
-          ? t('messages.app.language.partial_locale', '已切换到 {language}，当前语言包约完成 {progress}%，未翻译内容将显示默认中文。', { language: languageInfo.label || locale, progress })
+        const overridden = countLocaleStrings(data.user)
+        const coverage = total > 0 ? Math.round((overridden / total) * 100) : 0
+        const message = overridden > 0
+          ? t('messages.app.language.partial_locale', '已切换到 {language}，当前用户语言包覆盖率约 {coverage}%，未覆盖内容将显示默认中文。', { language: languageInfo.label || locale, coverage })
           : t('messages.app.language.empty_locale', '已切换到 {language}，该语言包暂无翻译，界面将暂时显示默认中文。', { language: languageInfo.label || locale })
         toast.info(message, { timeout: 5000 })
       }

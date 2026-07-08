@@ -573,7 +573,7 @@ class SettingsManager:
         self.config.self_mods_path = normalize_path_for_storage(self.config.self_mods_path) or str(MODS_DIR)
         if self.config.workshop_mods_path and same_path(self.config.self_mods_path, self.config.workshop_mods_path):
             self.config.self_mods_path = str(MODS_DIR)
-            warnings.append("管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。")
+            warnings.append("self_mods_path_reset")
         self.config.ripgrep_path = normalize_path_for_storage(self.config.ripgrep_path) or str(TOOLS_DIR / "ripgrep")
         self.config.load_order_import_custom_path = normalize_path_for_storage(self.config.load_order_import_custom_path)
         self.config.load_order_import_last_path = normalize_path_for_storage(self.config.load_order_import_last_path)
@@ -775,7 +775,7 @@ class SettingsManager:
         payload = self.to_storage_dict()
         payload["_secret_status"] = self.get_secret_status()
         if secret_store.fallback_keys:
-            payload["_secret_storage_warning"] = "部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。"
+            payload["_secret_storage_warning"] = "secret_storage_warning"
             payload["_secret_storage_warning_key"] = "toast.settings.secret_storage_warning"
             payload["_secret_storage_warning_params"] = {}
         return payload

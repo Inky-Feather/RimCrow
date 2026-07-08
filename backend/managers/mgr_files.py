@@ -22,6 +22,7 @@ from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
 from backend.paths.game_locations import normalize_steam_root, resolve_steam_executable_path, resolve_steamcmd_executable_path
 from backend.paths.rimworld_layout import normalize_rimworld_install_root
+from backend.i18n.messages import localized_key, localized_params, tr
 from backend.profile import UserDataRoot
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
@@ -1644,14 +1645,21 @@ class FileManager:
 class PathChecker:
 
     @classmethod
-    def _format_res(cls, is_pass: bool, data: Any = None, msg: str = "", msg_type: str = "success"):
+    def _format_res(cls, is_pass: bool, data: Any = None, msg: Any = "", msg_type: str = "success"):
         """统一返回格式"""
-        return {
+        result = {
             'pass': is_pass,
             'data': data,
             'type': msg_type if is_pass else ("error" if msg_type == "success" else msg_type),
-            'msg': msg
+            'msg': str(msg or "")
         }
+        key = localized_key(msg)
+        if key:
+            result['msg_key'] = key
+        params = localized_params(msg)
+        if params:
+            result['msg_params'] = params
+        return result
     
     @classmethod
     def check_normal_path(cls, path_str: str) -> Dict:
@@ -1664,17 +1672,17 @@ class PathChecker:
             'msg': ''
         }
         """
-        if not path_str: return cls._format_res(False, msg="路径不能为空")
+        if not path_str: return cls._format_res(False, msg=tr("api.path.empty", "路径不能为空"))
         path = Path(path_str)
         # 文件路径只警告，检查其父路径是否存在
         if len(os.path.splitext(path_str.strip())[1]) > 0:
             if path.parent.exists():
-                if path.is_file(): return cls._format_res(True, data=str(path), msg=f"路径有效：{path}")
-                return cls._format_res(True, msg=f"父路径下不存在该文件，软件会按需生成该文件。", msg_type="warning")
-            return cls._format_res(False, msg=f"{path_str}\n父路径不存在！")
+                if path.is_file(): return cls._format_res(True, data=str(path), msg=tr("api.path.valid", "路径有效：{path}", path=str(path)))
+                return cls._format_res(True, msg=tr("api.path.parent_exists_file_will_be_created", "父路径下不存在该文件，软件会按需生成该文件。"), msg_type="warning")
+            return cls._format_res(False, msg=tr("api.path.parent_missing", "{path}\n父路径不存在！", path=path_str))
         
-        if not path.exists(): return cls._format_res(False, msg=f"{path_str}\n路径不存在！")
-        return cls._format_res(True, data=str(path), msg=f"路径有效：{path}")
+        if not path.exists(): return cls._format_res(False, msg=tr("api.path.not_exists", "{path}\n路径不存在！", path=path_str))
+        return cls._format_res(True, data=str(path), msg=tr("api.path.valid", "路径有效：{path}", path=str(path)))
     
     @classmethod
     def check_install_path(cls, path_str: str, *, force_steam_inspect: bool = False) -> Dict:
@@ -1687,21 +1695,21 @@ class PathChecker:
             'msg': ''
         }
         """
-        if not path_str: return cls._format_res(False, msg="安装路径不能为空")
+        if not path_str: return cls._format_res(False, msg=tr("api.path.game_install_empty", "安装路径不能为空"))
         path = Path(normalize_rimworld_install_root(path_str, system_name=platform.system()))
-        if not path.exists(): return cls._format_res(False, msg="游戏安装路径不存在！")
+        if not path.exists(): return cls._format_res(False, msg=tr("api.path.game_install_missing", "游戏安装路径不存在！"))
         res = {}
         # 1. 检查执行文件
         exe = GameManager.detect_executable(str(path))
         if exe:
-            res = cls._format_res(True, data={}, msg=f"游戏安装路径: {path}")
+            res = cls._format_res(True, data={}, msg=tr("api.path.game_install_path", "游戏安装路径: {path}", path=str(path)))
             res['data']["game_exe"] = str(exe)
         else:
-            res = cls._format_res(False, msg="无法检测到游戏程序")
+            res = cls._format_res(False, msg=tr("api.path.game_executable_missing", "无法检测到游戏程序"))
             return res
         # 2. 检查版本
         version = GameManager.get_game_version(str(path))
-        res['data']["game_version"] = version if version else "未知"
+        res['data']["game_version"] = version if version else str(tr("common.status.unknown", "未知"))
         # 3. Steam 判定
         from backend.managers.mgr_game_install import GameInstallInspector
 
@@ -1709,15 +1717,19 @@ class PathChecker:
         install_facts = inspector.inspect(str(path), force=True) if force_steam_inspect else inspector.quick_inspect(str(path))
         res['data']["is_steam"] = bool(install_facts.is_steam)
         res['data']["is_steam_managed"] = bool(install_facts.is_steam_managed)
-        steam_text = "Steam 版" if install_facts.is_steam else "非 Steam 版"
-        managed_text = "受 Steam 管理主版本" if install_facts.is_steam_managed else "非 Steam 管理主版本"
-        res['msg'] = f"游戏本体：{exe}\n游戏版本：{version}\n{steam_text}\n{managed_text}"
+        steam_text = tr("api.path.game_install_steam", "Steam 版") if install_facts.is_steam else tr("api.path.game_install_non_steam", "非 Steam 版")
+        managed_text = tr("api.path.game_install_steam_managed", "受 Steam 管理主版本") if install_facts.is_steam_managed else tr("api.path.game_install_not_steam_managed", "非 Steam 管理主版本")
+        res.update(cls._format_res(
+            True,
+            data=res.get('data') or {},
+            msg=tr("api.path.game_install_summary", "游戏本体：{exe}\n游戏版本：{version}\n{steam_text}\n{managed_text}", exe=str(exe), version=version or str(tr("common.status.unknown", "未知")), steam_text=str(steam_text), managed_text=str(managed_text)),
+        ))
         
         return res
     
     @classmethod
     def check_user_data_path(cls, path_str:str) -> Dict:
-        if not path_str: return cls._format_res(False, msg="用户数据路径不能为空")
+        if not path_str: return cls._format_res(False, msg=tr("api.path.user_data_empty", "用户数据路径不能为空"))
         try:
             normalized_path = UserDataRoot.from_raw(
                 path_str,
@@ -1728,9 +1740,9 @@ class PathChecker:
         # 哪怕目录不存在，只要父目录存在且有写入权限，我们就认为合法（因为我们可以创建它）
         parent_dir = os.path.dirname(normalized_path)
         if parent_dir and not os.path.exists(parent_dir):
-            return cls._format_res(False, msg=f"父目录不存在: {parent_dir}")
+            return cls._format_res(False, msg=tr("api.path.parent_dir_missing", "父目录不存在: {path}", path=parent_dir))
         if parent_dir and not os.access(parent_dir, os.W_OK):
-            return cls._format_res(False, msg="目录无写入权限，请以管理员身份运行或更换路径")
+            return cls._format_res(False, msg=tr("api.path.parent_dir_not_writable", "目录无写入权限，请以管理员身份运行或更换路径"))
 
         config_dir = os.path.join(normalized_path, "Config")
         mods_config_file = os.path.join(config_dir, "ModsConfig.xml")
@@ -1738,23 +1750,23 @@ class PathChecker:
         if not os.path.exists(normalized_path):
             return cls._format_res(
                 True,
-                msg=f"用户数据目录 {normalized_path} 当前不存在，但父目录可写；保存或激活环境时会自动创建目录结构。",
+                msg=tr("api.path.user_data_will_be_created", "用户数据目录 {path} 当前不存在，但父目录可写；保存或激活环境时会自动创建目录结构。", path=normalized_path),
                 msg_type="warn",
             )
         if not os.path.exists(config_dir):
             return cls._format_res(
                 True,
-                msg=f"用户数据路径 {normalized_path} 下无 Config 目录；程序会在保存或激活环境时自动生成。",
+                msg=tr("api.path.user_data_config_missing", "用户数据路径 {path} 下无 Config 目录；程序会在保存或激活环境时自动生成。", path=normalized_path),
                 msg_type="warn",
             )
         if not os.path.exists(mods_config_file):
             return cls._format_res(
                 True,
-                msg=f"用户数据路径 {normalized_path} 下未检测到 Config/ModsConfig.xml；路径仍可使用，游戏首次写入配置后会自动生成。",
+                msg=tr("api.path.user_data_mods_config_missing", "用户数据路径 {path} 下未检测到 Config/ModsConfig.xml；路径仍可使用，游戏首次写入配置后会自动生成。", path=normalized_path),
                 msg_type="warn",
             )
 
-        return cls._format_res(True, msg="校验通过")
+        return cls._format_res(True, msg=tr("api.path.check_passed", "校验通过"))
     
     @classmethod
     def check_mods_config(cls, path_str: str) -> Dict:
@@ -1768,8 +1780,8 @@ class PathChecker:
         }
         """
         path = Path(path_str) / "ModsConfig.xml"
-        if path.exists(): return cls._format_res(True, data=str(path), msg=f"Mods 配置文件：{path}")
-        return cls._format_res(False, msg="未找到 ModsConfig.xml", msg_type="warn")
+        if path.exists(): return cls._format_res(True, data=str(path), msg=tr("api.path.mods_config_file", "Mods 配置文件：{path}", path=str(path)))
+        return cls._format_res(False, msg=tr("api.path.mods_config_missing", "未找到 ModsConfig.xml"), msg_type="warn")
 
     @classmethod
     def check_workshop_path(cls, path_str: str) -> Dict:
@@ -1786,7 +1798,7 @@ class PathChecker:
         }
         """
         if not path_str:
-            return cls._format_res(False, msg="Workshop 路径不存在")
+            return cls._format_res(False, msg=tr("api.path.workshop_missing", "Workshop 路径不存在"))
 
         path = Path(path_str)
         normalized_parts = [part.lower() for part in Path(os.path.normpath(path_str)).parts]
@@ -1799,13 +1811,13 @@ class PathChecker:
             return cls._format_res(
                 True,
                 data=path_str,
-                msg=f"RimWorld 工坊目录尚未生成：{path_str}\n订阅或下载工坊内容后通常会自动出现。",
+                msg=tr("api.path.workshop_will_be_created", "RimWorld 工坊目录尚未生成：{path}\n订阅或下载工坊内容后通常会自动出现。", path=path_str),
                 msg_type="warn",
             )
         if not path.exists():
-            return cls._format_res(False, msg="Workshop 路径不存在")
+            return cls._format_res(False, msg=tr("api.path.workshop_missing", "Workshop 路径不存在"))
         return cls._format_res(is_valid, data=path_str, 
-                               msg=f"Workshop 路径：{path_str}" if is_valid else f"路径不在 Steam Workshop {RIMWORLD_STEAM_APP_ID_STR} 目录中",
+                               msg=tr("api.path.workshop_path", "Workshop 路径：{path}", path=path_str) if is_valid else tr("api.path.not_steam_workshop_content", "路径不在 Steam Workshop {app_id} 目录中", app_id=RIMWORLD_STEAM_APP_ID_STR),
                                msg_type="success" if is_valid else "warn")
         
     @classmethod
@@ -1820,21 +1832,21 @@ class PathChecker:
         }
         """
         if not path_str:
-            return cls._format_res(False, msg="未指定 Steam 路径")
+            return cls._format_res(False, msg=tr("api.path.steam_empty", "未指定 Steam 路径"))
         normalized_root = normalize_steam_root(path_str, system_name=platform.system())
         steam_root = Path(normalized_root or path_str)
         if not steam_root.exists():
-            return cls._format_res(False, msg="Steam 路径不存在")
+            return cls._format_res(False, msg=tr("api.path.steam_missing", "Steam 路径不存在"))
 
         system_name = platform.system()
         resolved_executable = resolve_steam_executable_path(str(steam_root), system_name=system_name)
         if resolved_executable:
-            return cls._format_res(True, data=str(steam_root), msg=f"Steam 客户端：{resolved_executable}")
+            return cls._format_res(True, data=str(steam_root), msg=tr("api.path.steam_client", "Steam 客户端：{path}", path=str(resolved_executable)))
         if system_name == "Linux":
-            return cls._format_res(True, data=str(steam_root), msg=f"Steam 根目录：{steam_root}")
+            return cls._format_res(True, data=str(steam_root), msg=tr("api.path.steam_root", "Steam 根目录：{path}", path=str(steam_root)))
         if system_name == "Darwin":
-            return cls._format_res(False, msg="路径下未找到 Steam.app/Contents/MacOS/steam_osx", msg_type="warn")
-        return cls._format_res(False, msg="路径下未找到 steam.exe", msg_type="warn")
+            return cls._format_res(False, msg=tr("api.path.steam_macos_executable_missing", "路径下未找到 Steam.app/Contents/MacOS/steam_osx"), msg_type="warn")
+        return cls._format_res(False, msg=tr("api.path.steam_windows_executable_missing", "路径下未找到 steam.exe"), msg_type="warn")
     
     @classmethod
     def check_steamcmd_path(cls, path_str: str) -> Dict:
@@ -1847,17 +1859,17 @@ class PathChecker:
             'msg': ''
         }
         """
-        if not path_str: return cls._format_res(False, msg="未指定 SteamCMD 路径")
+        if not path_str: return cls._format_res(False, msg=tr("api.path.steamcmd_empty", "未指定 SteamCMD 路径"))
         # 中文路经检查，steamcmd路径不能包含任何中文
         pattern = re.compile(r'[\u4e00-\u9fff]')
         result = pattern.search(path_str)
-        if result: return cls._format_res(False, msg="SteamCMD 路径不能包含中文")
+        if result: return cls._format_res(False, msg=tr("api.path.steamcmd_contains_chinese", "SteamCMD 路径不能包含中文"))
         
         exe_path = Path(resolve_steamcmd_executable_path(path_str, system_name=platform.system()))
         if exe_path.exists():
-            return cls._format_res(True, data=path_str, msg=f"SteamCMD 客户端：{exe_path}")
+            return cls._format_res(True, data=path_str, msg=tr("api.path.steamcmd_client", "SteamCMD 客户端：{path}", path=str(exe_path)))
         expected_name = "steamcmd.exe" if platform.system() == "Windows" else "steamcmd.sh"
-        return cls._format_res(False, msg=f"路径下未找到 {expected_name}", msg_type="warn")
+        return cls._format_res(False, msg=tr("api.path.executable_missing_under_path", "路径下未找到 {expected}", expected=expected_name), msg_type="warn")
 
     @classmethod
     def check_texture_tools_path(cls, path_str: str) -> Dict:
@@ -1866,19 +1878,19 @@ class PathChecker:
         这里统一按“目录中是否存在 todds.exe”判断，和 SteamCMD 的目录检查风格保持一致。
         """
         if not path_str:
-            return cls._format_res(False, msg="未指定贴图工具目录")
+            return cls._format_res(False, msg=tr("api.path.texture_tools_empty", "未指定贴图工具目录"))
         path = Path(path_str)
         if not path.exists():
-            return cls._format_res(False, msg="贴图工具目录不存在")
+            return cls._format_res(False, msg=tr("api.path.texture_tools_missing", "贴图工具目录不存在"))
         if not path.is_dir():
-            return cls._format_res(False, msg="贴图工具路径必须是目录")
+            return cls._format_res(False, msg=tr("api.path.texture_tools_not_dir", "贴图工具路径必须是目录"))
 
         exe_path = path / "todds.exe"
         if exe_path.exists():
-            return cls._format_res(True, data=path_str, msg=f"贴图工具：{exe_path}")
+            return cls._format_res(True, data=path_str, msg=tr("api.path.texture_tools_executable", "贴图工具：{path}", path=str(exe_path)))
         if platform.system() != "Windows":
-            return cls._format_res(False, msg="当前核心运行范围不包含 macOS/Linux 的 todds 自动化支持", msg_type="warn")
-        return cls._format_res(False, msg="目录下未找到 todds.exe，可在外部工具检查中下载安装", msg_type="warn")
+            return cls._format_res(False, msg=tr("api.path.texture_tools_windows_only", "当前核心运行范围不包含 macOS/Linux 的 todds 自动化支持"), msg_type="warn")
+        return cls._format_res(False, msg=tr("api.path.todds_missing", "目录下未找到 todds.exe，可在外部工具检查中下载安装"), msg_type="warn")
 
     @classmethod
     def check_ripgrep_path(cls, path_str: str) -> Dict:
@@ -1889,12 +1901,12 @@ class PathChecker:
         但前端仍建议用户选择目录，以便后续自动更新时保持一致。
         """
         if not path_str:
-            return cls._format_res(False, msg="未指定 ripgrep 目录")
+            return cls._format_res(False, msg=tr("api.path.ripgrep_empty", "未指定 ripgrep 目录"))
         path = Path(path_str)
         if not path.exists():
-            return cls._format_res(False, msg="ripgrep 路径不存在")
+            return cls._format_res(False, msg=tr("api.path.ripgrep_missing", "ripgrep 路径不存在"))
         if not path.is_file() and not path.is_dir():
-            return cls._format_res(False, msg="ripgrep 路径必须是目录")
+            return cls._format_res(False, msg=tr("api.path.ripgrep_not_dir", "ripgrep 路径必须是目录"))
 
         from backend.text_search.tooling import get_ripgrep_status, resolve_ripgrep_root
 
@@ -1903,12 +1915,12 @@ class PathChecker:
             return cls._format_res(
                 True,
                 data=str(resolve_ripgrep_root(path_str)),
-                msg=f"ripgrep：{status.resolved_path}",
+                msg=tr("api.path.ripgrep_executable", "ripgrep：{path}", path=str(status.resolved_path)),
             )
 
         if path.is_file():
-            return cls._format_res(False, msg="请选择 rg.exe 或其所在目录", msg_type="warn")
-        return cls._format_res(False, msg="目录下未找到 rg.exe，可在外部工具检查中下载安装", msg_type="warn")
+            return cls._format_res(False, msg=tr("api.path.ripgrep_choose_executable_or_dir", "请选择 rg.exe 或其所在目录"), msg_type="warn")
+        return cls._format_res(False, msg=tr("api.path.ripgrep_missing_executable", "目录下未找到 rg.exe，可在外部工具检查中下载安装"), msg_type="warn")
         
     @classmethod
     def paths_check(cls, paths_data: Dict[str, str]) -> Dict:

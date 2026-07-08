@@ -164,10 +164,10 @@ const logLevelOptions = [
 ]
 const bundleFolderNameOptions = computed(() => [
   { label: t('ui.settings.dev.folder_name.default', '默认'), value: 'default' },
-  { label: t('ui.settings.dev.folder_name.alias', '按别名'), value: 'alias_name' },
-  { label: t('ui.settings.dev.folder_name.name', '按原模组名'), value: 'name' },
-  { label: t('ui.settings.dev.folder_name.workshop_id', '按工坊 ID'), value: 'workshop_id' },
-  { label: t('ui.settings.dev.folder_name.package_id', '按包名'), value: 'package_id' },
+  { label: t('ui.mod.option.by_alias', '按别名'), value: 'alias_name' },
+  { label: t('ui.mod.option.by_name', '按原模组名'), value: 'name' },
+  { label: t('ui.mod.option.by_workshop_id', '按工坊 ID'), value: 'workshop_id' },
+  { label: t('ui.mod.option.by_package_id', '按包名'), value: 'package_id' },
 ])
 const isPending = (action) => pendingAction.value === action
 const runPendingAction = async (action, runner) => {
