@@ -17,7 +17,7 @@ import webbrowser
 import webview
 import tempfile
 from pathlib import Path
-from dataclasses import dataclass, asdict, is_dataclass
+from dataclasses import dataclass, asdict, fields, is_dataclass
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Dict, List, cast
 from peewee import Model, JOIN
@@ -105,7 +105,7 @@ def _build_error_detail(detail: Any = None, context: dict[str, Any] | None = Non
 
 def _localized_message_payload(message: Any) -> dict[str, Any]:
     """把启动期提示收口成前端可翻译 payload；普通字符串保持旧显示方式。"""
-    payload = {"message": str(message or "")}
+    payload: dict[str, Any] = {"message": str(message or "")}
     key = localized_key(message)
     params = localized_params(message)
     if key:
@@ -365,10 +365,9 @@ class ApiResponse:
         # 1. 检查对象是否自带 to_dict 方法 (这会覆盖 dataclass 的默认行为)
         if hasattr(obj, 'to_dict') and callable(getattr(obj, 'to_dict')):
             return cls.serialize_data(obj.to_dict())
-        # 2. 如果是 dataclass 但没有 to_dict，再回退到默认的 asdict
+        # 2. 如果是 dataclass 但没有 to_dict，浅取字段后继续递归，避免 asdict deepcopy 特殊 str 子类
         if is_dataclass(obj):
-            from dataclasses import asdict
-            return cls.serialize_data(asdict(obj)) # type: ignore
+            return {field.name: cls.serialize_data(getattr(obj, field.name)) for field in fields(obj)}
         # 1. 处理 Peewee 模型对象
         if isinstance(obj, Model):
             # recurse=True 自动处理关联表，但通常建议只转单表
@@ -1526,7 +1525,8 @@ class API:
                 payload = json.load(handle)
             if not isinstance(payload, dict):
                 raise ValueError("翻译文件内容不是 JSON 对象")
-            meta = payload.get("_meta") if isinstance(payload.get("_meta"), dict) else {}
+            raw_meta = payload.get("_meta")
+            meta: dict[str, Any] = raw_meta if isinstance(raw_meta, dict) else {}
             messages = payload.get("messages") if isinstance(payload.get("messages"), dict) else {key: value for key, value in payload.items() if key != "_meta"}
             return ApiResponse.success({
                 "path": normalize_path_for_storage(source),
@@ -6182,8 +6182,8 @@ class API:
                     'task_id': task_id,
                     'status': 'error', 
                     'message': str(failed_message),
-                    'message_key': failed_message.key,
-                    'message_params': failed_message.params,
+                    'message_key': localized_key(failed_message),
+                    'message_params': localized_params(failed_message),
                     'detail': {"original_error": str(e)}
                 })
             finally:

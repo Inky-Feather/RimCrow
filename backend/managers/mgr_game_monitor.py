@@ -1,7 +1,7 @@
 import os
 import time
 import threading
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 import ctypes
 import psutil
@@ -29,7 +29,17 @@ class RuntimeSession:
     message: str = ""
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {
+            "profile_id": str(self.profile_id or ""),
+            "state": str(self.state or ""),
+            "source": str(self.source or ""),
+            "launch_mode": str(self.launch_mode or ""),
+            "requested_at": self.requested_at,
+            "deadline_at": self.deadline_at,
+            "started_at": self.started_at,
+            "failure_reason": str(self.failure_reason or ""),
+            "message": str(self.message or ""),
+        }
 
 
 class GameMonitor:

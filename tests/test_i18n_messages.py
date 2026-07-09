@@ -33,6 +33,19 @@ def test_api_response_attaches_message_key_and_params():
     assert response["message_params"] == {"name": "任务"}
 
 
+def test_api_response_serializes_dataclass_localized_text_field():
+    from dataclasses import dataclass
+    from backend.api import ApiResponse
+
+    @dataclass
+    class DemoPayload:
+        message: str
+
+    response = ApiResponse.success(data={"payload": DemoPayload(tr("api.demo.started", "已开始"))})
+
+    assert response["data"]["payload"]["message"] == "已开始"
+
+
 def test_extract_locale_payload_is_generated_from_source_keys():
     from scripts.extract_i18n_messages import build_locale_payload, flatten_string_values
 

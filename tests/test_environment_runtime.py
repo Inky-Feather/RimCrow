@@ -51,6 +51,14 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
         self.assertIsNotNone(session.requested_at)
         self.assertEqual(session.deadline_at - session.requested_at, 60000)
 
+    def test_runtime_session_to_dict_accepts_localized_message(self):
+        from backend.i18n.messages import tr
+        from backend.managers.mgr_game_monitor import RuntimeSession
+
+        payload = RuntimeSession(message=tr("api.game.direct_launch_started", "已发起游戏启动，等待游戏进程确认。")).to_dict()
+
+        self.assertEqual(payload["message"], "已发起游戏启动，等待游戏进程确认。")
+
     def test_mark_running_from_trusted_launch_updates_last_played_time(self):
         api = SimpleNamespace(profile_mgr=SimpleNamespace(update_profile=Mock()))
         monitor = GameMonitor.__new__(GameMonitor)
