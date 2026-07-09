@@ -1,7 +1,7 @@
 <template>
               <section class="animate-in fade-in slide-in-from-right-4">
                 <h3 class="text-lg font-bold text-text-main mb-6 flex items-center justify-between">{{ t('ui.settings.general.title', '界面与布局') }}
-                  <button @click="guideStore.resetAllGuides()" v-tooltip="t('tooltip.settings.general.reset_guides', '重置界面引导，将界面引导重置为默认值')" class="px-3 py-1 bg-accent-warn/10 hover:bg-accent-warn/20 border border-accent-warn/30 rounded text-xs font-bold text-accent-warn transition-all">
+                  <button @click="guideStore.resetAllGuides()" v-tooltip="t('tooltip.settings.general.reset_guides', '重置界面引导，将界面引导重置为默认值')" class="pl-3 pr-3 pt-1 pb-1 bg-accent-warn/10 hover:bg-accent-warn/20 border border-accent-warn/30 rounded text-xs font-bold text-accent-warn transition-all">
                     {{ t('ui.settings.general.reset_guides', '重置界面引导') }}
                   </button>
                 </h3>
@@ -9,11 +9,7 @@
                   <div class="grid grid-cols-2 gap-4">
                     <div class="flex items-end gap-2">
                       <CommonSelect class="min-w-0 flex-1" :label="t('ui.settings.general.interface_language', '界面语言')" v-model="formData.language" :options="languageOptions" />
-                      <button type="button" class="h-9 shrink-0 rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 text-xs font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
-                        @click="openLanguageCreate">
-                        {{ t('ui.settings.general.create_language_pack', '创建语言包') }}
-                      </button>
-                      <button type="button" class="h-9 shrink-0 rounded-lg border border-border-base/10 bg-bg-overlay/5 px-3 text-xs font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
+                      <button type="button" class="h-9 shrink-0 rounded-lg border border-border-base/10 bg-bg-overlay/5 pl-3 pr-3 text-xs font-bold text-text-main transition-colors hover:bg-bg-overlay/10"
                         @click="appStore.uiState.showTranslationManager = true">
                         {{ t('ui.settings.general.translation_manager', '翻译管理') }}
                       </button>
@@ -42,7 +38,7 @@
                     </div>
 
                     <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
-                      <CommonSwitch class="col-span-2 px-2 pt-2" :label="t('ui.settings.general.list_icons', '列表图标')" v-model="formData.ui.show_list_icon" :description="t('ui.settings.general.list_icons_desc', '控制列表中的所有图标显示，包括简单视图和详细视图。')" mini />
+                      <CommonSwitch class="col-span-2 pl-2 pr-2 pt-2" :label="t('ui.settings.general.list_icons', '列表图标')" v-model="formData.ui.show_list_icon" :description="t('ui.settings.general.list_icons_desc', '控制列表中的所有图标显示，包括简单视图和详细视图。')" mini />
                       <CommonSwitch :disabled="!formData.ui.show_list_icon" :label="t('ui.settings.general.list_mod_icon', '列表 Mod 图标')" v-model="formData.ui.show_list_mod_icon" :description="t('ui.settings.general.list_mod_icon_desc', '控制列表中 Mod 图标显示，不影响详细视图。')" />
                       <CommonSwitch :disabled="!formData.ui.show_list_icon" :label="t('ui.settings.general.list_mod_type_icon', '列表 Mod 类型图标')" v-model="formData.ui.show_list_modtype_icon" :description="t('ui.settings.general.list_mod_type_icon_desc', '控制列表中 Mod 类型图标显示，不影响详细视图。')" />
                     </div>
@@ -56,13 +52,13 @@
                       <CommonSwitch :disabled="!formData.ui.enable_inactive_section_collapse" :label="t('ui.settings.general.default_collapse_inactive_sections', '停用列表默认折叠分割组')" v-model="formData.ui.default_collapse_inactive_sections" :description="t('ui.settings.general.default_collapse_inactive_sections_desc', '开启后，停用列表中的分割组会在初始显示时默认折叠。')" />
                       <div class="flex items-center gap-1">
                         <button @click="appStore.openSteamWorkshopById('2138932352', false)"
-                          class="px-2 py-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
+                          class="pl-2 pr-2 pt-1.5 pb-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
                           <span class="flex items-center gap-2">
                             {{ t('ui.settings.general.visit', '访问') }}<p class="text-accent-cool">{{ t('ui.settings.general.section_label_collection', '分类排列标签合集') }}</p>{{ t('ui.settings.general.workshop_page', '工坊页面') }}
                           </span>
                         </button>
                         <button @click="appStore.openSteamWorkshopById('3542535605', false)"
-                          class="px-2 py-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
+                          class="pl-2 pr-2 pt-1.5 pb-1.5 bg-bg-overlay/5 hover:bg-bg-overlay/10 border border-border-base/10 rounded-lg text-xs font-bold cursor-pointer transition-all">
                           <span class="flex items-center gap-2">
                             {{ t('ui.settings.general.visit', '访问') }}<p class="text-accent-cool">{{ t('ui.settings.general.section_sort_collection', '分类排序合集') }}</p>{{ t('ui.settings.general.workshop_page', '工坊页面') }}
                           </span>
@@ -97,7 +93,7 @@
                     </div>
 
                     <div class="modal-section col-span-2 grid grid-cols-2 gap-2 p-2">
-                      <CommonSwitch class="col-span-2 px-2 pt-2" mini :label="t('ui.settings.general.mod_details_panel', 'Mod 详情面板')" v-model="detailsPanelVisible" :description="t('ui.settings.general.mod_details_panel_desc', '可关闭 Mod 详情栏。')" />
+                      <CommonSwitch class="col-span-2 pl-2 pr-2 pt-2" mini :label="t('ui.settings.general.mod_details_panel', 'Mod 详情面板')" v-model="detailsPanelVisible" :description="t('ui.settings.general.mod_details_panel_desc', '可关闭 Mod 详情栏。')" />
                       <CommonSwitch :disabled="!detailsPanelVisible" :label="t('ui.settings.general.icons_cloud', '动态图标云')" v-model="formData.ui.show_icons_cloud" :description="t('ui.settings.general.icons_cloud_desc', '控制详情页闲置时的动态图标云显示。')" />
                       <CommonNumber :label="t('ui.settings.general.detail_delay', '详情页加载延迟')" :description="t('ui.settings.general.detail_delay_desc', '控制 Mod 详情页加载的延迟时间，单位是毫秒，默认值为 200 毫秒。')" v-model="formData.ui.detail_delay" :step="10" :min="0" :max="5000" />
                       <span class="col-span-2 text-xs ml-2 mt-2">{{ t('ui.settings.general.mod_details_layout', 'Mod 详情布局') }}
@@ -122,22 +118,6 @@
                     
                   </div>
                 </div>
-                <CommonModalShell :show="showLanguageCreate" :title="t('dialog.language_pack.create_title', '创建语言包')" size="custom" panel-class="!h-fit w-[min(28rem,94vw)]" content-class="!flex-none !basis-auto !grow-0 px-5 pb-5" :z-index="180" accent="primary" @close="showLanguageCreate = false">
-                  <div class="space-y-3">
-                    <CommonSelect v-model="languagePreset" :label="t('dialog.language_pack.select_language', '选择语言')" :options="createLanguageOptions" show-bottom />
-                    <CommonInput v-model="languageCode" :label="t('dialog.language_pack.language_code', '语言代码')" placeholder="ja" :readonly="!isCustomLanguage" />
-                    <CommonInput v-model="languageLabel" :label="t('dialog.language_pack.display_name', '显示名称')" placeholder="日本語" :readonly="!isCustomLanguage" />
-                    <p class="text-xs leading-5 text-text-dim">{{ t('dialog.language_pack.create_hint', '创建后会出现在界面语言和翻译管理中，但不会自动生成译文。你可以在翻译管理中逐条修改，也可以开启翻译模式，点选界面文本后实时翻译。') }}</p>
-                    <div class="flex justify-end gap-2 pt-2">
-                      <button type="button" class="rounded-lg bg-bg-overlay/8 px-3 py-2 text-xs font-bold text-text-main hover:bg-bg-overlay/14" @click="showLanguageCreate = false">
-                        {{ t('common.action.cancel', '取消') }}
-                      </button>
-                      <button type="button" class="rounded-lg bg-accent-primary px-4 py-2 text-xs font-black text-on-accent-primary hover:bg-accent-primary/85 disabled:opacity-50" :disabled="creatingLanguage || !languageCode.trim()" @click="createLanguagePack">
-                        {{ creatingLanguage ? t('common.status.processing', '处理中') : t('common.action.create', '创建') }}
-                      </button>
-                    </div>
-                  </div>
-                </CommonModalShell>
               </section>
 </template>
 
@@ -146,15 +126,12 @@ import { computed, ref, watch } from 'vue'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
-import CommonInput from '../../../shared/components/input/CommonInput.vue'
-import CommonModalShell from '../../../shared/components/modal/CommonModalShell.vue'
 import ThemeSelect from '../theme/ThemeSelect.vue'
 import { DEFAULT_THEME_ID, applyTheme, createEditableThemeFrom, findThemeById, normalizeTheme } from '../theme/themeManager'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { useGuideStore } from '../../guide/guideStore'
 import { t } from '../../../shared/i18n.js'
-import { toast } from '../../../shared/lib/common'
 
 const props = defineProps({
   formData: { type: Object, required: true },
@@ -165,54 +142,8 @@ const guideStore = useGuideStore()
 const confirmStore = useConfirmStore()
 
 const layoutDragState = ref({ key: '', fromIndex: -1, overIndex: -1 })
-const showLanguageCreate = ref(false)
-const creatingLanguage = ref(false)
-const languagePreset = ref('')
-const languageCode = ref('')
-const languageLabel = ref('')
-const CUSTOM_LANGUAGE_VALUE = '__custom__'
 
 const languageOptions = computed(() => appStore.uiLanguageOptions)
-const createLanguageOptions = computed(() => [
-  ...appStore.translationLanguageOptions.filter(item => !languageOptions.value.some(option => option.value === item.value)),
-  { label: t('dialog.language_pack.custom_language', '自定义语言'), value: CUSTOM_LANGUAGE_VALUE },
-])
-const isCustomLanguage = computed(() => languagePreset.value === CUSTOM_LANGUAGE_VALUE)
-
-const openLanguageCreate = async () => {
-  await appStore.ensureLanguageOptions(true)
-  const first = createLanguageOptions.value[0] || {}
-  languagePreset.value = first.value || ''
-  languageCode.value = first.value === CUSTOM_LANGUAGE_VALUE ? '' : (first.value || '')
-  languageLabel.value = first.value === CUSTOM_LANGUAGE_VALUE ? '' : (first.label || '')
-  showLanguageCreate.value = true
-}
-
-const createLanguagePack = async () => {
-  if (!languageCode.value.trim()) return
-  creatingLanguage.value = true
-  try {
-    const result = await appStore.createUserLocale(languageCode.value, languageLabel.value)
-    if (!result) return
-    props.formData.language = result.language
-    toast.success(t('dialog.language_pack.created', '已创建语言包：{label}', { label: result.label || result.language }))
-    showLanguageCreate.value = false
-  } finally {
-    creatingLanguage.value = false
-  }
-}
-
-watch(languagePreset, (value) => {
-  if (value === CUSTOM_LANGUAGE_VALUE) {
-    languageCode.value = ''
-    languageLabel.value = ''
-    return
-  }
-  const option = appStore.translationLanguageOptions.find(item => item.value === value)
-  if (!option) return
-  languageCode.value = option.value
-  languageLabel.value = option.label
-})
 
 watch(() => appStore.uiState.showSettingsPanel, (visible) => {
   if (visible) void appStore.ensureUiLanguageOptions(true)

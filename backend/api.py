@@ -1477,7 +1477,19 @@ class API:
         try:
             locales_dir = DATA_DIR / "locales"
             locales_dir.mkdir(parents=True, exist_ok=True)
-            filename = Path(str(default_filename or "")).name or f"rimcrow-locale-{normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE}.work.json"
+            language_code = normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE
+            messages = payload.get("messages") if isinstance(payload, dict) and isinstance(payload.get("messages"), dict) else (payload or {})
+            workfile = {
+                "_meta": {
+                    "type": "translation_workfile",
+                    "language": language_code,
+                    "source": DEFAULT_LOCALE,
+                    "exported_at": datetime.now().isoformat(),
+                    "usage": f"Translate each messages.*.target value. Keep keys unchanged. Blank target values are ignored when importing. Imported translations are saved to data/locales/{language_code}.json.",
+                },
+                "messages": messages,
+            }
+            filename = Path(str(default_filename or "")).name or f"rimcrow-locale-{language_code}.work.json"
             target = file_mgr.save_file_dialog(
                 initial_dir=str(locales_dir),
                 default_filename=filename,
@@ -1488,7 +1500,7 @@ class API:
             target_path = Path(target)
             if not target_path.suffix:
                 target_path = target_path.with_suffix(".json")
-            target_path.write_text(json.dumps(payload or {}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            target_path.write_text(json.dumps(workfile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             return ApiResponse.success({"path": normalize_path_for_storage(str(target_path))}, tr("api.i18n.workfile_exported", "翻译文件已导出"))
         except Exception as e:
             return ApiResponse.error(
@@ -1514,7 +1526,13 @@ class API:
                 payload = json.load(handle)
             if not isinstance(payload, dict):
                 raise ValueError("翻译文件内容不是 JSON 对象")
-            return ApiResponse.success({"path": normalize_path_for_storage(source), "payload": payload})
+            meta = payload.get("_meta") if isinstance(payload.get("_meta"), dict) else {}
+            messages = payload.get("messages") if isinstance(payload.get("messages"), dict) else {key: value for key, value in payload.items() if key != "_meta"}
+            return ApiResponse.success({
+                "path": normalize_path_for_storage(source),
+                "language": normalize_language_code(meta.get("language"), default=""),
+                "messages": messages,
+            })
         except Exception as e:
             return ApiResponse.error(
                 "导入翻译文件失败",

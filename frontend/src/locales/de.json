@@ -5950,7 +5950,6 @@
       "general": {
         "active_section_support": "Unterstützung der Abschnittsgruppe „Aktive Liste“.",
         "active_section_support_desc": "Wenn diese Option aktiviert ist, unterstützt die aktive Liste das Reduzieren von Abschnittsgruppen, das Ziehen ganzer Gruppen und das Verschieben von Abschnittsgruppen aus dem Kontextmenü.",
-        "create_language_pack": "Sprachpaket erstellen",
         "default_collapse_active_sections": "Aktive Listenabschnittsgruppen standardmäßig ausblenden",
         "default_collapse_active_sections_desc": "Wenn diese Option aktiviert ist, werden Abschnittsgruppen in der aktiven Liste bei der ersten Anzeige reduziert.",
         "default_collapse_inactive_sections": "Inaktive Listenabschnittsgruppen standardmäßig ausblenden",

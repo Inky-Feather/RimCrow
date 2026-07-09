@@ -5950,7 +5950,6 @@
       "general": {
         "active_section_support": "\"Active list\" section group support",
         "active_section_support_desc": "When enabled, the active list supports section group collapsing, dragging whole groups, and moving section groups from the context menu.",
-        "create_language_pack": "Create language pack",
         "default_collapse_active_sections": "Collapse active list section groups by default",
         "default_collapse_active_sections_desc": "When enabled, section groups in the active list are collapsed on initial display.",
         "default_collapse_inactive_sections": "Collapse inactive list section groups by default",

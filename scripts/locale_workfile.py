@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from backend.i18n.language_registry import normalize_language_code  # noqa: E402
-from extract_i18n_messages import (
+from scripts.extract_i18n_messages import (
     DEFAULT_LOCALE_PATH,
     UNTRANSLATED_PREFIX,
     configure_stdout,
@@ -44,14 +44,10 @@ def extract_messages(payload: dict[str, Any], language: str = "") -> tuple[str, 
             continue
         if isinstance(value, dict):
             target = value.get("target")
-            source = str(value.get("source") or "").strip()
         else:
             target = value
-            source = ""
         text = str(target or "").strip()
         if not text or text.startswith(UNTRANSLATED_PREFIX):
-            continue
-        if source and target_language != "zh-CN" and text == source:
             continue
         if not key or "." not in str(key):
             errors.append(f"无效 key: {key!r}")

@@ -232,3 +232,53 @@ def test_user_locale_options_only_accept_user_locale_files(tmp_path, monkeypatch
     assert "ja" in values
     assert "legacy" not in values
     assert "ko" not in values
+
+
+def test_locale_export_workfile_builds_meta_in_backend(tmp_path, monkeypatch):
+    from backend.api import API
+    import backend.api as api
+
+    target = tmp_path / "locale.work.json"
+    monkeypatch.setattr(api, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(api.file_mgr, "save_file_dialog", lambda **_: str(target))
+
+    response = API.__new__(API).locale_export_workfile("ja", {"ui.title": {"source": "标题", "target": ""}}, "")
+    payload = json.loads(target.read_text(encoding="utf-8"))
+
+    assert response["status"] == "success"
+    assert payload["_meta"]["type"] == "translation_workfile"
+    assert payload["_meta"]["language"] == "ja"
+    assert payload["messages"] == {"ui.title": {"source": "标题", "target": ""}}
+
+
+def test_locale_import_workfile_does_not_return_meta(tmp_path, monkeypatch):
+    from backend.api import API
+    import backend.api as api
+
+    source = tmp_path / "locale.work.json"
+    source.write_text(json.dumps({
+        "_meta": {"type": "translation_workfile", "language": "ja"},
+        "messages": {"ui.title": {"source": "标题", "target": "Title"}},
+    }), encoding="utf-8")
+    monkeypatch.setattr(api, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(api.file_mgr, "select_file_dialog", lambda **_: str(source))
+
+    response = API.__new__(API).locale_import_workfile()
+
+    assert response["status"] == "success"
+    assert response["data"]["language"] == "ja"
+    assert response["data"]["messages"] == {"ui.title": {"source": "标题", "target": "Title"}}
+    assert "_meta" not in response["data"]
+
+
+def test_locale_workfile_keeps_same_text_as_valid_translation():
+    from scripts.locale_workfile import extract_messages
+
+    language, messages, errors = extract_messages({
+        "_meta": {"language": "en"},
+        "messages": {"ui.symbol": {"source": "^^|^^", "target": "^^|^^"}},
+    })
+
+    assert language == "en"
+    assert errors == []
+    assert messages == {"ui.symbol": "^^|^^"}

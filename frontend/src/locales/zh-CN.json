@@ -5950,7 +5950,6 @@
       "general": {
         "active_section_support": "“启用列表”分割组支持",
         "active_section_support_desc": "开启后，启用列表会支持分割组折叠、整组拖动和右键分割组移动。",
-        "create_language_pack": "创建语言包",
         "default_collapse_active_sections": "启用列表默认折叠分割组",
         "default_collapse_active_sections_desc": "开启后，启用列表中的分割组会在初始显示时默认折叠。",
         "default_collapse_inactive_sections": "停用列表默认折叠分割组",

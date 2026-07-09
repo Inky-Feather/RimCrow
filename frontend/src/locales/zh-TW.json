@@ -5950,7 +5950,6 @@
       "general": {
         "active_section_support": "“啟用列表”分割組支持",
         "active_section_support_desc": "開啟後，啟用列表會支持分割組摺疊、整組拖動和右鍵分割組移動。",
-        "create_language_pack": "創建語言包",
         "default_collapse_active_sections": "啟用列表預設摺疊分割組",
         "default_collapse_active_sections_desc": "開啟後，啟用列表中的分割組會在初始顯示時預設摺疊。",
         "default_collapse_inactive_sections": "停用列表預設摺疊分割組",

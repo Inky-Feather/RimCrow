@@ -5950,7 +5950,6 @@
       "general": {
         "active_section_support": "\"활성 목록\" 섹션 그룹 ​​지원",
         "active_section_support_desc": "활성화되면 활성 목록은 섹션 그룹 ​​축소, 전체 그룹 끌기, 상황에 맞는 메뉴에서 섹션 그룹 ​​이동을 지원합니다.",
-        "create_language_pack": "언어 팩 만들기",
         "default_collapse_active_sections": "기본적으로 활성 목록 섹션 그룹 ​​축소",
         "default_collapse_active_sections_desc": "활성화되면 활성 목록의 섹션 그룹이 초기 표시에서 축소됩니다.",
         "default_collapse_inactive_sections": "기본적으로 비활성 목록 섹션 그룹 ​​축소",
