@@ -233,7 +233,7 @@ import { useConfirmStore } from '../../shared/components/modal/confirmStore.js'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore.js'
 import { useProfileStore } from '../profiles/profileStore.js'
 import { parse, formatDistanceToNow, differenceInCalendarDays } from 'date-fns'
-import { enUS, zhCN } from 'date-fns/locale'
+import { de, enUS, ko, ru, zhCN, zhTW } from 'date-fns/locale'
 import { ClipboardPlus, Copy, Download, Edit3, FileInput, FileText, FolderOpen, HelpCircle, LoaderCircle, Trash2, X } from 'lucide-vue-next'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
 import BackupItem from './BackupItem.vue'
@@ -268,7 +268,8 @@ let nativeDropBindTimer = null
 const selectedPath = computed(() => orderStore.currentBackupFile)
 const currentProfileId = computed(() => profileStore.currentProfileId || appStore.settings.current_profile_id || 'default')
 const isBrowserRuntime = computed(() => detectBrowserRuntime())
-const dateLocale = computed(() => getCurrentLocale().startsWith('en') ? enUS : zhCN)
+const dateLocales = { de, en: enUS, ko, ru, zh: zhCN, 'zh-CN': zhCN, 'zh-TW': zhTW }
+const dateLocale = computed(() => dateLocales[getCurrentLocale()] || dateLocales[getCurrentLocale().split('-')[0]] || enUS)
 const selectedBackupProfileId = computed({
   get: () => orderStore.backupProfileId || currentProfileId.value,
   set: (value) => orderStore.setBackupProfile(value),

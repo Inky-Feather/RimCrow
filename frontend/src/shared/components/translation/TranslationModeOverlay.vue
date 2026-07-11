@@ -98,7 +98,7 @@ import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
 import { Languages, Minimize2, MousePointer2, Save, WandSparkles, X } from 'lucide-vue-next'
 import { useAppStore } from '../../../app/stores/appStore'
 import CommonSelect from '../input/CommonSelect.vue'
-import { DEFAULT_LOCALE, findTranslationEntriesForText, findTranslationEntryByKey, getCurrentLocale, setLocale, t, translateMessagePayload } from '../../i18n.js'
+import { DEFAULT_LOCALE, findTranslationEntriesForText, findTranslationEntryByKey, getCurrentLocale, getTranslationValidationIssue, setLocale, t, translateMessagePayload } from '../../i18n.js'
 import { toast } from '../../lib/common'
 
 const appStore = useAppStore()
@@ -321,7 +321,17 @@ const autoTranslate = async () => {
       return
     }
     const segment = Array.isArray(res.data?.segments) ? res.data.segments.find(item => item.key === 'value') : null
-    draftText.value = segment?.text || draftText.value
+    const text = String(segment?.text || '').trim()
+    const issue = text ? getTranslationValidationIssue(selectedEntry.value.defaultText, text) : ''
+    if (issue === 'placeholders') {
+      toast.error(t('dialog.translation_manager.workfile_param_mismatch', '参数不一致：{key}', { key: selectedEntry.value.key }))
+      return
+    }
+    if (issue === 'markers') {
+      toast.error(t('dialog.translation_manager.workfile_marker_mismatch', '格式标记不一致：{key}', { key: selectedEntry.value.key }))
+      return
+    }
+    draftText.value = text || draftText.value
   } finally {
     busy.value = false
   }

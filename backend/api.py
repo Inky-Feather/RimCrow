@@ -1325,7 +1325,10 @@ class API:
         """读取用户覆盖语言包。内置默认语言包由前端打包，后端只返回 data/locales 下的增量覆盖。"""
         locale = normalize_language_code(language, default=DEFAULT_LOCALE) or DEFAULT_LOCALE
         try:
-            return ApiResponse.success({"language": locale, "messages": load_user_locale(locale)})
+            payload = load_user_locale(locale)
+            meta = payload.get("_meta") if isinstance(payload.get("_meta"), dict) else {}
+            messages = {key: value for key, value in payload.items() if key != "_meta"}
+            return ApiResponse.success({"language": locale, "meta": meta, "messages": messages})
         except Exception as e:
             return ApiResponse.error(
                 "读取用户语言文件失败",

@@ -40,10 +40,10 @@
           </div>
         </div>
         <div ref="listScrollRef" class="min-h-0 flex-1 overflow-y-auto pb-10 custom-scrollbar">
-          <div :style="{ height: toRem(totalSize), position: 'relative' }">
+          <div :style="{ height: toPx(totalSize), position: 'relative' }">
             <button v-for="virtualRow in virtualRows" :key="filteredRows[virtualRow.index]?.key || virtualRow.index" type="button"
-              class="absolute left-2 right-2 rounded-lg border pl-3 pr-3 pt-2 pb-2 text-left transition-colors"
-              :style="{ transform: `translateY(${toRem(virtualRow.start)})`, height: toRem(Math.max(0, virtualRow.size - rowGap)) }"
+              class="absolute left-2 right-2 rounded-lg border pl-2 pr-2 pt-1 pb-1 text-left transition-colors"
+              :style="{ transform: `translateY(${toPx(virtualRow.start)})`, height: toPx(Math.max(0, virtualRow.size - rowGap)) }"
               :class="selectedKey === filteredRows[virtualRow.index]?.key ? 'border-accent-primary/60 bg-accent-primary/12' : 'border-border-base/8 bg-bg-overlay/4 hover:bg-bg-overlay/8'"
               @click="selectedKey = filteredRows[virtualRow.index]?.key || ''"
             >
@@ -127,7 +127,7 @@ import CommonModalShell from '../modal/CommonModalShell.vue'
 import CommonSelect from '../input/CommonSelect.vue'
 import { useConfirmStore } from '../modal/confirmStore'
 import { useAppStore } from '../../../app/stores/appStore'
-import { DEFAULT_LOCALE, getCurrentLocale, getLocaleMessagesForManagement, setLocale, t, translateMessagePayload, UNTRANSLATED_PREFIX } from '../../i18n.js'
+import { DEFAULT_LOCALE, getCurrentLocale, getLocaleMessagesForManagement, getTranslationValidationIssue, setLocale, t, translateMessagePayload, UNTRANSLATED_PREFIX } from '../../i18n.js'
 import { toast } from '../../lib/common'
 
 const appStore = useAppStore()
@@ -153,10 +153,7 @@ const listScrollRef = ref(null)
 const BATCH_TRANSLATE_SIZE = 100
 const CUSTOM_LANGUAGE_VALUE = '__custom__'
 const toolbarIconButtonClass = 'flex size-10 shrink-0 items-center justify-center rounded-md text-accent-primary transition-colors hover:bg-bg-overlay/8 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50'
-const toRem = (value) => `${Number(value || 0) / 16}rem`
-const PLACEHOLDER_RE = /\{([A-Za-z_][\w.-]*)\}/g
-const LOCALE_MARKER_RE = /\[\[|\]\]|\^\^|!!|__|··/g
-
+const toPx = (value) => `${Number(value || 0)}px`
 const flattenMessages = (value, prefix = '', output = {}) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     if (prefix) output[prefix] = String(value ?? '')
@@ -171,11 +168,10 @@ const flattenMessages = (value, prefix = '', output = {}) => {
 
 const languageOptions = computed(() => {
   const seen = new Set()
-  return appStore.uiLanguageOptions.filter((item) => {
-    const value = String(item?.value || item?.code || '').trim()
+  return appStore.uiLanguageOptions.map(item => ({ ...item, value: String(item?.value || item?.code || '').trim() })).filter((item) => {
+    const value = item.value
     if (!value || seen.has(value)) return false
     seen.add(value)
-    item.value = value
     return true
   })
 })
@@ -245,8 +241,8 @@ const filteredRows = computed(() => {
 })
 const batchTranslateRows = computed(() => filteredRows.value.filter(row => row.status === 'untranslated'))
 
-const rowHeight = computed(() => appStore.scalePx(62))
-const rowGap = computed(() => appStore.scalePx(4))
+const rowHeight = computed(() => appStore.scalePx(64))
+const rowGap = computed(() => appStore.scalePx(6))
 const virtualizer = useVirtualizer(computed(() => ({
   count: filteredRows.value.length,
   getScrollElement: () => listScrollRef.value,
@@ -264,20 +260,12 @@ const statusLabel = (status) => ({
   builtin: t('dialog.translation_manager.status_builtin', '内置'),
 }[status] || status)
 
-const extractPlaceholders = (text) => new Set([...String(text ?? '').matchAll(PLACEHOLDER_RE)].map(item => item[1]))
-const extractLocaleMarkers = (text) => String(text ?? '').match(LOCALE_MARKER_RE) || []
-const sameSet = (left, right) => left.size === right.size && [...left].every(item => right.has(item))
-const sameList = (left, right) => left.length === right.length && left.every((item, index) => item === right[index])
-
 const validateImportedMessage = (key, text) => {
   const source = flatBase.value[key]
   if (source === undefined) return t('dialog.translation_manager.workfile_unknown_key', '未知 key：{key}', { key })
-  const sourceParams = extractPlaceholders(source)
-  const targetParams = extractPlaceholders(text)
-  if (!sameSet(sourceParams, targetParams)) return t('dialog.translation_manager.workfile_param_mismatch', '参数不一致：{key}', { key })
-  const sourceMarkers = extractLocaleMarkers(source)
-  const targetMarkers = extractLocaleMarkers(text)
-  if (!sameList(sourceMarkers, targetMarkers)) return t('dialog.translation_manager.workfile_marker_mismatch', '格式标记不一致：{key}', { key })
+  const issue = getTranslationValidationIssue(source, text)
+  if (issue === 'placeholders') return t('dialog.translation_manager.workfile_param_mismatch', '参数不一致：{key}', { key })
+  if (issue === 'markers') return t('dialog.translation_manager.workfile_marker_mismatch', '格式标记不一致：{key}', { key })
   return ''
 }
 
@@ -288,12 +276,18 @@ const statusClass = (status) => ({
 }[status] || 'bg-bg-overlay/10 text-text-dim')
 
 const loadMessages = async () => {
-  const data = await getLocaleMessagesForManagement(selectedLanguage.value)
-  flatBase.value = flattenMessages(data.base)
-  flatBuiltin.value = flattenMessages(data.builtin)
-  flatMerged.value = flattenMessages(data.merged)
-  flatUser.value = flattenMessages(data.user)
-  if (!selectedRow.value) selectedKey.value = filteredRows.value[0]?.key || ''
+  try {
+    const data = await getLocaleMessagesForManagement(selectedLanguage.value)
+    flatBase.value = flattenMessages(data.base)
+    flatBuiltin.value = flattenMessages(data.builtin)
+    flatMerged.value = flattenMessages(data.merged)
+    flatUser.value = flattenMessages(data.user)
+    if (!selectedRow.value) selectedKey.value = filteredRows.value[0]?.key || ''
+    return true
+  } catch (error) {
+    toast.error(error?.message || t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
+    return false
+  }
 }
 
 const close = () => {
@@ -390,7 +384,13 @@ const autoTranslateSelected = async () => {
       return
     }
     const segment = Array.isArray(res.data?.segments) ? res.data.segments.find(item => item.key === selectedRow.value.key) : null
-    draftText.value = segment?.text || draftText.value
+    const text = String(segment?.text || '').trim()
+    const error = text ? validateImportedMessage(selectedRow.value.key, text) : ''
+    if (error) {
+      toast.error(error)
+      return
+    }
+    draftText.value = text || draftText.value
   } finally {
     busy.value = false
   }
@@ -423,7 +423,13 @@ const autoTranslateBatch = async () => {
         return
       }
       for (const item of (res.data?.segments || [])) {
-        if (item?.key && String(item?.text || '').trim()) messages[item.key] = item.text
+        if (!item?.key || !String(item?.text || '').trim()) continue
+        const error = validateImportedMessage(item.key, item.text)
+        if (error) {
+          toast.error(error)
+          return
+        }
+        messages[item.key] = item.text
       }
     }
     if (!Object.keys(messages).length) {
@@ -563,8 +569,9 @@ watch(selectedLanguage, () => {
 
 watch(() => appStore.uiState.showTranslationManager, async (visible) => {
   if (!visible) return
+  const languageChanged = selectedLanguage.value !== getCurrentLocale()
   selectedLanguage.value = getCurrentLocale()
-  await Promise.all([appStore.ensureUiLanguageOptions(true), appStore.ensureTranslationLanguageOptions(), ensureProviderSelection()])
-  await loadMessages()
+  await Promise.all([appStore.ensureLanguageOptions(true), ensureProviderSelection()])
+  if (!languageChanged) await loadMessages()
 }, { immediate: true })
 </script>

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from backend.i18n.language_registry import get_language_label, normalize_language_code
@@ -28,6 +29,9 @@ class LocalizedText(str):
         value.message_params = normalized_params
         value.default_text = str(default_text or "")
         return value
+
+    def __reduce__(self):
+        return type(self), (self.message_key, self.default_text, self.message_params)
 
 
 def _format_default(default_text: str, params: Mapping[str, Any]) -> str:
@@ -86,6 +90,15 @@ def _is_user_locale_payload(payload: Mapping[str, Any]) -> bool:
     return meta_type == "user_locale"
 
 
+def _ensure_user_locale_meta(payload: dict[str, Any], code: str, label: str = "") -> dict[str, Any]:
+    meta = _locale_meta(payload)
+    meta["language"] = code
+    meta["label"] = str(label or meta.get("label") or get_language_label(code, code)).strip() or code
+    meta["type"] = "user_locale"
+    payload["_meta"] = meta
+    return meta
+
+
 def list_user_locale_options() -> list[dict[str, Any]]:
     """列出 data/locales 下的用户语言包；内置语言包由前端从已打包语言文件推导。"""
     options: dict[str, dict[str, Any]] = {}
@@ -113,11 +126,7 @@ def create_user_locale(language: str, label: str = "") -> dict[str, Any]:
     if not code:
         raise ValueError("语言代码不能为空")
     payload = load_user_locale(code)
-    meta = _locale_meta(payload)
-    meta["language"] = code
-    meta["label"] = str(label or meta.get("label") or get_language_label(code, code)).strip() or code
-    meta.setdefault("type", "user_locale")
-    payload["_meta"] = meta
+    meta = _ensure_user_locale_meta(payload, code, label)
     write_json(USER_LOCALES_DIR / f"{code}.json", payload)
     return {"language": code, "label": meta["label"], "path": str(USER_LOCALES_DIR / f"{code}.json")}
 
@@ -167,6 +176,7 @@ def save_user_locale_message(language: str, key: str, value: str) -> dict[str, s
     if not normalized_key:
         raise ValueError("语言包 key 不能为空")
     payload = load_user_locale(code)
+    _ensure_user_locale_meta(payload, code)
     set_nested(payload, normalized_key, value)
     write_json(USER_LOCALES_DIR / f"{code}.json", payload)
     return {"language": code, "key": normalized_key}
@@ -191,6 +201,7 @@ def save_user_locale_messages(language: str, messages: Mapping[str, Any]) -> dic
     if not isinstance(messages, Mapping) or not messages:
         raise ValueError("语言包内容不能为空")
     payload = load_user_locale(code)
+    _ensure_user_locale_meta(payload, code)
     saved_keys: list[str] = []
     for key, value in messages.items():
         normalized_key = str(key or "").strip()
@@ -204,7 +215,10 @@ def save_user_locale_messages(language: str, messages: Mapping[str, Any]) -> dic
 
 def write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    with NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
+        temp_path = Path(handle.name)
+    try:
+        temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temp_path.replace(path)
+    finally:
+        temp_path.unlink(missing_ok=True)

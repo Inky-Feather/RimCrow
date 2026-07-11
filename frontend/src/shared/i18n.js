@@ -6,8 +6,12 @@ export const UNTRANSLATED_PREFIX = '[UNTRANSLATED] '
 
 const translationRegistry = new Map()
 export const localeRevision = ref(0)
+let localeRequestVersion = 0
+const PLACEHOLDER_RE = /\{([A-Za-z_][\w.-]*)\}/g
+const LOCALE_MARKER_RE = /\[\[|\]\]|\^\^|!!|__|··/g
 
 const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value)
+const cloneMessages = (messages = {}) => JSON.parse(JSON.stringify(isPlainObject(messages) ? messages : {}))
 
 const localeModules = import.meta.glob('../locales/*.json', { eager: true, import: 'default' })
 const builtinMessages = Object.fromEntries(Object.values(localeModules)
@@ -83,34 +87,51 @@ export const i18n = createI18n({
   fallbackLocale: DEFAULT_LOCALE,
   missingWarn: false,
   fallbackWarn: false,
-  messages: builtinMessages,
+  messages: Object.fromEntries(Object.entries(builtinMessages).map(([code, messages]) => [code, cloneMessages(messages)])),
 })
 
 const loadUserMessages = async (locale) => {
-  if (!window.pywebview?.api?.locale_load_user_messages) return {}
+  if (!window.pywebview?.api?.locale_load_user_messages) return { language: locale, messages: {} }
   const res = await window.pywebview.api.locale_load_user_messages(locale)
-  if (res?.status !== 'success') return {}
-  return res.data?.messages && typeof res.data.messages === 'object' ? res.data.messages : {}
+  if (res?.status !== 'success') {
+    const error = new Error(translateMessagePayload(res, '读取用户语言文件失败。'))
+    error.response = res
+    throw error
+  }
+  return {
+    language: normalizeLocale(res.data?.language || locale),
+    messages: res.data?.messages && typeof res.data.messages === 'object' ? res.data.messages : {},
+  }
 }
 
 export const getLocaleMessagesForManagement = async (language = DEFAULT_LOCALE) => {
-  const locale = normalizeLocale(language)
-  const builtin = builtinMessages[locale] || {}
-  const userMessages = await loadUserMessages(locale)
+  const requestedLocale = normalizeLocale(language)
+  const loaded = await loadUserMessages(requestedLocale)
+  const locale = loaded.language
+  const builtin = cloneMessages(builtinMessages[locale])
   return {
     language: locale,
-    base: builtinMessages[DEFAULT_LOCALE] || {},
+    base: cloneMessages(builtinMessages[DEFAULT_LOCALE]),
     builtin,
-    user: userMessages,
-    merged: deepMerge(builtin, userMessages),
+    user: loaded.messages,
+    merged: deepMerge(builtin, loaded.messages),
   }
 }
 
 export const setLocale = async (language = DEFAULT_LOCALE) => {
-  const locale = normalizeLocale(language)
-  const builtin = builtinMessages[locale] || {}
-  const userMessages = await loadUserMessages(locale)
-  i18n.global.setLocaleMessage(locale, deepMerge(builtin, userMessages))
+  const version = ++localeRequestVersion
+  const requestedLocale = normalizeLocale(language)
+  let loaded
+  try {
+    loaded = await loadUserMessages(requestedLocale)
+  } catch (error) {
+    if (version !== localeRequestVersion) return getCurrentLocale()
+    throw error
+  }
+  if (version !== localeRequestVersion) return getCurrentLocale()
+  const locale = loaded.language
+  const builtin = cloneMessages(builtinMessages[locale])
+  i18n.global.setLocaleMessage(locale, deepMerge(builtin, loaded.messages))
   i18n.global.locale.value = locale
   localeRevision.value += 1
   document.documentElement.lang = locale
@@ -148,6 +169,16 @@ export const findTranslationEntriesForText = (text = '') => {
 }
 
 export const findTranslationEntryByKey = (key = '') => translationRegistry.get(String(key || '').trim()) || null
+
+export const getTranslationValidationIssue = (source = '', target = '') => {
+  const sourceParams = new Set([...String(source ?? '').matchAll(PLACEHOLDER_RE)].map(item => item[1]))
+  const targetParams = new Set([...String(target ?? '').matchAll(PLACEHOLDER_RE)].map(item => item[1]))
+  if (sourceParams.size !== targetParams.size || [...sourceParams].some(item => !targetParams.has(item))) return 'placeholders'
+  const sourceMarkers = String(source ?? '').match(LOCALE_MARKER_RE) || []
+  const targetMarkers = String(target ?? '').match(LOCALE_MARKER_RE) || []
+  if (sourceMarkers.length !== targetMarkers.length || sourceMarkers.some((item, index) => item !== targetMarkers[index])) return 'markers'
+  return ''
+}
 
 export const translateMessagePayload = (payload = {}, fallback = '') => {
   const key = String(payload?.message_key || '').trim()

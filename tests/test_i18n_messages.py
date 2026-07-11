@@ -1,4 +1,7 @@
 import json
+from pathlib import Path
+
+import pytest
 
 from backend.i18n.messages import deep_merge, localized_key, localized_params, tr
 
@@ -245,6 +248,68 @@ def test_user_locale_options_only_accept_user_locale_files(tmp_path, monkeypatch
     assert "ja" in values
     assert "legacy" not in values
     assert "ko" not in values
+
+
+def test_save_user_locale_message_creates_listed_user_locale(tmp_path, monkeypatch):
+    import backend.i18n.messages as messages
+
+    locales_dir = tmp_path / "locales"
+    monkeypatch.setattr(messages, "USER_LOCALES_DIR", locales_dir)
+
+    messages.save_user_locale_message("ja", "ui.title", "タイトル")
+
+    payload = json.loads((locales_dir / "ja.json").read_text(encoding="utf-8"))
+    assert payload["_meta"] == {"language": "ja", "label": "日本語", "type": "user_locale"}
+    assert {item["value"] for item in messages.list_user_locale_options()} == {"ja"}
+
+
+def test_save_user_locale_messages_creates_listed_user_locale(tmp_path, monkeypatch):
+    import backend.i18n.messages as messages
+
+    locales_dir = tmp_path / "locales"
+    monkeypatch.setattr(messages, "USER_LOCALES_DIR", locales_dir)
+
+    messages.save_user_locale_messages("ko", {"ui.title": "제목"})
+
+    payload = json.loads((locales_dir / "ko.json").read_text(encoding="utf-8"))
+    assert payload["_meta"] == {"language": "ko", "label": "한국어", "type": "user_locale"}
+    assert {item["value"] for item in messages.list_user_locale_options()} == {"ko"}
+
+
+def test_write_json_keeps_existing_file_when_write_fails(tmp_path, monkeypatch):
+    import backend.i18n.messages as messages
+
+    target = tmp_path / "locale.json"
+    target.write_text('{"old": true}\n', encoding="utf-8")
+    original_write_text = Path.write_text
+
+    def fail_after_write(path, *args, **kwargs):
+        original_write_text(path, *args, **kwargs)
+        raise OSError("simulated write failure")
+
+    monkeypatch.setattr(Path, "write_text", fail_after_write)
+
+    with pytest.raises(OSError, match="simulated write failure"):
+        messages.write_json(target, {"new": True})
+
+    assert target.read_text(encoding="utf-8") == '{"old": true}\n'
+
+
+def test_locale_load_user_messages_separates_meta_from_messages(monkeypatch):
+    from backend.api import API
+    import backend.api as api
+
+    monkeypatch.setattr(api, "load_user_locale", lambda _: {
+        "_meta": {"type": "user_locale", "language": "ja", "label": "日本語"},
+        "ui": {"title": "タイトル"},
+    })
+
+    response = API.__new__(API).locale_load_user_messages("ja")
+
+    assert response["status"] == "success"
+    assert response["data"]["language"] == "ja"
+    assert response["data"]["meta"] == {"type": "user_locale", "language": "ja", "label": "日本語"}
+    assert response["data"]["messages"] == {"ui": {"title": "タイトル"}}
 
 
 def test_locale_export_workfile_builds_meta_in_backend(tmp_path, monkeypatch):

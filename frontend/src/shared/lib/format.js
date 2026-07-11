@@ -1,3 +1,5 @@
+import { getCurrentLocale } from '../i18n.js'
+
 /**
  * 将字节数格式化为更适合展示的存储单位。
  * @param {number|string} bytes 字节数
@@ -28,7 +30,7 @@ export function formatFileSize(bytes, decimals = 2) {
 export function formatDate(dateString) {
   if (!dateString) return ''
 
-  return new Date(dateString).toLocaleString('zh-CN', {
+  return new Date(dateString).toLocaleString(getCurrentLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

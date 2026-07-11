@@ -172,11 +172,15 @@ export const useAppStore = defineStore('app', () => {
     return settings.value.translation
   }
 
-  const countLocaleStrings = (value, skipMeta = true) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return 0
-    return Object.entries(value).reduce((count, [key, child]) => (
-      count + (skipMeta && key === '_meta' ? 0 : (child && typeof child === 'object' && !Array.isArray(child) ? countLocaleStrings(child, skipMeta) : 1))
-    ), 0)
+  const getLocaleStringKeys = (value, prefix = '', keys = new Set()) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return keys
+    Object.entries(value).forEach(([key, child]) => {
+      if (!prefix && key === '_meta') return
+      const path = prefix ? `${prefix}.${key}` : key
+      if (child && typeof child === 'object' && !Array.isArray(child)) getLocaleStringKeys(child, path, keys)
+      else if (typeof child === 'string' || typeof child === 'number') keys.add(path)
+    })
+    return keys
   }
 
   const getTranslationFeatureSettings = (feature = 'workshop_detail') => {
@@ -622,8 +626,9 @@ export const useAppStore = defineStore('app', () => {
       const languageInfo = options.find(item => item.value === locale || item.code === locale)
       if (locale !== DEFAULT_LOCALE && languageInfo?.user && !languageInfo?.builtin) {
         const data = await getLocaleMessagesForManagement(locale)
-        const total = countLocaleStrings(data.base)
-        const overridden = countLocaleStrings(data.user)
+        const baseKeys = getLocaleStringKeys(data.base)
+        const overridden = [...getLocaleStringKeys(data.user)].filter(key => baseKeys.has(key)).length
+        const total = baseKeys.size
         const coverage = total > 0 ? Math.round((overridden / total) * 100) : 0
         const message = overridden > 0
           ? t('messages.app.language.partial_locale', '已切换到 {language}，当前用户语言包覆盖率约 {coverage}%，未覆盖内容将显示默认中文。', { language: languageInfo.label || locale, coverage })
@@ -636,12 +641,13 @@ export const useAppStore = defineStore('app', () => {
         recommendationExportDialog.sourceName = defaultRecommendationSourceName()
       }
     } catch (error) {
-      console.warn('切换界面语言失败，继续使用默认中文:', error)
+      console.warn('切换界面语言失败，保留当前语言:', error)
+      toast.error(error?.message || t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
     }
   }
   watch(() => settings.value.language, () => {
     void syncCurrentLocale()
-  }, { immediate: true })
+  })
   watch(currentTheme, (theme) => {
     applyTheme(theme)
   }, { immediate: true, deep: true })
@@ -710,6 +716,7 @@ export const useAppStore = defineStore('app', () => {
   const applyInitialPayload = (payload, { isInit = false, historyLabel = t('messages.app.history.refresh_disk_state', '刷新磁盘状态') } = {}) => {
     if (!payload) return false
 
+    const previousLanguage = settings.value.language
     if (isInit && payload.settings) {
       settings.value = payload.settings
       settings.value.asset_port = payload.asset_port || 0
@@ -720,7 +727,7 @@ export const useAppStore = defineStore('app', () => {
     if (payload.settings) {
       settings.value.translation = normalizeTranslationSettings(settings.value.translation)
       settingsReady.value = true
-      void syncCurrentLocale()
+      if (settings.value.language === previousLanguage) void syncCurrentLocale()
     }
     if (Array.isArray(payload.user_themes)) {
       userThemes.value = payload.user_themes
@@ -753,12 +760,13 @@ export const useAppStore = defineStore('app', () => {
   const applyStartupBootstrapPayload = (payload) => {
     if (!payload) return false
 
+    const previousLanguage = settings.value.language
     if (payload.settings) {
       settings.value = payload.settings
       settings.value.asset_port = payload.asset_port || 0
       settings.value.translation = normalizeTranslationSettings(settings.value.translation)
       settingsReady.value = true
-      void syncCurrentLocale()
+      if (settings.value.language === previousLanguage) void syncCurrentLocale()
     }
     upgradeContext.value = payload.upgrade_context || {}
     if (Array.isArray(payload.user_themes)) {

@@ -398,6 +398,10 @@ const showSecretStorageWarning = (target) => {
   }, t('toast.settings.secret_storage_warning', '部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。')), { timeout: 9000 })
 }
 
+const previewLocale = (language) => setLocale(language).catch(error => {
+  toast.error(error?.message || t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
+})
+
 // 数据同步：打开时立即生成表单副本；路径检测只在后台补充 check_info，不阻塞设置页渲染。
 watch(() => appStore.uiState.showSettingsPanel, (val) => {
   if (val) {
@@ -418,7 +422,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
   } else {
     settingsPanelOpenVersion += 1
     if (!appStore.themeEditor.isOpen) applyTheme(appStore.currentTheme)
-    if (!isApplyingSettings && settingsPanelLanguageSnapshot) void setLocale(settingsPanelLanguageSnapshot)
+    if (!isApplyingSettings && settingsPanelLanguageSnapshot) void previewLocale(settingsPanelLanguageSnapshot)
     clearFormSecrets(formData.value)
     settingsPanelLanguageSnapshot = ''
   }
@@ -426,7 +430,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
 
 watch(() => formData.value?.language, (language) => {
   if (!appStore.uiState.showSettingsPanel || !language) return
-  void setLocale(language)
+  void previewLocale(language)
 })
 
 // 手动选择其他路径
