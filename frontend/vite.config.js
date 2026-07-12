@@ -42,17 +42,11 @@ export default defineConfig({
     },
   },
   server: {
-    // proxy: {
-    //   '/api': {
-    //     target: 'http://localhost:5000',
-    //     changeOrigin: true,
-    //     secure: false,
-    //     rewrite: (path) => path.replace(/^\/api/, ''),
-    //   },
-    // },
-    // host: '0.0.0.0',
-    // port: 5173,
-    // open: false,  
+    // 开发模式只给本机桌面壳和本地浏览器使用，固定回环地址更稳定。
+    host: '127.0.0.1',
+    // 5173 在部分 Windows 机器上会落入系统保留端口范围，改成明确可用的固定端口。
+    port: 5173,
+    strictPort: true,
   },
   css: {
     preprocessorOptions: {

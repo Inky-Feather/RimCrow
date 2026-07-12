@@ -48,11 +48,10 @@ from backend.settings import settings, BASE_RESOURCE_DIR, HOME_DIR
 from backend.utils.event_bus import EventBus
 from backend.utils.tools import current_ms
 from validate_environment import (
-    get_entrypoint,
-    get_local_frontend_root,
-    is_port_available,
-    show_native_error,
-    validate_environment,
+    # 前端入口
+    get_entrypoint, get_local_frontend_root, show_native_error, validate_environment,
+    # 开发服探测
+    DEV_SERVER_HOST, DEV_SERVER_PORT, is_port_available,
 )
 
 from icecream import ic
@@ -308,7 +307,7 @@ def main():
             browser_runtime = BrowserAppServer(
                 api=api,
                 static_root=static_root,
-                use_dev_server=(not getattr(sys, 'frozen', False) and is_port_available("localhost", 5173)),
+                use_dev_server=(not getattr(sys, 'frozen', False) and is_port_available(DEV_SERVER_HOST, DEV_SERVER_PORT)),
             )
             browser_runtime.start()
             api.set_browser_base_url(browser_runtime.base_url)

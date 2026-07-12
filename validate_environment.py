@@ -13,6 +13,10 @@ if sys.platform == "win32":
 else:
     winreg = None
 
+DEV_SERVER_HOST = "127.0.0.1"
+DEV_SERVER_PORT = 5173
+DEV_SERVER_URL = f"http://{DEV_SERVER_HOST}:{DEV_SERVER_PORT}"
+
 
 def _is_windows():
     return sys.platform == "win32"
@@ -32,7 +36,7 @@ def _path_from_file_uri(uri: str) -> Path:
     return Path(path)
 
 
-def is_port_available(host: str = "localhost", port: int = 5173, timeout: float = 0.5) -> bool:
+def is_port_available(host: str = DEV_SERVER_HOST, port: int = DEV_SERVER_PORT, timeout: float = 0.5) -> bool:
     """
     检测指定主机的端口是否可达（用于判断前端开发服务器是否启动）
     :param host: 主机地址
@@ -64,10 +68,10 @@ def get_entrypoint():
     """
     fix_mime_types()
     # 定义前端开发服务器地址
-    dev_server = "http://localhost:5173"
+    dev_server = DEV_SERVER_URL
     
     # 1. 获取程序根目录 (Base Directory)
-    if not getattr(sys, 'frozen', False) and is_port_available("localhost", 5173):
+    if not getattr(sys, 'frozen', False) and is_port_available(DEV_SERVER_HOST, DEV_SERVER_PORT):
         print(f"[Debug] 开发服务器端口可用，使用: {dev_server}")
         return dev_server
             
@@ -97,7 +101,7 @@ def get_entrypoint():
     # 4. 兜底回退：本地开发服务器
     from backend.utils.logger import logger 
     logger.debug(f"[Debug] Local assets not found. Searched in:\n - {path_external}\n - {path_internal}")
-    if is_port_available("localhost", 5173): return dev_server
+    if is_port_available(DEV_SERVER_HOST, DEV_SERVER_PORT): return dev_server
     return path_external.absolute().as_uri()
 
 def get_local_frontend_root():

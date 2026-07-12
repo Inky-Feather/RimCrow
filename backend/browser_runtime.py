@@ -21,12 +21,11 @@ from backend.static_page import (
 )
 from backend.i18n.messages import tr
 from backend.utils.logger import logger
-from validate_environment import is_port_available
+from validate_environment import DEV_SERVER_HOST, DEV_SERVER_PORT, DEV_SERVER_URL, is_port_available
 
 
 SESSION_TTL_SECONDS = 30.0
 PRIMARY_CLOSE_GRACE_SECONDS = 3.0
-DEV_SERVER_URL = "http://localhost:5173"
 REMOTE_FETCH_TIMEOUT_SECONDS = 20
 REMOTE_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -522,7 +521,7 @@ class BrowserAppServer:
 
     @staticmethod
     def should_use_dev_server():
-        return not getattr(__import__("sys"), "frozen", False) and is_port_available("localhost", 5173)
+        return not getattr(__import__("sys"), "frozen", False) and is_port_available(DEV_SERVER_HOST, DEV_SERVER_PORT)
 
     def get_launch_url(self):
         api_base = quote(self.base_url, safe="")
