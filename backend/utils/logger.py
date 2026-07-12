@@ -16,6 +16,16 @@ from icecream import ic
 from backend.settings import DATA_DIR
 
 
+def _is_console_stream_available(stream) -> bool:
+    """判断标准流是否真的适合做控制台日志输出。"""
+    if stream is None or getattr(stream, 'closed', False): return False
+    name = str(getattr(stream, 'name', '') or '').lower()
+    # 无控制台打包环境可能暴露 nul/devnull 流；这类目标不需要控制台 handler，文件日志仍会保留。
+    if name in {'nul', os.devnull, '/dev/null'}: return False
+    writable = getattr(stream, 'writable', None)
+    return bool(writable()) if callable(writable) else True
+
+
 def generate_log_id(timestamp: str, level: str, message: str) -> str:
     """生成基于内容的唯一哈希 ID，保证跨重启和双端的绝对去重"""
     raw_str = f"{timestamp}_{level}_{message}"
@@ -410,8 +420,8 @@ class LoggerManager:
                 # 如果处于某些特殊无控制台环境 (pythonw.exe)，sys.stdout 可能是 None
                 pass
         # 2. 安全地添加控制台 Handler
-        # 只有当 sys.stdout 存在（不是 None）时才添加，避免 --noconsole 模式下报错
-        if sys.stdout is not None:
+        # 只有控制台流确实可用时才添加，避免无控制台打包环境里的 nul 设备报错。
+        if _is_console_stream_available(sys.stdout):
             try:
                 console_handler = logging.StreamHandler(sys.stdout)
         

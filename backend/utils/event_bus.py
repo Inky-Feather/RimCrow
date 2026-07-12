@@ -1,10 +1,11 @@
 # backend/utils/event_bus.py
 import threading
-
-from webview import WebViewException, Window
+from typing import Any
 
 from backend.i18n.messages import localized_key, localized_params
 from backend.utils.tools import current_ms
+
+# 不在模块导入期导入 webview：日志初始化会导入 EventBus，过早加载 webview 可能在无控制台打包环境触发 nul 启动崩溃。
 
 class EventBus:
     _instance = None   # 存储单例实例的变量
@@ -22,7 +23,7 @@ class EventBus:
         return cls._instance
 
     @classmethod
-    def set_window(cls, window: Window):
+    def set_window(cls, window: Any):
         cls._window = window
         cls._browser_dispatcher = None
         cls._paused = False
@@ -91,22 +92,17 @@ class EventBus:
                 """
                 # 在主线程执行 JS (pywebview 可以在任意线程调用 evaluate_js，它内部会处理线程安全)
                 cls._window.evaluate_js(js_code)
-            except WebViewException:
+            except Exception:
                 # 窗口可能还没准备好，或者已经关闭
                 # 这种情况下，静默失败，只在控制台打印简单的 stderr，防止递归调用 logger
                 # 捕获异常后，将就绪状态置为 False，防止后续事件继续撞墙
                 cls._frontend_ready = False
-                import sys
-                # print(f"[EventBus Error] Window not ready for event: {event_name}", file=sys.stderr)
-            except Exception as e:
-                import sys
-                # print(f"[EventBus Error] Unknown error: {e}", file=sys.stderr)
 
     @classmethod
     def send_toast(cls, message: str, type: str = 'info', duration: int = 3000):
         """快捷发送 Toast"""
         print(f"[EventBus] send_toast: {message}")
-        payload = {
+        payload: dict[str, Any] = {
             'mode': 'toast',
             'message': str(message or ""),
             'type': type,
@@ -123,7 +119,7 @@ class EventBus:
     @classmethod
     def send_alert(cls, title: str, message: str, type: str = 'info'):
         """快捷发送 Modal/Alert"""
-        payload = {
+        payload: dict[str, Any] = {
             'mode': 'modal',
             'title': title,
             'message': str(message or ""),

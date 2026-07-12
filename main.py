@@ -10,6 +10,30 @@ import sys
 import threading
 import time
 
+
+class _NullTextStream:
+    encoding = 'utf-8'
+
+    def write(self, text):
+        return len(text or '')
+
+    def flush(self):
+        pass
+
+    def isatty(self):
+        return False
+
+
+def _ensure_stdio():
+    # 打包无控制台时标准流可能是 None；提前补空流，避免 pywebview 或日志导入期把缺失流转成 nul 报错。
+    if sys.stdout is None:
+        sys.stdout = _NullTextStream()
+    if sys.stderr is None:
+        sys.stderr = _NullTextStream()
+
+
+_ensure_stdio()
+
 from backend.window_state import MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, WindowStateManager, enable_per_monitor_dpi_awareness
 
 # 必须在创建任何窗口前调用
