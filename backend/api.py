@@ -399,7 +399,13 @@ class ApiResponse:
 class LaunchWarningAction(Enum):
     CONTINUE = "continue"
     WAIT_STEAM_EXIT = "wait_steam_exit"
+    RETRY_STEAM_CLIENT = "retry_steam_client"
+    RETRY_STEAM_URL = "retry_steam_url"
     CANCEL = "cancel"
+
+
+class LaunchPreparationError(RuntimeError):
+    """启动前链接同步失败时中止后续启动。"""
 
 
 class _LazyAIManager:
@@ -3655,125 +3661,43 @@ class API:
             runtime_caps = self._resolve_profile_runtime_caps_from_profile(profile)
             prefer_steam_launch = bool(runtime_caps.get('steam_launch_enabled'))
             is_steam_managed = bool(runtime_caps.get('is_steam_managed'))
-            # 检查 Steam 路径是否有效，无效则尝试重新获取
-            if prefer_steam_launch and settings.config.steam_path:
+            runtime_session_mgr = self._get_runtime_session_manager()
+
+            if prefer_steam_launch and is_steam_managed and settings.config.steam_path:
                 settings.config.steam_path = normalize_steam_root(settings.config.steam_path)
-            if prefer_steam_launch and not settings.config.steam_path:
+            if prefer_steam_launch and is_steam_managed and not settings.config.steam_path:
                 settings.config.steam_path = self.steam_mgr.get_steam_path() or ''
-            if prefer_steam_launch and settings.config.steam_path:
+            if prefer_steam_launch and is_steam_managed and settings.config.steam_path:
                 self.steam_mgr.steam_dir = settings.config.steam_path
                 self.steam_mgr.steam_exe = resolve_steam_executable_path(settings.config.steam_path)
-            steam_path_valid = bool(
-                settings.config.steam_path
-                and PathChecker.check_steam_path(settings.config.steam_path).get('pass', False)
-            )
-            steam_status = self.steam_mgr.get_steam_client_status()
-            steam_running = bool(steam_status.get("running"))
-            steam_ready = bool(steam_status.get("ready"))
             logger.debug(
-                "启动游戏参数：profile_id=%s, prefer_steam=%s, steam_path_valid=%s, steam_running=%s, steam_ready=%s, steam_source=%s, steam_detail=%s, is_steam=%s, is_steam_managed=%s",
+                "启动游戏参数：profile_id=%s, prefer_steam=%s, args_count=%s, is_steam=%s, is_steam_managed=%s",
                 profile_id,
                 prefer_steam_launch,
-                steam_path_valid,
-                steam_running,
-                steam_ready,
-                steam_status.get("source"),
-                steam_status.get("detail"),
+                len(extra_args or []),
                 profile.is_steam,
                 is_steam_managed,
             )
 
-            runtime_session_mgr = self._get_runtime_session_manager()
+            if prefer_steam_launch and is_steam_managed:
+                return self._launch_steam_managed_profile(profile_id, extra_args, runtime_session_mgr)
 
             if prefer_steam_launch:
-                if is_steam_managed:
-                    # Steam 管理主版本可以走 Steam 官方入口，但启动前仍要先收口链接状态。
-                    prepare_result = self._prepare_profile_launch(profile_id, include_workshop=False)
-                    if not prepare_result.get("ok"):
-                        failed_session = runtime_session_mgr.mark_launch_failed(
-                            "launch_prepare_failed",
-                            str(prepare_result.get("message") or tr("api.game.launch_prepare_failed", "启动前准备失败")),
-                        )
-                        return ApiResponse.error(
-                            str(prepare_result.get("message") or tr("api.game.launch_prepare_failed", "启动前准备失败")),
-                            data={"runtime_session": failed_session, "failure_reason": "launch_prepare_failed"},
-                        )
-
-                    if steam_path_valid:
-                        launch_message = tr("api.game.launch_steam_started", "已发起 Steam 启动，等待游戏进程确认。")
-                        session = runtime_session_mgr.begin_launch(profile_id, "steam", message=launch_message)
-                        self.steam_mgr.launch_via_steam_cmd(extra_args=extra_args)
-                        return ApiResponse.success( data={"runtime_session": session}, message=launch_message )
-
-                    if profile.id == 'default':
-                        try:
-                            prepare_result = self._prepare_profile_launch(profile_id, include_workshop=False)
-                            if not prepare_result.get("ok"):
-                                failed_session = runtime_session_mgr.mark_launch_failed(
-                                    "launch_prepare_failed",
-                                    str(prepare_result.get("message") or tr("api.game.launch_prepare_failed", "启动前准备失败")),
-                                )
-                                return ApiResponse.error(
-                                    str(prepare_result.get("message") or tr("api.game.launch_prepare_failed", "启动前准备失败")),
-                                    data={"runtime_session": failed_session, "failure_reason": "launch_prepare_failed"},
-                                )
-                            launch_message = tr("api.game.launch_steam_url_started", "已尝试通过 Steam URL 启动，等待游戏进程确认。")
-                            session = runtime_session_mgr.begin_launch(profile_id, "steam", message=launch_message)
-                            open_uri_with_system_handler(f"steam://run/{RIMWORLD_STEAM_APP_ID_STR}")
-                            return ApiResponse.warning(
-                                message=tr("api.game.launch_steam_url_fallback", "未定位到可直接启动的 Steam 客户端，已尝试通过系统协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。"),
-                                data={"runtime_session": session},
-                            )
-                        except Exception as e:
-                            logger.warning("通过 Steam URL 启动游戏失败: %s", e, exc_info=True)
-                            failed_session = runtime_session_mgr.mark_launch_failed("steam_url_launch_failed", f"通过 Steam URL 启动失败: {e}")
-                            return ApiResponse.error(
-                                "通过 Steam URL 启动失败",
-                                data={"runtime_session": failed_session, "failure_reason": "steam_url_launch_failed"},
-                                code="GAME.LAUNCH.STEAM_URL_FAILED",
-                                detail=e,
-                                user_message=tr("errors.game.steam_url_launch_failed", "通过 Steam URL 启动失败。请确认 Steam 已安装并且系统协议关联正常，详细原因已写入系统日志。"),
-                            )
-
-                    return self._build_direct_launch_confirmation(
-                        profile_id=profile_id,
-                        steam_running=bool(steam_running),
-                        reason="steam_path_invalid",
-                        message=tr("api.game.steam_path_invalid", "当前环境配置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径。"),
-                        requires_fallback_confirm=True,
-                        steam_status=self._attach_steam_user_hint(steam_status),
-                    )
-                # 非 Steam 管理主版本的 Steam 正版副本：
-                # 不适合再假装它是“官方 AppID 安装”，但仍然可以通过
-                # “先等 Steam 就绪，再直启游戏本体”的方式进入 Steam 运行态。
-                ok, ensured_status, message = self._ensure_steam_ready(timeout_seconds=60)
-                if ok:
-                    session = runtime_session_mgr.begin_launch(profile_id, "direct", message=tr("api.game.steam_ready_wait_game", "Steam 已就绪，等待游戏进程确认。"))
-                    self._launch_profile_with_runtime_links(profile_id, profile.game_install_path, extra_args, include_workshop=False)
-                    return ApiResponse.success(
-                        data={"runtime_session": session},
-                        message=tr("api.game.steam_ready_launch_started", "Steam 已就绪，已发起游戏启动，等待游戏进程确认。"),
-                    )
-
-                failed_reason = str((ensured_status or {}).get("reason") or "steam_not_ready").strip() or "steam_not_ready"
-                return self._build_direct_launch_confirmation(
-                    profile_id=profile_id,
-                    steam_running=bool((ensured_status or {}).get("running")),
-                    reason="steam_not_ready",
-                    message=message or tr("api.game.steam_not_ready", "Steam 未能进入可用状态。"),
-                    requires_fallback_confirm=True,
-                    steam_status={**(ensured_status or {}), "reason": failed_reason},
-                )
+                # 非 Steam 管理安装直启本体；Steamworks 探针只用于需要其 API 的操作，不能阻断游戏启动。
+                launch_message = tr("api.game.direct_launch_started", "已发起游戏启动，等待游戏进程确认。")
+                session = runtime_session_mgr.begin_launch(profile_id, "direct", message=launch_message)
+                self._launch_profile_with_runtime_links(profile_id, profile.game_install_path, extra_args, include_workshop=False)
+                return ApiResponse.success(data={"runtime_session": session}, message=launch_message)
 
             # 这里只处理“当前环境启用了创意工坊模组链接，且 Steam 已运行”时的冲突提示。
             # 管理器模组不参与 Steam 删链/避让判断；没有启用工坊链接部署时，也不在这里额外弹窗。
-            if ( steam_running and bool(runtime_caps.get('is_steam')) and bool(runtime_caps.get('workshop_deploy_enabled')) ):
+            if bool(runtime_caps.get('is_steam')) and bool(runtime_caps.get('workshop_deploy_enabled')) and self.steam_mgr.is_steam_running():
                 return self._build_direct_launch_confirmation(
                     profile_id=profile_id,
                     steam_running=True,
                     reason="steam_running_workshop_conflict",
                     message=tr("api.game.steam_running_workshop_conflict", "检测到 Steam 已在运行，需要先确认工坊链接冲突后再继续启动。"),
-                    steam_status=steam_status,
+                    steam_status={"running": True, "source": "process"},
                 )
 
             # 不使用 Steam 启动时，运行时链接是否带 Workshop 只由目标运行模式决定。
@@ -3782,10 +3706,9 @@ class API:
             session = runtime_session_mgr.begin_launch(profile_id, "direct", message=direct_launch_message)
             self._launch_profile_with_runtime_links(profile_id, profile.game_install_path, extra_args, include_workshop=include_workshop)
 
-            # 使用Steam启动，且Steam路径无效，提示用户
-            if prefer_steam_launch and not steam_path_valid:
-                return ApiResponse.warning( message=tr("api.game.direct_launch_after_invalid_steam_path", "未检测到有效的 Steam 程序路径，本次已改为游戏本体直接启动。"), data={"runtime_session": session} )
             return ApiResponse.success( data={"runtime_session": session}, message=direct_launch_message )
+        except LaunchPreparationError as e:
+            return self._build_launch_prepare_failure(profile_id, str(e))
         except Exception as e:
             logger.error("启动游戏失败: %s", e, exc_info=True)
             failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_exception", f"启动游戏时出错: {e}")
@@ -3941,6 +3864,63 @@ class API:
         normalized_profile_id = str(profile_id or "").strip()
         return self._sync_runtime_links_for_profile(normalized_profile_id, include_workshop=include_workshop)
 
+    def _build_launch_prepare_failure(self, profile_id: str, message: str):
+        """链接同步失败时终止启动，并让前端显示明确提示。"""
+        detail = str(message or tr("api.game.launch_prepare_failed", "启动前准备失败"))
+        logger.error("启动前链接同步失败: profile_id=%s, detail=%s", profile_id, detail)
+        failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_prepare_failed", detail)
+        return ApiResponse.warning(
+            detail,
+            data={
+                "action": "launch_prepare_failed",
+                "profile_id": profile_id,
+                "runtime_session": failed_session,
+                "failure_reason": "launch_prepare_failed",
+            },
+        )
+
+    def _launch_steam_managed_profile(self, profile_id: str, extra_args: list[str], runtime_session_mgr, launch_method: str | None = None):
+        """同步目标环境链接后，按指定方式提交 Steam 官方安装启动请求。"""
+        prepare_result = self._prepare_profile_launch(profile_id, include_workshop=False)
+        if not prepare_result.get("ok"):
+            return self._build_launch_prepare_failure(profile_id, str(prepare_result.get("message") or ""))
+
+        args = list(extra_args or [])
+        method = str(launch_method or "").strip().lower()
+        if method not in {"steam_client", "steam_url"}:
+            method = "steam_url" if not args and bool(getattr(settings.config, "prefer_steam_url_for_no_args", False)) else "steam_client"
+        url_ignores_args = bool(args and method == "steam_url")
+        launch_message = tr(
+            "api.game.launch_steam_url_started" if method == "steam_url" else "api.game.launch_steam_started",
+            "已发起 Steam URL 启动，等待游戏进程确认。" if method == "steam_url" else "已发起 Steam 启动，等待游戏进程确认。",
+        )
+        logger.info("提交 Steam 游戏启动: profile_id=%s, method=%s, args_count=%s, url_ignores_args=%s", profile_id, method, len(args), url_ignores_args)
+        session = runtime_session_mgr.begin_launch(profile_id, method, message=launch_message, has_launch_args=bool(args))
+        launch_result = self.steam_mgr.launch_via_steam_url() if method == "steam_url" else self.steam_mgr.launch_via_steam_client(extra_args=args)
+        if not isinstance(launch_result, dict):
+            launch_result = {"ok": bool(launch_result), "method": method}
+        if launch_result.get("ok"):
+            return ApiResponse.success(
+                data={"runtime_session": session, "launch_method": method, "url_ignores_args": url_ignores_args},
+                message=launch_message,
+            )
+
+        error = str(launch_result.get("error") or "unknown")
+        logger.error("Steam 游戏启动未提交: profile_id=%s, method=%s, error=%s, result=%s", profile_id, method, error, launch_result)
+        failed_session = runtime_session_mgr.mark_launch_failed("steam_launch_failed", error)
+        return ApiResponse.warning(
+            tr("api.game.steam_launch_failed", "无法提交 Steam 启动请求。"),
+            data={
+                "action": "resolve_steam_launch_failure",
+                "profile_id": profile_id,
+                "runtime_session": failed_session,
+                "failure_reason": "steam_launch_failed",
+                "launch_method": method,
+                "has_launch_args": bool(args),
+                "url_ignores_args": url_ignores_args,
+            },
+        )
+
     @staticmethod
     def _profile_update_requires_rebootstrap(data: Dict[str, Any] | None) -> bool:
         changed_keys = {
@@ -3997,7 +3977,7 @@ class API:
         """
         prepare_result = self._prepare_profile_launch(profile_id, include_workshop=include_workshop)
         if not prepare_result.get("ok"):
-            raise RuntimeError(str(prepare_result.get("message") or tr("api.game.launch_prepare_sync_failed", "启动前同步失败")))
+            raise LaunchPreparationError(str(prepare_result.get("message") or tr("api.game.launch_prepare_sync_failed", "启动前同步失败")))
         self.game_mgr.launch_game(game_install_path=game_install_path, custom_args=extra_args or [])
 
     def _build_direct_launch_confirmation(
@@ -4141,6 +4121,12 @@ class API:
             include_workshop = bool(runtime_caps.get('workshop_deploy_enabled'))
             runtime_session_mgr = self._get_runtime_session_manager()
 
+            if normalized_action in {LaunchWarningAction.RETRY_STEAM_CLIENT.value, LaunchWarningAction.RETRY_STEAM_URL.value}:
+                if not bool(runtime_caps.get('is_steam_managed')):
+                    return ApiResponse.error(tr("api.game.invalid_launch_warning_action", "无效的启动确认动作"))
+                method = "steam_client" if normalized_action == LaunchWarningAction.RETRY_STEAM_CLIENT.value else "steam_url"
+                return self._launch_steam_managed_profile(profile_id, extra_args, runtime_session_mgr, launch_method=method)
+
             if normalized_action == LaunchWarningAction.WAIT_STEAM_EXIT.value:
                 steam_running = self.steam_mgr.is_steam_running()
                 if steam_running:
@@ -4190,6 +4176,8 @@ class API:
                 include_workshop=include_workshop,
             )
             return ApiResponse.success( data={"runtime_session": session}, message=launch_message )
+        except LaunchPreparationError as e:
+            return self._build_launch_prepare_failure(profile_id, str(e))
         except Exception as e:
             logger.error("处理启动确认失败: %s", e, exc_info=True)
             failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_warning_resolve_failed", f"处理启动确认失败: {e}")

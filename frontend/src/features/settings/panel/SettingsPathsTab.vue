@@ -44,6 +44,8 @@
                       <CommonSwitch :label="t('ui.settings.paths.use_workshop_mods', '使用创意工坊 Mod')" :disabled="isPending('workshop-mods-check')"
                         :model-value="formData.use_workshop_mods" :description="t('ui.settings.paths.use_workshop_mods_desc', '开启后，管理器会把创意工坊模组接入当前环境的本地模组目录。目录不可用时会提醒，但仍可手动开启。')"
                         @update:modelValue="handleWorkshopModsUpdate" />
+                      <CommonSwitch :label="t('ui.settings.paths.prefer_steam_url_for_no_args', '优先使用 Steam URL 启动')" v-model="formData.prefer_steam_url_for_no_args" :disabled="!formData.prefer_steam_launch"
+                        :description="t('ui.settings.paths.prefer_steam_url_for_no_args_desc', '仅在没有启动参数时生效。Steam URL 启动不会携带启动参数，效果与桌面原版快捷方式相同。关闭后优先使用 Steam 本体并携带参数启动。')" />
                     </div>
                   </div>
                   <div class="modal-section grid grid-cols-2 gap-2 p-3">

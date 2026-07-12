@@ -687,7 +687,6 @@
       "tool_ready": "工具已经就绪"
     },
     "game": {
-      "direct_launch_after_invalid_steam_path": "未检测到有效的 Steam 程序路径，本次已改为游戏本体直接启动。",
       "direct_launch_started": "已发起游戏启动，等待游戏进程确认。",
       "invalid_launch_warning_action": "无效的启动确认动作",
       "launch_after_steam_exit": "Steam 已退出，已发起游戏启动，等待游戏进程确认。",
@@ -704,13 +703,7 @@
       "launch_prepare_scan_sync_failed": "启动前检查同步已完成扫描，但链接同步失败。",
       "launch_prepare_sync_failed": "启动前同步失败",
       "launch_prepare_unhealthy_context": "目标环境路径不可用，请先完成路径设置。",
-      "launch_steam_started": "已发起 Steam 启动，等待游戏进程确认。",
-      "launch_steam_url_fallback": "未定位到可直接启动的 Steam 客户端，已尝试通过系统协议启动 Steam 游戏；如果失败，请检查 Steam 客户端状态或关闭“优先 Steam 启动”选项。",
-      "launch_steam_url_started": "已尝试通过 Steam URL 启动，等待游戏进程确认。",
-      "steam_not_ready": "Steam 未能进入可用状态。",
-      "steam_path_invalid": "当前环境配置为优先使用 Steam 启动，但未检测到有效的 Steam 程序路径。",
-      "steam_ready_launch_started": "Steam 已就绪，已发起游戏启动，等待游戏进程确认。",
-      "steam_ready_wait_game": "Steam 已就绪，等待游戏进程确认。",
+      "steam_launch_failed": "无法提交 Steam 启动请求。",
       "steam_running_workshop_conflict": "检测到 Steam 已在运行，需要先确认工坊链接冲突后再继续启动。",
       "steam_still_running": "Steam 仍在运行，继续等待其退出。"
     },
@@ -2920,8 +2913,7 @@
     },
     "game": {
       "launch_failed": "启动游戏失败。请检查游戏路径、启动参数和当前环境链接状态，详细原因已写入系统日志。",
-      "launch_warning_resolve_failed": "处理启动确认失败。请重新尝试启动，或刷新当前环境状态后再试。",
-      "steam_url_launch_failed": "通过 Steam URL 启动失败。请确认 Steam 已安装并且系统协议关联正常，详细原因已写入系统日志。"
+      "launch_warning_resolve_failed": "处理启动确认失败。请重新尝试启动，或刷新当前环境状态后再试。"
     },
     "group": {
       "create_failed": "创建分组失败。请检查分组名称是否有效，稍后重试。"
@@ -3946,11 +3938,21 @@
           "check_steam_status": "检查 Steam 状态",
           "continue_run": "继续运行",
           "direct_once": "本次直启游戏",
-          "disable_steam_launch": "关闭 Steam 优先启动"
+          "disable_steam_launch": "关闭 Steam 优先启动",
+          "retry_steam_client": "改用 Steam 客户端启动",
+          "retry_steam_url": "改用 Steam URL 启动"
         },
         "confirm": {
           "message": "当前环境需要先确认后再继续启动。",
           "title": "启动前确认"
+        },
+        "link_sync_failed": {
+          "message": "未能完成模组链接同步，本次未启动游戏。",
+          "title": "模组链接同步失败"
+        },
+        "steam_launch_failed": {
+          "message": "无法提交 Steam 启动请求。",
+          "title": "Steam 启动失败"
         },
         "steam_not_ready": {
           "fallback": "Steam 未能进入可用状态。",
@@ -3968,7 +3970,10 @@
         "steam_status": {
           "complete": "已完成 Steam 状态检查。",
           "title": "Steam 状态"
-        }
+        },
+        "steam_url_no_args_current": "\n刚才的 Steam URL 启动未使用本次启动参数。",
+        "steam_url_no_args_retry": "\n改用 Steam URL 启动时不会使用本次启动参数。",
+        "timeout_message": "未在限定时间内检测到游戏进程。"
       },
       "history": {
         "refresh_after_game_exit": "游戏退出后刷新磁盘状态",
@@ -6118,6 +6123,8 @@
         "move_old_self_mods_desc": "开启后，修改路径时会将原有模组移动到新路径；不开启则保留原有的文件结构。",
         "prefer_steam_launch": "优先使用 Steam 启动",
         "prefer_steam_launch_desc": "开启后，管理器会优先通过 Steam 启动当前环境，并直接使用 Steam 中的创意工坊内容。路径不完整时会提醒，但仍可手动开启。",
+        "prefer_steam_url_for_no_args": "优先使用 Steam URL 启动",
+        "prefer_steam_url_for_no_args_desc": "仅在没有启动参数时生效。Steam URL 启动不会携带启动参数，效果与桌面原版快捷方式相同。关闭后优先使用 Steam 本体并携带参数启动。",
         "run_commands": "游戏启动参数",
         "run_commands_desc": "注意不要使用 [[-savedatafolder]] 指令，多环境管理已经默认使用此指令，无需手动配置。",
         "run_commands_placeholder": "请输入一个完整指令后回车确认……",

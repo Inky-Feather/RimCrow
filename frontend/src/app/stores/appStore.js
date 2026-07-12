@@ -1186,6 +1186,7 @@ export const useAppStore = defineStore('app', () => {
     // 监听游戏状态变化
     window.addEventListener('game-status-changed', (e) => {
       const detail = e?.detail || {}
+      const runtimeSession = detail.runtime_session || {}
       if (detail.runtime_session) {
         setRuntimeSession(detail.runtime_session)
       } else {
@@ -1196,6 +1197,13 @@ export const useAppStore = defineStore('app', () => {
       }
       if (detail.source === 'external' && detail.message) {
         toast.info(detail.message, { timeout: 4000 })
+      }
+      if (
+        detail.failure_reason === 'launch_timeout'
+        && ['steam_client', 'steam_url'].includes(String(runtimeSession.launch_mode || ''))
+      ) {
+        void handleSteamLaunchTimeout(detail)
+        return
       }
       if (detail.failure_reason && detail.message) {
         toast.error(toUserMessage(detail.message, t('messages.app.error.game_status_failed', '游戏启动状态异常。可能是游戏路径、启动参数或运行环境暂时不可用，详细原因已写入系统日志。')))
@@ -1492,6 +1500,8 @@ export const useAppStore = defineStore('app', () => {
   const WAIT_STEAM_EXIT_ACTION = 'wait_steam_exit'
   const GAME_LAUNCH_ACTION = Object.freeze({
     CONTINUE: 'continue',
+    RETRY_STEAM_CLIENT: 'retry_steam_client',
+    RETRY_STEAM_URL: 'retry_steam_url',
     CHECK_STEAM_STATUS: 'check_steam_status',
     DISABLE_STEAM_LAUNCH: 'disable_steam_launch',
     CANCEL: 'cancel',
@@ -1510,7 +1520,35 @@ export const useAppStore = defineStore('app', () => {
     { label: t('common.action.cancel', '取消'), value: GAME_LAUNCH_ACTION.CANCEL, kind: 'secondary' },
   ]
 
+  const buildSteamLaunchFailureConfig = (gameRes) => {
+    const data = gameRes?.data || {}
+    const launchMethod = String(data.launch_method || 'steam_client')
+    const retryWithUrl = launchMethod !== 'steam_url'
+    const hasLaunchArgs = !!data.has_launch_args
+    const urlNotice = !hasLaunchArgs ? '' : retryWithUrl
+      ? t('messages.app.game_launch.steam_url_no_args_retry', '\n改用 Steam URL 启动时不会使用本次启动参数。')
+      : t('messages.app.game_launch.steam_url_no_args_current', '\n刚才的 Steam URL 启动未使用本次启动参数。')
+    return {
+      type: 'warning',
+      mode: 'actions',
+      title: t('messages.app.game_launch.steam_launch_failed.title', 'Steam 启动失败'),
+      message: `${String(gameRes?.message || t('messages.app.game_launch.steam_launch_failed.message', '无法提交 Steam 启动请求。'))}${urlNotice}`,
+      actionButtons: [
+        {
+          label: retryWithUrl
+            ? t('messages.app.game_launch.action.retry_steam_url', '改用 Steam URL 启动')
+            : t('messages.app.game_launch.action.retry_steam_client', '改用 Steam 客户端启动'),
+          value: retryWithUrl ? GAME_LAUNCH_ACTION.RETRY_STEAM_URL : GAME_LAUNCH_ACTION.RETRY_STEAM_CLIENT,
+          kind: 'primary',
+        },
+        { label: t('messages.app.game_launch.action.direct_once', '本次直启游戏'), value: GAME_LAUNCH_ACTION.CONTINUE, kind: 'secondary' },
+        { label: t('common.action.cancel', '取消'), value: GAME_LAUNCH_ACTION.CANCEL, kind: 'secondary' },
+      ],
+    }
+  }
+
   const buildGameLaunchWarningConfig = (gameRes) => {
+    if (gameRes?.data?.action === 'resolve_steam_launch_failure') return buildSteamLaunchFailureConfig(gameRes)
     const reason = String(gameRes?.data?.reason || '').trim()
     const fallbackMessage = String(gameRes?.message || '').trim()
     switch (reason) {
@@ -1578,13 +1616,24 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const resolveGameLaunchWarning = async (gameRes, requestedProfileId = null) => {
-    if (gameRes?.status !== 'warning' || gameRes?.data?.action !== 'confirm_direct_launch') {
+    if (gameRes?.status !== 'warning') {
       return gameRes
     }
 
     const profileStore = useProfileStore()
     const targetProfileId = gameRes?.data?.profile_id || requestedProfileId || profileStore.currentProfileId
     const confirmStore = useConfirmStore()
+    if (gameRes?.data?.action === 'launch_prepare_failed') {
+      await confirmStore.alert(
+        t('messages.app.game_launch.link_sync_failed.title', '模组链接同步失败'),
+        gameRes.message || t('messages.app.game_launch.link_sync_failed.message', '未能完成模组链接同步，本次未启动游戏。'),
+        { type: 'error' },
+      )
+      return null
+    }
+    if (!['confirm_direct_launch', 'resolve_steam_launch_failure'].includes(String(gameRes?.data?.action || ''))) {
+      return gameRes
+    }
     const warningConfig = buildGameLaunchWarningConfig(gameRes)
     if (!warningConfig) {
       return gameRes
@@ -1597,7 +1646,7 @@ export const useAppStore = defineStore('app', () => {
         { type: warningConfig.type, confirmText: warningConfig.confirmText, cancelText: warningConfig.cancelText }
       )
       if (!ok) return null
-      return window.pywebview.api.game_launch_resolve_warning(targetProfileId, warningConfig.action || 'continue')
+      return resolveGameLaunchWarning(await window.pywebview.api.game_launch_resolve_warning(targetProfileId, warningConfig.action || 'continue'), targetProfileId)
     }
 
     if (warningConfig.mode === 'actions') {
@@ -1611,13 +1660,33 @@ export const useAppStore = defineStore('app', () => {
       if (!choice || choice === GAME_LAUNCH_ACTION.CANCEL) return null
       if (choice === GAME_LAUNCH_ACTION.CHECK_STEAM_STATUS) return await showSteamStatusForLaunch()
       if (choice === GAME_LAUNCH_ACTION.DISABLE_STEAM_LAUNCH) return await disableSteamLaunchForProfile(targetProfileId)
-      return window.pywebview.api.game_launch_resolve_warning(targetProfileId, choice)
+      return resolveGameLaunchWarning(await window.pywebview.api.game_launch_resolve_warning(targetProfileId, choice), targetProfileId)
     }
 
     if (warningConfig.mode === 'wait_steam_exit') {
       return await waitSteamExitAndLaunch(targetProfileId, warningConfig)
     }
     return gameRes
+  }
+
+  const handleSteamLaunchTimeout = async (detail) => {
+    const runtimeSession = detail?.runtime_session || {}
+    const profileId = String(runtimeSession.profile_id || '').trim()
+    if (!profileId) return
+    const result = await resolveGameLaunchWarning({
+      status: 'warning',
+      message: String(detail?.message || t('messages.app.game_launch.timeout_message', '未在限定时间内检测到游戏进程。')),
+      data: {
+        action: 'resolve_steam_launch_failure',
+        profile_id: profileId,
+        launch_method: runtimeSession.launch_mode,
+        has_launch_args: !!runtimeSession.has_launch_args,
+      },
+    }, profileId)
+    if (!result) return
+    if (checkResult(result, t('messages.app.action.launch_game_program', '启动游戏程序'))) {
+      if (result?.data?.runtime_session) setRuntimeSession(result.data.runtime_session)
+    }
   }
 
   const waitSteamExitAndLaunch = async (targetProfileId, warningConfig) => {

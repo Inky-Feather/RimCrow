@@ -687,7 +687,6 @@
       "tool_ready": "Werkzeug ist bereits fertig"
     },
     "game": {
-      "direct_launch_after_invalid_steam_path": "Es wurde kein gültiger Pfad für die ausführbare Steam-Datei gefunden, daher wurde bei diesem Start die ausführbare Datei des Spiels direkt verwendet.",
       "direct_launch_started": "Der Spielstart hat begonnen. Warten auf die Bestätigung des Spielvorgangs.",
       "invalid_launch_warning_action": "Ungültige Startbestätigungsaktion",
       "launch_after_steam_exit": "Steam wurde beendet. Der Spielstart hat begonnen. Warten auf die Bestätigung des Spielvorgangs.",
@@ -704,15 +703,9 @@
       "launch_prepare_scan_sync_failed": "Der Scan der Startüberprüfung wurde abgeschlossen, aber die Linksynchronisierung ist fehlgeschlagen.",
       "launch_prepare_sync_failed": "Die Startsynchronisierung ist fehlgeschlagen",
       "launch_prepare_unhealthy_context": "Der Zielumgebungspfad ist nicht verfügbar. Schließen Sie zunächst die Pfadeinrichtung ab.",
-      "launch_steam_started": "Der Start des Steam hat begonnen. Warten auf die Bestätigung des Spielvorgangs.",
-      "launch_steam_url_fallback": "Es wurde kein direkt startbarer Steam-Client gefunden. Stattdessen wurde das Steam-Systemprotokoll zum Starten des Spiels verwendet. Wenn dies fehlschlägt, überprüfen Sie den Status des Steam-Clients oder deaktivieren Sie „Steam-Start bevorzugen“.",
-      "launch_steam_url_started": "Steam URL-Start gestartet. Warten auf die Bestätigung des Spielvorgangs.",
-      "steam_not_ready": "Steam wurde nicht bereit.",
-      "steam_path_invalid": "Diese Umgebung ist so eingestellt, dass sie den Start von Steam bevorzugt, es wurde jedoch kein gültiger ausführbarer Pfad für Steam gefunden.",
-      "steam_ready_launch_started": "Steam ist fertig. Der Spielstart hat begonnen. Warten auf die Bestätigung des Spielvorgangs.",
-      "steam_ready_wait_game": "Steam ist fertig. Warten auf die Bestätigung des Spielvorgangs.",
       "steam_running_workshop_conflict": "Steam läuft bereits. Bestätigen Sie den Workshop-Linkkonflikt, bevor Sie mit dem Start fortfahren.",
-      "steam_still_running": "Steam läuft noch. Ich warte darauf, dass es beendet wird."
+      "steam_still_running": "Steam läuft noch. Ich warte darauf, dass es beendet wird.",
+      "steam_launch_failed": "Die Steam-Startanfrage konnte nicht gesendet werden."
     },
     "github": {
       "deploy_started": "Die Bereitstellungsaufgabe für das Git-Abonnement wurde gestartet",
@@ -2920,8 +2913,7 @@
     },
     "game": {
       "launch_failed": "Das Spiel konnte nicht gestartet werden. Überprüfen Sie den Spielpfad, die Startargumente und den aktuellen Linkstatus der Umgebung. Einzelheiten finden Sie im Systemprotokoll.",
-      "launch_warning_resolve_failed": "Die Startbestätigung konnte nicht verarbeitet werden. Versuchen Sie es erneut oder aktualisieren Sie zunächst den aktuellen Umgebungsstatus.",
-      "steam_url_launch_failed": "Der Start über die Steam-URL ist fehlgeschlagen. Stellen Sie sicher, dass Steam installiert ist und die Systemprotokollzuordnung funktioniert. Einzelheiten finden Sie im Systemprotokoll."
+      "launch_warning_resolve_failed": "Die Startbestätigung konnte nicht verarbeitet werden. Versuchen Sie es erneut oder aktualisieren Sie zunächst den aktuellen Umgebungsstatus."
     },
     "group": {
       "create_failed": "Die Gruppe konnte nicht erstellt werden. Überprüfen Sie, ob der Gruppenname gültig ist, und versuchen Sie es später erneut."
@@ -3946,7 +3938,9 @@
           "check_steam_status": "Überprüfen Sie den Steam-Status",
           "continue_run": "Laufen Sie weiter",
           "direct_once": "Diesmal direkt starten",
-          "disable_steam_launch": "Deaktivieren Sie den ersten Start von Steam"
+          "disable_steam_launch": "Deaktivieren Sie den ersten Start von Steam",
+          "retry_steam_url": "Mit Steam-URL erneut versuchen",
+          "retry_steam_client": "Mit Steam-Client erneut versuchen"
         },
         "confirm": {
           "message": "Diese Umgebung muss bestätigt werden, bevor der Start fortgesetzt werden kann.",
@@ -3968,7 +3962,18 @@
         "steam_status": {
           "complete": "Steam-Statusprüfung abgeschlossen.",
           "title": "Steam-Status"
-        }
+        },
+        "link_sync_failed": {
+          "message": "Die Mod-Link-Synchronisierung konnte nicht abgeschlossen werden. Das Spiel wurde diesmal nicht gestartet.",
+          "title": "Mod-Link-Synchronisierung fehlgeschlagen"
+        },
+        "steam_launch_failed": {
+          "message": "Die Steam-Startanfrage konnte nicht gesendet werden.",
+          "title": "Steam-Start fehlgeschlagen"
+        },
+        "steam_url_no_args_current": "\nBeim gerade ausgeführten Steam-URL-Start wurden die Startargumente dieses Starts nicht verwendet.",
+        "steam_url_no_args_retry": "\nWenn Sie stattdessen per Steam-URL starten, werden die Startargumente dieses Starts nicht verwendet.",
+        "timeout_message": "Der Spielprozess wurde nicht innerhalb des Zeitlimits erkannt."
       },
       "history": {
         "refresh_after_game_exit": "Aktualisieren Sie den Festplattenstatus nach dem Beenden des Spiels",
@@ -6134,7 +6139,9 @@
         "user_data_path": "Benutzerdatenverzeichnis",
         "user_data_path_desc": "Benutzerdatenverzeichnis mit Spieleinstellungen, Spielständen und Protokollen. Der Standort ist je nach System unterschiedlich. Sie können eine automatische Erkennung oder eine manuelle Auswahl durchführen.\nUnter Windows lautet der Standarddatenpfad normalerweise:\nC:/Benutzer/BENUTZERNAME/AppData/LocalLow/Ludeon Studios/RimWorld von Ludeon Studios",
         "workshop_mods_path": "Workshop-Verzeichnis",
-        "workshop_mods_path_desc": "Verzeichnis mit von Steam Workshop heruntergeladenen Mods. Diese Einstellung wird von allen Profilen gemeinsam genutzt."
+        "workshop_mods_path_desc": "Verzeichnis mit von Steam Workshop heruntergeladenen Mods. Diese Einstellung wird von allen Profilen gemeinsam genutzt.",
+        "prefer_steam_url_for_no_args": "Steam-URL-Start bevorzugen",
+        "prefer_steam_url_for_no_args_desc": "Wird nur ohne Startparameter verwendet. Steam-URL startet ohne Parameter wie die ursprüngliche Desktop-Verknüpfung. Andernfalls startet Steam selbst mit den Parametern."
       },
       "theme": {
         "builtin": "Eingebaut",

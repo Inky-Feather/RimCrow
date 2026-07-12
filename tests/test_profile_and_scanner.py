@@ -1263,15 +1263,27 @@ class TestSteamManagerPlatformGuards(unittest.TestCase):
         self.assertEqual(result, str(steam_root))
         self.assertEqual(result_with_exe, str(steam_exe))
 
-    def test_launch_via_steam_cmd_falls_back_to_open_on_macos(self):
+    def test_launch_via_steam_client_reports_missing_executable_without_url_retry(self):
         manager = SteamManager.__new__(SteamManager)
         manager.steam_exe = ""
 
         with patch("backend.managers.mgr_steam.platform.system", return_value="Darwin"), \
-             patch("backend.platform.runtime.subprocess.Popen") as popen:
-            SteamManager.launch_via_steam_cmd(manager, app_id="294100")
+              patch("backend.platform.runtime.subprocess.Popen") as popen:
+            result = SteamManager.launch_via_steam_client(manager, app_id="294100")
 
-        popen.assert_called_once_with(["open", "steam://run/294100"])
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["method"], "steam_client")
+        popen.assert_not_called()
+
+    def test_launch_via_steam_url_reports_system_dispatch_result(self):
+        manager = SteamManager.__new__(SteamManager)
+
+        with patch("backend.managers.mgr_steam.open_system_uri", return_value=True) as open_system_uri:
+            result = SteamManager.launch_via_steam_url(manager, app_id="294100")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["method"], "steam_url")
+        open_system_uri.assert_called_once_with("steam://run/294100")
 
 
 class TestAppUpgradeMigrations(unittest.TestCase):
@@ -2444,7 +2456,7 @@ class TestApiScanMods(unittest.TestCase):
 
 
 class TestApiGameLaunch(unittest.TestCase):
-    def test_game_launch_prefers_steam_waits_until_ready_then_direct_launches_game(self):
+    def test_game_launch_direct_steam_copy_does_not_wait_for_steamworks_probe(self):
         api = API.__new__(API)
         profile = SimpleNamespace(
             id="default",
@@ -2477,7 +2489,7 @@ class TestApiGameLaunch(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         self.assertEqual(res["data"]["runtime_session"]["state"], "launching")
         self.assertEqual(res["data"]["runtime_session"]["profile_id"], "default")
-        api._ensure_steam_ready.assert_called_once_with(timeout_seconds=60)
+        api._ensure_steam_ready.assert_not_called()
         api._launch_profile_with_runtime_links.assert_called_once_with(
             "default",
             "C:/Games/RimWorld",
@@ -2485,7 +2497,7 @@ class TestApiGameLaunch(unittest.TestCase):
             include_workshop=False,
         )
 
-    def test_game_launch_default_steam_profile_uses_url_fallback_when_steam_path_invalid(self):
+    def test_game_launch_prefers_url_for_steam_managed_profile_without_args_when_enabled(self):
         api = API.__new__(API)
         profile = SimpleNamespace(
             id="default",
@@ -2499,46 +2511,90 @@ class TestApiGameLaunch(unittest.TestCase):
             get_launch_args=Mock(return_value=[]),
         )
         api.steam_mgr = SimpleNamespace(
-            get_steam_path=Mock(return_value=""),
+            get_steam_path=Mock(return_value="C:/Program Files (x86)/Steam"),
             get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
+            launch_via_steam_client=Mock(),
+            launch_via_steam_url=Mock(return_value={"ok": True, "method": "steam_url"}),
+            steam_dir="",
+            steam_exe="",
         )
-        api._ensure_runtime_links_for_launch = Mock(return_value=True)
+        api._prepare_profile_launch = Mock(return_value={"ok": True})
         api._resolve_profile_runtime_caps_from_profile = Mock(return_value={
             "steam_launch_enabled": True,
             "is_steam": True,
             "is_steam_managed": True,
         })
 
-        config = SimpleNamespace(steam_path="")
+        config = SimpleNamespace(steam_path="C:/Program Files (x86)/Steam", prefer_steam_url_for_no_args=True)
         with patch("backend.api.settings.config", config), \
-             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": False}), \
-             patch("backend.api.open_uri_with_system_handler", return_value=True) as open_system_uri:
+             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": True}), \
+             patch("backend.api.resolve_steam_executable_path", return_value="C:/Program Files (x86)/Steam/steam.exe"):
+            res = API.game_launch(api, "default")
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["data"]["runtime_session"]["state"], "launching")
+        api.steam_mgr.launch_via_steam_client.assert_not_called()
+        api.steam_mgr.launch_via_steam_url.assert_called_once_with()
+
+    def test_game_launch_returns_retry_options_when_steam_dispatch_fails(self):
+        api = API.__new__(API)
+        profile = SimpleNamespace(id="default", game_install_path="C:/Games/RimWorld", prefer_steam_launch=True, is_steam=True)
+        api.profile_mgr = SimpleNamespace(
+            current_profile=profile,
+            get_profile=Mock(return_value=profile),
+            get_launch_args=Mock(return_value=[]),
+        )
+        api.steam_mgr = SimpleNamespace(
+            get_steam_path=Mock(return_value="C:/Program Files (x86)/Steam"),
+            get_steam_client_status=Mock(return_value={"running": True, "ready": True}),
+            launch_via_steam_client=Mock(return_value={"ok": False, "method": "steam_client", "error": "拒绝访问"}),
+            steam_dir="",
+            steam_exe="",
+        )
+        api._prepare_profile_launch = Mock(return_value={"ok": True})
+        api._resolve_profile_runtime_caps_from_profile = Mock(return_value={
+            "steam_launch_enabled": True,
+            "is_steam": True,
+            "is_steam_managed": True,
+        })
+
+        config = SimpleNamespace(steam_path="C:/Program Files (x86)/Steam", prefer_steam_url_for_no_args=False)
+        with patch("backend.api.settings.config", config), \
+             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": True}), \
+             patch("backend.api.resolve_steam_executable_path", return_value="C:/Program Files (x86)/Steam/steam.exe"):
             res = API.game_launch(api, "default")
 
         self.assertEqual(res["status"], "warning")
-        self.assertIn("系统协议启动", res["message"])
-        self.assertEqual(res["data"]["runtime_session"]["state"], "launching")
-        api._ensure_runtime_links_for_launch.assert_not_called()
-        open_system_uri.assert_called_once_with("steam://run/294100")
+        self.assertEqual(res["data"]["action"], "resolve_steam_launch_failure")
+        self.assertEqual(res["data"]["launch_method"], "steam_client")
 
-    def test_open_system_uri_routes_to_system_handler(self):
+    def test_steam_url_retry_omits_existing_launch_args(self):
         api = API.__new__(API)
+        api._prepare_profile_launch = Mock(return_value={"ok": True})
+        api.steam_mgr = SimpleNamespace(
+            launch_via_steam_client=Mock(),
+            launch_via_steam_url=Mock(return_value={"ok": True, "method": "steam_url"}),
+        )
+        runtime_session_mgr = SimpleNamespace(begin_launch=Mock(return_value={"state": "launching"}))
 
-        with patch("backend.api.open_uri_with_system_handler", return_value=True) as open_system_uri:
-            res = API.open_system_uri(api, "steam://run/294100")
+        res = API._launch_steam_managed_profile(
+            api,
+            "default",
+            ["-savedatafolder=C:/Profiles/default"],
+            runtime_session_mgr,
+            launch_method="steam_url",
+        )
 
         self.assertEqual(res["status"], "success")
-        self.assertEqual(res["data"]["uri"], "steam://run/294100")
-        open_system_uri.assert_called_once_with("steam://run/294100")
-
-    def test_steam_open_workshop_page_uses_system_uri_handler(self):
-        api = API.__new__(API)
-
-        with patch("backend.api.open_uri_with_system_handler", return_value=True) as open_system_uri:
-            res = API.steam_open_workshop_page(api, "1001")
-
-        self.assertEqual(res["status"], "success")
-        open_system_uri.assert_called_once_with("steam://url/CommunityFilePage/1001")
+        self.assertTrue(res["data"]["url_ignores_args"])
+        api.steam_mgr.launch_via_steam_url.assert_called_once_with()
+        api.steam_mgr.launch_via_steam_client.assert_not_called()
+        runtime_session_mgr.begin_launch.assert_called_once_with(
+            "default",
+            "steam_url",
+            message="已发起 Steam URL 启动，等待游戏进程确认。",
+            has_launch_args=True,
+        )
 
     def test_game_launch_normalizes_macos_steam_app_path_before_launch(self):
         api = API.__new__(API)
@@ -2556,7 +2612,7 @@ class TestApiGameLaunch(unittest.TestCase):
         api.steam_mgr = SimpleNamespace(
             get_steam_path=Mock(return_value=""),
             get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
-            launch_via_steam_cmd=Mock(),
+            launch_via_steam_client=Mock(),
             steam_dir="",
             steam_exe="",
         )
@@ -2582,7 +2638,7 @@ class TestApiGameLaunch(unittest.TestCase):
         self.assertEqual(config.steam_path, steam_root)
         self.assertEqual(api.steam_mgr.steam_dir, steam_root)
         self.assertEqual(api.steam_mgr.steam_exe, steam_exe)
-        api.steam_mgr.launch_via_steam_cmd.assert_called_once_with(extra_args=[])
+        api.steam_mgr.launch_via_steam_client.assert_called_once_with(extra_args=[])
 
     def test_steam_open_workshop_page_uses_open_system_uri(self):
         api = API.__new__(API)
@@ -2613,46 +2669,6 @@ class TestApiGameLaunch(unittest.TestCase):
         self.assertEqual(res["status"], "warning")
         self.assertEqual(res["data"]["shortcut_kind"], "unsupported_manual_only")
 
-    def test_game_launch_warns_when_steam_not_ready_for_direct_game_launch(self):
-        api = API.__new__(API)
-        profile = SimpleNamespace(
-            id="default",
-            game_install_path="C:/Games/RimWorld",
-            prefer_steam_launch=True,
-            is_steam=True,
-        )
-        api.profile_mgr = SimpleNamespace(
-            current_profile=profile,
-            get_profile=Mock(return_value=profile),
-            get_launch_args=Mock(return_value=[]),
-        )
-        api.steam_mgr = SimpleNamespace(
-            get_steam_path=Mock(return_value="C:/Program Files (x86)/Steam"),
-            get_steam_client_status=Mock(return_value={"running": False, "ready": False}),
-        )
-        api._ensure_steam_ready = Mock(return_value=(
-            False,
-            {"running": True, "ready": False, "reason": "steam_ready_timeout"},
-            "Steam 已尝试自动启动，但未能在限定时间内进入已登录可用状态。",
-        ))
-        api._launch_profile_with_runtime_links = Mock()
-        api._resolve_profile_runtime_caps_from_profile = Mock(return_value={
-            "steam_launch_enabled": True,
-            "is_steam": True,
-            "is_steam_managed": False,
-        })
-
-        config = SimpleNamespace(steam_path="C:/Program Files (x86)/Steam")
-        with patch("backend.api.settings.config", config), \
-             patch("backend.api.PathChecker.check_steam_path", return_value={"pass": True}):
-            res = API.game_launch(api, "default")
-
-        self.assertEqual(res["status"], "warning")
-        self.assertEqual(res["data"]["action"], "confirm_direct_launch")
-        self.assertEqual(res["data"]["reason"], "steam_not_ready")
-        self.assertEqual(res["data"]["steam_status"]["reason"], "steam_ready_timeout")
-        api._launch_profile_with_runtime_links.assert_not_called()
-
     def test_game_launch_warns_when_direct_launching_steam_profile_with_workshop_links_while_steam_running(self):
         api = API.__new__(API)
         profile = SimpleNamespace(
@@ -2667,7 +2683,7 @@ class TestApiGameLaunch(unittest.TestCase):
             get_launch_args=Mock(return_value=[]),
         )
         api.steam_mgr = SimpleNamespace(
-            get_steam_client_status=Mock(return_value={"running": True, "ready": True}),
+            is_steam_running=Mock(return_value=True),
         )
         api._resolve_profile_runtime_caps_from_profile = Mock(return_value={
             "steam_launch_enabled": False,
@@ -2781,6 +2797,30 @@ class TestApiGameLaunch(unittest.TestCase):
 
 
 class TestApiRuntimeLinkSync(unittest.TestCase):
+    def test_sync_links_fails_when_created_link_cannot_be_verified(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_mods_path = Path(temp_dir) / "Mods"
+            source_path = Path(temp_dir) / "SourceMod"
+            local_mods_path.mkdir()
+            source_path.mkdir()
+
+            with patch.object(FileManager, "_create_links_windows_batch"):
+                success = FileManager.sync_links(str(local_mods_path), [str(source_path)])
+
+        self.assertFalse(success)
+
+    def test_sync_links_full_fails_when_created_link_cannot_be_verified(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_mods_path = Path(temp_dir) / "Mods"
+            source_path = Path(temp_dir) / "SourceMod"
+            local_mods_path.mkdir()
+            source_path.mkdir()
+
+            with patch.object(FileManager, "_create_links_fast"):
+                success = FileManager.sync_links_full(str(local_mods_path), [str(source_path)])
+
+        self.assertFalse(success)
+
     def test_build_scan_paths_for_profile_skips_self_when_local_matches_self(self):
         api = API.__new__(API)
         context = SimpleNamespace(

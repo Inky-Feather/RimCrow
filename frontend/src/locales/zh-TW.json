@@ -687,7 +687,6 @@
       "tool_ready": "工具已經就緒"
     },
     "game": {
-      "direct_launch_after_invalid_steam_path": "未檢測到有效的 Steam 程序路徑，本次已改為遊戲本體直接啟動。",
       "direct_launch_started": "已發起遊戲啟動，等待遊戲進程確認。",
       "invalid_launch_warning_action": "無效的啟動確認動作",
       "launch_after_steam_exit": "Steam 已退出，已發起遊戲啟動，等待遊戲進程確認。",
@@ -704,15 +703,9 @@
       "launch_prepare_scan_sync_failed": "啟動前檢查同步已完成掃描，但連結同步失敗。",
       "launch_prepare_sync_failed": "啟動前同步失敗",
       "launch_prepare_unhealthy_context": "目標環境路徑不可用，請先完成路徑設定。",
-      "launch_steam_started": "已發起 Steam 啟動，等待遊戲進程確認。",
-      "launch_steam_url_fallback": "未定位到可直接啟動的 Steam 客戶端，已嘗試通過系統協議啟動 Steam 遊戲；如果失敗，請檢查 Steam 客戶端狀態或關閉“優先 Steam 啟動”選項。",
-      "launch_steam_url_started": "已嘗試通過 Steam URL 啟動，等待遊戲進程確認。",
-      "steam_not_ready": "Steam 未能進入可用狀態。",
-      "steam_path_invalid": "目前環境配置為優先使用 Steam 啟動，但未檢測到有效的 Steam 程序路徑。",
-      "steam_ready_launch_started": "Steam 已就緒，已發起遊戲啟動，等待遊戲進程確認。",
-      "steam_ready_wait_game": "Steam 已就緒，等待遊戲進程確認。",
       "steam_running_workshop_conflict": "檢測到 Steam 已在運行，需要先確認工坊連結衝突後再繼續啟動。",
-      "steam_still_running": "Steam 仍在運行，繼續等待其退出。"
+      "steam_still_running": "Steam 仍在運行，繼續等待其退出。",
+      "steam_launch_failed": "無法提交 Steam 啟動請求。"
     },
     "github": {
       "deploy_started": "Git 訂閱部署任務已啟動",
@@ -2920,8 +2913,7 @@
     },
     "game": {
       "launch_failed": "啟動遊戲失敗。請檢查遊戲路徑、啟動參數和目前環境連結狀態，詳細原因已寫入系統日誌。",
-      "launch_warning_resolve_failed": "處理啟動確認失敗。請重新嘗試啟動，或重新整理目前環境狀態後再試。",
-      "steam_url_launch_failed": "通過 Steam URL 啟動失敗。請確認 Steam 已安裝並且系統協議關聯正常，詳細原因已寫入系統日誌。"
+      "launch_warning_resolve_failed": "處理啟動確認失敗。請重新嘗試啟動，或重新整理目前環境狀態後再試。"
     },
     "group": {
       "create_failed": "創建分組失敗。請檢查分組名稱是否有效，稍後重試。"
@@ -3946,7 +3938,9 @@
           "check_steam_status": "檢查 Steam 狀態",
           "continue_run": "繼續運行",
           "direct_once": "本次直啟遊戲",
-          "disable_steam_launch": "關閉 Steam 優先啟動"
+          "disable_steam_launch": "關閉 Steam 優先啟動",
+          "retry_steam_url": "改用 Steam URL 啟動",
+          "retry_steam_client": "改用 Steam 用戶端啟動"
         },
         "confirm": {
           "message": "目前環境需要先確認後再繼續啟動。",
@@ -3968,7 +3962,18 @@
         "steam_status": {
           "complete": "已完成 Steam 狀態檢查。",
           "title": "Steam 狀態"
-        }
+        },
+        "link_sync_failed": {
+          "message": "未能完成模組連結同步，本次未啟動遊戲。",
+          "title": "模組連結同步失敗"
+        },
+        "steam_launch_failed": {
+          "message": "無法提交 Steam 啟動請求。",
+          "title": "Steam 啟動失敗"
+        },
+        "steam_url_no_args_current": "\n剛才的 Steam URL 啟動未使用本次啟動參數。",
+        "steam_url_no_args_retry": "\n改用 Steam URL 啟動時不會使用本次啟動參數。",
+        "timeout_message": "未在限定時間內檢測到遊戲進程。"
       },
       "history": {
         "refresh_after_game_exit": "遊戲退出後重新整理磁碟狀態",
@@ -6134,7 +6139,9 @@
         "user_data_path": "使用者資料目錄",
         "user_data_path_desc": "使用者資料目錄即遊戲配置、存檔和日誌所在的目錄，不同系統位置不同，可使用自動搜尋或手動選擇。\nWindows下預設資料目錄一般位於：\nC:/Users/{使用者名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
         "workshop_mods_path": "創意工坊目錄",
-        "workshop_mods_path_desc": "創意工坊目錄即創意工坊下載的模組所在的目錄，該設定所有環境通用"
+        "workshop_mods_path_desc": "創意工坊目錄即創意工坊下載的模組所在的目錄，該設定所有環境通用",
+        "prefer_steam_url_for_no_args": "優先使用 Steam URL 啟動",
+        "prefer_steam_url_for_no_args_desc": "僅在沒有啟動參數時生效。Steam URL 啟動不會攜帶啟動參數，效果與桌面原版捷徑相同。關閉後會優先使用 Steam 本體並攜帶參數啟動。"
       },
       "theme": {
         "builtin": "內置",

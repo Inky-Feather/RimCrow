@@ -22,6 +22,7 @@ class RuntimeSession:
     state: str = "idle"
     source: str = "manager"
     launch_mode: str = "unknown"
+    has_launch_args: bool = False
     requested_at: int | None = None
     deadline_at: int | None = None
     started_at: int | None = None
@@ -34,6 +35,7 @@ class RuntimeSession:
             "state": str(self.state or ""),
             "source": str(self.source or ""),
             "launch_mode": str(self.launch_mode or ""),
+            "has_launch_args": bool(self.has_launch_args),
             "requested_at": self.requested_at,
             "deadline_at": self.deadline_at,
             "started_at": self.started_at,
@@ -136,13 +138,14 @@ class GameMonitor:
     def get_runtime_session_data(self) -> dict:
         return self.runtime_session.to_dict()
 
-    def begin_launch(self, profile_id: str, launch_mode: str, *, message: str = "") -> RuntimeSession:
+    def begin_launch(self, profile_id: str, launch_mode: str, *, message: str = "", has_launch_args: bool = False) -> RuntimeSession:
         now_ms = int(time.time() * 1000)
         self.runtime_session = RuntimeSession(
             profile_id=str(profile_id or "").strip(),
             state="launching",
             source="manager",
             launch_mode=str(launch_mode or "unknown").strip() or "unknown",
+            has_launch_args=bool(has_launch_args),
             requested_at=now_ms,
             deadline_at=now_ms + self.LAUNCH_TIMEOUT_SECONDS * 1000,
             message=message,
@@ -150,8 +153,17 @@ class GameMonitor:
         return self.runtime_session
 
     def mark_launch_failed(self, reason: str, message: str = "") -> RuntimeSession:
+        session = self.runtime_session
+        if session.state != "launching":
+            session = RuntimeSession()
         self.runtime_session = RuntimeSession(
+            profile_id=str(session.profile_id or ""),
             state="idle",
+            source=str(session.source or "manager"),
+            launch_mode=str(session.launch_mode or "unknown"),
+            has_launch_args=bool(session.has_launch_args),
+            requested_at=session.requested_at,
+            deadline_at=session.deadline_at,
             failure_reason=str(reason or "").strip(),
             message=message,
         )

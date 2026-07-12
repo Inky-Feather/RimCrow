@@ -274,6 +274,7 @@ class AppConfig:
     # run_commands: List[str] = field(default_factory=list)   # 启动时运行的命令
     enable_tool_mods: bool = False           # 是否启用 ToolMods 目录下的伴生模组
     link_deployment_mode_full: bool = False # 链接部署模式: true=完全重建, false=增量部署
+    prefer_steam_url_for_no_args: bool = False  # 无启动参数时优先使用 Steam URL
     
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数

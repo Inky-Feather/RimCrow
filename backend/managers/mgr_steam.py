@@ -2207,13 +2207,12 @@ class SteamManager:
         logger.debug("未找到 Steam InstallPath。")
         return None
 
-    def launch_via_steam_cmd(self, app_id=RIMWORLD_STEAM_APP_ID_STR, extra_args=None):
+    def launch_via_steam_client(self, app_id=RIMWORLD_STEAM_APP_ID_STR, extra_args=None):
         steam_exe = str(self.steam_exe) if self.steam_exe else None
-        # 如果找不到 Steam 可执行文件，回退到 URL 方式
         if not steam_exe or not os.path.exists(steam_exe):
-            logger.warning("未找到 Steam 可执行文件，回退到 URL 协议启动")
-            open_system_uri(f"steam://run/{app_id}")
-            return
+            error = "未找到 Steam 可执行文件"
+            logger.warning("Steam 客户端启动不可用: app_id=%s, error=%s", app_id, error)
+            return {"ok": False, "method": "steam_client", "error": error}
         # 构建命令: Steam.exe -applaunch <AppID> [Arguments]
         cmd = [steam_exe, "-applaunch", str(app_id)]
         # 如果管理器本身也有需要注入的参数（例如隔离配置文件的参数）
@@ -2224,9 +2223,30 @@ class SteamManager:
                 cmd.extend(extra_args)
             else:
                 cmd.append(extra_args)
-        # 启动
-        subprocess.Popen(cmd)
-        logger.debug(f"通过 Steam 命令启动 RimWorld: {cmd}")
+        try:
+            process = subprocess.Popen(cmd)
+        except Exception as e:
+            error = str(e)
+            logger.error("Steam 客户端启动失败: app_id=%s, cmd=%s, error=%s", app_id, cmd, error, exc_info=True)
+            return {"ok": False, "method": "steam_client", "cmd": cmd, "error": error}
+        logger.info("已提交 Steam 客户端启动: app_id=%s, pid=%s, args_count=%s", app_id, process.pid, len(extra_args or []))
+        return {"ok": True, "method": "steam_client", "cmd": cmd, "pid": process.pid}
+
+    def launch_via_steam_url(self, app_id=RIMWORLD_STEAM_APP_ID_STR):
+        """通过系统协议提交无参数 Steam 游戏启动请求。"""
+        uri = f"steam://run/{app_id}"
+        try:
+            ok = bool(open_system_uri(uri))
+        except Exception as e:
+            error = str(e)
+            logger.error("Steam URL 启动失败: app_id=%s, uri=%s, error=%s", app_id, uri, error, exc_info=True)
+            return {"ok": False, "method": "steam_url", "uri": uri, "error": error}
+        if not ok:
+            error = "系统未接受 Steam URL 启动请求"
+            logger.warning("Steam URL 启动未提交: app_id=%s, uri=%s", app_id, uri)
+            return {"ok": False, "method": "steam_url", "uri": uri, "error": error}
+        logger.info("已提交 Steam URL 启动: app_id=%s, uri=%s", app_id, uri)
+        return {"ok": True, "method": "steam_url", "uri": uri}
 
     def _steam64_to_account_id(self, steam64_id: str | int | None) -> str:
         """将 Steam64 ID 转成 userdata 目录使用的 account id（32 位）。"""

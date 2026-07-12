@@ -1296,6 +1296,10 @@ class FileManager:
                 'raw_name': link_name,
                 'src_path': os.path.normpath(os.path.abspath(src))
             }
+        missing_sources = [info['src_path'] for info in target_map.values() if not os.path.isdir(info['src_path'])]
+        if missing_sources:
+            logger.error("同步链接失败：源目录不存在: %s", missing_sources)
+            return False
 
         # --- 2. 扫描磁盘并识别“必须删除”的项 ---
         # 遍历目录下的所有内容，只要命中前缀且不在 target_map 中，就是删除目标
@@ -1345,6 +1349,15 @@ class FileManager:
             logger.info(f"正在创建 {len(links_to_create)} 个缺失链接...")
             FileManager._create_links_windows_batch(links_to_create)
 
+        failed_links = [
+            f"{dst} -> {src}"
+            for src, dst in links_to_create
+            if not FileManager._is_link_correct(dst, src)
+        ]
+        if failed_links:
+            logger.error("同步链接失败：创建后校验未通过: %s", failed_links)
+            return False
+
         logger.info(f"同步结果：保留 {len(existing_valid_keys)} 个，创建 {len(links_to_create)} 个，删除 {len(to_delete_paths)} 个")
         return True
 
@@ -1363,6 +1376,10 @@ class FileManager:
                 'raw_name': link_name,
                 'src_path': os.path.normpath(os.path.abspath(src))
             }
+        missing_sources = [info['src_path'] for info in target_map.values() if not os.path.isdir(info['src_path'])]
+        if missing_sources:
+            logger.error("完整同步链接失败：源目录不存在: %s", missing_sources)
+            return False
 
         to_delete_paths = []
         links_to_create = []
@@ -1393,6 +1410,15 @@ class FileManager:
         # 5. 执行极速创建
         if links_to_create:
             FileManager._create_links_fast(links_to_create)
+
+        failed_links = [
+            f"{dst} -> {src}"
+            for src, dst in links_to_create
+            if not FileManager._is_link_correct(dst, src)
+        ]
+        if failed_links:
+            logger.error("完整同步链接失败：创建后校验未通过: %s", failed_links)
+            return False
 
         logger.info(f"完整同步结果：创建 {len(links_to_create)} 个，删除 {len(to_delete_paths)} 个")
         return True
@@ -1465,7 +1491,9 @@ class FileManager:
             temp_path = tf.name
 
         try:
-            subprocess.run(temp_path, shell=True, capture_output=True, check=True)
+            result = subprocess.run(temp_path, shell=True, capture_output=True, text=True, encoding="gbk", errors="replace")
+            if result.returncode != 0:
+                logger.error("批量创建链接命令失败: code=%s, stdout=%s, stderr=%s", result.returncode, result.stdout.strip(), result.stderr.strip())
         finally:
             if os.path.exists(temp_path): os.remove(temp_path)
     

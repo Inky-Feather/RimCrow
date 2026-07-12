@@ -99,7 +99,7 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
         from backend.managers.mgr_game_monitor import RuntimeSession
         monitor.runtime_session = RuntimeSession()
 
-        session = monitor.begin_launch("profile-a", "steam")
+        session = monitor.begin_launch("profile-a", "steam_url", has_launch_args=True)
 
         expired = monitor.expire_launch_if_needed(now_ms=int(session.deadline_at or 0) + 1)
 
@@ -107,6 +107,9 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
         self.assertEqual(expired.state, "idle")
         self.assertEqual(expired.failure_reason, "launch_timeout")
         self.assertEqual(expired.message, "启动超时，未检测到游戏进程。")
+        self.assertEqual(expired.profile_id, "profile-a")
+        self.assertEqual(expired.launch_mode, "steam_url")
+        self.assertTrue(expired.has_launch_args)
 
     def test_is_target_process_matches_supported_rimworld_names(self):
         monitor = GameMonitor.__new__(GameMonitor)

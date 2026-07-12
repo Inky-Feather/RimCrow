@@ -687,7 +687,6 @@
       "tool_ready": "Tool is already ready"
     },
     "game": {
-      "direct_launch_after_invalid_steam_path": "No valid Steam executable path was found, so this launch used the game executable directly.",
       "direct_launch_started": "Game launch started. Waiting for the game process to confirm.",
       "invalid_launch_warning_action": "Invalid launch confirmation action",
       "launch_after_steam_exit": "Steam has exited. Game launch started. Waiting for the game process to confirm.",
@@ -704,15 +703,9 @@
       "launch_prepare_scan_sync_failed": "Startup check scan completed, but link sync failed.",
       "launch_prepare_sync_failed": "Startup sync failed",
       "launch_prepare_unhealthy_context": "The target environment path is unavailable. Complete path setup first.",
-      "launch_steam_started": "Steam launch started. Waiting for the game process to confirm.",
-      "launch_steam_url_fallback": "No directly launchable Steam client was found. The Steam system protocol was used to start the game instead. If it fails, check Steam client status or turn off Prefer Steam Launch.",
-      "launch_steam_url_started": "Steam URL launch started. Waiting for the game process to confirm.",
-      "steam_not_ready": "Steam did not become ready.",
-      "steam_path_invalid": "This environment is set to prefer Steam launch, but no valid Steam executable path was found.",
-      "steam_ready_launch_started": "Steam is ready. Game launch started. Waiting for the game process to confirm.",
-      "steam_ready_wait_game": "Steam is ready. Waiting for the game process to confirm.",
       "steam_running_workshop_conflict": "Steam is already running. Confirm the Workshop link conflict before continuing launch.",
-      "steam_still_running": "Steam is still running. Waiting for it to exit."
+      "steam_still_running": "Steam is still running. Waiting for it to exit.",
+      "steam_launch_failed": "Failed to submit the Steam launch request."
     },
     "github": {
       "deploy_started": "Git subscription deployment task started",
@@ -2920,8 +2913,7 @@
     },
     "game": {
       "launch_failed": "Failed to launch the game. Check the game path, launch arguments, and current environment link state. See system log for details.",
-      "launch_warning_resolve_failed": "Failed to handle the launch confirmation. Try launching again, or refresh the current environment state first.",
-      "steam_url_launch_failed": "Failed to launch through Steam URL. Make sure Steam is installed and the system protocol association works. See system log for details."
+      "launch_warning_resolve_failed": "Failed to handle the launch confirmation. Try launching again, or refresh the current environment state first."
     },
     "group": {
       "create_failed": "Failed to create the group. Check whether the group name is valid, then try again later."
@@ -3946,7 +3938,9 @@
           "check_steam_status": "Check Steam status",
           "continue_run": "Continue running",
           "direct_once": "Launch directly this time",
-          "disable_steam_launch": "Disable Steam-first launch"
+          "disable_steam_launch": "Disable Steam-first launch",
+          "retry_steam_url": "Retry with Steam URL",
+          "retry_steam_client": "Retry with Steam client"
         },
         "confirm": {
           "message": "This environment needs confirmation before launch can continue.",
@@ -3968,7 +3962,18 @@
         "steam_status": {
           "complete": "Steam status check completed.",
           "title": "Steam status"
-        }
+        },
+        "link_sync_failed": {
+          "message": "Mod link sync could not be completed, so the game was not launched this time.",
+          "title": "Mod link sync failed"
+        },
+        "steam_launch_failed": {
+          "message": "Failed to submit the Steam launch request.",
+          "title": "Steam launch failed"
+        },
+        "steam_url_no_args_current": "\nThe Steam URL launch just now did not use the launch arguments from this run.",
+        "steam_url_no_args_retry": "\nIf you switch to Steam URL launch, the launch arguments from this run will not be used.",
+        "timeout_message": "The game process was not detected within the time limit."
       },
       "history": {
         "refresh_after_game_exit": "Refresh disk state after game exit",
@@ -6134,7 +6139,9 @@
         "user_data_path": "User data directory",
         "user_data_path_desc": "User data directory containing game settings, saves, and logs. Location differs by system. You can auto-detect or choose manually.\nOn Windows the default data path is usually:\nC:/Users/USERNAME/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
         "workshop_mods_path": "Workshop directory",
-        "workshop_mods_path_desc": "Directory containing mods downloaded by Steam Workshop. This setting is shared by all profiles."
+        "workshop_mods_path_desc": "Directory containing mods downloaded by Steam Workshop. This setting is shared by all profiles.",
+        "prefer_steam_url_for_no_args": "Prefer Steam URL launch",
+        "prefer_steam_url_for_no_args_desc": "Only used when there are no launch arguments. Steam URL launches without arguments, like the original desktop shortcut. When disabled, Steam itself is used with the launch arguments."
       },
       "theme": {
         "builtin": "Built-in",
