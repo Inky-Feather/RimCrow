@@ -6009,7 +6009,9 @@
         "translation_mode": "翻譯模式",
         "translation_mode_desc": "開啟後顯示介面翻譯輔助浮窗，也可按 Ctrl + Shift + L 快速開關。",
         "visit": "訪問",
-        "workshop_page": "工坊頁面"
+        "workshop_page": "工坊頁面",
+        "remember_mod_list_view": "記住列表顯示方式",
+        "remember_mod_list_view_desc": "開啟後，會記住啟用、停用和臨時列表的簡潔或詳細視圖。關閉後，下次開啟預設使用簡潔視圖。"
       },
       "keybindings": {
         "all_categories": "全部分類",

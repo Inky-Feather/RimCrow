@@ -210,6 +210,7 @@ class UIConfig:
     default_collapse_active_sections: bool = False  # 在没有历史折叠状态时，是否让启用列表分割组首次默认折叠
     default_collapse_inactive_sections: bool = False  # 在没有历史折叠状态时，是否让停用列表分割组首次默认折叠
     persist_temp_mod_list: bool = False  # 是否按环境保存临时列表
+    mod_list_simple_view: Dict[str, bool] = field(default_factory=dict)  # 主界面 Mod 列表视图状态
     show_list_index: bool = True  # 是否显示列表索引列
     show_list_icon: bool = True  # 是否显示 Mod 图标
     show_list_mod_icon: bool = True  # 是否显示 Mod 图标
@@ -619,6 +620,14 @@ class SettingsManager:
             except (TypeError, ValueError):
                 ai_cfg.context_window_tokens = 0
         self.config.skip_language_pack_alias_generation = bool(self.config.skip_language_pack_alias_generation)
+        if not isinstance(self.config.ui.mod_list_simple_view, dict):
+            self.config.ui.mod_list_simple_view = {}
+        else:
+            self.config.ui.mod_list_simple_view = {
+                str(key).strip(): bool(value)
+                for key, value in self.config.ui.mod_list_simple_view.items()
+                if str(key).strip()
+            }
         translation_cfg = self.config.translation
         default_translation = default_translation_settings()
         if not isinstance(translation_cfg, dict):

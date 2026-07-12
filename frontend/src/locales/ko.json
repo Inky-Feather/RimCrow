@@ -6009,7 +6009,9 @@
         "translation_mode": "번역 모드",
         "translation_mode_desc": "인터페이스 번역 도우미 오버레이를 표시합니다. Ctrl + Shift + L을 눌러 전환할 수도 있습니다.",
         "visit": "방문하다",
-        "workshop_page": "Workshop 페이지"
+        "workshop_page": "Workshop 페이지",
+        "remember_mod_list_view": "목록 보기 방식 기억",
+        "remember_mod_list_view_desc": "켜면 활성, 비활성, 임시 목록의 간단 보기 또는 자세히 보기를 기억합니다. 끄면 다음에 열 때 기본적으로 간단 보기를 사용합니다."
       },
       "keybindings": {
         "all_categories": "모든 카테고리",

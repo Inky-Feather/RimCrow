@@ -5996,6 +5996,8 @@
         "mod_hover_panel_desc": "控制 Mod 列表中悬停时的面板显示。",
         "open_url_in_system_browser": "在系统浏览器中打开 URL",
         "open_url_in_system_browser_desc": "关闭则使用内置浏览器",
+        "remember_mod_list_view": "记住列表显示方式",
+        "remember_mod_list_view_desc": "开启后，会记住启用、停用和临时列表的简洁或详细视图。关闭后，下次打开默认使用简洁视图。",
         "reset_guides": "重置界面引导",
         "section_collapse": "列表分割组功能",
         "section_label_collection": "分类排列标签合集",

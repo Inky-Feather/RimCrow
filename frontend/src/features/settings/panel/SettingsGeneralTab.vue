@@ -34,6 +34,7 @@
                       <CommonSwitch :label="t('ui.settings.general.double_click_toggle_mod', '双击启用/停用 Mod')" v-model="formData.ui.double_click_active_mod" :description="t('ui.settings.general.double_click_toggle_mod_desc', '控制 Mod 列表中双击启用/停用 Mod 动作。')" />
                       <CommonSwitch :label="t('ui.settings.general.dependency_graph', '依赖关系图')" v-model="formData.ui.show_dependency_graph" :description="t('ui.settings.general.dependency_graph_desc', '控制启用列表中依赖关系图的显示。')" />
                       <CommonSwitch :label="t('ui.settings.general.smooth_target_scroll', '平滑定位滚动')" v-model="formData.ui.smooth_list_target_scroll" :description="t('ui.settings.general.smooth_target_scroll_desc', '开启后，搜索定位或移动后定位会平滑滚动到目标项；关闭后直接跳到目标位置。')" />
+                      <CommonSwitch :label="t('ui.settings.general.remember_mod_list_view', '记住列表显示方式')" v-model="rememberModListView" :description="t('ui.settings.general.remember_mod_list_view_desc', '开启后，会记住启用、停用和临时列表的简洁或详细视图。关闭后，下次打开默认使用简洁视图。')" />
                       <CommonSwitch :label="t('ui.settings.general.list_index', '列表索引')" v-model="formData.ui.show_list_index" :description="t('ui.settings.general.list_index_desc', '控制列表中索引列的显示。')" />
                     </div>
 
@@ -152,6 +153,14 @@ watch(() => appStore.uiState.showSettingsPanel, (visible) => {
 const translationMode = computed({
   get: () => !!appStore.translationModeEnabled,
   set: (enabled) => { appStore.translationModeEnabled = !!enabled },
+})
+const defaultModListViewState = () => ({ activeListSimple: true, inactiveListSimple: true, tempListSimple: true })
+const rememberModListView = computed({
+  get: () => Object.keys(props.formData.ui?.mod_list_simple_view || {}).length > 0,
+  set: (value) => {
+    if (!props.formData.ui) props.formData.ui = {}
+    props.formData.ui.mod_list_simple_view = value ? defaultModListViewState() : {}
+  }
 })
 
 const selectedFormTheme = computed(() => {

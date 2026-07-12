@@ -6009,7 +6009,9 @@
         "translation_mode": "Translation mode",
         "translation_mode_desc": "Show the interface translation helper overlay. You can also press Ctrl + Shift + L to toggle it.",
         "visit": "Visit",
-        "workshop_page": "Workshop page"
+        "workshop_page": "Workshop page",
+        "remember_mod_list_view": "Remember list view",
+        "remember_mod_list_view_desc": "When enabled, the active, inactive, and temporary lists remember compact or detailed view. When disabled, they open in compact view by default."
       },
       "keybindings": {
         "all_categories": "All categories",

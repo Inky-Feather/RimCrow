@@ -65,7 +65,7 @@
               <Motion :class="`p-1 size-7 rounded-md bg-accent-${listColor}/20 border border-accent-${listColor}/30 hover:bg-accent-${listColor}/50 text-accent-${listColor} hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 flex items-center justify-center cursor-pointer `"
                 :initial="{ rotateX: 0, opacity: 1 }" :animate="{ rotateX: isSimpleView ? 180 : 0 /*切换时旋转180度*/}" 
                 :transition="{ type: 'spring', /*弹性过渡动画*/ stiffness: 300, /*动画刚度*/ damping: 20 /*动画阻尼（回弹效果）*/}"
-                @click="isSimpleView = !isSimpleView" v-tooltip="t('tooltip.mod_list.toggle_view', '切换列表视图')" >
+                @click="toggleSimpleView" v-tooltip="t('tooltip.mod_list.toggle_view', '切换列表视图')" >
                 <svg v-if="!isSimpleView" class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M14 4h7"/><path d="M14 9h7"/><path d="M14 15h7"/><path d="M14 20h7"/></svg>
                 <svg v-else class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>
               </Motion>
@@ -253,7 +253,7 @@ const normalizeCanonicalId = (value: string) => normalizePackageId(value)
 const {
   SORT_MODE_MAP,
   // 视图与排序
-  isSimpleView, isSortAsc, sortMode, allowSort, sortIcon, isSortChange,
+  isSimpleView, toggleSimpleView, isSortAsc, sortMode, allowSort, sortIcon, isSortChange,
   // 搜索定位
   searchQuery, searchLogic, searchResults, currentSearchIndex, searchResultSet, resolvedCurrentTargetId, executeSearch, bindTargetReveal,
   // 筛选状态

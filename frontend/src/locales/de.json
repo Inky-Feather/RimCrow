@@ -6009,7 +6009,9 @@
         "translation_mode": "Übersetzungsmodus",
         "translation_mode_desc": "Zeigt das Overlay der Schnittstellenübersetzungshilfe an. Sie können auch Strg + Umschalt + L drücken, um es umzuschalten.",
         "visit": "Besuchen",
-        "workshop_page": "Workshop-Seite"
+        "workshop_page": "Workshop-Seite",
+        "remember_mod_list_view": "Listenansicht merken",
+        "remember_mod_list_view_desc": "Merkt die kompakte oder detaillierte Ansicht für aktive, inaktive und temporäre Listen. Aus: Beim nächsten Öffnen wird die kompakte Ansicht verwendet."
       },
       "keybindings": {
         "all_categories": "Alle Kategorien",

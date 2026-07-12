@@ -11,7 +11,14 @@ export function useModListQuery({
   normalizeTokenId,
   normalizeCanonicalId,
 }) {
-  const isSimpleView = ref(true) // 是否简单视图
+  const simpleViewKeyMap = { active: 'activeListSimple', inactive: 'inactiveListSimple', temp: 'tempListSimple' }
+  const simpleViewKey = computed(() => simpleViewKeyMap[props.listId] || `${props.listId}ListSimple`)
+  const isSimpleViewPersistenceEnabled = () => Object.keys(appStore.settings.ui?.mod_list_simple_view || {}).length > 0
+  const takeSavedSimpleView = () => {
+    const viewState = appStore.settings.ui?.mod_list_simple_view
+    return viewState && Object.prototype.hasOwnProperty.call(viewState, simpleViewKey.value) ? viewState[simpleViewKey.value] !== false : true
+  }
+  const isSimpleView = ref(takeSavedSimpleView()) // 是否简单视图
   const isSortAsc = ref(true)   // 是否升序排序
   const sortMode = ref('default')  // 排序模式
 
@@ -31,6 +38,22 @@ export function useModListQuery({
   const isSortChange = ref(false) // 是否排序切换
   const engine = computed(() => searchStore.engine)
   const searchResultSet = computed(() => new Set(searchResults.value))
+  const toggleSimpleView = async () => {
+    isSimpleView.value = !isSimpleView.value
+    if (!isSimpleViewPersistenceEnabled()) return
+    const nextUi = {
+      ...(appStore.settings.ui || {}),
+      mod_list_simple_view: {
+        ...(appStore.settings.ui?.mod_list_simple_view || {}),
+        [simpleViewKey.value]: isSimpleView.value,
+      },
+    }
+    appStore.settings.ui = nextUi
+    await appStore.saveSetting('ui', nextUi)
+  }
+  watch(() => appStore.settings.ui?.mod_list_simple_view, () => {
+    isSimpleView.value = takeSavedSimpleView()
+  }, { deep: true })
   const SORT_MODE_MAP = computed(() => ({
     default: t('ui.mod_list.sort.default', '默认'),
     name: t('common.field.name', '名称'),
@@ -345,6 +368,7 @@ export function useModListQuery({
     itemHeight,
     toggleIssueFilter,
     toggleIssueTypeFilter,
+    toggleSimpleView,
     clearFilter,
     clearSort,
     sortTooltip,
