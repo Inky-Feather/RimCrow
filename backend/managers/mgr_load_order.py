@@ -265,6 +265,16 @@ class LoadOrderManager:
                     package_id = normalize_package_id(mod.get("package_id"))
                     if not package_id or package_id in visible_map:
                         continue
+                    workshop_variant = mod.get("coexist_workshop_variant")
+                    workshop_variant_meta = {}
+                    if isinstance(workshop_variant, dict) and workshop_variant:
+                        workshop_variant_meta = {
+                            "package_id_raw": workshop_variant.get("package_id_raw") or workshop_variant.get("package_id") or package_id,
+                            "name": workshop_variant.get("name") or workshop_variant.get("display_name") or workshop_variant.get("alias_name") or package_id,
+                            "alias_name": workshop_variant.get("alias_name") or workshop_variant.get("display_name") or workshop_variant.get("name") or package_id,
+                            "workshop_id": self._normalize_workshop_id(workshop_variant.get("workshop_id")),
+                            "source_url": self._normalize_source_url(workshop_variant.get("url")),
+                        }
                     visible_map[package_id] = {
                         "package_id_raw": mod.get("package_id_raw") or mod.get("package_id") or package_id,
                         "name": mod.get("name") or package_id,
@@ -272,7 +282,8 @@ class LoadOrderManager:
                         "workshop_id": self._normalize_workshop_id(mod.get("workshop_id")),
                         "source_url": self._normalize_source_url(mod.get("url")),
                         # 仅当当前环境里仍然存在可切换的 workshop 共存副本时，才继续保留 `_steam` token。
-                        "has_coexist_workshop_variant": bool(mod.get("coexist_workshop_variant")),
+                        "has_coexist_workshop_variant": bool(workshop_variant_meta),
+                        "coexist_workshop_variant": workshop_variant_meta,
                     }
         except Exception as e:
             logger.warning(f"补全排序文件 Mod 可见元数据失败: {e}")
@@ -326,12 +337,17 @@ class LoadOrderManager:
             # 这里采用“文件原值 > 当前环境 > 扩展库 > 兜底包名”的顺序。
             # 这样既能尊重导入文件的原始信息，又能在信息不完整时尽量补齐。
             package_id = entry.get("package_id", "")
-            visible_meta = visible_map.get(package_id, {})
+            base_visible_meta = visible_map.get(package_id, {})
+            token_info = parse_package_token(entry.get("package_token_raw") or entry.get("package_token") or package_id)
+            visible_meta = base_visible_meta
+            if token_info.source_preference == "steam":
+                visible_meta = base_visible_meta.get("coexist_workshop_variant") or base_visible_meta
             asset_meta = asset_map.get(package_id, {})
             workshop_meta = meta_map.get(package_id, {})
 
             entry["package_id_raw"] = (
-                entry.get("package_id_raw")
+                (visible_meta.get("package_id_raw") if token_info.source_preference == "steam" else None)
+                or entry.get("package_id_raw")
                 or visible_meta.get("package_id_raw")
                 or asset_meta.get("package_id_raw")
                 or package_id
@@ -359,11 +375,10 @@ class LoadOrderManager:
             )
             entry["source_url_raw"] = entry.get("source_url_raw") or ""
 
-            token_info = parse_package_token(entry.get("package_token_raw") or entry.get("package_token") or entry.get("package_id"))
             if (
                 token_info.source_preference == "steam"
                 and package_id in visible_map
-                and not visible_meta.get("has_coexist_workshop_variant")
+                and not base_visible_meta.get("has_coexist_workshop_variant")
             ):
                 # stale `_steam` 只在 workshop 共存副本实际可用时才保留；
                 # 否则回落到裸包名，避免前端显示本地版但保存时仍写回 `_steam`。
@@ -425,7 +440,13 @@ class LoadOrderManager:
             'version_token': self._build_version_token(source_path, parsed_result.get('active_mods', []), modify_time=modify_time),
         }
 
-    def _build_export_entries(self, active_ids, export_format: str = EXPORT_FORMAT_MODSCONFIG):
+    def _build_export_entries(
+        self,
+        active_ids,
+        export_format: str = EXPORT_FORMAT_MODSCONFIG,
+        *,
+        preserve_package_tokens: bool = True,
+    ):
         # 导出前统一生成结构化条目，避免两个导出分支重复查库和补名。
         normalized_ids = []
         normalized_tokens = []
@@ -445,11 +466,13 @@ class LoadOrderManager:
 
         entries = self._enrich_mod_entries(self._build_mod_entries(normalized_ids, normalized_tokens))
         for entry in entries:
-            # 除 ModsConfig.xml 外，其它导出都统一回落到裸 package_id。
-            entry["package_id_raw"] = entry["package_id"]
-            if export_format != EXPORT_FORMAT_MODSCONFIG:
-                entry["package_token"] = entry["package_id"]
-                entry["package_token_raw"] = entry["package_id"]
+            # 来源后缀是共存模组的实例选择信息，不能因导出格式不同而丢失。
+            # 只有调用方明确要求“原始包名”时，才回落到不带后缀的规范包名。
+            entry["export_package_id"] = (
+                entry.get("package_token") or entry.get("package_id")
+                if preserve_package_tokens
+                else entry.get("package_id")
+            )
         return entries
 
     def _build_active_ids_hash(self, active_ids: list[str] | None = None) -> str:
@@ -553,8 +576,9 @@ class LoadOrderManager:
         workshop_ids_node = etree.SubElement(root, "modSteamWorkshopIds")
 
         for entry in entries:
-            etree.SubElement(mod_ids_node, "li").text = entry.get("package_id_raw") or entry.get("package_id")
-            etree.SubElement(mod_names_node, "li").text = entry.get("name") or entry.get("package_id_raw") or entry.get("package_id")
+            package_id = entry.get("export_package_id") or entry.get("package_token") or entry.get("package_id_raw") or entry.get("package_id")
+            etree.SubElement(mod_ids_node, "li").text = package_id
+            etree.SubElement(mod_names_node, "li").text = entry.get("name") or package_id
             etree.SubElement(workshop_ids_node, "li").text = entry.get("workshop_id") or "0"
 
         tree = etree.ElementTree(root)
@@ -586,7 +610,7 @@ class LoadOrderManager:
         names_node = etree.SubElement(mod_list_node, "names")
 
         for entry in entries:
-            package_id = entry.get("package_id_raw") or entry.get("package_id") or ""
+            package_id = entry.get("export_package_id") or entry.get("package_token") or entry.get("package_id_raw") or entry.get("package_id") or ""
             display_name = entry.get("name") or package_id
             workshop_id = entry.get("workshop_id") or "0"
 
@@ -701,7 +725,16 @@ class LoadOrderManager:
                 pass
             raise
 
-    def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False, is_dirty=True, export_format: str = EXPORT_FORMAT_MODSCONFIG, list_name: str | None = None):
+    def save_active_mods(
+        self,
+        active_ids,
+        target_path=None,
+        trigger_dialog=False,
+        is_dirty=True,
+        export_format: str = EXPORT_FORMAT_MODSCONFIG,
+        list_name: str | None = None,
+        preserve_package_tokens: bool = True,
+    ):
         """
         保存加载顺序。
         :param active_ids: Mod ID 列表
@@ -709,16 +742,19 @@ class LoadOrderManager:
         :param trigger_dialog: 是否触发系统弹窗让用户选择保存位置。
         :param export_format: 导出格式，支持 ModsConfig.xml / ModList.xml / RML
         :param list_name: 导出 ModList.xml 时写入的 Name
+        :param preserve_package_tokens: 是否保留 `_steam` 等来源后缀；自动保存和自动备份默认保留。
         """
         export_format = str(export_format or EXPORT_FORMAT_MODSCONFIG).strip().lower()
         if export_format not in {EXPORT_FORMAT_MODSCONFIG, EXPORT_FORMAT_MODLIST, EXPORT_FORMAT_RML}:
             raise ValueError(f"不支持的导出格式: {export_format}")
         # 先统一整理一份可导出的结构化条目，避免不同导出分支重复查库补名。
-        entries = self._build_export_entries(active_ids, export_format=export_format)
+        entries = self._build_export_entries(
+            active_ids,
+            export_format=export_format,
+            preserve_package_tokens=preserve_package_tokens,
+        )
         final_ids = [
-            (entry.get("package_token") or entry.get("package_id") or "")
-            if export_format == EXPORT_FORMAT_MODSCONFIG
-            else (entry.get("package_id") or "")
+            entry.get("export_package_id") or entry.get("package_id") or ""
             for entry in entries
         ]
         default_name = self._default_export_name(export_format)

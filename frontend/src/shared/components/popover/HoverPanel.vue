@@ -190,14 +190,14 @@ watch(() => hoverStore.isHovering, (hovering) => {
 const containerClasses = computed(() => {
   if (hoverStore.type === 'text') {
     // Tooltip 样式：紧凑、黑底白字、圆角小
-    return ' max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] overflow-x-hidden overflow-y-auto overscroll-contain rounded-md border border-border-base/18 bg-glass-heavy px-2 py-1.5 text-pretty break-words whitespace-normal shadow-lg backdrop-blur-sm custom-scrollbar'
+    return ' max-h-[calc(100vh-2rem)] max-w-[40vw] overflow-x-hidden overflow-y-auto overscroll-contain rounded-md border border-border-base/18 bg-glass-heavy px-2 py-1.5 text-pretty break-words whitespace-normal shadow-lg backdrop-blur-sm custom-scrollbar'
   }
   // 让组件自己决定长什么样
   if (hoverStore.type === 'component') {
     return 'shadow-2xl' // 可能只留个阴影，或者连阴影都不要，完全由组件内部控制
   }
   // Preview 样式：宽大、有背景、圆角大
-  return 'w-[21.25rem] max-h-[min(15rem,calc(100vh-2rem))] rounded-xl shadow-2xl overflow-hidden'
+  return 'w-100 max-h-[min(15rem,calc(100vh-2rem))] rounded-xl shadow-2xl overflow-hidden'
 })
 // --- 2. 窗口尺寸监听 ---
 const winWidth = ref(window.innerWidth)

@@ -125,7 +125,47 @@ class TestLoadOrderManagerImportCheck(unittest.TestCase):
             self.assertEqual(result["active_mods"], ["author.steammod"])
             self.assertEqual(result["mods"][0]["package_token"], "author.steammod")
 
-    def test_build_export_entries_strips_suffixes_for_non_modsconfig_exports(self):
+    def test_build_export_entries_uses_coexist_workshop_metadata_for_steam_token(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = SimpleNamespace(
+                is_healthy=True,
+                backup_dir=str(Path(temp_dir) / "backups"),
+                game_config_path=str(Path(temp_dir) / "config"),
+                game_version="1.5.4069",
+            )
+            manager = LoadOrderManager(context)
+            visible_mods = [
+                {
+                    "package_id": "author.steammod",
+                    "package_id_raw": "Author.SteamMod",
+                    "name": "Local Winner",
+                    "display_name": "Local Winner",
+                    "workshop_id": "111",
+                    "url": "https://local.example/mod",
+                    "coexist_workshop_variant": {
+                        "package_id": "author.steammod",
+                        "package_id_raw": "Author.SteamMod.Workshop",
+                        "name": "Workshop Winner",
+                        "display_name": "Workshop Winner",
+                        "workshop_id": "222",
+                        "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=222",
+                    },
+                }
+            ]
+
+            with patch.object(manager, "_get_visible_installed_mods", return_value=visible_mods), \
+                 patch("backend.database.models.ModAsset.select") as select_mock, \
+                 patch("backend.managers.mgr_load_order.ExtDAO.get_workshop_details_by_package_ids", return_value={}):
+                select_mock.return_value.where.return_value.dicts.return_value = []
+                entries = manager._build_export_entries(["author.steammod_steam"], export_format="rml")
+
+            self.assertEqual(entries[0]["export_package_id"], "author.steammod_steam")
+            self.assertEqual(entries[0]["package_id_raw"], "Author.SteamMod.Workshop")
+            self.assertEqual(entries[0]["name"], "Workshop Winner")
+            self.assertEqual(entries[0]["workshop_id"], "222")
+            self.assertEqual(entries[0]["source_url"], "https://steamcommunity.com/sharedfiles/filedetails/?id=222")
+
+    def test_build_export_entries_preserves_suffixes_for_non_modsconfig_exports(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             context = SimpleNamespace(
                 is_healthy=False,
@@ -142,7 +182,7 @@ class TestLoadOrderManagerImportCheck(unittest.TestCase):
                 )
 
             self.assertEqual([entry["package_id"] for entry in entries], ["author.steammod", "author.localmod"])
-            self.assertEqual([entry["package_token"] for entry in entries], ["author.steammod", "author.localmod"])
+            self.assertEqual([entry["package_token"] for entry in entries], ["author.steammod_steam", "author.localmod"])
             self.assertEqual([entry["package_id_raw"] for entry in entries], ["author.steammod", "author.localmod"])
 
     def test_build_export_entries_rewrites_legacy_companion_to_current_id(self):

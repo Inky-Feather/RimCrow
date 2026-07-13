@@ -13,7 +13,7 @@ from typing import Any, Callable, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from backend.database.dao import ModDAO, GroupDAO
-from backend.load_order.package_tokens import parse_package_token
+from backend.load_order.package_tokens import parse_package_token, select_mod_instance
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.managers.mgr_game_logs import LogCondenser
@@ -810,11 +810,14 @@ class AIToolExecutor:
 
     def _tool_get_mod_rules(self, args: GetModRulesArgs) -> dict[str, Any]:
         """获取指定模组的生效规则，可选择是否仅返回原生规则。"""
-        pkg_id = args.package_id.lower()
+        token_info = parse_package_token(args.package_id)
+        pkg_id = token_info.canonical_package_id
         native_only = args.native_only
         if not self.context: return {"error": "缺少当前环境上下文，无法执行工具。"}
         mod = ModDAO.get_visible_profile_mod(self.context, pkg_id)
-        if not mod: return {"error": f"未找到此模组: {pkg_id}"}
+        if not mod: return {"error": f"未找到此模组: {args.package_id}"}
+        # AI 查询也必须沿用调用方传入的实例 token；规则外置部分仍由规范包名合并。
+        mod = select_mod_instance(mod, args.package_id)
         if native_only:
             return {
                 "dependencies": mod.get("dependencies_mods", []),

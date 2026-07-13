@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { normalizePackageToken } from '../../lib/modIdentity'
 
 export const useModExportPlan = ({
   activeIds,
@@ -24,11 +25,29 @@ export const useModExportPlan = ({
     ].map(normalizeCanonicalId).filter(Boolean)),
   ])
 
+  // 导出范围按规范包名去重，但要保留列表中的实例 token，供后端选择对应原生规则。
+  const visibleTokenByCanonicalId = computed(() => {
+    const result = new Map()
+    ;[...activeIds.value, ...inactiveIds.value, ...tempIds.value].forEach(rawId => {
+      const token = normalizePackageToken(rawId)
+      const canonicalId = normalizeCanonicalId(token)
+      if (canonicalId && !result.has(canonicalId)) result.set(canonicalId, token)
+    })
+    return result
+  })
+  const preferredTokenForId = (rawId = '') => {
+    const token = normalizePackageToken(rawId)
+    const canonicalId = normalizeCanonicalId(token)
+    return token.endsWith('_steam') || token.endsWith('_local')
+      ? token
+      : (visibleTokenByCanonicalId.value.get(canonicalId) || canonicalId)
+  }
+
   // 只保留运行时可导出的 Mod，过滤缺失项和非本地/自建/工坊路径项。
   const exportableModsMap = computed(() => {
     const result = new Map()
     for (const canonicalId of currentVisibleCanonicalIds.value) {
-      const mod = takeModById(canonicalId)
+      const mod = takeModById(preferredTokenForId(canonicalId))
       if (!canonicalId || !isExportableRuntimeMod(mod)) continue
       result.set(canonicalId, mod)
     }
@@ -66,7 +85,7 @@ export const useModExportPlan = ({
         result.push(dependencyId)
       }
     }
-    ;(mod?.rules?.dependencies || []).forEach(dep => pushDependencyId(dep?.package_id))
+    ;(mod?.rules?.dependencies || []).forEach(dep => pushDependencyId(dep?.target_id || dep?.package_id))
     if (result.length > 0) return result
     ;(mod?.dependencies_mods || []).forEach(dep => pushDependencyId(dep?.package_id))
     return result
@@ -111,12 +130,14 @@ export const useModExportPlan = ({
     modIds = [],
   } = {}) => {
     const normalizedScope = String(exportScope || 'custom').trim().toLowerCase()
-    if (normalizedScope === 'profile-effective') return [...exportableVisibleIds.value]
-    if (normalizedScope === 'profile-active') return [...exportableActiveIds.value]
+    if (normalizedScope === 'profile-effective') return exportableVisibleIds.value.map(preferredTokenForId)
+    if (normalizedScope === 'profile-active') return activeIds.value
+      .map(normalizePackageToken)
+      .filter(id => id && exportableVisibleIdSet.value.has(normalizeCanonicalId(id)))
     return [...new Set(
       (modIds || [])
-        .map(id => normalizeCanonicalId(id))
-        .filter(id => id && exportableVisibleIdSet.value.has(id))
+        .map(preferredTokenForId)
+        .filter(id => id && exportableVisibleIdSet.value.has(normalizeCanonicalId(id)))
     )]
   }
 
@@ -143,9 +164,10 @@ export const useModExportPlan = ({
     const selectedSet = new Set()
     const pushModId = (rawId = '') => {
       const canonicalId = normalizeCanonicalId(rawId)
+      const packageToken = preferredTokenForId(rawId)
       if (!canonicalId || selectedSet.has(canonicalId) || !exportableVisibleIdSet.value.has(canonicalId)) return false
       selectedSet.add(canonicalId)
-      orderedIds.push(canonicalId)
+      orderedIds.push(packageToken)
       return true
     }
 
@@ -158,7 +180,8 @@ export const useModExportPlan = ({
 
       if (includeDependencies) {
         snapshot.forEach(id => {
-          (exportDependencyMap.value.get(id) || []).forEach(depId => {
+          const canonicalId = normalizeCanonicalId(id)
+          ;(exportDependencyMap.value.get(canonicalId) || []).forEach(depId => {
             if (pushModId(depId)) changed = true
           })
         })
@@ -166,7 +189,8 @@ export const useModExportPlan = ({
 
       if (includeInterlocks) {
         snapshot.forEach(id => {
-          takeInterlockChainIds(exportableModsMap.value.get(id)?.interlock_id, exportableVisibleIdSet.value).forEach(linkedId => {
+          const canonicalId = normalizeCanonicalId(id)
+          takeInterlockChainIds(exportableModsMap.value.get(canonicalId)?.interlock_id, exportableVisibleIdSet.value).forEach(linkedId => {
             if (pushModId(linkedId)) changed = true
           })
         })
@@ -174,7 +198,8 @@ export const useModExportPlan = ({
 
       if (includeLanguagePacks) {
         snapshot.forEach(id => {
-          const languagePackId = pickExportLanguagePackId(id, selectedSet)
+          const canonicalId = normalizeCanonicalId(id)
+          const languagePackId = pickExportLanguagePackId(canonicalId, selectedSet)
           if (pushModId(languagePackId)) changed = true
         })
       }

@@ -6113,6 +6113,8 @@
         },
         "export_start_dir": "Startverzeichnis exportieren",
         "export_start_dir_desc": "Steuert den Anfangsordner für die Dateiauswahl für die Exportladereihenfolge. Im Standardmodus wird der andere Ordner im aktuellen Profilsicherungsverzeichnis verwendet. Denken Sie daran, dass das letzte erfolgreiche Exportverzeichnis verwendet wird. Custom verwendet das untenstehende feste Verzeichnis.",
+        "export_use_raw_package_ids": "Rohe Paketnamen für Load-Order-Exporte verwenden",
+        "export_use_raw_package_ids_desc": "Standardmäßig bleiben Quellenzusätze wie _steam erhalten, damit koexistierende Mod-Instanzen unterschieden werden können. Aktivieren Sie diese Option, um Paketnamen ohne Quellenzusatz zu exportieren. Automatische Sicherungen behalten Quellenzusätze immer bei.",
         "game_install_path": "Spielinstallationsverzeichnis",
         "game_install_path_desc": "Spielinstallationsverzeichnis, in dem sich die ausführbare Hauptdatei befindet. Der Standort ist je nach System unterschiedlich. Unter Windows lautet der Standardpfad Steam normalerweise:\nC:/Programme (x86)/Steam/steamapps/common/RimWorld",
         "import_start_dir": "Startverzeichnis importieren",

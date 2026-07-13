@@ -268,6 +268,7 @@ class AppConfig:
     load_order_export_dir_mode: str = "default"    # 导出文件选择器初始目录策略: default / remember / custom
     load_order_export_custom_path: str = ""        # 导出文件选择器自定义目录（全局）
     load_order_export_last_path: str = ""          # 导出文件选择器上次成功目录（全局）
+    load_order_export_use_raw_package_ids: bool = False  # 排序导出是否去掉来源后缀
     
     # --- 游戏设置 ---
     # game_version: str = ""               # RimWorld 版本
@@ -598,6 +599,12 @@ class SettingsManager:
             self.config.load_order_export_dir_mode = "default"
         else:
             self.config.load_order_export_dir_mode = str(self.config.load_order_export_dir_mode).strip().lower()
+        raw_export_package_id_setting = getattr(self.config, "load_order_export_use_raw_package_ids", False)
+        self.config.load_order_export_use_raw_package_ids = (
+            raw_export_package_id_setting.strip().lower() in {"1", "true", "yes", "on"}
+            if isinstance(raw_export_package_id_setting, str)
+            else bool(raw_export_package_id_setting)
+        )
         try:
             self.config.bundle_compress_level = max(0, min(9, int(self.config.bundle_compress_level or 0)))
         except (TypeError, ValueError):

@@ -10,7 +10,9 @@ from typing import Any, Callable
 from backend._version import __version__
 from backend.database.dao import ModDAO, _ProfilePathScope
 from backend.database.models import ModInterlock
-from backend.load_order.package_tokens import build_steam_package_token, parse_package_token
+from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
+from backend.load_order.package_tokens import build_steam_package_token, parse_package_token, select_mod_instance
+from backend.managers.mgr_rules import resolve_mod_rules
 from backend.utils.bundle_io import (
     create_sibling_stage_dir,
     estimate_disk_space_requirement,
@@ -220,9 +222,30 @@ class ModPackageManager:
         rule_mgr = self.rule_mgr_provider()
         if rule_mgr:
             for mod in visible_mods:
-                mod["rules"] = rule_mgr.get_effective_mod_rules(mod.get("package_id"), mod)
+                # 导出依赖展开按实际选中的实例读取原生规则；外置规则仍由同一包名共享。
+                mod["rules"] = resolve_mod_rules(rule_mgr, mod.get("package_id"), mod)[1]
+                workshop_variant = mod.get("coexist_workshop_variant")
+                if isinstance(workshop_variant, dict):
+                    workshop_variant["rules"] = resolve_mod_rules(rule_mgr, build_steam_package_token(mod.get("package_id")), mod)[1]
         active_tokens = self._read_active_tokens(profile_id, context)
         active_token_set = {str(token or "").strip().lower() for token in active_tokens if str(token or "").strip()}
+        include_language_packs = bool(payload.get("include_language_packs"))
+        if include_language_packs:
+            owner_map = resolve_language_pack_ownership_for_mods(
+                visible_mods,
+                user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
+            )
+            for mod in visible_mods:
+                package_id = parse_package_token(mod.get("package_id")).canonical_package_id
+                if not package_id:
+                    continue
+                mod["language_pack_owner_result"] = owner_map.get(package_id, {})
+                workshop_variant = mod.get("coexist_workshop_variant")
+                if isinstance(workshop_variant, dict):
+                    workshop_variant["language_pack_owner_result"] = owner_map.get(
+                        build_steam_package_token(package_id),
+                        {},
+                    )
         requested_ids = self._resolve_requested_mod_ids(payload, exportable_visible_mods, active_tokens)
         folder_name_type = self._normalize_export_folder_name_type(
             payload.get("folder_name_type") or getattr(settings.config, "bundle_mod_folder_name_type", "default")
@@ -230,9 +253,10 @@ class ModPackageManager:
         expanded_ids = self._expand_mod_ids(
             requested_ids,
             visible_mods,
+            active_token_set=active_token_set,
             include_dependencies=bool(payload.get("include_dependencies")),
             include_interlocks=bool(payload.get("include_interlocks")),
-            include_language_packs=bool(payload.get("include_language_packs")),
+            include_language_packs=include_language_packs,
         )
         export_mods, warnings = self._resolve_export_mods(visible_mods, expanded_ids, active_token_set, path_scope, folder_name_type)
         return {
@@ -483,6 +507,7 @@ class ModPackageManager:
         base_ids: list[str],
         visible_mods: list[dict[str, Any]],
         *,
+        active_token_set: set[str] | None = None,
         include_dependencies: bool = False,
         include_interlocks: bool = False,
         include_language_packs: bool = False,
@@ -494,7 +519,7 @@ class ModPackageManager:
             for mod in visible_mods
             if normalize_package_id(mod.get("package_id"))
         }
-        language_pack_map = self._build_language_pack_map(visible_mods) if include_language_packs else {}
+        language_pack_map = self._build_language_pack_map(visible_mods, active_token_set) if include_language_packs else {}
         interlock_map = self._build_interlock_map() if include_interlocks else {}
 
         def _push(raw_id: str):
@@ -505,12 +530,17 @@ class ModPackageManager:
             seen.add(key)
             ordered_ids.append(raw_id)
 
-        def _visit_dependency(raw_id: str):
+        def _resolve_mod(raw_id: str) -> dict[str, Any] | None:
             token_info = parse_package_token(raw_id)
             canonical_id = token_info.canonical_package_id
-            if not canonical_id:
-                return
             mod = visible_map.get(canonical_id)
+            if not mod:
+                return None
+            # 与最终导出资产选择保持一致，避免依赖展开读取本地版而实际导出工坊版。
+            return self._select_export_asset(mod, token_info, active_token_set or set())
+
+        def _visit_dependency(raw_id: str):
+            mod = _resolve_mod(raw_id)
             if not mod:
                 return
             for dep in self._extract_dependency_ids(mod):
@@ -530,8 +560,7 @@ class ModPackageManager:
 
         if include_interlocks:
             for raw_id in list(ordered_ids):
-                canonical_id = parse_package_token(raw_id).canonical_package_id
-                for interlock_id in self._extract_interlock_ids(visible_map.get(canonical_id), interlock_map):
+                for interlock_id in self._extract_interlock_ids(_resolve_mod(raw_id), interlock_map):
                     _push(interlock_id)
 
         if include_language_packs:
@@ -704,34 +733,30 @@ class ModPackageManager:
     ) -> dict[str, Any]:
         workshop_variant = mod.get("coexist_workshop_variant")
         if token_info.source_preference == "steam" and workshop_variant:
-            return dict(workshop_variant)
+            return select_mod_instance(mod, token_info.normalized_token)
 
         canonical_id = token_info.canonical_package_id
         active_steam_token = build_steam_package_token(canonical_id)
         if workshop_variant and active_steam_token in active_token_set:
-            return dict(workshop_variant)
+            return select_mod_instance(mod, active_steam_token)
 
         if token_info.normalized_token and token_info.normalized_token in active_token_set:
-            return dict(mod)
+            return select_mod_instance(mod, token_info.normalized_token)
 
-        if workshop_variant:
-            local_time = max(int(mod.get("file_modify_time") or 0), int(mod.get("file_create_time") or 0))
-            workshop_time = max(
-                int(workshop_variant.get("file_modify_time") or 0),
-                int(workshop_variant.get("file_create_time") or 0),
-            )
-            if workshop_time > local_time:
-                return dict(workshop_variant)
+        return select_mod_instance(mod, canonical_id)
 
-        return dict(mod)
-
-    def _build_language_pack_map(self, visible_mods: list[dict[str, Any]]) -> dict[str, list[str]]:
+    def _build_language_pack_map(self, visible_mods: list[dict[str, Any]], active_token_set: set[str] | None = None) -> dict[str, list[str]]:
         result: dict[str, list[str]] = {}
         for mod in visible_mods:
             package_id = normalize_package_id(mod.get("package_id"))
             if not package_id:
                 continue
-            owner_result = mod.get("language_pack_owner_result") or {}
+            selected = self._select_export_asset(
+                mod,
+                parse_package_token(package_id),
+                active_token_set or set(),
+            )
+            owner_result = selected.get("language_pack_owner_result") or {}
             for owner in owner_result.get("owners", []) or []:
                 owner_id = normalize_package_id(owner.get("package_id"))
                 if not owner_id:
@@ -763,13 +788,13 @@ class ModPackageManager:
         rules = mod.get("rules") or {}
         result: list[str] = []
         for dep in rules.get("dependencies", []) or []:
-            dep_id = normalize_package_id(dep.get("package_id"))
+            dep_id = normalize_package_id(dep.get("target_id") or dep.get("package_id"))
             if dep_id and dep_id not in result:
                 result.append(dep_id)
         if result:
             return result
         for dep in mod.get("dependencies_mods", []) or []:
-            dep_id = normalize_package_id(dep.get("package_id"))
+            dep_id = normalize_package_id(dep.get("package_id") if isinstance(dep, dict) else dep)
             if dep_id and dep_id not in result:
                 result.append(dep_id)
         return result

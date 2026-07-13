@@ -276,8 +276,10 @@ const getCommunityRules = (type) => {
 // 3. Workshop
 const getWorkshopRules = (type) => {
   const rules = ruleStore.workshopModRules[targetMod.value?.package_id]
-  if (!rules || !rules[type]) return []
-  return rules[type]
+  if (!rules) return {}
+  if (type !== 'loadAfter') return rules[type] || {}
+  // 强依赖模式的外置规则保存在 dependencies，展示时仍归入“前置”关系。
+  return { ...(rules.loadAfter || {}), ...(rules.dependencies || {}) }
 }
 // 4. User
 const getUserRules = (type) => {

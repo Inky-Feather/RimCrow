@@ -4,6 +4,7 @@ from difflib import SequenceMatcher
 import re
 from typing import Any
 
+from backend.load_order.package_tokens import build_steam_package_token
 from backend.utils.tools import normalize_package_id
 
 
@@ -342,16 +343,23 @@ def resolve_language_pack_ownership_for_mods(
     mods: list[dict[str, Any]],
     user_mod_rules: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    # 共存工坊版和本地版包名相同，但 About.xml 里的依赖/前置可能不同；
+    # 用来源 token 分开保存结果，调用方才能在读取实际实例时拿到对应判定。
     asset_index = _build_asset_index(mods)
-    language_packs = [mod for mod in mods if _is_language_pack_mod(mod)]
     result: dict[str, dict[str, Any]] = {}
-    for mod in language_packs:
+    for mod in mods:
         package_id = normalize_package_id(mod.get("package_id"))
         if not package_id:
             continue
-        result[package_id] = resolve_language_pack_ownership_for_mod(
-            mod,
-            asset_index,
-            user_mod_rules=user_mod_rules,
-        )
+        if _is_language_pack_mod(mod):
+            result[package_id] = resolve_language_pack_ownership_for_mod(mod, asset_index, user_mod_rules=user_mod_rules)
+
+        workshop_variant = mod.get("coexist_workshop_variant")
+        if isinstance(workshop_variant, dict) and _is_language_pack_mod(workshop_variant):
+            steam_token = build_steam_package_token(package_id)
+            result[steam_token] = resolve_language_pack_ownership_for_mod(
+                workshop_variant,
+                asset_index,
+                user_mod_rules=user_mod_rules,
+            )
     return result

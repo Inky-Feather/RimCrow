@@ -84,6 +84,8 @@
                       :check="formData.check_info?.load_order_export_custom_path" :description="t('ui.settings.paths.custom_start_dir_desc', '仅在导出目录模式为“自定义”时生效；若路径无效，运行时会自动回退到默认目录。')"
                       @browse="handleBrowse('load_order_export_custom_path')" @blur="checkPath('load_order_export_custom_path', formData.load_order_export_custom_path)"
                     />
+                    <CommonSwitch class="col-span-1" :label="t('ui.settings.paths.export_use_raw_package_ids', '排序导出使用原始包名')" v-model="formData.load_order_export_use_raw_package_ids"
+                      :description="t('ui.settings.paths.export_use_raw_package_ids_desc', '默认保留 _steam 等来源后缀，以便区分共存模组实例；开启后导出不带来源后缀的原始包名。自动备份始终保留来源后缀。')" />
                   </div>
                   <!-- <CommonPathInput label="主目录" v-model="formData.home_path" @browse="handleBrowse('home_path')" /> -->
                 </div>

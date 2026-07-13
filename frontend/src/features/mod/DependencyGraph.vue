@@ -39,6 +39,7 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useContextMenuStore } from '../../shared/components/context-menu/contextMenuStore'
 import { useHoverStore } from '../../shared/components/popover/hoverStore'
 import DependencyGraphManagerPanel from './DependencyGraphManagerPanel.vue'
+import { normalizePackageId } from './lib/modIdentity'
 import { useModStore } from './stores/modStore'
 import { CornerUpRight, Eye, EyeOff, Filter, FilterX, Focus, FolderTree, Settings2, Undo2 } from 'lucide-vue-next'
 import { t } from '../../shared/i18n.js'
@@ -100,6 +101,7 @@ const CONFIG = {
 }
 
 const normalizeSourceId = (value) => String(value || '').trim().toLowerCase()
+const normalizeGraphId = (value) => normalizePackageId(value)
 
 const getThemeColor = (name, fallback) => {
   if (typeof window === 'undefined') return fallback
@@ -118,12 +120,12 @@ const hashSourceColor = (sourceId) => {
 }
 
 const listIndexMap = computed(() => (
-  new Map(props.listIds.map((id, index) => [normalizeSourceId(id), index]))
+  new Map(props.listIds.map((id, index) => [normalizeGraphId(id), index]))
 ))
 
 const hiddenSourceIds = computed(() => (
   Array.isArray(appStore.settings.ui?.hidden_dependency_graph_source_ids)
-    ? appStore.settings.ui.hidden_dependency_graph_source_ids.map(normalizeSourceId).filter(Boolean)
+    ? appStore.settings.ui.hidden_dependency_graph_source_ids.map(normalizeGraphId).filter(Boolean)
     : []
 ))
 const hiddenSourceIdSet = computed(() => new Set(hiddenSourceIds.value))
@@ -133,15 +135,15 @@ const lastSelectedId = computed(() => modStore.lastSelectedMod?.package_id || ''
 const selectedIndicesSet = computed(() => {
   const set = new Set()
   ;(modStore.selectedIds || []).forEach(id => {
-    const idx = listIndexMap.value.get(normalizeSourceId(id))
+    const idx = listIndexMap.value.get(normalizeGraphId(id))
     if (idx != null && idx !== -1) set.add(idx)
   })
   return set
 })
 
 const isSameLineFilter = (lineIds = []) => {
-  const currentIds = Array.isArray(props.lineFilterIds) ? props.lineFilterIds.map(normalizeSourceId).filter(Boolean) : []
-  const nextIds = Array.isArray(lineIds) ? lineIds.map(normalizeSourceId).filter(Boolean) : []
+  const currentIds = Array.isArray(props.lineFilterIds) ? props.lineFilterIds.map(normalizeGraphId).filter(Boolean) : []
+  const nextIds = Array.isArray(lineIds) ? lineIds.map(normalizeGraphId).filter(Boolean) : []
   if (currentIds.length !== nextIds.length) return false
   return currentIds.every((id, index) => id === nextIds[index])
 }
@@ -353,10 +355,15 @@ const processGraph = () => {
   const tempGroups = new Map()
   props.listIds.forEach((childId, childIndex) => {
     const mod = modStore.takeModById(childId)
-    if (!mod || !Array.isArray(mod.dependencies_mods)) return
+    // 依赖图展示最终生效的强依赖；工坊规则设为强依赖时也必须出现在图中。
+    // rules 缺失时再回退到原生字段，兼容规则尚未完成注入的短暂状态。
+    const dependencyRules = Array.isArray(mod?.rules?.dependencies)
+      ? mod.rules.dependencies
+      : (Array.isArray(mod?.dependencies_mods) ? mod.dependencies_mods : [])
+    if (!mod || dependencyRules.length === 0) return
 
-    mod.dependencies_mods.forEach(parentMod => {
-      const parentId = normalizeSourceId(parentMod.package_id)
+    dependencyRules.forEach(parentMod => {
+      const parentId = normalizeGraphId(parentMod.target_id || parentMod.package_id)
       if (!parentId || !listIndexMap.value.has(parentId)) return
 
       const parentIndex = listIndexMap.value.get(parentId)

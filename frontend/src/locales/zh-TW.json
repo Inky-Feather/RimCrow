@@ -6113,6 +6113,8 @@
         },
         "export_start_dir": "導出起始目錄",
         "export_start_dir_desc": "控制“導出載入序列”檔案選擇器的選擇視窗初始目錄。預設模式保持目前環境備份目錄的 other 子目錄；記憶模式使用上次成功導出的目錄；自定義模式使用下方固定目錄。",
+        "export_use_raw_package_ids": "排序導出使用原始包名",
+        "export_use_raw_package_ids_desc": "預設保留 _steam 等來源後綴，以便區分共存模組實例；開啟後導出不帶來源後綴的原始包名。自動備份始終保留來源後綴。",
         "game_install_path": "遊戲安裝目錄",
         "game_install_path_desc": "遊戲安裝目錄即遊戲主程序所在的目錄，不同系統位置不同，Windows下預設安裝目錄一般位於：\nC:/Program Files (x86)/Steam/steamapps/common/RimWorld",
         "import_start_dir": "導入起始目錄",

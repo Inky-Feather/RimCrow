@@ -5,7 +5,10 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { useProfileStore } from '../profiles/profileStore'
 import { ISSUE_TYPE } from '../../shared/lib/constants'
-import { dedupeNormalizedPackageIds, mapUniqueDisplayNames, normalizePackageId, pushUnique } from '../mod/lib/modIdentity'
+import {
+  dedupeNormalizedPackageIds, dedupeNormalizedPackageTokens,
+  mapUniqueDisplayNames, normalizePackageId, normalizePackageToken, pushUnique
+} from '../mod/lib/modIdentity'
 import { DEFAULT_TOOL_PACKAGE_IDS, isCorePackageId, isOfficialDlcPackageId } from '../mod/lib/packageScope'
 import { getVersionInfo as getVersionInfoByVersions, normalizeVersion } from '../mod/lib/versioning'
 import { t } from '../../shared/i18n.js'
@@ -168,7 +171,7 @@ export const useSupplementStore = defineStore('supplement', () => {
     if (!appStore.settings.check_language_support || !currentLanguage.value) {
       return { strictTargetMap, fallbackTargetMap }
     }
-    for (const mod of modStore.allModsMap.values()) {
+    for (const mod of modStore.getAvailableModInstances()) {
       if (!mod || mod.isMissing || !mod.path || !isLanguagePackMod(mod)) continue
       if (!canUseLanguagePackForSupplement(mod)) continue
       const relatedTargets = new Set(getResolvedLanguagePackOwnerIds(mod))
@@ -185,10 +188,12 @@ export const useSupplementStore = defineStore('supplement', () => {
 
   // ctx 是一次补缺计算共享的只读上下文，递归构图时都复用这一份派生数据。
   const createContext = (activeIds = modStore.activeIds) => {
-    const normalizedActiveIds = dedupeNormalizedPackageIds(activeIds)
+    // 规则 owner 必须保留实例 token；依赖是否已满足仍按裸包名判断。
+    const activeTokens = dedupeNormalizedPackageTokens(activeIds)
+    const canonicalActiveIds = dedupeNormalizedPackageIds(activeTokens)
     return {
-      activeIds: normalizedActiveIds,
-      activeSet: new Set(normalizedActiveIds),
+      activeIds: activeTokens,
+      activeSet: new Set(canonicalActiveIds),
       ...getLanguagePackTargetMap(),
     }
   }
@@ -276,6 +281,19 @@ export const useSupplementStore = defineStore('supplement', () => {
   // satisfiedSet 表示当前路径已满足的包，trailSet 用于阻断递归回环。
   const collectDependencyEntries = (ownerIds = [], ctx, satisfiedSet = ctx.activeSet, trailSet = new Set()) => {
     const entryMap = new Map()
+    const availableInstances = modStore.getAvailableModInstances()
+    const takeInstalledOptions = (optionId = '') => availableInstances
+      .filter(mod => {
+        const packageId = normalizePackageId(mod?.package_id)
+        return packageId === optionId && !mod?.isMissing && !!mod?.path
+      })
+      .map(mod => {
+        const packageToken = normalizePackageToken(mod.active_package_token || mod.package_id)
+        const sourceLabel = packageToken.endsWith('_steam')
+          ? t('common.store.workshop', '工坊')
+          : t('common.store.local', '本地')
+        return { packageId: packageToken, canonicalId: normalizePackageId(packageToken), mod, sourceLabel }
+      })
 
     ownerIds.forEach(ownerId => {
       const owner = modStore.takeModById(ownerId)
@@ -289,38 +307,42 @@ export const useSupplementStore = defineStore('supplement', () => {
         if (optionIds.length === 0) return
         if (optionIds.some(optionId => satisfiedSet.has(optionId))) return
 
-        const installedOptionIds = optionIds.filter(optionId => modStore.hasRealModById(optionId))
-        if (installedOptionIds.length === 0) return
+        const installedOptions = optionIds.flatMap(takeInstalledOptions)
+        if (installedOptions.length === 0) return
         const category = isCorePackageId(targetId)
           ? 'core'
           : isOfficialDlcPackageId(targetId)
             ? 'official_dlc'
             : 'dependency'
 
-        const key = `dependency:${targetId}:${installedOptionIds.join('|')}`
+        const key = `dependency:${targetId}:${installedOptions.map(option => option.packageId).join('|')}`
         if (!entryMap.has(key)) {
-          const onlyOptionId = installedOptionIds.length === 1 ? installedOptionIds[0] : ''
-          const usesAlternativeOnly = !!onlyOptionId && onlyOptionId !== targetId
+          const onlyOption = installedOptions.length === 1 ? installedOptions[0] : null
+          const usesAlternativeOnly = !!onlyOption && onlyOption.canonicalId !== targetId
+          const preferredOption = installedOptions.find(option => option.canonicalId === targetId) || installedOptions[0]
           entryMap.set(key, {
-            entryType: installedOptionIds.length > 1 ? 'choice' : 'toggle',
+            entryType: installedOptions.length > 1 ? 'choice' : 'toggle',
             key,
             category,
             severity: CATEGORY_SEVERITY[category] || 'danger',
-            title: usesAlternativeOnly ? modStore.displayModName(onlyOptionId) : modStore.displayModName(targetId),
+            title: usesAlternativeOnly ? modStore.displayModName(onlyOption.packageId) : modStore.displayModName(targetId),
             reason: '',
             detail: '',
             owners: [],
-            packageId: onlyOptionId,
+            packageId: onlyOption?.packageId || '',
             removeIds: [],
             relationLabel: usesAlternativeOnly ? t('dialog.supplement.relation.alternative_dependency', '备选依赖') : t('dialog.supplement.relation.dependency', '依赖'),
             allowSkip: true,
-            defaultOptionPackageId: installedOptionIds.includes(targetId) ? targetId : installedOptionIds[0],
-            options: installedOptionIds.map(optionId => ({
-              packageId: optionId,
-              title: modStore.displayModName(optionId),
-              detail: optionId === targetId ? t('dialog.supplement.detail.original_dependency', '原始依赖项') : t('dialog.supplement.detail.alternative_dependency', '可用于满足依赖的备选模组'),
+            defaultOptionPackageId: preferredOption?.packageId || '',
+            options: installedOptions.map(option => ({
+              packageId: option.packageId,
+              title: modStore.displayModName(option.packageId),
+              detail: mergeText(
+                option.canonicalId === targetId ? t('dialog.supplement.detail.original_dependency', '原始依赖项') : t('dialog.supplement.detail.alternative_dependency', '可用于满足依赖的备选模组'),
+                option.sourceLabel,
+              ),
               removeIds: [],
-              relationLabel: optionId === targetId ? t('dialog.supplement.relation.dependency', '依赖') : t('dialog.supplement.relation.alternative_dependency', '备选依赖'),
+              relationLabel: option.canonicalId === targetId ? t('dialog.supplement.relation.dependency', '依赖') : t('dialog.supplement.relation.alternative_dependency', '备选依赖'),
             })),
             hasAlternatives: alternativeIds.length > 0,
           })
@@ -383,7 +405,8 @@ export const useSupplementStore = defineStore('supplement', () => {
       if (!candidate) return
 
       const candidateId = normalizePackageId(candidate.package_id)
-      const key = `language:${candidateId}`
+      const candidateToken = String(candidate.active_package_token || candidate.package_id || candidateId).trim().toLowerCase()
+      const key = `language:${candidateToken}`
       if (!entryMap.has(key)) {
         const isFallback = strictCandidates.length === 0
         entryMap.set(key, {
@@ -395,7 +418,8 @@ export const useSupplementStore = defineStore('supplement', () => {
           reason: '',
           detail: '',
           owners: [],
-          packageId: candidateId,
+          // 语言包自身也可能存在本地/工坊共存，补齐时保留候选实例 token。
+          packageId: candidateToken,
           removeIds: [],
           relationLabel: t('dialog.supplement.relation.language_pack', '语言包'),
           isLanguageFallback: isFallback,
@@ -469,7 +493,8 @@ export const useSupplementStore = defineStore('supplement', () => {
 
   // choice option 需要跨不同来源合并，这里先统一成标准结构。
   const createChoiceOption = (rowId, option = {}) => {
-    const packageId = normalizePackageId(option.packageId)
+    // 选项可能指向共存实例；保留 token 供最终启用，删除项仍按规范包名处理。
+    const packageId = normalizePackageToken(option.packageId)
     return {
       id: `${rowId}:${packageId}`,
       packageId,
@@ -675,31 +700,32 @@ const createEmptySummary = () => ({
       if (entry.entryType === 'choice') {
         const rowId = entry.key
         const options = (entry.options || []).map(option => {
-          const packageId = normalizePackageId(option.packageId)
+          const packageToken = normalizePackageToken(option.packageId)
+          const packageId = normalizePackageId(packageToken)
           const nextTrailSet = new Set([...Array.from(trailSet), packageId])
           const nextSatisfiedSet = new Set([...Array.from(satisfiedSet), packageId])
           const childEntries = [
-            ...collectDependencyEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
-            ...collectLanguageEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
+            ...collectDependencyEntries([packageToken], ctx, nextSatisfiedSet, nextTrailSet),
+            ...collectLanguageEntries([packageToken], ctx, nextSatisfiedSet, nextTrailSet),
           ]
           const childNodeIds = childEntries
             .map(childEntry => buildNode(childEntry, nextSatisfiedSet, nextTrailSet))
             .filter(Boolean)
 
           return {
-            id: `${rowId}:${packageId}`,
-            packageId,
-            title: option.title || modStore.displayModName(packageId),
+            id: `${rowId}:${packageToken}`,
+            packageId: packageToken,
+            title: option.title || modStore.displayModName(packageToken),
             detail: option.detail || '',
             removeIds: dedupeNormalizedPackageIds(option.removeIds || []),
             relationLabel: option.relationLabel || '',
             relationLabels: option.relationLabel ? [option.relationLabel] : [],
-            versionInfo: getVersionInfo(packageId),
+            versionInfo: getVersionInfo(packageToken),
             childNodeIds,
           }
         })
 
-        const preferredPackageId = normalizePackageId(entry.defaultOptionPackageId)
+        const preferredPackageId = normalizePackageToken(entry.defaultOptionPackageId)
         const preferredOption = options.find(option => option.packageId === preferredPackageId) || options[0]
         const node = {
           id: nextNodeId('choice'),
@@ -721,14 +747,16 @@ const createEmptySummary = () => ({
         return node.id
       }
 
-      const packageId = normalizePackageId(entry.packageId)
+      // packageToken 决定实际启用哪个共存实例，packageId 只用于依赖满足和回环检测。
+      const packageToken = normalizePackageToken(entry.packageId)
+      const packageId = normalizePackageId(packageToken)
       if (!packageId) return null
-      const rowId = `toggle:${packageId}`
+      const rowId = `toggle:${packageToken}`
       const nextTrailSet = new Set([...Array.from(trailSet), packageId])
       const nextSatisfiedSet = new Set([...Array.from(satisfiedSet), packageId])
       const childEntries = [
-        ...collectDependencyEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
-        ...collectLanguageEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
+        ...collectDependencyEntries([packageToken], ctx, nextSatisfiedSet, nextTrailSet),
+        ...collectLanguageEntries([packageToken], ctx, nextSatisfiedSet, nextTrailSet),
       ]
       const childNodeIds = childEntries
         .map(childEntry => buildNode(childEntry, nextSatisfiedSet, nextTrailSet))
@@ -740,15 +768,15 @@ const createEmptySummary = () => ({
         kind: 'toggle',
         category: entry.category,
         severity: entry.severity || 'info',
-        packageId,
-        title: entry.title || modStore.displayModName(packageId),
+        packageId: packageToken,
+        title: entry.title || modStore.displayModName(packageToken),
         reason: entry.reason || '',
         detail: entry.detail || '',
         defaultSelected: entry.defaultSelected,
         owners: dedupeNormalizedPackageIds(entry.owners || []),
         removeIds: dedupeNormalizedPackageIds(entry.removeIds || []),
         relationLabel: entry.relationLabel || '',
-        versionInfo: getVersionInfo(packageId),
+        versionInfo: getVersionInfo(packageToken),
         childNodeIds,
       }
       nodes.set(node.id, node)
@@ -943,7 +971,7 @@ const createEmptySummary = () => ({
   } = {}) => {
     resetDialogState()
     defaultSelectionMode.value = 'custom'
-    const resolvedActiveIds = dedupeNormalizedPackageIds(activeIds)
+    const resolvedActiveIds = dedupeNormalizedPackageTokens(activeIds)
     const resolvedPrepared = prepared || await prepareDialogPlan(resolvedActiveIds)
     graphState.value = resolvedPrepared.graph
     applyResolvedPlan(resolvedPrepared.plan, { title, message, confirmText, cancelText, continueText })
@@ -1008,8 +1036,11 @@ const createEmptySummary = () => ({
   // 真正应用时只更新当前启用列表并写入历史栈，不会直接触发保存。
   // removeIds 主要服务于替代模组这类“启用新项同时移除旧项”的场景。
   const applySelectionPayload = async (payload = { addIds: [], removeIds: [] }, { silent = false } = {}) => {
-    const idsToEnable = dedupeNormalizedPackageIds(payload.addIds || [])
-    const idsToRemove = dedupeNormalizedPackageIds(payload.removeIds || []).filter(removeId => !idsToEnable.includes(removeId))
+    // addIds 必须保留来源 token；否则补齐工坊实例时，智能插入会重新读取本地原生规则。
+    const idsToEnable = dedupeNormalizedPackageTokens(payload.addIds || [])
+    const enabledCanonicalIds = new Set(idsToEnable.map(normalizePackageId))
+    const idsToRemove = dedupeNormalizedPackageIds(payload.removeIds || [])
+      .filter(removeId => !enabledCanonicalIds.has(removeId))
     if (idsToEnable.length === 0 && idsToRemove.length === 0) return false
 
     const success = await modStore.runListHistoryTransaction({

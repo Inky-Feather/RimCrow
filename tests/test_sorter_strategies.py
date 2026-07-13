@@ -30,6 +30,19 @@ fake_rules_module.RuleManager = type("RuleManager", (), {"__init__": lambda self
 fake_rules_module.POSITION_WEIGHT_TOP = 0
 fake_rules_module.POSITION_WEIGHT_DEFAULT = 500
 fake_rules_module.POSITION_WEIGHT_BOTTOM = 1000
+def _fake_resolve_mod_rules(rule_mgr, package_token, mod_full_data):
+    from backend.load_order.package_tokens import parse_package_token, select_mod_instance
+    from backend.utils.tools import normalize_package_id
+
+    resolver = getattr(rule_mgr, "resolve_effective_mod_rules", None)
+    if callable(resolver):
+        resolved = resolver(package_token, mod_full_data)
+        if isinstance(resolved, tuple) and len(resolved) == 2:
+            return resolved
+    selected_mod = select_mod_instance(mod_full_data, package_token)
+    canonical_id = parse_package_token(package_token).canonical_package_id or normalize_package_id(selected_mod.get("package_id"))
+    return selected_mod, rule_mgr.get_effective_mod_rules(canonical_id, selected_mod)
+fake_rules_module.resolve_mod_rules = _fake_resolve_mod_rules
 sys.modules.setdefault("backend.managers.mgr_rules", fake_rules_module)
 
 import backend.managers.mgr_sorter as mgr_sorter_module
@@ -80,6 +93,141 @@ class TestOrderSorterStrategies(unittest.TestCase):
             {},
         )
         self.assertEqual(result["strategy"], "classic_sort_logic")
+
+    def test_sort_uses_coexist_workshop_variant_rules_for_steam_token(self):
+        mods_data = [{
+            "package_id": "shared.mod",
+            "name": "Local",
+            "load_after_mods": [{"package_id": "local.dep"}],
+            "coexist_workshop_variant": {
+                "package_id": "shared.mod",
+                "name": "Workshop",
+                "load_after_mods": [{"package_id": "workshop.dep"}],
+            },
+        }]
+        self.sorter.rule_mgr.get_effective_mod_rules.side_effect = (
+            lambda mod_id, mod_data: {
+                "dependencies": [],
+                "load_after": [
+                    {"target_id": rule["package_id"], "source": {"type": "native"}}
+                    for rule in mod_data.get("load_after_mods", [])
+                ],
+                "load_before": [],
+                "incompatible": [],
+                "weight_info": {"final_weight": 500, "absolute_type": None},
+            }
+        )
+
+        with patch.object(mgr_sorter_module.ModDAO, "get_profile_mods", return_value=mods_data), \
+             patch.object(dao_module.GroupDAO, "get_groups_structured_by_mod_ids", return_value=[]), \
+             patch.object(self.sorter, "build_atomic_groups", return_value=([AtomicGroup(["shared.mod_steam"])], [])), \
+             patch.object(self.sorter, "_build_weighted_graph", return_value=({}, {})), \
+             patch.object(self.sorter, "_break_cycles", return_value=[]), \
+             patch.object(mgr_sorter_module.settings, "config", SimpleNamespace(
+                 auto_sort_strategy="classic_sort_logic",
+                 enable_tool_mods=False,
+                 auto_activate_dependencies=False,
+                 sort_mods_by="name",
+                 regular_mods_follow_dependencies=False,
+                 language_packs_follow_targets=False,
+             )):
+            self.sorter.sort(["shared.mod_steam"])
+
+        self.assertIn("shared.mod_steam", self.sorter.effective_rules_cache)
+        targets = [
+            rule["target_id"]
+            for rule in self.sorter.effective_rules_cache["shared.mod_steam"]["load_after"]
+        ]
+        self.assertEqual(targets, ["workshop.dep"])
+
+    def test_sort_uses_preferred_workshop_instance_after_token_canonicalization(self):
+        mods_data = [{
+            "package_id": "shared.mod",
+            "name": "Local",
+            "load_after_mods": [{"package_id": "local.dep"}],
+            "coexist_workshop_variant": {
+                "package_id": "shared.mod",
+                "name": "Workshop",
+                "load_after_mods": [{"package_id": "workshop.dep"}],
+            },
+        }]
+        self.sorter.rule_mgr.get_effective_mod_rules.side_effect = (
+            lambda mod_id, mod_data: {
+                "dependencies": [],
+                "load_after": [
+                    {"target_id": rule["package_id"], "source": {"type": "native"}}
+                    for rule in mod_data.get("load_after_mods", [])
+                ],
+                "load_before": [],
+                "incompatible": [],
+                "weight_info": {"final_weight": 500, "absolute_type": None},
+            }
+        )
+
+        with patch.object(mgr_sorter_module.ModDAO, "get_profile_mods", return_value=mods_data), \
+             patch.object(dao_module.GroupDAO, "get_groups_structured_by_mod_ids", return_value=[]), \
+             patch.object(self.sorter, "build_atomic_groups", return_value=([AtomicGroup(["shared.mod"])], [])), \
+             patch.object(self.sorter, "_build_weighted_graph", return_value=({}, {})), \
+             patch.object(self.sorter, "_break_cycles", return_value=[]), \
+             patch.object(mgr_sorter_module.settings, "config", SimpleNamespace(
+                 auto_sort_strategy="classic_sort_logic",
+                 enable_tool_mods=False,
+                 auto_activate_dependencies=False,
+                 sort_mods_by="name",
+                 regular_mods_follow_dependencies=False,
+                 language_packs_follow_targets=False,
+             )):
+            self.sorter.sort(["shared.mod"], preferred_tokens={"shared.mod": "shared.mod_steam"})
+
+        targets = [
+            rule["target_id"]
+            for rule in self.sorter.effective_rules_cache["shared.mod"]["load_after"]
+        ]
+        self.assertEqual(targets, ["workshop.dep"])
+
+    def test_sort_keeps_preferred_workshop_language_owner_result(self):
+        mods_data = [{
+            "package_id": "shared.pack",
+            "name": "Local",
+            "mod_type": "LanguagePack",
+            "coexist_workshop_variant": {
+                "package_id": "shared.pack",
+                "name": "Workshop",
+                "mod_type": "LanguagePack",
+            },
+        }]
+        self.sorter.rule_mgr.get_effective_mod_rules.return_value = {
+            "dependencies": [],
+            "load_after": [],
+            "load_before": [],
+            "incompatible": [],
+            "weight_info": {"final_weight": 500, "absolute_type": None},
+        }
+        owner_map = {
+            "shared.pack": {"owners": [{"package_id": "local.owner"}], "summary_confidence": "high"},
+            "shared.pack_steam": {"owners": [{"package_id": "workshop.owner"}], "summary_confidence": "high"},
+        }
+
+        with patch.object(mgr_sorter_module.ModDAO, "get_profile_mods", return_value=mods_data), \
+             patch.object(dao_module.GroupDAO, "get_groups_structured_by_mod_ids", return_value=[]), \
+             patch.object(mgr_sorter_module, "resolve_language_pack_ownership_for_mods", return_value=owner_map), \
+             patch.object(self.sorter, "build_atomic_groups", return_value=([AtomicGroup(["shared.pack"])], [])), \
+             patch.object(self.sorter, "_build_weighted_graph", return_value=({}, {})), \
+             patch.object(self.sorter, "_break_cycles", return_value=[]), \
+             patch.object(mgr_sorter_module.settings, "config", SimpleNamespace(
+                 auto_sort_strategy="classic_sort_logic",
+                 enable_tool_mods=False,
+                 auto_activate_dependencies=False,
+                 sort_mods_by="name",
+                 regular_mods_follow_dependencies=False,
+                 language_packs_follow_targets=False,
+             )):
+            self.sorter.sort(["shared.pack"], preferred_tokens={"shared.pack": "shared.pack_steam"})
+
+        self.assertEqual(
+            self.sorter.mod_map["shared.pack"]["language_pack_owner_result"]["owners"],
+            [{"package_id": "workshop.owner"}],
+        )
 
     def test_classic_sort_logic_group_weight_keeps_bottom_member_conservative(self):
         groups = [AtomicGroup(["mod.bottom", "mod.framework"]), AtomicGroup(["mod.normal"])]

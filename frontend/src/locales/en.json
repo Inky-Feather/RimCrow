@@ -6113,6 +6113,8 @@
         },
         "export_start_dir": "Export start directory",
         "export_start_dir_desc": "Controls the initial folder for the export load order file picker. Default mode uses the other folder under the current profile backup directory; Remember uses the last successful export directory; Custom uses the fixed directory below.",
+        "export_use_raw_package_ids": "Use raw package names for load order exports",
+        "export_use_raw_package_ids_desc": "By default, exports keep source suffixes such as _steam to distinguish coexisting mod instances. Enable this to export package names without source suffixes. Automatic backups always keep source suffixes.",
         "game_install_path": "Game install directory",
         "game_install_path_desc": "Game install directory, where the main executable is located. Location differs by system. On Windows the default Steam path is usually:\nC:/Program Files (x86)/Steam/steamapps/common/RimWorld",
         "import_start_dir": "Import start directory",

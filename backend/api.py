@@ -163,11 +163,12 @@ from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_maintenance import MaintenanceManager
 from backend.managers.mgr_data_bundle import DataBundleManager
 from backend.managers.mgr_mod_package import ModPackageManager
+from backend.managers.mgr_rules import resolve_mod_rules
 from backend.managers.mgr_texture_opt import TextureOptimizationManager
 from backend.managers.mgr_recommendation_export import RecommendationExportManager
 from backend.managers.mgr_multiplayer_compat import MultiplayerCompatibilityManager
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
-from backend.load_order.package_tokens import parse_package_token
+from backend.load_order.package_tokens import build_steam_package_token, parse_package_token, select_mod_instance
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
 from backend.migrations.app_upgrade import normalize_duplicate_group_names_on_load, run_app_upgrade_migrations
@@ -406,6 +407,71 @@ class LaunchWarningAction(Enum):
 
 class LaunchPreparationError(RuntimeError):
     """启动前链接同步失败时中止后续启动。"""
+
+
+def _attach_effective_rules_to_mod_instances(mods: list[dict[str, Any]], rule_mgr: Any) -> None:
+    if not rule_mgr:
+        for mod in mods or []:
+            mod["rules"] = {}
+            if isinstance(mod.get("coexist_workshop_variant"), dict):
+                mod["coexist_workshop_variant"]["rules"] = {}
+        return
+
+    def resolve_rules(package_token: str, mod: dict[str, Any]) -> dict[str, Any]:
+        return resolve_mod_rules(rule_mgr, package_token, mod)[1]
+
+    for mod in mods or []:
+        package_id = parse_package_token(mod.get("package_id")).canonical_package_id
+        # 原生规则来自具体文件实例；社区、用户、动态和工坊外置规则仍按同一个包名合并。
+        mod["rules"] = resolve_rules(package_id, mod)
+        workshop_variant = mod.get("coexist_workshop_variant")
+        if isinstance(workshop_variant, dict):
+            workshop_variant["rules"] = resolve_rules(build_steam_package_token(package_id), mod)
+
+
+def _attach_language_pack_ownership_to_mod_instances(
+    mods: list[dict[str, Any]],
+    owner_map: dict[str, dict[str, Any]],
+) -> None:
+    empty_result = {
+        "owners": [],
+        "analyzed_owners": [],
+        "relation_type": "unknown",
+        "summary_confidence": "unknown",
+        "analyzed_relation_type": "unknown",
+        "analyzed_summary_confidence": "unknown",
+    }
+    for mod in mods or []:
+        package_id = parse_package_token(mod.get("package_id")).canonical_package_id
+        if not package_id:
+            continue
+        mod["language_pack_owner_result"] = owner_map.get(package_id, dict(empty_result))
+        workshop_variant = mod.get("coexist_workshop_variant")
+        if isinstance(workshop_variant, dict):
+            workshop_variant["language_pack_owner_result"] = owner_map.get(
+                build_steam_package_token(package_id),
+                dict(empty_result),
+            )
+
+
+def _build_mod_map_for_load_order_tokens(mods: list[dict[str, Any]], preferred_tokens: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
+    mod_map: dict[str, dict[str, Any]] = {}
+    for mod in mods or []:
+        canonical = parse_package_token(mod.get("package_id")).canonical_package_id
+        if canonical:
+            mod_map[canonical] = mod
+
+    for canonical, token in (preferred_tokens or {}).items():
+        canonical_id = parse_package_token(canonical).canonical_package_id
+        token_info = parse_package_token(token)
+        if not canonical_id or token_info.source_preference != "steam":
+            continue
+        mod = mod_map.get(canonical_id)
+        if isinstance(mod, dict) and isinstance(mod.get("coexist_workshop_variant"), dict):
+            # 智能插入内部仍用裸包名算位置，但规则数据要跟随用户当前选中的来源实例。
+            mod_map[canonical_id] = select_mod_instance(mod, token)
+
+    return mod_map
 
 
 class _LazyAIManager:
@@ -1632,8 +1698,17 @@ class API:
         _log_startup_perf(perf_scope, "translations_ready", perf_start_at)
 
         rule_mgr = self.sorter.rule_mgr if (self.sorter and self.sorter.rule_mgr) else None
-        for mod in context_mods:
-            mod["rules"] = rule_mgr.get_effective_mod_rules(mod["package_id"], mod) if rule_mgr else {}
+        _attach_effective_rules_to_mod_instances(context_mods, rule_mgr)
+        language_owner_enabled = bool(getattr(settings.config, "check_language_support", True))
+        language_pack_owner_map = (
+            resolve_language_pack_ownership_for_mods(
+                context_mods,
+                user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
+            )
+            if language_owner_enabled
+            else {}
+        )
+        _attach_language_pack_ownership_to_mod_instances(context_mods, language_pack_owner_map)
         _log_startup_perf(perf_scope, "rules_ready", perf_start_at, active=len(context_mods or []))
 
         result.update({
@@ -1692,22 +1767,8 @@ class API:
         )
         _log_startup_perf("get_mod_list_enrichment", "language_owner_ready", perf_start_at, enabled=language_owner_enabled)
 
+        _attach_language_pack_ownership_to_mod_instances(context_mods, language_pack_owner_map if language_owner_enabled else {})
         for mod in context_mods:
-            mod["language_pack_owner_result"] = (
-                language_pack_owner_map.get(
-                    str(mod.get("package_id") or "").strip().lower(),
-                    {
-                        "owners": [],
-                        "analyzed_owners": [],
-                        "relation_type": "unknown",
-                        "summary_confidence": "unknown",
-                        "analyzed_relation_type": "unknown",
-                        "analyzed_summary_confidence": "unknown",
-                    },
-                )
-                if language_owner_enabled
-                else None
-            )
             mod["replacement"] = replacements_map.get(mod.get("workshop_id")) if mod.get("workshop_id") else None
         for mod in disabled_mods:
             mod["replacement"] = replacements_map.get(mod.get("workshop_id")) if mod.get("workshop_id") else None
@@ -1734,6 +1795,15 @@ class API:
                 "language_pack_owner_result": mod.get("language_pack_owner_result"),
                 "replacement": mod.get("replacement"),
                 "multiplayer_compat": mod.get("multiplayer_compat"),
+                **(
+                    {
+                        "coexist_workshop_variant": {
+                            "language_pack_owner_result": mod["coexist_workshop_variant"].get("language_pack_owner_result"),
+                        }
+                    }
+                    if isinstance(mod.get("coexist_workshop_variant"), dict)
+                    else {}
+                ),
             }
             for mod in context_mods
             if str(mod.get("package_id") or "").strip()
@@ -1865,28 +1935,14 @@ class API:
         for mod in context_mods:
             # 翻译注入, 传入当前语言，Parser 内部会查找缓存
             if dlc_parser: dlc_parser.translate_record(mod, settings.config.language)
-            # 注入清洗后的规则集
-            if rule_mgr:
-                mod['rules'] = rule_mgr.get_effective_mod_rules(mod['package_id'], mod)
-            else:
-                mod['rules'] = {}
+        _attach_effective_rules_to_mod_instances(context_mods, rule_mgr)
         language_pack_owner_map = resolve_language_pack_ownership_for_mods(
             context_mods,
             user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
         )
         _log_startup_perf("get_initial_data", "rules_and_language_owner_ready", perf_start_at)
+        _attach_language_pack_ownership_to_mod_instances(context_mods, language_pack_owner_map)
         for mod in context_mods:
-            mod['language_pack_owner_result'] = language_pack_owner_map.get(
-                str(mod.get('package_id') or '').strip().lower(),
-                {
-                    "owners": [],
-                    "analyzed_owners": [],
-                    "relation_type": "unknown",
-                    "summary_confidence": "unknown",
-                    "analyzed_relation_type": "unknown",
-                    "analyzed_summary_confidence": "unknown",
-                }
-            )
             if mod['workshop_id'] and  mod['workshop_id'] in replacements_map:
                 mod['replacement'] = replacements_map[mod['workshop_id']]
             else:
@@ -3405,7 +3461,7 @@ class API:
             )
     
     @log_api_call
-    def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True, export_format: str = 'modsconfig', list_name: str | None = None, remember_dialog_dir: bool = False):
+    def load_order_export(self, active_ids: List[str], target_path: str|None = None, trigger_dialog: bool = True, export_format: str = 'modsconfig', list_name: str | None = None, remember_dialog_dir: bool = False, use_raw_package_ids: bool | None = None):
         """
         导出当前加载顺序到指定格式
         :param active_ids: 激活的 Mod 列表
@@ -3415,12 +3471,20 @@ class API:
             if not target_path and not trigger_dialog: trigger_dialog = True
             # 导出格式和列表名都透传给 LoadOrderManager，
             # 由底层统一决定生成 ModsConfig.xml 还是 ModList.xml。
+            use_raw_value = (
+                getattr(settings.config, "load_order_export_use_raw_package_ids", False)
+                if use_raw_package_ids is None else use_raw_package_ids
+            )
+            if isinstance(use_raw_value, str):
+                use_raw_value = use_raw_value.strip().lower() in {"1", "true", "yes", "on"}
+            preserve_package_tokens = not bool(use_raw_value)
             success = self.load_order_mgr.save_active_mods(
                 active_ids,
                 target_path,
                 trigger_dialog,
                 export_format=export_format,
-                list_name=list_name
+                list_name=list_name,
+                preserve_package_tokens=preserve_package_tokens,
             ) if self.load_order_mgr else False
             if success:
                 if remember_dialog_dir:
@@ -4907,7 +4971,7 @@ class API:
         """
         try:
             canonical_active_ids, preferred_tokens = self._canonicalize_load_order_ids(active_ids)
-            result = self.sorter.sort(canonical_active_ids) if self.sorter else {}
+            result = self.sorter.sort(canonical_active_ids, preferred_tokens=preferred_tokens) if self.sorter else {}
             if not result: return ApiResponse.error(tr("api.sort.engine_not_initialized", "排序失败，排序引擎未初始化"))
             result["sorted_ids"] = self._restore_load_order_tokens(result.get("sorted_ids", []), preferred_tokens)
             result["auto_activated"] = self._restore_load_order_tokens(result.get("auto_activated", []), preferred_tokens)
@@ -4941,7 +5005,7 @@ class API:
             canonical_target_ids, target_token_map = self._canonicalize_load_order_ids(package_ids)
             canonical_current_ids, current_token_map = self._canonicalize_load_order_ids(current_active_ids)
             context_mods = ModDAO.get_profile_mods(self.active_context)
-            mod_map = {m['package_id'].lower(): m for m in context_mods}
+            mod_map = _build_mod_map_for_load_order_tokens(context_mods, {**current_token_map, **target_token_map})
             final_ids = self.sorter.smart_insert_mods(canonical_target_ids, canonical_current_ids, mod_map)
             final_ids = self._restore_load_order_tokens(final_ids, {**current_token_map, **target_token_map})
             return ApiResponse.success(data=final_ids) if final_ids else ApiResponse.error(tr("api.sort.smart_insert_failed", "插入失败"))
@@ -6891,33 +6955,54 @@ class API:
         """
         # 1. 搜集当前启用的所有 Mod 数据
         installed_mods = ModDAO.get_profile_mods(self.active_context)
-        installed_pids = set([m['package_id'].lower() for m in installed_mods])
+        installed_map = {
+            parse_package_token(mod.get("package_id")).canonical_package_id: mod
+            for mod in installed_mods
+            if parse_package_token(mod.get("package_id")).canonical_package_id
+        }
+        installed_pids = set(installed_map)
+        rule_mgr = self.sorter.rule_mgr if (self.sorter and self.sorter.rule_mgr) else None
         missing_dependencies = {} # { "workshop_id": "name" }
         # 2. 遍历启用的 Mod，提取依赖要求
-        for pid in active_package_ids:
-            pid = pid.lower()
-            mod_data = next((m for m in installed_mods if m['package_id'].lower() == pid), None)
-            # 来源 A: 本地 About.xml 解析出的 rules
-            if mod_data and 'rules' in mod_data:
-                for dep in mod_data['rules'].get('dependencies', []):
-                    target_pid = dep['target_id'].lower()
-                    if target_pid not in installed_pids:
-                        # 缺失！通过外置数据库反查工坊 ID
-                        wid = ExtDAO.get_workshop_id_by_package(target_pid)
-                        if wid:
-                            missing_dependencies[wid] = target_pid # 暂存
-            # 来源 B: 直接查询外置数据库 (Ext_DB) 中的依赖
-            # (即使本地没写，社区库可能记录了隐藏依赖)
+        for raw_pid in active_package_ids:
+            token_info = parse_package_token(raw_pid)
+            pid = token_info.canonical_package_id
+            if not pid:
+                continue
+            mod_data = installed_map.get(pid)
+            selected_mod = select_mod_instance(mod_data, raw_pid)
+
+            if selected_mod:
+                if rule_mgr:
+                    _, effective_rules = resolve_mod_rules(rule_mgr, raw_pid, mod_data)
+                    dependency_rules = effective_rules.get("dependencies", [])
+                else:
+                    dependency_rules = selected_mod.get("dependencies_mods", [])
+                for raw_dep in dependency_rules:
+                    # 兼容旧缓存中直接保存包名字符串的依赖格式。
+                    dep = raw_dep if isinstance(raw_dep, dict) else {"package_id": raw_dep}
+                    target_pid = normalize_package_id(dep.get("target_id") or dep.get("package_id"))
+                    if not target_pid or target_pid in installed_pids:
+                        continue
+                    alternatives = [normalize_package_id(item) for item in dep.get("alternatives", [])]
+                    if any(item in installed_pids for item in alternatives if item):
+                        continue
+                    wid = ExtDAO.get_workshop_id_by_package(target_pid)
+                    if wid:
+                        missing_dependencies[wid] = target_pid
+
+            # 没有规则管理器时保留旧的外置库兜底；正常运行时外置规则已包含在 effective_rules 中，
+            # 不再额外按单一工坊包名重复判定，避免和 workshop_rules_as_dependency 开关不一致。
+            if rule_mgr:
+                continue
             self_wid = ExtDAO.get_workshop_id_by_package(pid)
             if self_wid:
-                # 调用 ext_db 的模型查询该 Mod 的全量云端依赖
                 meta = ExtDAO.get_manifest_by_workshop_id(self_wid)
                 if meta and meta.dependencies_mods:
                     dep_manifest_map = ExtDAO.get_manifests_by_workshop_ids(list(meta.dependencies_mods.keys()))
                     for dep_wid, dep_name in meta.dependencies_mods.items():
-                        # 反查依赖项的包名看本地有没有装
                         dep_meta = dep_manifest_map.get(str(dep_wid))
-                        dep_pid = dep_meta.package_id if dep_meta else None
+                        dep_pid = normalize_package_id(dep_meta.package_id if dep_meta else "")
                         if dep_pid and dep_pid not in installed_pids:
                             missing_dependencies[dep_wid] = dep_name
         if not missing_dependencies:

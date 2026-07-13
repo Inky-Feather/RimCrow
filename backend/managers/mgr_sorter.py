@@ -11,8 +11,30 @@ from backend.managers.mgr_rules import (
     POSITION_WEIGHT_DEFAULT,
     POSITION_WEIGHT_TOP,
     RuleManager,
+    resolve_mod_rules,
 )
 from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
+from backend.load_order.package_tokens import build_steam_package_token, parse_package_token, select_mod_instance
+
+
+def _canonical_package_id(value) -> str:
+    return parse_package_token(value).canonical_package_id
+
+
+def _build_instance_mod_map(all_mods_data: list[dict]) -> dict[str, dict]:
+    mod_map = {}
+    for mod in all_mods_data or []:
+        canonical_id = _canonical_package_id(mod.get("package_id"))
+        if not canonical_id:
+            continue
+        mod_map[canonical_id] = mod
+        workshop_variant = mod.get("coexist_workshop_variant")
+        if isinstance(workshop_variant, dict):
+            # 排序目标仍按裸包名连边；只有当前激活 token 需要拿到对应实例的原生规则。
+            steam_token = build_steam_package_token(canonical_id)
+            if steam_token:
+                mod_map[steam_token] = select_mod_instance(mod, steam_token)
+    return mod_map
 
 
 class AtomicGroup:
@@ -707,7 +729,12 @@ class OrderSorter:
 
         return order, warnings
 
-    def sort(self, active_ids: List[str], strategy: str | None = None):
+    def sort(
+        self,
+        active_ids: List[str],
+        strategy: str | None = None,
+        preferred_tokens: Dict[str, str] | None = None,
+    ):
         """
         最终排序：原子组 -> 权重修正 -> 依赖构图 -> 权重传播 -> 拓扑排序 (带名称稳定性)
         """
@@ -717,9 +744,16 @@ class OrderSorter:
         logger.info(f"开始排序 {len(active_ids)} 个 MOD，策略：{strategy}...")
         all_mods_data = ModDAO.get_profile_mods(self.context)
         # all_mods_data = ModDAO.get_profile_mods(self.context or None)
-        mod_map = {m['package_id'].lower(): m for m in all_mods_data}
+        mod_map = _build_instance_mod_map(all_mods_data)
+        # API 层为便于排序会把列表 token 暂时规范成裸包名；这里再按原 token
+        # 选择实际实例，避免共存工坊版的 About.xml 原生规则被本地版覆盖。
+        for canonical_id, preferred_token in (preferred_tokens or {}).items():
+            token_info = parse_package_token(preferred_token)
+            selected_mod = mod_map.get(token_info.canonical_package_id)
+            if token_info.source_preference == "steam" and isinstance(selected_mod, dict):
+                mod_map[token_info.canonical_package_id] = select_mod_instance(selected_mod, preferred_token)
         self.mod_map = mod_map
-        current_assets_ids = list(mod_map.keys())
+        current_assets_ids = [mid for mid in (_canonical_package_id(m.get('package_id')) for m in all_mods_data) if mid]
         from backend.database.dao import GroupDAO
         all_groups = GroupDAO.get_groups_structured_by_mod_ids(current_assets_ids) or []
         if not isinstance(all_groups, list):
@@ -734,19 +768,33 @@ class OrderSorter:
                 mod_groups_map[mid.lower()].append(g['name'])
         # 将分组名注入到 mod_map 中
         for mid, m_data in mod_map.items():
-            m_data['groups'] = mod_groups_map.get(mid, [])
+            m_data['groups'] = mod_groups_map.get(_canonical_package_id(mid), [])
 
-        self.effective_rules_cache = {} # 全局规则缓存字典
+        self.effective_rules_cache = {} # 本次排序的规则快照，缓存键保留实例 token
         for mid, m_data in mod_map.items():
-            self.effective_rules_cache[mid] = self.rule_mgr.get_effective_mod_rules(mid, m_data)
-            m_data['rules'] = self.effective_rules_cache[mid]
+            preferred_token = (preferred_tokens or {}).get(_canonical_package_id(mid), mid)
+            selected_mod, effective_rules = resolve_mod_rules(self.rule_mgr, preferred_token, m_data)
+            if selected_mod:
+                m_data = selected_mod
+                mod_map[mid] = selected_mod
+            self.effective_rules_cache[mid] = effective_rules
+            m_data['rules'] = effective_rules
         language_pack_owner_map = resolve_language_pack_ownership_for_mods(
-            list(mod_map.values()),
+            list(all_mods_data),
             user_mod_rules=self.rule_mgr.user_mod_rules,
         )
         for mid, m_data in mod_map.items():
+            canonical_id = _canonical_package_id(mid)
+            preferred_token = (preferred_tokens or {}).get(canonical_id, mid)
+            owner_key = (
+                build_steam_package_token(canonical_id)
+                if parse_package_token(preferred_token).source_preference == "steam"
+                else canonical_id
+            )
+            # 排序内部会把当前 token 暂时收敛为规范包名；若规范包名实际选中了工坊实例，
+            # 语言包归属也必须按该实例读取，不能因为 key 被收敛就回到本地实例结果。
             m_data['language_pack_owner_result'] = language_pack_owner_map.get(
-                mid,
+                owner_key,
                 {
                     "owners": [],
                     "analyzed_owners": [],
@@ -759,7 +807,13 @@ class OrderSorter:
         expanded_active_ids = list(active_ids)
         # 1. 将扩展后的激活列表转化为原子组
         groups, interlock_warnings = self.build_atomic_groups(expanded_active_ids, mod_map)
-        mod_to_group = {mid: g for g in groups for mid in g.mod_ids}
+        mod_to_group = {}
+        for g in groups:
+            for mid in g.mod_ids:
+                mod_to_group[mid] = g
+                canonical_id = _canonical_package_id(mid)
+                if canonical_id and canonical_id not in mod_to_group:
+                    mod_to_group[canonical_id] = g
         group_ids = [id(g) for g in groups]
         groups_by_id = {id(g): g for g in groups}
 
@@ -969,6 +1023,9 @@ class OrderSorter:
         在不打乱 current_list 现有顺序的前提下，为一批 target_ids 寻找最合适的插入点。
         """
         if not target_ids: return current_list
+        # 缓存键是规范包名，而本次 mod_map 可能因 `_steam` 选择了另一份原生文件；
+        # 智能插入必须以本次实例数据重算，不能复用上一次来源的规则。
+        self.effective_rules_cache = {}
         new_list = current_list.copy()
         existing_in_list = set(new_list) # 假设 current_list 中的 ID 也已是小写
         # 1. 自动扩展：提取所有 target_ids 包含的有效本地依赖项
@@ -986,7 +1043,7 @@ class OrderSorter:
             if not target_data: continue
             rules = self.effective_rules_cache.get(curr)
             if not rules:
-                rules = self.rule_mgr.get_effective_mod_rules(curr, target_data)
+                rules = resolve_mod_rules(self.rule_mgr, curr, target_data)[1]
                 self.effective_rules_cache[curr] = rules
             for dep in rules.get('dependencies', []):
                 dep_id = dep['target_id'] # 假设规则中的 ID 也是小写
@@ -1004,7 +1061,7 @@ class OrderSorter:
             if not target_data: continue
             rules = self.effective_rules_cache.get(tid)
             if not rules:
-                rules = self.rule_mgr.get_effective_mod_rules(tid, target_data)
+                rules = resolve_mod_rules(self.rule_mgr, tid, target_data)[1]
                 self.effective_rules_cache[tid] = rules
             weight = rules.get("weight_info", {}).get("final_weight", POSITION_WEIGHT_DEFAULT)
             to_insert.append({"id": tid, "weight": weight, "rules": rules})
@@ -1036,7 +1093,7 @@ class OrderSorter:
                 if not comp_rules:
                     # 如果缓存没有，尝试获取 (理论上应该都有，这是兜底)
                     comp_data = mod_map.get(comp_id, {})
-                    comp_rules = self.rule_mgr.get_effective_mod_rules(comp_id, comp_data)
+                    comp_rules = resolve_mod_rules(self.rule_mgr, comp_id, comp_data)[1]
                     self.effective_rules_cache[comp_id] = comp_rules
                 # C. 老模组必须在“我”之后 (老模组依赖/LoadAfter我) -> “我”必须在老模组之前
                 comp_afters = [r['target_id'] for r in comp_rules.get('load_after', [])] + \

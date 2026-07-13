@@ -297,6 +297,16 @@ export const useModStore = defineStore('mods', () => {
     applyInstallSourceHintToMod(ghostMod, canonicalId || id)
     return ghostMod
   }
+  const getAvailableModInstances = () => {
+    const tokens = new Set()
+    for (const mod of allModsMap.value.values()) {
+      const canonicalId = normalizeCanonicalId(mod?.package_id)
+      if (!canonicalId) continue
+      tokens.add(canonicalId)
+      if (mod?.coexist_workshop_variant) tokens.add(buildSteamPackageToken(canonicalId))
+    }
+    return [...tokens].map(token => takeModById(token)).filter(Boolean)
+  }
   const hasRealModById = (id) => {
     if (!id) return false
     const mod = resolveStoredMod(id)
@@ -583,7 +593,12 @@ export const useModStore = defineStore('mods', () => {
     Object.entries(patches).forEach(([packageId, patch]) => {
       const mod = allModsMap.value.get(normalizeCanonicalId(packageId))
       if (!mod || !patch || typeof patch !== 'object') return
-      Object.assign(mod, patch)
+      const { coexist_workshop_variant: workshopPatch, ...basePatch } = patch
+      Object.assign(mod, basePatch)
+      // enrichment 返回的是增量；共存实例必须合并到嵌套对象，不能覆盖整个实例导致原生规则等字段丢失。
+      if (workshopPatch && typeof workshopPatch === 'object' && mod.coexist_workshop_variant) {
+        Object.assign(mod.coexist_workshop_variant, workshopPatch)
+      }
     })
     const disabledPatches = payload?.disabled_mods && typeof payload.disabled_mods === 'object' ? payload.disabled_mods : {}
     disabledMods.value.forEach(mod => {
@@ -1543,7 +1558,7 @@ export const useModStore = defineStore('mods', () => {
     canUndoListHistory, canRedoListHistory,
 
     // 列表读取与基础写入
-    setMods, mergeModEnrichment, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, takeDisabledModByPathHash, hasRealModById, hasInstalledWorkshopId, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
+    setMods, mergeModEnrichment, reset, setActiveLoadBaseline, captureListHistorySnapshot, takeModById, getAvailableModInstances, takeDisabledModByPathHash, hasRealModById, hasInstalledWorkshopId, takeModListByIds, displayModName, displayModType, displayModIcon, fetchAndCacheGhostMods,
     isLanguagePackMod, getLanguagePackOwnerIds, canUseLanguagePackForIssueDetection, isDeclaredForCurrentLanguage,
     // 来源提示与列表选择
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,

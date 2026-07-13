@@ -178,6 +178,13 @@ export const dedupeNormalizedPackageIds = (values = []) => [...new Set(
     .filter(Boolean)
 )]
 
+// 列表项 token 会携带实例来源后缀，规则读取前不能提前压成裸包名。
+export const dedupeNormalizedPackageTokens = (values = []) => [...new Set(
+  (values || [])
+    .map(normalizePackageToken)
+    .filter(Boolean)
+)]
+
 // 用于组装显示列表时保持唯一值，避免上层反复手写 includes 判断。
 export const pushUnique = (list, value) => {
   if (!value || list.includes(value)) return

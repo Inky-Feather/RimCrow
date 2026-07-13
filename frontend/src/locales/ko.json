@@ -6113,6 +6113,8 @@
         },
         "export_start_dir": "시작 디렉터리 내보내기",
         "export_start_dir_desc": "내보내기 로드 순서 파일 선택기의 초기 폴더를 제어합니다. 기본 모드는 현재 프로필 백업 디렉터리 아래의 다른 폴더를 사용합니다. 마지막으로 성공한 내보내기 디렉터리를 사용한다는 것을 기억하세요. Custom은 아래의 고정 디렉터리를 사용합니다.",
+        "export_use_raw_package_ids": "로드 순서 내보내기에 원본 패키지 이름 사용",
+        "export_use_raw_package_ids_desc": "기본적으로 공존하는 모드 인스턴스를 구분할 수 있도록 _steam 같은 출처 접미사를 유지합니다. 켜면 출처 접미사 없이 패키지 이름을 내보냅니다. 자동 백업은 항상 출처 접미사를 유지합니다.",
         "game_install_path": "게임 설치 디렉토리",
         "game_install_path_desc": "기본 실행 파일이 있는 게임 설치 디렉터리입니다. 위치는 시스템에 따라 다릅니다. Windows에서 기본 Steam 경로는 일반적으로 다음과 같습니다.\nC:/프로그램 파일(x86)/Steam/steamapps/common/RimWorld",
         "import_start_dir": "시작 디렉터리 가져오기",

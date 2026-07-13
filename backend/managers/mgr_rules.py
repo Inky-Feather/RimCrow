@@ -13,6 +13,7 @@ from backend.utils.logger import logger
 from backend.database.dao import GroupDAO, ModDAO, normalize_interlock_payload, normalize_user_mod_data_payload
 from backend.settings import RULES_DIR, USER_RULES_PATH, settings
 from backend.utils.tools import current_ms, normalize_package_id
+from backend.load_order.package_tokens import parse_package_token, select_mod_instance
 from backend._version import __version__
 
 RULE_SOURCES = ["user", "native", "community", "dynamic", "workshop"]
@@ -89,7 +90,25 @@ def _resolve_import_group_mod_ids(raw_mod_ids: list[Any]) -> list[str]:
         resolved_ids.append(resolved_id)
 
     return resolved_ids
-    
+
+
+def resolve_mod_rules(rule_mgr: Any, package_token: Any, mod_full_data: dict | None) -> tuple[dict, Dict[str, Any]]:
+    """统一规则解析入口：token 只选实例，外置规则按规范包名合并。"""
+    mod_data = mod_full_data if isinstance(mod_full_data, dict) else {}
+    if not rule_mgr:
+        return select_mod_instance(mod_data, package_token), {}
+
+    resolver = getattr(rule_mgr, "resolve_effective_mod_rules", None)
+    if callable(resolver):
+        resolved = resolver(package_token, mod_data)
+        if isinstance(resolved, tuple) and len(resolved) == 2:
+            return resolved
+
+    selected_mod = select_mod_instance(mod_data, package_token)
+    canonical_id = parse_package_token(package_token).canonical_package_id or normalize_package_id(selected_mod.get("package_id"))
+    return selected_mod, rule_mgr.get_effective_mod_rules(canonical_id, selected_mod)
+
+
 class RuleManager:
     def __init__(self, context: ProfileContext):
         # 内存中的规则缓存
@@ -770,6 +789,14 @@ class RuleManager:
         except ValueError:
             return 999 # 未知来源优先级最低
         
+    def resolve_effective_mod_rules(self, package_token: str, mod_full_data: dict) -> tuple[dict, Dict[str, Any]]:
+        """选择实际实例后计算生效规则，避免调用方混淆 token 与规范包名。"""
+        token_info = parse_package_token(package_token)
+        selected_mod = select_mod_instance(mod_full_data, package_token)
+        canonical_id = token_info.canonical_package_id or normalize_package_id(selected_mod.get("package_id"))
+        rules = self.get_effective_mod_rules(canonical_id, selected_mod)
+        return selected_mod, rules
+
     def get_effective_mod_rules(self, mod_id: str, mod_full_data: dict) -> Dict[str, Any]:
         """
         获取该 Mod 生效的最终规则集（经过优先级合并和去重）。
@@ -783,7 +810,8 @@ class RuleManager:
             "weight_override": {"type": "top"|"bottom", "source": "user", "detail": "..."}
         }
         """
-        mid_l = mod_id.lower()
+        # token 后缀只用于选择共存实例；外置、社区、用户和内置规则均按规范包名共享。
+        mid_l = normalize_package_id(mod_id)
         
         # 定义结果容器，使用字典方便按 target_id 去重
         # 结构: { "target_id": { "source": "...", "priority": int, "detail": ... } }
@@ -1039,7 +1067,7 @@ class RuleManager:
             }
         # 情况 1：获取单个 Mod 的规则
         if package_id:
-            pid_l = package_id.lower().strip()
+            pid_l = normalize_package_id(package_id)
             mod = self.workshop_rules_cache.get(pid_l)
             return _transform(mod) if mod else {}
         # 情况 2：获取全量已生成的工坊规则

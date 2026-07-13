@@ -56,3 +56,34 @@ def is_steam_package_token(value: Any) -> bool:
 def build_steam_package_token(package_id: Any) -> str:
     canonical = strip_package_token_suffix(package_id)
     return f"{canonical}{STEAM_SUFFIX}" if canonical else ""
+
+
+def select_mod_instance(mod_record: dict[str, Any] | None, package_token: Any) -> dict[str, Any]:
+    """按加载顺序 token 选择实际模组实例，并保留规范包名用于规则匹配。
+
+    这里集中处理共存模组的来源选择。调用方不应再自行展开
+    ``coexist_workshop_variant``，否则很容易在读取原生规则前丢失来源信息。
+    返回副本，避免把临时的实例字段写回数据库查询结果。
+    """
+    if not isinstance(mod_record, dict):
+        return {}
+
+    token_info = parse_package_token(package_token or mod_record.get("package_id"))
+    canonical_id = token_info.canonical_package_id
+    if not canonical_id:
+        return {}
+
+    selected = dict(mod_record)
+    raw_variant = mod_record.get("coexist_workshop_variant")
+    is_workshop = False
+    if token_info.source_preference == "steam" and isinstance(raw_variant, dict):
+        is_workshop = True
+        for key, value in raw_variant.items():
+            selected[str(key)] = value
+
+    selected["package_id"] = canonical_id
+    selected["canonical_package_id"] = canonical_id
+    selected["active_package_token"] = token_info.normalized_token if is_workshop else canonical_id
+    selected["source_preference"] = "steam" if is_workshop else "local"
+    selected["is_coexistence"] = bool(is_workshop)
+    return selected

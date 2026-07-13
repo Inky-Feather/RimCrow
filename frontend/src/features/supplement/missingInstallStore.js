@@ -4,6 +4,7 @@ import { toast } from '../../shared/lib/common'
 import {
   dedupeInstallSources,
   dedupeNormalizedPackageIds,
+  dedupeNormalizedPackageTokens,
   getInstallSourceKey,
   normalizeInstallSource,
   normalizePackageId,
@@ -218,9 +219,10 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
 
   const collectVersionReplacementWarnings = (activeIds = [], installSourceMap = {}) => {
     const rows = []
-    dedupeNormalizedPackageIds(activeIds).forEach(packageId => {
+    dedupeNormalizedPackageTokens(activeIds).forEach(activeToken => {
+      const packageId = normalizePackageId(activeToken)
       if (!packageId || !modStore.hasRealModById(packageId)) return
-      const mod = modStore.takeModById(packageId)
+      const mod = modStore.takeModById(activeToken)
       const versionInfo = getVersionInfo(currentGameVersion.value, mod?.supported_versions || [])
       if (versionInfo.tone !== 'danger') return
       const { replacementSources } = resolveSourcesForPackage(packageId, installSourceMap)
@@ -234,10 +236,10 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
       })
       if (choiceOptions.length === 0) return
       rows.push({
-        id: `warn-version:${packageId}`,
+        id: `warn-version:${activeToken}`,
         groupKey: 'version_replacement_warn',
         packageId,
-        title: modStore.displayModName(packageId),
+        title: modStore.displayModName(activeToken),
         reasonLabels: [t('dialog.missing_install.reason.version_mismatch', '版本不符')],
         choiceOptions,
         defaultChoiceId: choiceOptions.find(choice => choice?.type === 'current')?.id || choiceOptions[0]?.id || '',
@@ -358,8 +360,8 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
 
   const buildMissingDependencyOwnerMap = (activeIds = []) => {
     const ownerMap = new Map()
-    const normalizedActiveIds = dedupeNormalizedPackageIds(activeIds)
-    normalizedActiveIds.forEach(ownerId => {
+    const activeTokens = dedupeNormalizedPackageTokens(activeIds)
+    activeTokens.forEach(ownerId => {
       if (!modStore.hasRealModById(ownerId)) return
       const owner = modStore.takeModById(ownerId)
       if (isIssueIgnored(owner, ISSUE_TYPE.ERROR_MISSING_DEPENDENCY)) return
@@ -382,7 +384,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
   }
 
   const buildAnalysisSignature = (activeIds = []) => (
-    `${dedupeNormalizedPackageIds(activeIds).join('|')}::${modStore.dataVersion}::${currentGameVersion.value || ''}`
+    `${dedupeNormalizedPackageTokens(activeIds).join('|')}::${modStore.dataVersion}::${currentGameVersion.value || ''}`
   )
 
   const buildGroups = (rows = []) => (
@@ -425,20 +427,22 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
   )
 
   const buildAnalysis = async (activeIds = []) => {
-    const normalizedActiveIds = dedupeNormalizedPackageIds(activeIds)
-    const initialSignature = buildAnalysisSignature(normalizedActiveIds)
+    // 活跃列表的 token 用来定位实际实例；安装来源和缺失目标仍按裸包名合并。
+    const activeTokens = dedupeNormalizedPackageTokens(activeIds)
+    const normalizedActiveIds = dedupeNormalizedPackageIds(activeTokens)
+    const initialSignature = buildAnalysisSignature(activeTokens)
     if (cachedAnalysis.value.signature === initialSignature) {
       return cachedAnalysis.value.payload
     }
 
-    const dependencyOwnerMap = buildMissingDependencyOwnerMap(normalizedActiveIds)
+    const dependencyOwnerMap = buildMissingDependencyOwnerMap(activeTokens)
     const relevantIds = dedupeNormalizedPackageIds([
       ...normalizedActiveIds,
       ...dependencyOwnerMap.keys(),
     ]).filter(packageId => !isExcludedPackageId(packageId))
 
     await modStore.fetchAndCacheGhostMods(relevantIds)
-    const signature = buildAnalysisSignature(normalizedActiveIds)
+    const signature = buildAnalysisSignature(activeTokens)
     if (cachedAnalysis.value.signature === signature) {
       return cachedAnalysis.value.payload
     }
@@ -561,11 +565,12 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
       })
     })
 
-    normalizedActiveIds
-      .filter(packageId => !isExcludedPackageId(packageId))
-      .forEach(packageId => {
+    activeTokens
+      .map(activeToken => ({ activeToken, packageId: normalizePackageId(activeToken) }))
+      .filter(({ packageId }) => packageId && !isExcludedPackageId(packageId))
+      .forEach(({ activeToken, packageId }) => {
         if (!modStore.hasRealModById(packageId)) return
-        const mod = modStore.takeModById(packageId)
+        const mod = modStore.takeModById(activeToken)
         const versionInfo = getVersionInfo(currentGameVersion.value, mod?.supported_versions || [])
         if (versionInfo.tone === 'danger') return
         const { replacementSources } = resolveSourcesForPackage(packageId, installSourceMap)
@@ -579,10 +584,10 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
         })
         if (choiceOptions.length <= 1) return
         rows.push({
-          id: `optional:${packageId}`,
+          id: `optional:${activeToken}`,
           groupKey: 'optional_install',
           packageId,
-          title: modStore.displayModName(packageId),
+          title: modStore.displayModName(activeToken),
           reasonLabels: [t('dialog.missing_install.reason.optional_install', '可选补装')],
           choiceOptions,
           defaultChoiceId: choiceOptions.find(choice => choice?.type === 'current')?.id || choiceOptions[0]?.id || '',
@@ -590,7 +595,7 @@ export const useMissingInstallStore = defineStore('missingInstall', () => {
         })
       })
 
-    rows.push(...collectVersionReplacementWarnings(normalizedActiveIds, installSourceMap))
+    rows.push(...collectVersionReplacementWarnings(activeTokens, installSourceMap))
 
     Object.assign(summary, buildScopedSummary(summary, rows))
     const payload = {

@@ -58,6 +58,7 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { useGroupStore } from './stores/groupStore'
 import { useModStore } from './stores/modStore'
+import { normalizePackageId, normalizePackageToken } from './lib/modIdentity'
 import { t } from '../../shared/i18n.js'
 
 const props = defineProps({
@@ -142,8 +143,8 @@ const takeGroupNamesByMod = (mod) => {
   return normalizeTextList(groups.map(group => group?.name))
 }
 
-const normalizePackageId = (value) => String(value || '').trim().toLowerCase()
 const activeCanonicalIdSet = computed(() => new Set((modStore.activeIds || []).map(normalizePackageId).filter(Boolean)))
+const activeTokenSet = computed(() => new Set((modStore.activeIds || []).map(normalizePackageToken).filter(Boolean)))
 
 const takeLanguagePacksByMod = (mod) => {
   if (!form.includeLanguagePacks || !mod || modStore.isLanguagePackMod(mod) || modStore.isDeclaredForCurrentLanguage(mod)) return []
@@ -151,12 +152,14 @@ const takeLanguagePacksByMod = (mod) => {
   if (!ownerId) return []
   const strictPacks = []
   const fallbackPacks = []
-  for (const languagePack of modStore.allModsMap.values()) {
+  for (const languagePack of modStore.getAvailableModInstances()) {
     if (!modStore.isLanguagePackMod(languagePack) || !modStore.canUseLanguagePackForIssueDetection(languagePack)) continue
     if (!modStore.getLanguagePackOwnerIds(languagePack).includes(ownerId)) continue
     ;(modStore.isDeclaredForCurrentLanguage(languagePack) ? strictPacks : fallbackPacks).push(languagePack)
   }
   const activePack = [...strictPacks, ...fallbackPacks].find(languagePack => (
+    activeTokenSet.value.has(normalizePackageToken(languagePack?.active_package_token || languagePack?.package_id))
+  )) || [...strictPacks, ...fallbackPacks].find(languagePack => (
     activeCanonicalIdSet.value.has(normalizePackageId(languagePack?.package_id))
   ))
   const pickedPack = activePack || strictPacks[0] || fallbackPacks[0]

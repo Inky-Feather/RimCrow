@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useModStore } from '../mod/stores/modStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { deepClone, toast, checkResult, toUserMessage } from '../../shared/lib/common'
+import { normalizePackageId } from '../mod/lib/modIdentity'
 import { t } from '../../shared/i18n.js'
 
 // 动态规则支持属性映射
@@ -109,15 +110,17 @@ export const useRuleStore = defineStore('rules', () => {
   // --- 核心：计算当前 Mod 的所有约束视图 ---
   // 将分散的数据聚合为： { loadAfter: [{id, source, note}], loadBefore: [...], incompatible: [...] }
   const currentConstraints = computed(() => {
-    const pid = targetId.value?.toLowerCase()
+    // currentId 可能带 `_steam`；它只负责选择实际文件，规则表和目标匹配仍使用规范包名。
+    const selectedToken = currentId.value || modStore.lastSelectedMod?.active_package_token || targetId.value
+    const pid = normalizePackageId(selectedToken)
     const result = { loadAfter: [], loadBefore: [], incompatible: [] }
     if (!pid) return result
 
     // 1. Native (About.xml) - 从 modStore 获取
-    const mod = modStore.takeModById(pid)
+    const mod = modStore.takeModById(selectedToken)
     if (mod) {
       mod.load_after_mods?.forEach(d => result.loadAfter.push({ id: d.package_id, source: 'native' }))
-    //   mod.dependencies_mods?.forEach(d => result.loadAfter.push({ id: d.package_id, source: 'native' }))
+      mod.dependencies_mods?.forEach(d => result.loadAfter.push({ id: d.package_id, source: 'native' }))
       mod.load_before_mods?.forEach(d => result.loadBefore.push({ id: d.package_id, source: 'native' }))
       mod.incompatible_mods?.forEach(d => result.incompatible.push({ id: d.package_id, source: 'native' }))
     }
@@ -147,7 +150,10 @@ export const useRuleStore = defineStore('rules', () => {
     // 4. Workshop Rules
     const workshop = workshopModRules.value[pid]
     if (workshop) {
-      Object.keys(user.loadAfter || {}).forEach(id =>
+      // 强依赖模式由后端放在 dependencies；编辑器仍将它展示为“前置”关系，
+      // 这样规则来源视图与实际排序/补齐判定保持一致。
+      const workshopAfter = { ...(workshop.loadAfter || {}), ...(workshop.dependencies || {}) }
+      Object.keys(workshopAfter).forEach(id =>
         result.loadAfter.push({ id, source: 'workshop' }))
     }
 
