@@ -676,6 +676,7 @@
       "no_file_selected": "선택한 파일이 없습니다.",
       "no_folder_selected": "선택한 폴더가 없습니다.",
       "no_save_dir_selected": "저장 폴더를 선택하지 않았습니다.",
+      "empty_load_order": "파일을 읽었지만 가져올 수 있는 로드 순서를 찾지 못했습니다.",
       "parse_failed": "파일을 구문 분석하지 못했습니다."
     },
     "file_search": {
@@ -745,7 +746,8 @@
       "active_mods_empty": "활성 모드 목록이 비어 있거나 파일을 읽을 수 없습니다.",
       "disk_changed": "디스크의 로드 순서가 외부에서 변경되었습니다. 갈등을 먼저 해결하세요.",
       "game_config_missing": "게임 구성 경로가 지정되지 않았습니다.",
-      "manager_not_initialized": "로드 순서 관리자가 초기화되지 않았습니다."
+      "manager_not_initialized": "로드 순서 관리자가 초기화되지 않았습니다.",
+      "saved_with_backup_error": "로드 순서는 저장되었지만 자동 백업이 완료되지 않았습니다. 자세한 내용은 시스템 로그에 기록되었습니다."
     },
     "log": {
       "file_not_found": "로그 파일을 찾을 수 없습니다",

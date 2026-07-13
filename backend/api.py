@@ -850,7 +850,7 @@ class API:
             self.active_context,
             runtime_link_sync_handler=self._sync_runtime_links_after_scan,
         )
-        self.load_order_mgr = LoadOrderManager(self.active_context)
+        self.load_order_mgr = LoadOrderManager(self.active_context, rotate_backups=True)
         self.game_log_mgr = GameLogManager(self.active_context)
         self.sorter = OrderSorter(self.active_context)
         # 启动新的实时监视器
@@ -929,7 +929,6 @@ class API:
             raise ValueError("只能操作当前环境的备份文件")
         if source_path.suffix.lower() not in {'.xml', '.rml'}:
             raise ValueError("仅支持处理 XML 或 RML 备份文件")
-
         return source_path, backup_root, context
 
     def _handle_app_version_upgrade(self):
@@ -3362,8 +3361,14 @@ class API:
             source_profile_name=profile.name if profile else "",
         )
         # 对于 workshop id 列表这类文件，可能没有 package_id，但仍然是有效输入。
-        if not result["active_ids"] and not result["workshop_ids"]:
+        if res.get("errors"):
             return ApiResponse.error(tr("api.file.parse_failed", "解析文件出错。"))
+        # 解析过程没报错但没有任何可导入列表时，给用户警告而不是当成系统错误。
+        if not result["active_ids"] and not result["workshop_ids"]:
+            return ApiResponse.warning(
+                tr("api.file.empty_load_order", "文件已读取，但没有识别到可导入的排序列表。"),
+                result,
+            )
         if from_dialog:
             self._remember_load_order_dialog_dir("import", file)
         return ApiResponse.success(result)
@@ -3386,8 +3391,14 @@ class API:
             source_profile_name=profile.name if profile else "",
             list_name_override=Path(normalized_name).stem,
         )
-        if not result["active_ids"] and not result["workshop_ids"]:
+        if res.get("errors"):
             return ApiResponse.error(tr("api.file.parse_failed", "解析文件出错。"))
+        # 浏览器拖入也保持同样语义：解析错误是 error，空列表是 warning。
+        if not result["active_ids"] and not result["workshop_ids"]:
+            return ApiResponse.warning(
+                tr("api.file.empty_load_order", "文件已读取，但没有识别到可导入的排序列表。"),
+                result,
+            )
         return ApiResponse.success(result)
     
     @log_api_call
@@ -3445,12 +3456,21 @@ class API:
             success = self.load_order_mgr.save_active_mods(active_ids, is_dirty=is_dirty) if self.load_order_mgr else False
             if success:
                 latest = self.load_order_mgr.read_active_mods() if self.load_order_mgr else {}
-                return ApiResponse.success({
+                payload = {
                     "saved": True,
                     "version_token": latest.get("version_token", current_token if self.load_order_mgr else {}),
                     "modify_time": latest.get("modify_time", 0),
                     "active_ids": latest.get("active_mods", []),
-                })
+                }
+                backup_error = str(getattr(self.load_order_mgr, "last_backup_error", "") or "").strip()
+                if backup_error:
+                    # 主排序文件已保存成功，备份问题单独提示，避免用户误以为排序保存失败。
+                    return ApiResponse.warning(
+                        tr("api.load_order.saved_with_backup_error", "排序文件已保存，但自动备份未完成。详细原因已写入系统日志。"),
+                        payload,
+                        code="LOAD_ORDER.BACKUP_FAILED",
+                    )
+                return ApiResponse.success(payload)
             return ApiResponse.warning(tr("api.common.save_cancelled", "取消保存"))
         except Exception as e:
             return ApiResponse.error(
@@ -3594,7 +3614,7 @@ class API:
         """获取所有备份文件路径"""
         try:
             context, profile = self._resolve_load_order_scope(profile_id)
-            load_order_mgr = LoadOrderManager(context)
+            load_order_mgr = LoadOrderManager(context, rotate_backups=False)
             backups = load_order_mgr.get_all_backups() if load_order_mgr else {"today": [], "earlier": [], "other": []}
             return ApiResponse.success({
                 **backups,
@@ -3713,7 +3733,7 @@ class API:
                 context={"path": path, "new_name": new_name, "profile_id": profile_id},
                 user_message=tr("errors.backup.rename_failed", "重命名备份失败。请检查备份名称、文件占用状态和目录权限。"),
             )
-    
+
     @log_api_call
     def game_launch(self, profile_id: str):
         """启动游戏"""

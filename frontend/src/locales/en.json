@@ -676,6 +676,7 @@
       "no_file_selected": "No file selected",
       "no_folder_selected": "No folder selected",
       "no_save_dir_selected": "No save folder selected",
+      "empty_load_order": "The file was read, but no importable load order was found.",
       "parse_failed": "Failed to parse the file."
     },
     "file_search": {
@@ -745,7 +746,8 @@
       "active_mods_empty": "The active mod list is empty, or the file could not be read.",
       "disk_changed": "The load order on disk was changed externally. Resolve the conflict first.",
       "game_config_missing": "Game config path is not specified",
-      "manager_not_initialized": "Load order manager is not initialized"
+      "manager_not_initialized": "Load order manager is not initialized",
+      "saved_with_backup_error": "The load order was saved, but automatic backup did not complete. Details were written to the system log."
     },
     "log": {
       "file_not_found": "Log file not found",

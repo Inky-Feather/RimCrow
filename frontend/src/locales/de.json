@@ -676,6 +676,7 @@
       "no_file_selected": "Keine Datei ausgewählt",
       "no_folder_selected": "Kein Ordner ausgewählt",
       "no_save_dir_selected": "Kein Speicherordner ausgewählt",
+      "empty_load_order": "Die Datei wurde gelesen, aber es wurde keine importierbare Ladereihenfolge gefunden.",
       "parse_failed": "Die Datei konnte nicht analysiert werden."
     },
     "file_search": {
@@ -745,7 +746,8 @@
       "active_mods_empty": "Die aktive Mod-Liste ist leer oder die Datei konnte nicht gelesen werden.",
       "disk_changed": "Die Ladereihenfolge auf der Festplatte wurde extern geändert. Lösen Sie zunächst den Konflikt.",
       "game_config_missing": "Der Spielkonfigurationspfad ist nicht angegeben",
-      "manager_not_initialized": "Der Ladereihenfolge-Manager ist nicht initialisiert"
+      "manager_not_initialized": "Der Ladereihenfolge-Manager ist nicht initialisiert",
+      "saved_with_backup_error": "Die Ladereihenfolge wurde gespeichert, aber die automatische Sicherung wurde nicht abgeschlossen. Details wurden ins Systemprotokoll geschrieben."
     },
     "log": {
       "file_not_found": "Protokolldatei nicht gefunden",

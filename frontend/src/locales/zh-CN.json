@@ -671,6 +671,7 @@
       "workshop_db_started": "社区工坊数据库开始更新"
     },
     "file": {
+      "empty_load_order": "文件已读取，但没有识别到可导入的排序列表。",
       "invalid_save_dir": "请选择有效的保存目录",
       "no_export_path_selected": "未选择导出路径",
       "no_file_selected": "未选择文件",
@@ -745,7 +746,8 @@
       "active_mods_empty": "已启用的 Mod 为空，或文件读取失败。",
       "disk_changed": "磁盘加载顺序已被外部修改，请先处理冲突。",
       "game_config_missing": "未指定游戏配置路径",
-      "manager_not_initialized": "加载顺序管理器未初始化"
+      "manager_not_initialized": "加载顺序管理器未初始化",
+      "saved_with_backup_error": "排序文件已保存，但自动备份未完成。详细原因已写入系统日志。"
     },
     "log": {
       "file_not_found": "找不到日志文件",

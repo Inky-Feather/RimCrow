@@ -66,6 +66,7 @@ class TestProfileManager(unittest.TestCase):
                 user_data_path="C:/Profiles/profile-a",
                 use_workshop_mods=True,
                 use_self_mods=False,
+                run_commands=["-logfile=Player.log"],
                 inactive_mods_order=["mod.b", "mod.a"],
                 temp_mods_order=["mod.temp"],
             )
@@ -75,6 +76,7 @@ class TestProfileManager(unittest.TestCase):
             context = manager.build_profile_context("profile-a")
 
         self.assertEqual(context.profile_id, "profile-a")
+        self.assertEqual(context.run_commands, ["-logfile=Player.log"])
         self.assertEqual(context.inactive_mods_order, ["mod.b", "mod.a"])
         self.assertEqual(context.temp_mods_order, ["mod.temp"])
 
@@ -554,6 +556,20 @@ class TestProfileManager(unittest.TestCase):
 
 
 class TestProfileContext(unittest.TestCase):
+    def test_to_dict_includes_run_commands(self):
+        context = ProfileContext(
+            profile_id="default",
+            game_version="",
+            game_install_path="",
+            user_data_path="",
+            prefer_steam_launch=False,
+            use_workshop_mods=False,
+            use_self_mods=False,
+            run_commands=["-logfile=Player.log"],
+        )
+
+        self.assertEqual(context.to_dict()["run_commands"], ["-logfile=Player.log"])
+
     def test_to_dict_keeps_empty_derived_paths_empty(self):
         context = ProfileContext(
             profile_id="default",

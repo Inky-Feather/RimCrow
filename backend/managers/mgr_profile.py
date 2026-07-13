@@ -34,6 +34,7 @@ class ProfileContext:
     prefer_steam_launch: bool
     use_workshop_mods: bool
     use_self_mods: bool
+    run_commands: list = field(default_factory=list)
     inactive_mods_order: list = field(default_factory=list)
     temp_mods_order: list = field(default_factory=list)
     is_steam: bool = False
@@ -231,7 +232,7 @@ class ProfileManager:
         创建新版本环境
         :param copy_current_data: 是否从当前环境复制 Config 和 Saves 到新环境作为初始状态
         """
-        game_install_path = normalize_rimworld_install_root(data.get('game_install_path'))
+        game_install_path = normalize_rimworld_install_root(str(data.get('game_install_path') or ''))
         # 验证游戏安装路径是否存在
         if not GameManager.detect_executable(game_install_path):
             raise ValueError(f"Game executable not found: {game_install_path}")
@@ -408,6 +409,7 @@ class ProfileManager:
             prefer_steam_launch=runtime_flags['prefer_steam_launch'],
             use_workshop_mods=runtime_flags['use_workshop_mods'],
             use_self_mods=profile.use_self_mods,
+            run_commands=list(getattr(profile, 'run_commands', None) or []),
             inactive_mods_order=list(profile.inactive_mods_order or []),
             temp_mods_order=list(getattr(profile, 'temp_mods_order', []) or []),
             is_steam=runtime_flags['is_steam'],

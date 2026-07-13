@@ -180,7 +180,13 @@ class TestLoadOrderManagerSave(unittest.TestCase):
                     "package_token": "author.workshop_steam",
                 }],
             }
-            manager._write_rml_file = lambda _path, entries: captured_entries.extend(entries)
+            original_write_rml_file = manager._write_rml_file
+
+            def capture_backup(path, entries):
+                captured_entries.extend(entries)
+                original_write_rml_file(path, entries)
+
+            manager._write_rml_file = capture_backup
 
             manager._create_backup()
 

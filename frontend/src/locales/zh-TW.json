@@ -676,6 +676,7 @@
       "no_file_selected": "未選擇檔案",
       "no_folder_selected": "未選擇資料夾",
       "no_save_dir_selected": "未選擇儲存目錄",
+      "empty_load_order": "檔案已讀取，但沒有識別到可匯入的排序列表。",
       "parse_failed": "解析檔案出錯。"
     },
     "file_search": {
@@ -745,7 +746,8 @@
       "active_mods_empty": "已啟用的 Mod 為空，或檔案讀取失敗。",
       "disk_changed": "磁碟載入順序已被外部修改，請先處理衝突。",
       "game_config_missing": "未指定遊戲配置路徑",
-      "manager_not_initialized": "載入順序管理器未初始化"
+      "manager_not_initialized": "載入順序管理器未初始化",
+      "saved_with_backup_error": "排序檔案已儲存，但自動備份未完成。詳細原因已寫入系統日誌。"
     },
     "log": {
       "file_not_found": "找不到日誌檔案",

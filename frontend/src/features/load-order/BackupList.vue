@@ -807,9 +807,9 @@ const handleDelete = async (e, item) => {
     type: 'error'
   }, e?.target)
   if (!confirmed) return
-  // 调用后端删除接口
+  const wasCurrent = orderStore.currentBackupFile === item.path
   await appStore.deletePath(item.path, false)
-  if (orderStore.currentBackupFile == item.path) {
+  if (wasCurrent) {
     orderStore.clearBackupOrder()
     appStore.uiState.showDiffDrawer = false
   }
