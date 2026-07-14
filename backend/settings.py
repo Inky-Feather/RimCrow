@@ -832,10 +832,12 @@ class SettingsManager:
         if old_self_mods_path != new_self_mods_path or \
            old_steamcmd_path != new_steamcmd_path:
             from backend.managers.mgr_files import FileManager
-            FileManager.sync_steamcmd_root_link(
+            sync_ok = FileManager.sync_steamcmd_root_link(
                 old_mods_path=old_self_mods_path,
                 move_old_data=self.config.move_old_self_mods
             )
+            if not sync_ok:
+                normalization_warnings.append("steamcmd_junction_sync_failed")
         self.save()
         return normalization_warnings
 

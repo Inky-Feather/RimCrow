@@ -12,6 +12,7 @@ from PIL import Image
 from webview.util import parse_file_type
 
 from backend.managers.mgr_files import FileManager, LocalAssetHandler, PathChecker
+from backend.settings import settings
 from backend.utils.tools import normalize_path_for_storage
 
 
@@ -344,6 +345,145 @@ class TestFileManager(unittest.TestCase):
 
             self.assertTrue(result["pass"])
             self.assertIn("steamcmd.sh", result["msg"])
+
+    def test_windows_junction_support_rejects_fat_file_systems(self):
+        with (
+            patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+            patch.object(FileManager, "_get_windows_filesystem_type", return_value="exFAT"),
+        ):
+            self.assertFalse(FileManager._is_junction_supported(r"E:\steamcmd"))
+
+        with (
+            patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+            patch.object(FileManager, "_get_windows_filesystem_type", return_value=""),
+        ):
+            self.assertTrue(FileManager._is_junction_supported(r"E:\steamcmd"))
+
+    def test_sync_managed_links_stops_before_deleting_on_unsupported_filesystem(self):
+        with (
+            patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+            patch.object(FileManager, "_get_windows_filesystem_type", return_value="exFAT"),
+            patch.object(FileManager, "sync_links") as sync_links,
+        ):
+            success, failure_message = FileManager.sync_managed_links(r"E:\Profile\Mods", [])
+
+        self.assertFalse(success)
+        self.assertIn("NTFS", failure_message)
+        sync_links.assert_not_called()
+
+    def test_check_steamcmd_path_warns_when_windows_junction_is_unsupported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steamcmd_root = Path(temp_dir) / "steamcmd"
+            steamcmd_exe = steamcmd_root / "steamcmd.exe"
+            steamcmd_root.mkdir(parents=True)
+            steamcmd_exe.write_text("", encoding="utf-8")
+
+            with (
+                patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+                patch.object(FileManager, "_get_windows_filesystem_type", return_value="exFAT"),
+            ):
+                result = PathChecker.check_steamcmd_path(str(steamcmd_root))
+
+            self.assertTrue(result["pass"])
+            self.assertEqual(result["type"], "warn")
+            self.assertIn("NTFS", result["msg"])
+
+    def test_check_steamcmd_path_checks_download_directory_filesystem(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steamcmd_root = Path(temp_dir) / "steamcmd"
+            steamcmd_exe = steamcmd_root / "steamcmd.exe"
+            steamcmd_root.mkdir(parents=True)
+            steamcmd_exe.write_text("", encoding="utf-8")
+
+            def filesystem_type(path):
+                return "exFAT" if str(path).endswith(os.path.join("content", "294100")) else "NTFS"
+
+            with (
+                patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+                patch.object(FileManager, "_get_windows_filesystem_type", side_effect=filesystem_type),
+            ):
+                result = PathChecker.check_steamcmd_path(str(steamcmd_root))
+
+            self.assertTrue(result["pass"])
+            self.assertEqual(result["type"], "warn")
+            self.assertIn(str(steamcmd_root / "steamapps" / "workshop" / "content" / "294100"), result["msg"])
+
+    def test_settings_update_warns_when_steamcmd_link_sync_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            original_self_mods = settings.config.self_mods_path
+            original_steamcmd_path = settings.config.steamcmd_path
+            original_steamcmd_mods = settings.config.steamcmd_mods_path
+            custom_mods = str(Path(temp_dir) / "custom-mods")
+            self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods)
+            self.addCleanup(setattr, settings.config, "steamcmd_path", original_steamcmd_path)
+            self.addCleanup(setattr, settings.config, "steamcmd_mods_path", original_steamcmd_mods)
+
+            with (
+                patch("backend.managers.mgr_files.FileManager.sync_steamcmd_root_link", return_value=False),
+                patch.object(settings, "save") as save,
+            ):
+                warnings = settings.update_from_dict({"self_mods_path": custom_mods})
+
+            self.assertIn("steamcmd_junction_sync_failed", warnings)
+            save.assert_called_once()
+
+    def test_sync_steamcmd_root_link_uses_steamcmd_directory_when_default_storage_is_empty(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            default_mods = temp_root / "mods"
+            steamcmd_mods = temp_root / "steamcmd" / "steamapps" / "workshop" / "content" / "294100"
+            original_self_mods = settings.config.self_mods_path
+            original_steamcmd_mods = settings.config.steamcmd_mods_path
+            self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods)
+            self.addCleanup(setattr, settings.config, "steamcmd_mods_path", original_steamcmd_mods)
+            settings.config.self_mods_path = str(default_mods)
+            settings.config.steamcmd_mods_path = str(steamcmd_mods)
+
+            with (
+                patch("backend.managers.mgr_files.MODS_DIR", default_mods),
+                patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+                patch.object(FileManager, "_get_windows_filesystem_type", return_value="FAT32"),
+                patch.object(settings, "save") as save,
+                patch("backend.managers.mgr_files.subprocess.run") as run,
+            ):
+                self.assertTrue(FileManager.sync_steamcmd_root_link())
+
+            self.assertEqual(settings.config.self_mods_path, str(steamcmd_mods))
+            self.assertFalse(default_mods.exists())
+            self.assertTrue(steamcmd_mods.is_dir())
+            save.assert_called_once()
+            run.assert_not_called()
+
+    def test_sync_steamcmd_root_link_does_not_replace_nonempty_or_custom_storage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            default_mods = temp_root / "mods"
+            steamcmd_mods = temp_root / "steamcmd" / "steamapps" / "workshop" / "content" / "294100"
+            original_self_mods = settings.config.self_mods_path
+            original_steamcmd_mods = settings.config.steamcmd_mods_path
+            self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods)
+            self.addCleanup(setattr, settings.config, "steamcmd_mods_path", original_steamcmd_mods)
+
+            for storage, should_create_file in ((default_mods, True), (temp_root / "custom-mods", False)):
+                with self.subTest(storage=storage):
+                    if should_create_file:
+                        storage.mkdir()
+                        (storage / "existing-mod").mkdir()
+                    settings.config.self_mods_path = str(storage)
+                    settings.config.steamcmd_mods_path = str(steamcmd_mods)
+
+                    with (
+                        patch("backend.managers.mgr_files.MODS_DIR", default_mods),
+                        patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+                        patch.object(FileManager, "_get_windows_filesystem_type", return_value="FAT"),
+                        patch.object(settings, "save") as save,
+                        patch("backend.managers.mgr_files.subprocess.run") as run,
+                    ):
+                        self.assertFalse(FileManager.sync_steamcmd_root_link())
+
+                    self.assertEqual(settings.config.self_mods_path, str(storage))
+                    save.assert_not_called()
+                    run.assert_not_called()
 
 
 if __name__ == "__main__":

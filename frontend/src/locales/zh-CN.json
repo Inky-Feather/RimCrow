@@ -847,6 +847,7 @@
       "ripgrep_missing": "ripgrep 路径不存在",
       "ripgrep_missing_executable": "目录下未找到 rg.exe，可在外部工具检查中下载安装",
       "ripgrep_not_dir": "ripgrep 路径必须是目录",
+      "runtime_link_deployment_unsupported": "当前环境的模组目录所在磁盘不支持文件链接，无法通过文件链接加载模组：{path}\n请将该目录改到 NTFS 磁盘后重试。",
       "steam_client": "Steam 客户端：{path}",
       "steam_empty": "未指定 Steam 路径",
       "steam_macos_executable_missing": "路径下未找到 Steam.app/Contents/MacOS/steam_osx",
@@ -856,6 +857,7 @@
       "steamcmd_client": "SteamCMD 客户端：{path}",
       "steamcmd_contains_chinese": "SteamCMD 路径不能包含中文",
       "steamcmd_empty": "未指定 SteamCMD 路径",
+      "steamcmd_junction_unsupported": "当前 SteamCMD 下载目录所在磁盘不支持目录连接。下载目录：{path}。管理器默认下载目录为空时，软件会自动使用该目录；已有模组或自定义下载目录时，请改用 NTFS 磁盘，或将管理器下载模组路径设为这个目录。",
       "target_name": "路径",
       "texture_tools_empty": "未指定贴图工具目录",
       "texture_tools_executable": "贴图工具：{path}",
@@ -4536,7 +4538,8 @@
       },
       "save_failed": "保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。",
       "secret_storage_warning": "部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。",
-      "self_mods_path_reset": "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。"
+      "self_mods_path_reset": "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。",
+      "steamcmd_junction_sync_failed": "当前磁盘无法连接 SteamCMD 下载目录，已保留你的管理器下载目录设置，但 SteamCMD 下载的模组不会自动出现在管理器目录中。请改用 NTFS 磁盘，或将管理器下载模组路径设为：{path}"
     },
     "startup": {
       "auxiliary_warmup_failed": "部分后台数据暂时未能预热，相关提示可能稍后才会出现。",

@@ -637,7 +637,8 @@ class API:
         
         # 每次启动 API 时，强制检查并修复 SteamCMD 的软链接！
         if settings.config.self_mods_path and settings.config.steamcmd_mods_path:
-            FileManager.sync_steamcmd_root_link()
+            if not FileManager.sync_steamcmd_root_link():
+                EventBus.send_toast(self._localized_settings_warning("steamcmd_junction_sync_failed"), type="warning", duration=8000)
         # 打包版每次启动都校验 Browser mode 快捷方式，缺失或过期就自动修复。
         if self._runtime_mode == "desktop" and os.name == "nt":
             self._ensure_browser_mode_shortcut()
@@ -691,6 +692,12 @@ class API:
         text = str(warning or "").strip()
         if text == "self_mods_path_reset":
             return tr("toast.settings.self_mods_path_reset", "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。")
+        if text == "steamcmd_junction_sync_failed":
+            return tr(
+                "toast.settings.steamcmd_junction_sync_failed",
+                "当前磁盘无法连接 SteamCMD 下载目录，已保留你的管理器下载目录设置，但 SteamCMD 下载的模组不会自动出现在管理器目录中。请改用 NTFS 磁盘，或将管理器下载模组路径设为：{path}",
+                path=str(settings.config.steamcmd_mods_path or ""),
+            )
         return warning
 
     def _resolve_ai_request_config(self, config_data: dict | None) -> dict:
@@ -3824,12 +3831,18 @@ class API:
         )
         deploy_paths = runtime_analysis.get('deploy_paths', [])
 
-        success = self.file_mgr.sync_managed_links(local_mods_root, deploy_paths)
+        success, failure_message = self.file_mgr.sync_managed_links(local_mods_root, deploy_paths)
         if success:
             self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "deployed"}
         else:
-            self._last_runtime_link_sync_result = {"profile_id": normalized_profile_id, "status": "failed"}
+            self._last_runtime_link_sync_result = {
+                "profile_id": normalized_profile_id, "status": "failed", "message": failure_message,
+            }
         return success
+
+    def _get_runtime_link_sync_failure_message(self, fallback: Any):
+        result = getattr(self, "_last_runtime_link_sync_result", {})
+        return result.get("message") or fallback
 
     def _sync_runtime_links_after_scan(self, scanned_profile_id: str) -> str:
         """
@@ -3889,7 +3902,9 @@ class API:
                 "message": (
                     tr("api.game.launch_prepare_active_done", "当前活动环境已完成启动前检查同步。")
                     if success
-                    else tr("api.game.launch_prepare_active_failed", "当前活动环境启动前检查同步失败。")
+                    else self._get_runtime_link_sync_failure_message(
+                        tr("api.game.launch_prepare_active_failed", "当前活动环境启动前检查同步失败。"),
+                    )
                 ),
                 "mode": "active-profile",
             }
@@ -3924,7 +3939,9 @@ class API:
                 "message": (
                     tr("api.game.launch_prepare_scan_sync_done", "已完成启动前检查同步，并按最新扫描结果更新链接。")
                     if success
-                    else tr("api.game.launch_prepare_scan_sync_failed", "启动前检查同步已完成扫描，但链接同步失败。")
+                    else self._get_runtime_link_sync_failure_message(
+                        tr("api.game.launch_prepare_scan_sync_failed", "启动前检查同步已完成扫描，但链接同步失败。"),
+                    )
                 ),
                 "mode": "scan-sync",
             }
@@ -3935,7 +3952,9 @@ class API:
             "message": (
                 tr("api.game.launch_prepare_cache_sync_done", "已按当前缓存状态完成启动前检查同步。")
                 if success
-                else tr("api.game.launch_prepare_cache_sync_failed", "按当前缓存执行启动前检查同步失败。")
+                else self._get_runtime_link_sync_failure_message(
+                    tr("api.game.launch_prepare_cache_sync_failed", "按当前缓存执行启动前检查同步失败。"),
+                )
             ),
             "mode": "cached-links",
         }

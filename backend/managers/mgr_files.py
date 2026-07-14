@@ -25,7 +25,7 @@ from backend.paths.rimworld_layout import normalize_rimworld_install_root
 from backend.i18n.messages import localized_key, localized_params, tr
 from backend.scanner.parser_xml import ModXMLParser
 from backend.profile import UserDataRoot
-from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
+from backend.settings import GALLERY_CACHE_DIR, MODS_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR, RIMWORLD_WORKSHOP_CONTENT_PARTS
 from backend.utils.logger import logger
@@ -395,6 +395,71 @@ class FileManager:
     3. 提供文件/文件夹打开操作
     4. 提供本地路径到 URL 的转换
     """
+
+    _JUNCTION_UNSUPPORTED_FILE_SYSTEMS = {"FAT", "FAT32", "EXFAT"}
+
+    @staticmethod
+    def _get_windows_filesystem_type(path: str) -> str:
+        """获取路径所在卷的文件系统类型；无法识别时返回空字符串。"""
+        if platform.system() != "Windows":
+            return ""
+        try:
+            import ctypes
+
+            normalized_path = os.path.abspath(path)
+            volume_root = ctypes.create_unicode_buffer(260)
+            if not ctypes.windll.kernel32.GetVolumePathNameW(normalized_path, volume_root, len(volume_root)):
+                logger.warning("无法识别路径所在卷的文件系统类型: %s", normalized_path)
+                return ""
+
+            filesystem_name = ctypes.create_unicode_buffer(256)
+            if not ctypes.windll.kernel32.GetVolumeInformationW(
+                volume_root.value, None, 0, None, None, None, filesystem_name, len(filesystem_name),
+            ):
+                logger.warning("无法读取卷的文件系统类型: %s", volume_root.value)
+                return ""
+            return filesystem_name.value.upper()
+        except (AttributeError, OSError) as e:
+            logger.warning("检测路径文件系统类型失败: %s，错误: %s", path, e)
+            return ""
+
+    @classmethod
+    def _is_junction_supported(cls, path: str) -> bool:
+        """仅在已知 FAT 系文件系统上提前阻止 Junction 创建。"""
+        if platform.system() != "Windows":
+            return True
+        filesystem_type = str(cls._get_windows_filesystem_type(path) or "").strip().upper()
+        return filesystem_type not in cls._JUNCTION_UNSUPPORTED_FILE_SYSTEMS
+
+    @classmethod
+    def _get_link_deployment_failure(cls, local_mods_path: str):
+        """返回不能创建运行时模组链接时的用户提示。"""
+        if cls._is_junction_supported(local_mods_path):
+            return None
+        return tr(
+            "api.path.runtime_link_deployment_unsupported",
+            "当前环境的模组目录所在磁盘不支持文件链接，无法通过文件链接加载模组：{path}\n请将该目录改到 NTFS 磁盘后重试。",
+            path=local_mods_path,
+        )
+
+    @staticmethod
+    def _is_empty_directory(path: str) -> bool:
+        """不存在的目录视为空；无法读取或不是目录时不自动处理。"""
+        if not os.path.exists(path):
+            return True
+        if not os.path.isdir(path):
+            return False
+        try:
+            with os.scandir(path) as entries:
+                return next(entries, None) is None
+        except OSError as e:
+            logger.warning("无法读取目录，跳过自动存储回退: %s，错误: %s", path, e)
+            return False
+
+    @staticmethod
+    def _steamcmd_workshop_mods_path(steamcmd_root: str) -> str:
+        """根据 SteamCMD 根目录推导 RimWorld 工坊下载目录。"""
+        return os.path.normpath(os.path.abspath(os.path.join(str(steamcmd_root or ""), *RIMWORLD_WORKSHOP_CONTENT_PARTS)))
     # 定义内部常量，统一管理链接目录名
     LINK_PREFIX = "_Link_" # 使用统一前缀识别由管理器创建的链接
     # 本地化复制属于后台线程任务，这里集中维护取消令牌，供 API 全局任务栏复用。
@@ -1017,10 +1082,15 @@ class FileManager:
         """
         将本地 Mods 目录中的管理器链接收敛到 deploy_paths。
         这里复用既有同步逻辑，避免手写删除规则误伤 Self/Tool 链接。
+        返回：(是否成功，预检失败时的用户提示)。
         """
+        failure_message = FileManager._get_link_deployment_failure(local_mods_path)
+        if failure_message:
+            logger.error("模组链接部署失败：%s", failure_message)
+            return False, failure_message
         if settings.config.link_deployment_mode_full:
-            return FileManager.sync_links_full(local_mods_path, deploy_paths)
-        return FileManager.sync_links(local_mods_path, deploy_paths)
+            return FileManager.sync_links_full(local_mods_path, deploy_paths), None
+        return FileManager.sync_links(local_mods_path, deploy_paths), None
     
     @staticmethod
     def localize_workshop_mods(query, local_root: str, folder_name_type: str = 'workshop_id', conflict_action: str = ''):
@@ -1596,17 +1666,41 @@ class FileManager:
         # SteamCMD 期望的下载路径 (Link Location, 通常是 RimWorld 工坊内容目录)
         steamcmd_link_path = os.path.normpath(os.path.abspath(settings.config.steamcmd_mods_path))
         
-        os.makedirs(os.path.dirname(steamcmd_link_path), exist_ok=True)
-        os.makedirs(real_storage_path, exist_ok=True)
-
-        logger.info(f"正在重定向 SteamCMD 目录：{steamcmd_link_path} -> {real_storage_path}")
-
         if same_path(steamcmd_link_path, real_storage_path):
+            os.makedirs(real_storage_path, exist_ok=True)
             logger.warning(
                 "跳过 SteamCMD 重定向：源目录和目标目录相同：%s",
                 real_storage_path,
             )
             return True
+
+        if not FileManager._is_junction_supported(steamcmd_link_path):
+            default_mods_path = os.path.normpath(os.path.abspath(MODS_DIR))
+            if same_path(real_storage_path, default_mods_path) and FileManager._is_empty_directory(real_storage_path):
+                try:
+                    os.makedirs(steamcmd_link_path, exist_ok=True)
+                except OSError as e:
+                    logger.error("SteamCMD 下载目录创建失败，无法自动使用该目录: %s，错误: %s", steamcmd_link_path, e)
+                    return False
+
+                settings.config.self_mods_path = steamcmd_link_path
+                settings.save()
+                logger.warning(
+                    "SteamCMD 所在磁盘不支持目录连接，默认模组目录为空，已改用 SteamCMD 下载目录: %s",
+                    steamcmd_link_path,
+                )
+                return True
+
+            logger.error(
+                "SteamCMD 所在磁盘不支持目录连接，未自动修改已有或自定义的管理器模组目录: %s",
+                real_storage_path,
+            )
+            return False
+
+        os.makedirs(os.path.dirname(steamcmd_link_path), exist_ok=True)
+        os.makedirs(real_storage_path, exist_ok=True)
+
+        logger.info(f"正在重定向 SteamCMD 目录：{steamcmd_link_path} -> {real_storage_path}")
 
         # ---------------------------------------------------------
         # 步骤 A: 处理 mods_path 变更导致的数据迁移
@@ -1955,6 +2049,18 @@ class PathChecker:
         
         exe_path = Path(resolve_steamcmd_executable_path(path_str, system_name=platform.system()))
         if exe_path.exists():
+            steamcmd_mods_path = FileManager._steamcmd_workshop_mods_path(path_str)
+            if not FileManager._is_junction_supported(steamcmd_mods_path):
+                return cls._format_res(
+                    True,
+                    data=path_str,
+                    msg=tr(
+                        "api.path.steamcmd_junction_unsupported",
+                        "当前 SteamCMD 下载目录所在磁盘不支持目录连接。下载目录：{path}。管理器默认下载目录为空时，软件会自动使用该目录；已有模组或自定义下载目录时，请改用 NTFS 磁盘，或将管理器下载模组路径设为这个目录。",
+                        path=steamcmd_mods_path,
+                    ),
+                    msg_type="warn",
+                )
             return cls._format_res(True, data=path_str, msg=tr("api.path.steamcmd_client", "SteamCMD 客户端：{path}", path=str(exe_path)))
         expected_name = "steamcmd.exe" if platform.system() == "Windows" else "steamcmd.sh"
         return cls._format_res(False, msg=tr("api.path.executable_missing_under_path", "路径下未找到 {expected}", expected=expected_name), msg_type="warn")

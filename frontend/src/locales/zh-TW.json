@@ -671,12 +671,12 @@
       "workshop_db_started": "社區工坊資料庫開始更新"
     },
     "file": {
+      "empty_load_order": "檔案已讀取，但沒有識別到可匯入的排序列表。",
       "invalid_save_dir": "請選擇有效的儲存目錄",
       "no_export_path_selected": "未選擇導出路徑",
       "no_file_selected": "未選擇檔案",
       "no_folder_selected": "未選擇資料夾",
       "no_save_dir_selected": "未選擇儲存目錄",
-      "empty_load_order": "檔案已讀取，但沒有識別到可匯入的排序列表。",
       "parse_failed": "解析檔案出錯。"
     },
     "file_search": {
@@ -704,9 +704,9 @@
       "launch_prepare_scan_sync_failed": "啟動前檢查同步已完成掃描，但連結同步失敗。",
       "launch_prepare_sync_failed": "啟動前同步失敗",
       "launch_prepare_unhealthy_context": "目標環境路徑不可用，請先完成路徑設定。",
+      "steam_launch_failed": "無法提交 Steam 啟動請求。",
       "steam_running_workshop_conflict": "檢測到 Steam 已在運行，需要先確認工坊連結衝突後再繼續啟動。",
-      "steam_still_running": "Steam 仍在運行，繼續等待其退出。",
-      "steam_launch_failed": "無法提交 Steam 啟動請求。"
+      "steam_still_running": "Steam 仍在運行，繼續等待其退出。"
     },
     "github": {
       "deploy_started": "Git 訂閱部署任務已啟動",
@@ -847,6 +847,7 @@
       "ripgrep_missing": "ripgrep 路徑不存在",
       "ripgrep_missing_executable": "目錄下未找到 rg.exe，可在外部工具檢查中下載安裝",
       "ripgrep_not_dir": "ripgrep 路徑必須是目錄",
+      "runtime_link_deployment_unsupported": "目前環境的模組目錄所在磁碟不支援檔案連結，無法透過檔案連結載入模組：{path}\n請將此目錄改到 NTFS 磁碟後再試。",
       "steam_client": "Steam 用戶端：{path}",
       "steam_empty": "未指定 Steam 路徑",
       "steam_macos_executable_missing": "路徑下未找到 Steam.app/Contents/MacOS/steam_osx",
@@ -856,6 +857,7 @@
       "steamcmd_client": "SteamCMD 用戶端：{path}",
       "steamcmd_contains_chinese": "SteamCMD 路徑不能包含中文",
       "steamcmd_empty": "未指定 SteamCMD 路徑",
+      "steamcmd_junction_unsupported": "目前 SteamCMD 下載目錄所在磁碟不支援目錄聯結。下載目錄：{path}。管理器預設下載目錄為空時，軟體會自動使用該目錄；已有模組或自訂下載目錄時，請改用 NTFS 磁碟，或將管理器下載模組路徑設為這個目錄。",
       "target_name": "路徑",
       "texture_tools_empty": "未指定貼圖工具目錄",
       "texture_tools_executable": "貼圖工具：{path}",
@@ -1091,6 +1093,7 @@
     },
     "workspace": {
       "local_mods_path_missing": "未指定本地模組路徑",
+      "localize_conflict_found": "有同名目錄需要確認",
       "localize_started": "本地共存任務已在背景啟動",
       "no_localizable_mods": "沒有可同步的 {store} 模組",
       "no_refreshable_workshop_items": "沒有可重新整理的工坊項目",
@@ -1101,8 +1104,7 @@
       "transfer_failed_suffix": " {count} 個失敗。",
       "transfer_preparing": "準備{action}...",
       "transfer_running": "正在{action}: {name}",
-      "transfer_source_missing": "未找到指定的源檔案",
-      "localize_conflict_found": "有同名目錄需要確認"
+      "transfer_source_missing": "未找到指定的源檔案"
     }
   },
   "brand": {
@@ -1569,6 +1571,7 @@
       "open_mod_folder": "打開模組目錄",
       "open_path": "打開路徑",
       "open_workshop": "打開工坊",
+      "overwrite": "覆蓋",
       "refresh": "重新整理",
       "remove": "移除",
       "rename": "重命名",
@@ -1577,6 +1580,7 @@
       "restore_default": "恢復預設",
       "restore_list": "恢復列表",
       "save": "儲存",
+      "save_as": "另存",
       "search": "搜尋",
       "select_all": "全選",
       "select_file": "選擇檔案",
@@ -1585,9 +1589,7 @@
       "start_localize": "開始本地化",
       "start_processing": "開始處理",
       "update": "更新",
-      "visit_page": "訪問頁面",
-      "overwrite": "覆蓋",
-      "save_as": "另存"
+      "visit_page": "訪問頁面"
     },
     "count": {
       "items": "{count} 項",
@@ -2186,16 +2188,16 @@
         "title": "禁用確認"
       },
       "localize": {
+        "conflict_item": "目錄 {folder} 已存在：目前 {current}，目標 {target}",
+        "conflict_message": "以下目標目錄已被其他 Mod 使用。請選擇這些衝突項的處理方式，未衝突的 Mod 會正常處理。",
+        "conflict_more": "還有 {count} 個同名目錄需要按相同方式處理。",
+        "conflict_title": "同名目錄需要確認",
         "create_message": "確定要將選中的 {total} 個{store}模組本地化為共存模組嗎？\n本地化後會獨立佔用磁碟空間，後續{store}更新不會自動改動這些本地副本。",
         "create_title": "本地化共存模組",
         "sync_and_create_message": "選中的 {total} 個{store}模組中，{createCount} 個會本地化為共存模組，{existingCount} 個會同步已有本地共存副本。",
         "sync_and_create_title": "本地化/同步本地共存模組",
         "sync_message": "選中的 {total} 個{store}模組已經存在本地共存模組。\n繼續後會用目前{store}檔案同步已有本地副本。",
-        "sync_title": "同步本地共存模組",
-        "conflict_item": "目錄 {folder} 已存在：目前 {current}，目標 {target}",
-        "conflict_message": "以下目標目錄已被其他 Mod 使用。請選擇這些衝突項的處理方式，未衝突的 Mod 會正常處理。",
-        "conflict_more": "還有 {count} 個同名目錄需要按相同方式處理。",
-        "conflict_title": "同名目錄需要確認"
+        "sync_title": "同步本地共存模組"
       }
     },
     "mod_alias_review": {
@@ -3948,12 +3950,20 @@
           "continue_run": "繼續運行",
           "direct_once": "本次直啟遊戲",
           "disable_steam_launch": "關閉 Steam 優先啟動",
-          "retry_steam_url": "改用 Steam URL 啟動",
-          "retry_steam_client": "改用 Steam 用戶端啟動"
+          "retry_steam_client": "改用 Steam 用戶端啟動",
+          "retry_steam_url": "改用 Steam URL 啟動"
         },
         "confirm": {
           "message": "目前環境需要先確認後再繼續啟動。",
           "title": "啟動前確認"
+        },
+        "link_sync_failed": {
+          "message": "未能完成模組連結同步，本次未啟動遊戲。",
+          "title": "模組連結同步失敗"
+        },
+        "steam_launch_failed": {
+          "message": "無法提交 Steam 啟動請求。",
+          "title": "Steam 啟動失敗"
         },
         "steam_not_ready": {
           "fallback": "Steam 未能進入可用狀態。",
@@ -3971,14 +3981,6 @@
         "steam_status": {
           "complete": "已完成 Steam 狀態檢查。",
           "title": "Steam 狀態"
-        },
-        "link_sync_failed": {
-          "message": "未能完成模組連結同步，本次未啟動遊戲。",
-          "title": "模組連結同步失敗"
-        },
-        "steam_launch_failed": {
-          "message": "無法提交 Steam 啟動請求。",
-          "title": "Steam 啟動失敗"
         },
         "steam_url_no_args_current": "\n剛才的 Steam URL 啟動未使用本次啟動參數。",
         "steam_url_no_args_retry": "\n改用 Steam URL 啟動時不會使用本次啟動參數。",
@@ -4536,7 +4538,8 @@
       },
       "save_failed": "儲存設定失敗。可能是後端服務暫時不可用、配置檔案無法寫入或目前路徑權限不足，請稍後重試。",
       "secret_storage_warning": "部分密鑰暫時無法寫入本機安全存儲，已臨時保留在配置檔案中。請檢查系統憑據服務後重新儲存密鑰。",
-      "self_mods_path_reset": "管理器下載模組路徑不能與創意工坊目錄相同，已自動恢復為預設目錄。"
+      "self_mods_path_reset": "管理器下載模組路徑不能與創意工坊目錄相同，已自動恢復為預設目錄。",
+      "steamcmd_junction_sync_failed": "目前磁碟無法連接 SteamCMD 下載目錄，已保留你的管理器下載目錄設定，但 SteamCMD 下載的模組不會自動出現在管理器目錄中。請改用 NTFS 磁碟，或將管理器下載模組路徑設為：{path}"
     },
     "startup": {
       "auxiliary_warmup_failed": "部分背景資料暫時未能預熱，相關提示可能稍後才會出現。",
@@ -6005,6 +6008,8 @@
         "mod_hover_panel_desc": "控制 Mod 列表中懸停時的面板顯示。",
         "open_url_in_system_browser": "在系統瀏覽器中打開 URL",
         "open_url_in_system_browser_desc": "關閉則使用內置瀏覽器",
+        "remember_mod_list_view": "記住列表顯示方式",
+        "remember_mod_list_view_desc": "開啟後，會記住啟用、停用和臨時列表的簡潔或詳細視圖。關閉後，下次開啟預設使用簡潔視圖。",
         "reset_guides": "重置介面引導",
         "section_collapse": "列表分割組功能",
         "section_label_collection": "分類排列標籤合集",
@@ -6018,9 +6023,7 @@
         "translation_mode": "翻譯模式",
         "translation_mode_desc": "開啟後顯示介面翻譯輔助浮窗，也可按 Ctrl + Shift + L 快速開關。",
         "visit": "訪問",
-        "workshop_page": "工坊頁面",
-        "remember_mod_list_view": "記住列表顯示方式",
-        "remember_mod_list_view_desc": "開啟後，會記住啟用、停用和臨時列表的簡潔或詳細視圖。關閉後，下次開啟預設使用簡潔視圖。"
+        "workshop_page": "工坊頁面"
       },
       "keybindings": {
         "all_categories": "全部分類",
@@ -6136,6 +6139,8 @@
         "move_old_self_mods_desc": "開啟後，修改路徑時會將原有模組移動到新路徑；不開啟則保留原有的檔案結構。",
         "prefer_steam_launch": "優先使用 Steam 啟動",
         "prefer_steam_launch_desc": "開啟後，管理器會優先通過 Steam 啟動目前環境，並直接使用 Steam 中的創意工坊內容。路徑不完整時會提醒，但仍可手動開啟。",
+        "prefer_steam_url_for_no_args": "優先使用 Steam URL 啟動",
+        "prefer_steam_url_for_no_args_desc": "僅在沒有啟動參數時生效。Steam URL 啟動不會攜帶啟動參數，效果與桌面原版捷徑相同。關閉後會優先使用 Steam 本體並攜帶參數啟動。",
         "run_commands": "遊戲啟動參數",
         "run_commands_desc": "注意不要使用 [[-savedatafolder]] 指令，多環境管理已經預設使用此指令，無需手動配置。",
         "run_commands_placeholder": "請輸入一個完整指令後回車確認……",
@@ -6152,9 +6157,7 @@
         "user_data_path": "使用者資料目錄",
         "user_data_path_desc": "使用者資料目錄即遊戲配置、存檔和日誌所在的目錄，不同系統位置不同，可使用自動搜尋或手動選擇。\nWindows下預設資料目錄一般位於：\nC:/Users/{使用者名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
         "workshop_mods_path": "創意工坊目錄",
-        "workshop_mods_path_desc": "創意工坊目錄即創意工坊下載的模組所在的目錄，該設定所有環境通用",
-        "prefer_steam_url_for_no_args": "優先使用 Steam URL 啟動",
-        "prefer_steam_url_for_no_args_desc": "僅在沒有啟動參數時生效。Steam URL 啟動不會攜帶啟動參數，效果與桌面原版捷徑相同。關閉後會優先使用 Steam 本體並攜帶參數啟動。"
+        "workshop_mods_path_desc": "創意工坊目錄即創意工坊下載的模組所在的目錄，該設定所有環境通用"
       },
       "theme": {
         "builtin": "內置",

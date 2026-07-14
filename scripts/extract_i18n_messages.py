@@ -854,14 +854,19 @@ def build_translated_locale_payload(
     existing: Mapping[str, Any],
     previous_default: Mapping[str, str],
     extracted: Mapping[str, str],
+    *,
+    preserve_existing_order: bool = True,
 ) -> tuple[dict[str, Any], int]:
     existing_values = flatten_string_values(existing)
     payload = copy_locale_meta(existing)
     reset_count = 0
-    # 普通同步只保留已有语言包顺序并追加新 key，避免日常生成产生大面积无意义 diff。
-    ordered_keys = [key for key in existing_values if key in extracted]
-    written_keys = set(ordered_keys)
-    ordered_keys.extend(key for key in sorted(extracted) if key not in written_keys)
+    if preserve_existing_order:
+        # 普通同步只保留已有语言包顺序并追加新 key，避免日常生成产生大面积无意义 diff。
+        ordered_keys = [key for key in existing_values if key in extracted]
+        written_keys = set(ordered_keys)
+        ordered_keys.extend(key for key in sorted(extracted) if key not in written_keys)
+    else:
+        ordered_keys = sorted(extracted)
     for key in ordered_keys:
         source_text = extracted[key]
         translated = existing_values.get(key)
@@ -886,13 +891,16 @@ def sync_builtin_locales(previous_default: Mapping[str, str], extracted: Mapping
     return results
 
 
-def align_builtin_locales(reference_payload: Mapping[str, Any]) -> list[str]:
+def align_builtin_locales(previous_default: Mapping[str, str], extracted: Mapping[str, str]) -> list[str]:
     results: list[str] = []
     for path in sorted(BUILTIN_LOCALES_DIR.glob("*.json")):
         if path.name == DEFAULT_LOCALE_PATH.name:
             continue
-        write_json(path, ensure_builtin_locale_meta(path, align_locale_structure(reference_payload, load_locale(path))))
-        results.append(f"{path.relative_to(ROOT).as_posix()}：已对齐结构")
+        payload, reset_count = build_translated_locale_payload(
+            load_locale(path), previous_default, extracted, preserve_existing_order=False,
+        )
+        write_json(path, ensure_builtin_locale_meta(path, payload))
+        results.append(f"{path.relative_to(ROOT).as_posix()}：已对齐字段顺序，重置 {reset_count} 条")
     return results
 
 
@@ -1009,7 +1017,7 @@ def main() -> int:
     configure_stdout()
     parser = argparse.ArgumentParser(description="扫描 t/tr 调用并增量生成默认中文语言包。")
     parser.add_argument("--check", action="store_true", help="只检查 zh-CN.json 是否已同步，不写入文件。")
-    parser.add_argument("--align-locales", action="store_true", help="只按默认中文语言包对齐其它内置语言包结构和字段顺序。")
+    parser.add_argument("--align-locales", action="store_true", help="按固定顺序同步默认中文和其它内置语言包；源文案未变时只调整字段顺序。")
     parser.add_argument("--report-bare-chinese", action="store_true", help="报告疑似未接入 i18n 的裸中文，不阻断构建。")
     parser.add_argument("--report-limit", type=int, default=120, help="裸中文报告最多显示条数。")
     parser.add_argument("--locale-file", type=Path, default=DEFAULT_LOCALE_PATH, help="默认中文语言包路径。")
@@ -1029,7 +1037,9 @@ def main() -> int:
         if locale_path.resolve() != DEFAULT_LOCALE_PATH.resolve():
             print("--align-locales 只支持默认中文语言包。", file=sys.stderr)
             return 1
-        for item in align_builtin_locales(next_payload):
+        write_json(locale_path, next_payload)
+        print(f"已更新 {locale_path.relative_to(ROOT).as_posix()}，共 {len(extracted)} 条。")
+        for item in align_builtin_locales(previous_default, extracted):
             print(item)
         return 0
     if args.check:

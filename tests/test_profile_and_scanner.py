@@ -2921,6 +2921,21 @@ class TestApiRuntimeLinkSync(unittest.TestCase):
         self.assertEqual(res["mode"], "cached-links")
         api._sync_runtime_links_for_profile.assert_called_once_with("profile-b", include_workshop=False)
 
+    def test_prepare_profile_launch_keeps_specific_link_failure_message(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="profile-a")
+
+        def fail_sync(*_args, **_kwargs):
+            api._last_runtime_link_sync_result = {"status": "failed", "message": "请将目录改到 NTFS 磁盘"}
+            return False
+
+        api._ensure_runtime_links_for_launch = Mock(side_effect=fail_sync)
+
+        res = API._prepare_profile_launch(api, "profile-a", include_workshop=False)
+
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["message"], "请将目录改到 NTFS 磁盘")
+
     def test_prepare_profile_launch_handles_missing_target_context(self):
         api = API.__new__(API)
         api.active_context = SimpleNamespace(profile_id="profile-a")
@@ -3398,7 +3413,7 @@ class TestApiSaveSettings(unittest.TestCase):
         local_mods_root = temp_root / "Mods"
         context = SimpleNamespace(local_mods_path=str(local_mods_root))
         api.profile_mgr = SimpleNamespace(build_profile_context=Mock(return_value=context))
-        api.file_mgr = SimpleNamespace(sync_managed_links=Mock(return_value=True))
+        api.file_mgr = SimpleNamespace(sync_managed_links=Mock(return_value=(True, None)))
 
         runtime_caps = {"workshop_detection_enabled": True, "workshop_deploy_enabled": True}
         runtime_analysis = {"deploy_paths": ["D:/mods/a", "D:/mods/b"]}
@@ -3419,7 +3434,7 @@ class TestApiSaveSettings(unittest.TestCase):
         local_mods_root.mkdir(parents=True)
         context = SimpleNamespace(local_mods_path=str(local_mods_root))
         api.profile_mgr = SimpleNamespace(build_profile_context=Mock(return_value=context))
-        api.file_mgr = SimpleNamespace(sync_managed_links=Mock(return_value=True))
+        api.file_mgr = SimpleNamespace(sync_managed_links=Mock(return_value=(True, None)))
 
         runtime_caps = {"workshop_detection_enabled": True, "workshop_deploy_enabled": True}
         runtime_analysis = {"deploy_paths": ["D:/mods/a"]}

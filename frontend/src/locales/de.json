@@ -671,12 +671,12 @@
       "workshop_db_started": "Aktualisierung der Community-Workshop-Datenbank gestartet"
     },
     "file": {
+      "empty_load_order": "Die Datei wurde gelesen, aber es wurde keine importierbare Ladereihenfolge gefunden.",
       "invalid_save_dir": "Wählen Sie einen gültigen Speicherordner",
       "no_export_path_selected": "Kein Exportpfad ausgewählt",
       "no_file_selected": "Keine Datei ausgewählt",
       "no_folder_selected": "Kein Ordner ausgewählt",
       "no_save_dir_selected": "Kein Speicherordner ausgewählt",
-      "empty_load_order": "Die Datei wurde gelesen, aber es wurde keine importierbare Ladereihenfolge gefunden.",
       "parse_failed": "Die Datei konnte nicht analysiert werden."
     },
     "file_search": {
@@ -704,9 +704,9 @@
       "launch_prepare_scan_sync_failed": "Der Scan der Startüberprüfung wurde abgeschlossen, aber die Linksynchronisierung ist fehlgeschlagen.",
       "launch_prepare_sync_failed": "Die Startsynchronisierung ist fehlgeschlagen",
       "launch_prepare_unhealthy_context": "Der Zielumgebungspfad ist nicht verfügbar. Schließen Sie zunächst die Pfadeinrichtung ab.",
+      "steam_launch_failed": "Die Steam-Startanfrage konnte nicht gesendet werden.",
       "steam_running_workshop_conflict": "Steam läuft bereits. Bestätigen Sie den Workshop-Linkkonflikt, bevor Sie mit dem Start fortfahren.",
-      "steam_still_running": "Steam läuft noch. Ich warte darauf, dass es beendet wird.",
-      "steam_launch_failed": "Die Steam-Startanfrage konnte nicht gesendet werden."
+      "steam_still_running": "Steam läuft noch. Ich warte darauf, dass es beendet wird."
     },
     "github": {
       "deploy_started": "Die Bereitstellungsaufgabe für das Git-Abonnement wurde gestartet",
@@ -847,6 +847,7 @@
       "ripgrep_missing": "ripgrep-Pfad existiert nicht",
       "ripgrep_missing_executable": "rg.exe wurde in diesem Ordner nicht gefunden. Installation ist unter Externe Tools moeglich.",
       "ripgrep_not_dir": "ripgrep-Pfad muss ein Ordner sein",
+      "runtime_link_deployment_unsupported": "Der Mods-Ordner des aktuellen Profils liegt auf einem Laufwerk, das keine Dateiverknüpfungen unterstützt. Mods können daher nicht über Dateiverknüpfungen geladen werden: {path}\nVerschieben Sie diesen Ordner auf ein NTFS-Laufwerk und versuchen Sie es erneut.",
       "steam_client": "Steam-Client: {path}",
       "steam_empty": "Steam-Pfad erforderlich",
       "steam_macos_executable_missing": "Steam.app/Contents/MacOS/steam_osx wurde unter diesem Pfad nicht gefunden",
@@ -856,6 +857,7 @@
       "steamcmd_client": "SteamCMD-Client: {path}",
       "steamcmd_contains_chinese": "SteamCMD-Pfad darf keine chinesischen Zeichen enthalten",
       "steamcmd_empty": "SteamCMD-Pfad erforderlich",
+      "steamcmd_junction_unsupported": "Das Laufwerk mit dem SteamCMD-Downloadordner unterstützt keine Verzeichnisverknüpfungen. Downloadordner: {path}. Wenn der Standard-Downloadordner des Managers leer ist, verwendet die App automatisch diesen Ordner. Bei vorhandenen Mods oder einem benutzerdefinierten Downloadordner SteamCMD auf ein NTFS-Laufwerk verschieben oder den Downloadordner des Managers auf diesen Ordner setzen.",
       "target_name": "Weg",
       "texture_tools_empty": "Texturtool-Ordner erforderlich",
       "texture_tools_executable": "Texturtool: {path}",
@@ -1091,6 +1093,7 @@
     },
     "workspace": {
       "local_mods_path_missing": "Lokaler Mod-Pfad ist nicht angegeben",
+      "localize_conflict_found": "Ein Ordnernamenskonflikt muss bestätigt werden",
       "localize_started": "Die lokale Koexistenzaufgabe wurde im Hintergrund gestartet",
       "no_localizable_mods": "Keine {store}-Mods zum Synchronisieren verfügbar",
       "no_refreshable_workshop_items": "Keine Workshop-Elemente zum Aktualisieren verfügbar",
@@ -1101,8 +1104,7 @@
       "transfer_failed_suffix": "{count} ist fehlgeschlagen.",
       "transfer_preparing": "Vorbereitung auf {action}...",
       "transfer_running": "{action}: {name}",
-      "transfer_source_missing": "Die angegebenen Quelldateien wurden nicht gefunden",
-      "localize_conflict_found": "Ein Ordnernamenskonflikt muss bestätigt werden"
+      "transfer_source_missing": "Die angegebenen Quelldateien wurden nicht gefunden"
     }
   },
   "brand": {
@@ -1569,6 +1571,7 @@
       "open_mod_folder": "Mod-Ordner öffnen",
       "open_path": "Offener Weg",
       "open_workshop": "Öffnen Sie Workshop",
+      "overwrite": "Überschreiben",
       "refresh": "Aktualisieren",
       "remove": "Entfernen",
       "rename": "Umbenennen",
@@ -1577,6 +1580,7 @@
       "restore_default": "Standard wiederherstellen",
       "restore_list": "Liste wiederherstellen",
       "save": "Speichern",
+      "save_as": "Speichern als",
       "search": "Suchen",
       "select_all": "Alles auswählen",
       "select_file": "Datei auswählen",
@@ -1585,9 +1589,7 @@
       "start_localize": "Beginnen Sie mit der Lokalisierung",
       "start_processing": "Beginnen Sie mit der Verarbeitung",
       "update": "Aktualisieren",
-      "visit_page": "Seite besuchen",
-      "overwrite": "Überschreiben",
-      "save_as": "Speichern als"
+      "visit_page": "Seite besuchen"
     },
     "count": {
       "items": "{count} Artikel",
@@ -2186,16 +2188,16 @@
         "title": "Bestätigen Sie die Deaktivierung"
       },
       "localize": {
+        "conflict_item": "Ordner {folder} existiert bereits: aktuell {current}, Ziel {target}",
+        "conflict_message": "Die folgenden Zielordner werden bereits von anderen Mods verwendet. Wählen Sie, wie diese Konflikte behandelt werden sollen; Mods ohne Konflikte werden normal verarbeitet.",
+        "conflict_more": "{count} weitere Ordnerkonflikte werden auf die gleiche Weise behandelt.",
+        "conflict_title": "Ordnernamenskonflikt",
         "create_message": "Die ausgewählten {total} {store}-Mods als separate lokale Kopien lokalisieren?\nLokalisierte Kopien belegen zusätzlichen Speicherplatz. Zukünftige {store}-Updates werden diese lokalen Kopien nicht automatisch ändern.",
         "create_title": "Als separate lokale Mods lokalisieren",
         "sync_and_create_message": "Unter den ausgewählten {total} {store}-Mods wird {createCount} als separate lokale Kopien lokalisiert und vorhandene lokale Kopien von {existingCount} werden synchronisiert.",
         "sync_and_create_title": "Lokale Kopien lokalisieren/synchronisieren",
         "sync_message": "Die ausgewählten {total} {store}-Mods verfügen bereits über lokale Kopien.\nWenn Sie fortfahren, werden die aktuellen {store}-Dateien mit diesen lokalen Kopien synchronisiert.",
-        "sync_title": "Lokale Kopien synchronisieren",
-        "conflict_item": "Ordner {folder} existiert bereits: aktuell {current}, Ziel {target}",
-        "conflict_message": "Die folgenden Zielordner werden bereits von anderen Mods verwendet. Wählen Sie, wie diese Konflikte behandelt werden sollen; Mods ohne Konflikte werden normal verarbeitet.",
-        "conflict_more": "{count} weitere Ordnerkonflikte werden auf die gleiche Weise behandelt.",
-        "conflict_title": "Ordnernamenskonflikt"
+        "sync_title": "Lokale Kopien synchronisieren"
       }
     },
     "mod_alias_review": {
@@ -3948,12 +3950,20 @@
           "continue_run": "Laufen Sie weiter",
           "direct_once": "Diesmal direkt starten",
           "disable_steam_launch": "Deaktivieren Sie den ersten Start von Steam",
-          "retry_steam_url": "Mit Steam-URL erneut versuchen",
-          "retry_steam_client": "Mit Steam-Client erneut versuchen"
+          "retry_steam_client": "Mit Steam-Client erneut versuchen",
+          "retry_steam_url": "Mit Steam-URL erneut versuchen"
         },
         "confirm": {
           "message": "Diese Umgebung muss bestätigt werden, bevor der Start fortgesetzt werden kann.",
           "title": "Vor dem Start bestätigen"
+        },
+        "link_sync_failed": {
+          "message": "Die Mod-Link-Synchronisierung konnte nicht abgeschlossen werden. Das Spiel wurde diesmal nicht gestartet.",
+          "title": "Mod-Link-Synchronisierung fehlgeschlagen"
+        },
+        "steam_launch_failed": {
+          "message": "Die Steam-Startanfrage konnte nicht gesendet werden.",
+          "title": "Steam-Start fehlgeschlagen"
         },
         "steam_not_ready": {
           "fallback": "Steam wurde nicht verfügbar.",
@@ -3971,14 +3981,6 @@
         "steam_status": {
           "complete": "Steam-Statusprüfung abgeschlossen.",
           "title": "Steam-Status"
-        },
-        "link_sync_failed": {
-          "message": "Die Mod-Link-Synchronisierung konnte nicht abgeschlossen werden. Das Spiel wurde diesmal nicht gestartet.",
-          "title": "Mod-Link-Synchronisierung fehlgeschlagen"
-        },
-        "steam_launch_failed": {
-          "message": "Die Steam-Startanfrage konnte nicht gesendet werden.",
-          "title": "Steam-Start fehlgeschlagen"
         },
         "steam_url_no_args_current": "\nBeim gerade ausgeführten Steam-URL-Start wurden die Startargumente dieses Starts nicht verwendet.",
         "steam_url_no_args_retry": "\nWenn Sie stattdessen per Steam-URL starten, werden die Startargumente dieses Starts nicht verwendet.",
@@ -4536,7 +4538,8 @@
       },
       "save_failed": "Einstellungen konnten nicht gespeichert werden. Der App-Dienst ist möglicherweise nicht verfügbar, die Konfigurationsdatei ist möglicherweise nicht beschreibbar oder der aktuelle Pfad verfügt möglicherweise nicht über ausreichende Berechtigungen. Bitte versuchen Sie es später noch einmal.",
       "secret_storage_warning": "Einige Schlüssel konnten nicht in den sicheren Speicher geschrieben werden, daher werden sie vorübergehend in der Konfigurationsdatei gespeichert. Überprüfen Sie den Anmeldeinformationsdienst des Systems und speichern Sie die Schlüssel erneut.",
-      "self_mods_path_reset": "Der vom Manager heruntergeladene Mods-Ordner darf nicht mit dem Workshop-Verzeichnis identisch sein und wurde daher im Standardordner wiederhergestellt."
+      "self_mods_path_reset": "Der vom Manager heruntergeladene Mods-Ordner darf nicht mit dem Workshop-Verzeichnis identisch sein und wurde daher im Standardordner wiederhergestellt.",
+      "steamcmd_junction_sync_failed": "Das aktuelle Laufwerk kann den SteamCMD-Downloadordner nicht verbinden. Deine Einstellung für den Manager-Downloadordner wurde beibehalten, aber mit SteamCMD geladene Mods erscheinen nicht automatisch im Manager-Ordner. Verschiebe SteamCMD auf ein NTFS-Laufwerk oder setze den Manager-Mod-Downloadpfad auf: {path}"
     },
     "startup": {
       "auxiliary_warmup_failed": "Einige Hintergrunddaten konnten noch nicht aufgewärmt werden. Verwandte Hinweise können später erscheinen.",
@@ -6005,6 +6008,8 @@
         "mod_hover_panel_desc": "Steuert, ob das Hover-Panel in der Mod-Liste angezeigt wird.",
         "open_url_in_system_browser": "Öffnen Sie URLs im Systembrowser",
         "open_url_in_system_browser_desc": "Wenn diese Option deaktiviert ist, werden URLs im integrierten Browser geöffnet",
+        "remember_mod_list_view": "Listenansicht merken",
+        "remember_mod_list_view_desc": "Merkt die kompakte oder detaillierte Ansicht für aktive, inaktive und temporäre Listen. Aus: Beim nächsten Öffnen wird die kompakte Ansicht verwendet.",
         "reset_guides": "UI-Anleitungen zurücksetzen",
         "section_collapse": "Abschnittsgruppen auflisten",
         "section_label_collection": "Kategorie-Label-Sammlung",
@@ -6018,9 +6023,7 @@
         "translation_mode": "Übersetzungsmodus",
         "translation_mode_desc": "Zeigt das Overlay der Schnittstellenübersetzungshilfe an. Sie können auch Strg + Umschalt + L drücken, um es umzuschalten.",
         "visit": "Besuchen",
-        "workshop_page": "Workshop-Seite",
-        "remember_mod_list_view": "Listenansicht merken",
-        "remember_mod_list_view_desc": "Merkt die kompakte oder detaillierte Ansicht für aktive, inaktive und temporäre Listen. Aus: Beim nächsten Öffnen wird die kompakte Ansicht verwendet."
+        "workshop_page": "Workshop-Seite"
       },
       "keybindings": {
         "all_categories": "Alle Kategorien",
@@ -6136,6 +6139,8 @@
         "move_old_self_mods_desc": "Wenn diese Option aktiviert ist, werden vorhandene Mods nach der Änderung in den neuen Pfad verschoben. Bei Deaktivierung bleibt die bestehende Dateistruktur erhalten.",
         "prefer_steam_launch": "Bevorzugen Sie den Start von Steam",
         "prefer_steam_launch_desc": "Wenn diese Option aktiviert ist, startet der Manager zuerst das aktuelle Profil über Steam und verwendet den Steam Workshop-Inhalt direkt. Bei unvollständigen Pfaden werden Sie gewarnt, der Schalter kann jedoch weiterhin manuell aktiviert werden.",
+        "prefer_steam_url_for_no_args": "Steam-URL-Start bevorzugen",
+        "prefer_steam_url_for_no_args_desc": "Wird nur ohne Startparameter verwendet. Steam-URL startet ohne Parameter wie die ursprüngliche Desktop-Verknüpfung. Andernfalls startet Steam selbst mit den Parametern.",
         "run_commands": "Argumente zum Spielstart",
         "run_commands_desc": "Verwenden Sie nicht das Argument [[-savedatafolder]]. Die Multiprofilverwaltung wendet es bereits automatisch an.",
         "run_commands_placeholder": "Geben Sie ein vollständiges Argument ein und drücken Sie die Eingabetaste...",
@@ -6152,9 +6157,7 @@
         "user_data_path": "Benutzerdatenverzeichnis",
         "user_data_path_desc": "Benutzerdatenverzeichnis mit Spieleinstellungen, Spielständen und Protokollen. Der Standort ist je nach System unterschiedlich. Sie können eine automatische Erkennung oder eine manuelle Auswahl durchführen.\nUnter Windows lautet der Standarddatenpfad normalerweise:\nC:/Benutzer/BENUTZERNAME/AppData/LocalLow/Ludeon Studios/RimWorld von Ludeon Studios",
         "workshop_mods_path": "Workshop-Verzeichnis",
-        "workshop_mods_path_desc": "Verzeichnis mit von Steam Workshop heruntergeladenen Mods. Diese Einstellung wird von allen Profilen gemeinsam genutzt.",
-        "prefer_steam_url_for_no_args": "Steam-URL-Start bevorzugen",
-        "prefer_steam_url_for_no_args_desc": "Wird nur ohne Startparameter verwendet. Steam-URL startet ohne Parameter wie die ursprüngliche Desktop-Verknüpfung. Andernfalls startet Steam selbst mit den Parametern."
+        "workshop_mods_path_desc": "Verzeichnis mit von Steam Workshop heruntergeladenen Mods. Diese Einstellung wird von allen Profilen gemeinsam genutzt."
       },
       "theme": {
         "builtin": "Eingebaut",

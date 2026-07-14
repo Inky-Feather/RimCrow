@@ -671,12 +671,12 @@
       "workshop_db_started": "Community Workshop database update started"
     },
     "file": {
+      "empty_load_order": "The file was read, but no importable load order was found.",
       "invalid_save_dir": "Choose a valid save folder",
       "no_export_path_selected": "No export path selected",
       "no_file_selected": "No file selected",
       "no_folder_selected": "No folder selected",
       "no_save_dir_selected": "No save folder selected",
-      "empty_load_order": "The file was read, but no importable load order was found.",
       "parse_failed": "Failed to parse the file."
     },
     "file_search": {
@@ -704,9 +704,9 @@
       "launch_prepare_scan_sync_failed": "Startup check scan completed, but link sync failed.",
       "launch_prepare_sync_failed": "Startup sync failed",
       "launch_prepare_unhealthy_context": "The target environment path is unavailable. Complete path setup first.",
+      "steam_launch_failed": "Failed to submit the Steam launch request.",
       "steam_running_workshop_conflict": "Steam is already running. Confirm the Workshop link conflict before continuing launch.",
-      "steam_still_running": "Steam is still running. Waiting for it to exit.",
-      "steam_launch_failed": "Failed to submit the Steam launch request."
+      "steam_still_running": "Steam is still running. Waiting for it to exit."
     },
     "github": {
       "deploy_started": "Git subscription deployment task started",
@@ -847,6 +847,7 @@
       "ripgrep_missing": "ripgrep path does not exist",
       "ripgrep_missing_executable": "rg.exe was not found in this folder. You can install it from External Tools.",
       "ripgrep_not_dir": "ripgrep path must be a folder",
+      "runtime_link_deployment_unsupported": "The current profile's Mods folder is on a drive that does not support file links, so mods cannot be loaded through file links: {path}\nMove this folder to an NTFS drive and try again.",
       "steam_client": "Steam client: {path}",
       "steam_empty": "Steam path is required",
       "steam_macos_executable_missing": "Steam.app/Contents/MacOS/steam_osx was not found under this path",
@@ -856,6 +857,7 @@
       "steamcmd_client": "SteamCMD client: {path}",
       "steamcmd_contains_chinese": "SteamCMD path cannot contain Chinese characters",
       "steamcmd_empty": "SteamCMD path is required",
+      "steamcmd_junction_unsupported": "The drive containing SteamCMD's download folder does not support directory junctions. Download folder: {path}. If the manager's default download folder is empty, the app will use this folder automatically. If it already contains mods or you use a custom download folder, move SteamCMD to an NTFS drive or set the manager download folder to this folder.",
       "target_name": "path",
       "texture_tools_empty": "Texture tool folder is required",
       "texture_tools_executable": "Texture tool: {path}",
@@ -1091,6 +1093,7 @@
     },
     "workspace": {
       "local_mods_path_missing": "Local mod path is not specified",
+      "localize_conflict_found": "A folder name conflict needs confirmation",
       "localize_started": "Local coexist task started in the background",
       "no_localizable_mods": "No {store} mods available to sync",
       "no_refreshable_workshop_items": "No Workshop items available to refresh",
@@ -1101,8 +1104,7 @@
       "transfer_failed_suffix": " {count} failed.",
       "transfer_preparing": "Preparing to {action}...",
       "transfer_running": "{action}: {name}",
-      "transfer_source_missing": "Specified source files were not found",
-      "localize_conflict_found": "A folder name conflict needs confirmation"
+      "transfer_source_missing": "Specified source files were not found"
     }
   },
   "brand": {
@@ -1569,6 +1571,7 @@
       "open_mod_folder": "Open mod folder",
       "open_path": "Open path",
       "open_workshop": "Open Workshop",
+      "overwrite": "Overwrite",
       "refresh": "Refresh",
       "remove": "Remove",
       "rename": "Rename",
@@ -1577,6 +1580,7 @@
       "restore_default": "Restore default",
       "restore_list": "Restore list",
       "save": "Save",
+      "save_as": "Save as",
       "search": "Search",
       "select_all": "Select all",
       "select_file": "Select file",
@@ -1585,9 +1589,7 @@
       "start_localize": "Start localizing",
       "start_processing": "Start processing",
       "update": "Update",
-      "visit_page": "Visit page",
-      "overwrite": "Overwrite",
-      "save_as": "Save as"
+      "visit_page": "Visit page"
     },
     "count": {
       "items": "{count} items",
@@ -2186,16 +2188,16 @@
         "title": "Confirm Deactivation"
       },
       "localize": {
+        "conflict_item": "Folder {folder} already exists: current {current}, target {target}",
+        "conflict_message": "The target folders below are already used by other mods. Choose how to handle these conflicts; mods without conflicts will be processed normally.",
+        "conflict_more": "{count} more folder conflicts will be handled the same way.",
+        "conflict_title": "Folder Name Conflict",
         "create_message": "Localize the selected {total} {store} mods as separate local copies?\nLocalized copies use additional disk space. Future {store} updates will not automatically change these local copies.",
         "create_title": "Localize as Separate Local Mods",
         "sync_and_create_message": "Among the selected {total} {store} mods, {createCount} will be localized as separate local copies, and {existingCount} existing local copies will be synced.",
         "sync_and_create_title": "Localize / Sync Local Copies",
         "sync_message": "The selected {total} {store} mods already have local copies.\nContinuing will sync the current {store} files into those local copies.",
-        "sync_title": "Sync Local Copies",
-        "conflict_item": "Folder {folder} already exists: current {current}, target {target}",
-        "conflict_message": "The target folders below are already used by other mods. Choose how to handle these conflicts; mods without conflicts will be processed normally.",
-        "conflict_more": "{count} more folder conflicts will be handled the same way.",
-        "conflict_title": "Folder Name Conflict"
+        "sync_title": "Sync Local Copies"
       }
     },
     "mod_alias_review": {
@@ -3948,12 +3950,20 @@
           "continue_run": "Continue running",
           "direct_once": "Launch directly this time",
           "disable_steam_launch": "Disable Steam-first launch",
-          "retry_steam_url": "Retry with Steam URL",
-          "retry_steam_client": "Retry with Steam client"
+          "retry_steam_client": "Retry with Steam client",
+          "retry_steam_url": "Retry with Steam URL"
         },
         "confirm": {
           "message": "This environment needs confirmation before launch can continue.",
           "title": "Confirm before launch"
+        },
+        "link_sync_failed": {
+          "message": "Mod link sync could not be completed, so the game was not launched this time.",
+          "title": "Mod link sync failed"
+        },
+        "steam_launch_failed": {
+          "message": "Failed to submit the Steam launch request.",
+          "title": "Steam launch failed"
         },
         "steam_not_ready": {
           "fallback": "Steam did not become available.",
@@ -3971,14 +3981,6 @@
         "steam_status": {
           "complete": "Steam status check completed.",
           "title": "Steam status"
-        },
-        "link_sync_failed": {
-          "message": "Mod link sync could not be completed, so the game was not launched this time.",
-          "title": "Mod link sync failed"
-        },
-        "steam_launch_failed": {
-          "message": "Failed to submit the Steam launch request.",
-          "title": "Steam launch failed"
         },
         "steam_url_no_args_current": "\nThe Steam URL launch just now did not use the launch arguments from this run.",
         "steam_url_no_args_retry": "\nIf you switch to Steam URL launch, the launch arguments from this run will not be used.",
@@ -4536,7 +4538,8 @@
       },
       "save_failed": "Failed to save settings. The app service may be unavailable, the configuration file may not be writable, or the current path may not have sufficient permissions. Please try again later.",
       "secret_storage_warning": "Some keys could not be written to secure storage, so they are temporarily kept in the config file. Check the system credential service and save the keys again.",
-      "self_mods_path_reset": "The manager-downloaded Mods folder cannot be the same as the Workshop directory, so it has been restored to the default folder."
+      "self_mods_path_reset": "The manager-downloaded Mods folder cannot be the same as the Workshop directory, so it has been restored to the default folder.",
+      "steamcmd_junction_sync_failed": "The current drive cannot connect SteamCMD's download folder. Your manager download folder setting was kept, but mods downloaded by SteamCMD will not appear in the manager folder automatically. Move SteamCMD to an NTFS drive, or set the manager mod download path to: {path}"
     },
     "startup": {
       "auxiliary_warmup_failed": "Some background data could not be warmed up yet. Related hints may appear later.",
@@ -6005,6 +6008,8 @@
         "mod_hover_panel_desc": "Controls whether the hover panel appears in the Mod list.",
         "open_url_in_system_browser": "Open URLs in system browser",
         "open_url_in_system_browser_desc": "When disabled, URLs open in the built-in browser",
+        "remember_mod_list_view": "Remember list view",
+        "remember_mod_list_view_desc": "When enabled, the active, inactive, and temporary lists remember compact or detailed view. When disabled, they open in compact view by default.",
         "reset_guides": "Reset UI guides",
         "section_collapse": "List section groups",
         "section_label_collection": "Category label collection",
@@ -6018,9 +6023,7 @@
         "translation_mode": "Translation mode",
         "translation_mode_desc": "Show the interface translation helper overlay. You can also press Ctrl + Shift + L to toggle it.",
         "visit": "Visit",
-        "workshop_page": "Workshop page",
-        "remember_mod_list_view": "Remember list view",
-        "remember_mod_list_view_desc": "When enabled, the active, inactive, and temporary lists remember compact or detailed view. When disabled, they open in compact view by default."
+        "workshop_page": "Workshop page"
       },
       "keybindings": {
         "all_categories": "All categories",
@@ -6136,6 +6139,8 @@
         "move_old_self_mods_desc": "When enabled, existing mods are moved to the new path after changing it. When disabled, the existing file structure is kept.",
         "prefer_steam_launch": "Prefer Steam launch",
         "prefer_steam_launch_desc": "When enabled, the manager starts the current profile through Steam first and uses Steam Workshop content directly. Incomplete paths will warn you, but the switch can still be enabled manually.",
+        "prefer_steam_url_for_no_args": "Prefer Steam URL launch",
+        "prefer_steam_url_for_no_args_desc": "Only used when there are no launch arguments. Steam URL launches without arguments, like the original desktop shortcut. When disabled, Steam itself is used with the launch arguments.",
         "run_commands": "Game launch arguments",
         "run_commands_desc": "Do not use the [[-savedatafolder]] argument. Multi-profile management already applies it automatically.",
         "run_commands_placeholder": "Enter a complete argument and press Enter...",
@@ -6152,9 +6157,7 @@
         "user_data_path": "User data directory",
         "user_data_path_desc": "User data directory containing game settings, saves, and logs. Location differs by system. You can auto-detect or choose manually.\nOn Windows the default data path is usually:\nC:/Users/USERNAME/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
         "workshop_mods_path": "Workshop directory",
-        "workshop_mods_path_desc": "Directory containing mods downloaded by Steam Workshop. This setting is shared by all profiles.",
-        "prefer_steam_url_for_no_args": "Prefer Steam URL launch",
-        "prefer_steam_url_for_no_args_desc": "Only used when there are no launch arguments. Steam URL launches without arguments, like the original desktop shortcut. When disabled, Steam itself is used with the launch arguments."
+        "workshop_mods_path_desc": "Directory containing mods downloaded by Steam Workshop. This setting is shared by all profiles."
       },
       "theme": {
         "builtin": "Built-in",

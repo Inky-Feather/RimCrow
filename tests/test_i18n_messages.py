@@ -127,6 +127,21 @@ def test_translated_locale_payload_preserves_existing_order_and_appends_new_keys
     assert list(flatten_string_values(payload)) == ["ui.second", "ui.first", "ui.third"]
 
 
+def test_translated_locale_payload_can_use_canonical_order_without_resetting_unchanged_text():
+    from scripts.extract_i18n_messages import build_translated_locale_payload, flatten_string_values
+
+    payload, reset_count = build_translated_locale_payload(
+        {"_meta": {"language": "en"}, "ui": {"second": "Second", "first": "First"}},
+        {"ui.first": "第一", "ui.second": "第二"},
+        {"ui.first": "第一", "ui.second": "第二"},
+        preserve_existing_order=False,
+    )
+
+    assert reset_count == 0
+    assert flatten_string_values(payload) == {"ui.first": "First", "ui.second": "Second"}
+    assert list(flatten_string_values(payload)) == ["ui.first", "ui.second"]
+
+
 def test_translated_locale_payload_resets_marker_mismatch():
     from scripts.extract_i18n_messages import UNTRANSLATED_PREFIX, build_translated_locale_payload
 
