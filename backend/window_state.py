@@ -233,6 +233,27 @@ class WindowStateManager:
     def on_restored(self):
         self.settings.config.window_state.placement = "normal"
 
+    def capture_window(self, window) -> bool:
+        snapshot = _snapshot_native_window(window)
+        if snapshot is None:
+            return False
+
+        placement, geometry = snapshot
+        config = self.settings.config
+        config.window_state = _coerce_state(getattr(config, "window_state", None))
+        state = config.window_state
+        if placement is not None:
+            state.placement = placement
+
+        display = _select_display_for_geometry(geometry, self.displays_provider() or _get_pywebview_displays())
+        geometry = _clamp_to_display(geometry, display)
+        self.current_display = display
+        self._last_geometry = geometry
+        _apply_geometry(state, geometry, display)
+        config.window_width = geometry.width
+        config.window_height = geometry.height
+        return True
+
     def save(self):
         self.settings.save()
 
@@ -433,6 +454,49 @@ def _apply_geometry(state: WindowStateConfig, geometry: WindowGeometry, display:
         work_width=display.work_width,
         work_height=display.work_height,
     )
+
+
+def _snapshot_native_window(window) -> tuple[str | None, WindowGeometry] | None:
+    native = getattr(window, "native", None)
+    if native is None:
+        return None
+
+    state_name = str(getattr(native, "WindowState", "") or "").lower()
+    placement = None
+    if "maximized" in state_name:
+        placement = "maximized"
+    elif "normal" in state_name:
+        placement = "normal"
+
+    # 最大化/最小化时当前 Bounds 是屏幕尺寸，RestoreBounds 才是用户还原后的窗口尺寸。
+    rect = getattr(native, "RestoreBounds", None) if placement != "normal" else getattr(native, "Bounds", None)
+    if rect is None:
+        return None
+    return placement, _geometry_from_native_rect(rect, _native_scale(native))
+
+
+def _geometry_from_native_rect(rect, scale: float) -> WindowGeometry:
+    return WindowGeometry(
+        x=_scaled_native_int(getattr(rect, "X", 0), scale, 0),
+        y=_scaled_native_int(getattr(rect, "Y", 0), scale, 0),
+        width=_scaled_native_int(getattr(rect, "Width", DEFAULT_WINDOW_WIDTH), scale, DEFAULT_WINDOW_WIDTH),
+        height=_scaled_native_int(getattr(rect, "Height", DEFAULT_WINDOW_HEIGHT), scale, DEFAULT_WINDOW_HEIGHT),
+    )
+
+
+def _native_scale(native) -> float:
+    try:
+        scale = float(getattr(native, "_scale", 1) or 1)
+    except (TypeError, ValueError):
+        return 1
+    return scale if scale > 0 else 1
+
+
+def _scaled_native_int(value, scale: float, default: int) -> int:
+    try:
+        return int(float(value) / scale)
+    except (TypeError, ValueError):
+        return default
 
 
 def _as_int(value, default: int) -> int:

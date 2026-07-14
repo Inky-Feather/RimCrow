@@ -180,6 +180,9 @@
         </div>
       </div>
       <div class="absolute top-0 left-0 -z-100 w-full rounded-lg h-full group-hover:bg-bg-overlay/10"></div>
+      <div v-if="selectionOrder > 0" class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-accent-special text-text-main text-[0.65rem] leading-4 text-center font-bold shadow-md shadow-black/30 pointer-events-none">
+        {{ selectionOrder }}
+      </div>
 
     </div>
 
@@ -227,6 +230,7 @@ const props = defineProps({
   isDragging: { type: Boolean, default: false }, // 用于外部控制样式
   isInSearch: { type: Boolean, default: false }, // 是否在搜索结果中
   searchMatch: { type: Boolean, default: false }, // 是否是当前搜索焦点
+  selectionOrder: { type: Number, default: 0 },
   moveMenu: { type: Object, default: null },
   currentSplitGroup: { type: Object, default: null },
   // 仅用于在右键菜单中判断“当前选中项里是否包含分割线模组”，不参与普通模组逻辑。
@@ -721,8 +725,10 @@ const handleContextMenu = async (event) => {
   const fileMenuItems = [
     { divider: true },
     { commandId: 'mods.openSelectedFolder', args: { modId: props.item_id }, labelOverride: t('common.action.open_folder', '打开文件夹'), icon: FolderInput },
-    { label: localizeMenuLabel + localizeCandidateCountStr, icon: localizeMenuIcon, disabled: !selectedLocalizeCandidates.length,
-      action: () => modStore.localizeMods(localizeSummary.pathHashes, 'workshop', { existingCount: selectedCoexistWorkshopCount }) },
+    selectedIds.length > 1
+      ? { commandId: 'mods.localizeSelectedWorkshop', args: { modIds: [...selectedIds] }, labelOverride: localizeMenuLabel + localizeCandidateCountStr, icon: localizeMenuIcon, disabled: !selectedLocalizeCandidates.length }
+      : { label: localizeMenuLabel + localizeCandidateCountStr, icon: localizeMenuIcon, disabled: !selectedLocalizeCandidates.length,
+        action: () => modStore.localizeMods(localizeSummary.pathHashes, 'workshop', { existingCount: selectedCoexistWorkshopCount }) },
     { label: t('menu.mod_item.coexist.switch', '切换共存版本'), icon: SquaresExclude, disabled: !coexistSelectedIds.length,
       children: [
         { label: t('menu.mod_item.coexist.switch_workshop', '切换为工坊版') + coexistSelectedCountStr, icon: IconSteam, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'steam') },
@@ -790,11 +796,11 @@ const handleContextMenu = async (event) => {
   ]
   const allInterlocked = modStore.selectedMods.every(m => m && m.interlock_id)
   if (!allInterlocked) {
-    selectedMenuItems.push({ label: t('menu.mod_item.interlock.create', '创建联锁') + selectedCountStr, icon: Link2, action: () => modStore.linkMods(selectedIds) })
+    selectedMenuItems.push({ commandId: 'mods.linkSelectedInterlock', args: { modIds: [...selectedIds] }, labelOverride: t('menu.mod_item.interlock.create', '创建联锁') + selectedCountStr, icon: Link2 })
   }
   const anyInterlocked = modStore.selectedMods.some(m => !!m.interlock_id)
   if (anyInterlocked) {
-    selectedMenuItems.push({ label: t('menu.mod_item.interlock.unlink', '解除联锁') + selectedCountStr, icon: Link2Off, action: () => modStore.unlinkMods(selectedIds) })
+    selectedMenuItems.push({ commandId: 'mods.unlinkSelectedInterlock', args: { modIds: [...selectedIds] }, labelOverride: t('menu.mod_item.interlock.unlink', '解除联锁') + selectedCountStr, icon: Link2Off })
     const disabledIds = linkIssueDetails.value.filter(d => d.reason === 'disabled').map(d => d.package_id)
     const missingPackageIds = linkIssueDetails.value.filter(d => d.reason === 'missing' && d.package_id).map(d => d.package_id)
     if (missingPackageIds.length > 0) {

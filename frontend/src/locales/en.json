@@ -1444,6 +1444,14 @@
         "description": "Recheck all files. Use this when the file state is uncertain.",
         "title": "Force scan Mods"
       },
+      "link_selected_interlock": {
+        "description": "Create a fixed-order interlock for the selected Mods.",
+        "title": "Create interlock for selected Mods"
+      },
+      "localize_selected_workshop": {
+        "description": "Copy selected Workshop Mods to the local folder. Existing local versions are handled by the current flow.",
+        "title": "Localize selected Workshop Mods"
+      },
       "move_selected_to_bottom": {
         "description": "Move the selected Mods to the bottom of their list.",
         "title": "Move selected items to bottom"
@@ -1491,6 +1499,10 @@
       "undo_list_history": {
         "description": "Undo the most recent Mod list change in the current session.",
         "title": "Undo list operation"
+      },
+      "unlink_selected_interlock": {
+        "description": "Remove interlocks associated with the currently selected Mods.",
+        "title": "Remove selected Mod interlocks"
       },
       "unsubscribe_and_delete_selected_workshop": {
         "description": "Unsubscribe the selected Workshop Mods and delete their local files.",
@@ -2182,7 +2194,7 @@
         "title": "Confirm Delete"
       },
       "disable": {
-        "message": "Deactivate {target}?\nAfter deactivation, it will not be available in game. You can activate it again from the inactive list.",
+        "message": "Disable {target}?\n\nDisabling renames this Mod's About.xml to About.xml.disabled, so the game will not find it when scanning. The files stay in their original location, and you can enable it again from the “Disabled” list.\nHere, “disable” is not the same as turning a mod off in the game's load order. Turning it off only removes it from the current load order; disabling makes the whole Mod temporarily invisible to the game.\nMake sure you fully understand the consequences before confirming.",
         "selected_count": "the selected {count} mods",
         "this_mod": "this mod",
         "title": "Confirm Deactivation"
@@ -4292,6 +4304,9 @@
       "only_one_file": "Only one file can be imported at a time. The first file was used.",
       "rename_empty": "Enter a new backup name"
     },
+    "command": {
+      "batch_selection_required": "Select at least 2 Mods before running a batch action"
+    },
     "common": {
       "copied_label": "{label} copied",
       "copy_empty": "No {label} to copy",
@@ -4408,6 +4423,8 @@
       "batch_set_type_failed": "Failed to batch set type. Local state has been restored. Try again later.",
       "batch_update_data_failed": "Failed to batch update mod data. Local state has been restored. Try again later. See system log for details.",
       "failed_suffix": ", {count} failed",
+      "interlock_all_selected_locked": "The selected Mods are already interlocked",
+      "interlock_no_selected_locked": "The selected Mods have no interlocks to remove",
       "link_failed": "Failed to link mods. Try again later. See system log for details.",
       "localize_no_workshop_items": "No selected mods come from Workshop",
       "scan_already_running": "A scan task is already running. Wait for the current scan to finish.",
@@ -4448,7 +4465,8 @@
     "mod_list": {
       "search": {
         "filtered_out": "Search item {id} is filtered out by the {list} list filter. Clear filters and try again.",
-        "loop_to_first": "Reached the last search result; wrapped to the first one"
+        "loop_to_first": "Reached the last search result; wrapped to the first one",
+        "loop_to_last": "Reached the first search result; wrapped to the last one"
       }
     },
     "mod_residue": {
@@ -4893,7 +4911,7 @@
           "warn_item": "• Recommended: {count}"
         }
       },
-      "search_next": "Find the next matching result",
+      "search_next": "Left-click to find the next matching result, right-click to find the previous one",
       "sort": {
         "asc": "(ascending)",
         "by_mode": "Sort by {mode}",
@@ -5363,6 +5381,7 @@
       "image_missing": "Image not found",
       "info_incomplete_hint": "* Some mod information may not be fully available due to format and consistency limits.",
       "no_available_groups": "No available groups",
+      "no_available_tags": "No available tags",
       "notes_placeholder": "Add custom notes here",
       "relation": {
         "dependencies": "Depends on",

@@ -97,10 +97,6 @@ def get_webview_proxy_args():
         "proxy_bypass_list": bypass_str
     }
 
-def on_main_window_closed():
-    """窗口关闭时触发"""
-    persist_exit_state()
-
 def persist_exit_state():
     """统一持久化退出状态"""
     settings.set('last_run_time', current_ms())
@@ -351,6 +347,12 @@ def main():
         logger.info(f"Entrypoint: {entrypoint}")
         log_startup_perf("window_created")
         if window: 
+            def persist_main_window_state():
+                try:
+                    window_state.capture_window(window)
+                finally:
+                    persist_exit_state()
+
             api.set_window(window)
             # `shown` 是“窗口可见”的信号，用它来结束 PyInstaller 启动画面；
             # `loaded` 仍然保留，用于区分页面是否真正完成加载，并配合超时提示给用户更准确的信息。
@@ -360,8 +362,8 @@ def main():
             window.events.moved += window_state.on_moved
             window.events.maximized += window_state.on_maximized
             window.events.restored += window_state.on_restored
+            window.events.closing += persist_main_window_state
             window.events.closed += api.cleanup
-            window.events.closed += on_main_window_closed  # 窗口关闭时退出应用
         # 注册窗口到事件总线
         EventBus.set_window(window) # type: ignore
         start_desktop_startup_timeout_guard()

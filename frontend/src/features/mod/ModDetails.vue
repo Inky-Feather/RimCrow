@@ -386,17 +386,21 @@
                 <div class="relative flex-1 flex" :ref="el => tagInputRef = el">
                   <input type="text" v-model="tagInput" @focus="openTagSuggest" @input="openTagSuggest" placeholder="+"
                     @keydown.enter.prevent="confirmAddTag" @keydown.up.prevent="navTag(-1)" @keydown.down.prevent="navTag(1)"
+                    @keydown.tab="applySelectedTag"
                     @keydown.esc="closeTagSuggest" v-tooltip="t('tooltip.mod_details.add_tag', '添加新标签')"
                     class="input-glass w-5 rounded px-1 py-0.5 text-center text-xs text-text-main placeholder:text-text-disabled focus:flex-1 focus:w-24 focus:outline-none"
                   />
-                  <FixedPopover :is-open="showTagSuggest && filteredKnownTags.length > 0" :trigger-ref="tagInputRef" @request-close="closeTagSuggest">
+                  <FixedPopover :is-open="showTagSuggest" :trigger-ref="tagInputRef" :z-index="100020" @request-close="closeTagSuggest">
                       <!-- 标签建议下拉框 -->
-                      <div class="popover-surface z-50 flex max-h-40 flex-col items-center gap-0.5 overflow-y-auto rounded-lg p-1">
-                        <button v-for="(t, idx) in filteredKnownTags" :key="t"  @click="addTag(t)"
-                          class="text-left px-2 min-w-20 text-xs items-center rounded hover:bg-accent-primary/20 hover:text-accent-primary transition-colors truncate"
-                          :class="{'bg-accent-primary/10 text-accent-primary': idx === tagNavIndex}">
+                      <div @mousedown.prevent class="popover-surface inline-flex max-h-60 min-w-32 max-w-[min(50vw,24rem)] flex-col gap-0.5 overflow-y-auto rounded-xl p-1 custom-scrollbar">
+                        <button v-for="(t, idx) in filteredKnownTags" :key="t" :ref="el => setTagOptionRef(el, idx)" type="button" @click="addTag(t)"
+                          class="w-full min-h-7 shrink-0 flex items-center px-2 py-1 rounded-lg text-xs text-left text-text-soft hover:bg-bg-overlay/10 hover:text-text-main transition-all duration-150 truncate"
+                          :class="{'bg-bg-overlay/10 ring-1 ring-border-base/18 text-accent-primary': idx === tagNavIndex}">
                           {{ t }}
                         </button>
+                        <div v-if="filteredKnownTags.length === 0" class="py-3 px-4 text-center text-xs text-text-dim italic">
+                          {{ t('ui.mod_details.no_available_tags', '暂无可用标签') }}
+                        </div>
                       </div>
                   </FixedPopover>
                 </div>
@@ -538,7 +542,7 @@
 </template>
 
 <script setup >
-import { computed, defineAsyncComponent, ref, watch, nextTick } from 'vue'
+import { computed, defineAsyncComponent, ref, watch, nextTick, onBeforeUpdate } from 'vue'
 import { refDebounced, onClickOutside, useDebounceFn } from '@vueuse/core' // 引入防抖函数
 import { MOD_SIGN_COLORS, MOD_TYPE_ICON_MAP, getModSignColorLabel, getModTypeLabel, getSourceTypeLabel } from '../../shared/lib/constants'
 import { useModStore } from './stores/modStore'
@@ -599,6 +603,7 @@ const tagInput = ref('')
 const showTagSuggest = ref(false)
 const tagInputRef = ref(null)
 const tagNavIndex = ref(-1) // -1 表示当前只是展示建议，还没有显式选中某一项
+const tagOptionRefs = ref([])
 // === 分组管理逻辑 ===
 const showGroupDrop = ref(false)
 const groupDropRef = ref(null)
@@ -686,7 +691,6 @@ const filteredKnownTags = computed(() => {
       .filter(t => !userTags.value.includes(t)) // 排除已添加
       .filter(t => t.toLowerCase().includes(input)) // 模糊匹配
   )
-    .slice(0, 8) // 最多显示8个
 })
 // 辅助计算：格式化描述（换行转为 <br>）
 const formattedDescription = computed(() => {
@@ -856,13 +860,12 @@ const removeTag = (tag) => {
 }
 // 确认添加 (回车键)
 const confirmAddTag = () => {
-  // 只有用户显式用方向键选中过建议项时，回车才采纳建议；否则优先保留原始输入。
-  if (showTagSuggest.value && tagNavIndex.value >= 0 && filteredKnownTags.value.length > tagNavIndex.value) {
-    addTag(filteredKnownTags.value[tagNavIndex.value])
-  } else if (tagInput.value.trim()) {
-    // 否则创建新标签
-    addTag(tagInput.value.trim())
-  }
+  if (tagInput.value.trim()) addTag(tagInput.value.trim())
+}
+const applySelectedTag = (event) => {
+  if (!showTagSuggest.value || tagNavIndex.value < 0 || filteredKnownTags.value.length <= tagNavIndex.value) return
+  event?.preventDefault()
+  addTag(filteredKnownTags.value[tagNavIndex.value])
 }
 // 键盘导航
 const navTag = (step) => {
@@ -871,10 +874,21 @@ const navTag = (step) => {
   if (len === 0) return
   if (tagNavIndex.value < 0) {
     tagNavIndex.value = step > 0 ? 0 : len - 1
+    scrollToTagOption(tagNavIndex.value)
     return
   }
   tagNavIndex.value = (tagNavIndex.value + step + len) % len
+  scrollToTagOption(tagNavIndex.value)
 }
+const scrollToTagOption = (index) => {
+  nextTick(() => tagOptionRefs.value[index]?.scrollIntoView?.({ block: 'nearest' }))
+}
+const setTagOptionRef = (el, index) => {
+  if (el) tagOptionRefs.value[index] = el
+}
+onBeforeUpdate(() => {
+  tagOptionRefs.value = []
+})
 const persistSignColor = useDebounceFn((packageId, color) => {
   // 自定义取色拖动时会连续触发事件，这里做轻量防抖，避免频繁写后端。
   modStore.updateModUserData(packageId, { sign_color: color })

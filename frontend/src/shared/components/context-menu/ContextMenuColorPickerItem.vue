@@ -2,9 +2,9 @@
   <div v-tooltip="item.tooltip || t('tooltip.context_menu.color_custom', '自定义颜色')"
     class="context-color-picker relative flex items-center justify-center aspect-square w-[33px] rounded-md border border-border-base/10 bg-bg-overlay/5 hover:border-border-base/18 hover:bg-bg-overlay/10 transition-all duration-200"
     @click.stop @mousedown.stop>
-    <!-- 把弹层挂回当前菜单节点内，避免 Teleport 到 body 后触发父级菜单的 mouseleave 关闭链路。 -->
+    <!-- 弹层挂到 body，避免被子菜单滚动容器裁剪。父菜单关闭保护在 ContextMenuItem 里处理。 -->
     <ColorPicker v-model:pureColor="item.color" @pureColorChange="handleColorChange"
-      :picker-container="pickerContainer || 'body'" format="hex" picker-type="fk" disable-alpha round-history />
+      :picker-container="pickerContainer || 'body'" :z-index="100020" format="hex" picker-type="fk" disable-alpha round-history />
   </div>
 </template>
 

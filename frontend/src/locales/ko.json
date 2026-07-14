@@ -1444,6 +1444,14 @@
         "description": "모든 파일을 다시 확인하십시오. 파일 상태가 확실하지 않은 경우 이 방법을 사용하세요.",
         "title": "강제 스캔 모드"
       },
+      "link_selected_interlock": {
+        "description": "현재 선택한 여러 모드에 고정 순서 연동을 생성합니다.",
+        "title": "선택한 모드 연동 생성"
+      },
+      "localize_selected_workshop": {
+        "description": "선택한 Workshop 모드를 로컬 폴더로 복사합니다. 이미 있는 로컬 버전은 현재 흐름에 따라 처리됩니다.",
+        "title": "선택한 Workshop 모드 로컬화"
+      },
       "move_selected_to_bottom": {
         "description": "선택한 모드를 목록의 맨 아래로 이동하세요.",
         "title": "선택한 항목을 맨 아래로 이동"
@@ -1491,6 +1499,10 @@
       "undo_list_history": {
         "description": "현재 세션에서 가장 최근 Mod 목록 변경 사항을 취소합니다.",
         "title": "실행 취소 목록 작업"
+      },
+      "unlink_selected_interlock": {
+        "description": "현재 선택한 모드와 연결된 연동을 제거합니다.",
+        "title": "선택한 모드 연동 제거"
       },
       "unsubscribe_and_delete_selected_workshop": {
         "description": "선택한 Workshop Mod를 구독 취소하고 해당 로컬 파일을 삭제하세요.",
@@ -2182,7 +2194,7 @@
         "title": "삭제 확인"
       },
       "disable": {
-        "message": "{target}를 비활성화하시겠습니까?\n비활성화 후에는 게임에서 사용할 수 없습니다. 비활성 목록에서 다시 활성화할 수 있습니다.",
+        "message": "{target}를 비활성화하시겠습니까?\n\n비활성화하면 이 Mod의 About.xml을 About.xml.disabled로 이름을 바꾸어 게임이 스캔할 때 찾지 못하게 합니다. 파일은 원래 위치에 남아 있으며 “비활성화됨” 목록에서 다시 활성화할 수 있습니다.\n여기서 말하는 “비활성화”는 게임 내 로드 순서에서 끄는 것과 다릅니다. 끄기는 현재 로드 순서에서만 제거하지만, 이 비활성화는 게임이 전체 Mod를 일시적으로 보지 못하게 합니다.\n결과를 완전히 이해한 뒤에 확인하세요.",
         "selected_count": "선택된 {count} 모드",
         "this_mod": "이 모드",
         "title": "비활성화 확인"
@@ -4292,6 +4304,9 @@
       "only_one_file": "한 번에 하나의 파일만 가져올 수 있습니다. 첫 번째 파일이 사용되었습니다.",
       "rename_empty": "새 백업 이름을 입력하세요."
     },
+    "command": {
+      "batch_selection_required": "일괄 작업을 실행하려면 모드를 2개 이상 선택하세요"
+    },
     "common": {
       "copied_label": "{label} 복사됨",
       "copy_empty": "복사할 {label}가 없습니다.",
@@ -4408,6 +4423,8 @@
       "batch_set_type_failed": "유형을 일괄 설정하지 못했습니다. 로컬 상태가 복원되었습니다. 나중에 다시 시도하세요.",
       "batch_update_data_failed": "모드 데이터를 일괄 업데이트하지 못했습니다. 로컬 상태가 복원되었습니다. 나중에 다시 시도하세요. 자세한 내용은 시스템 로그를 참조하세요.",
       "failed_suffix": ", {count} 실패",
+      "interlock_all_selected_locked": "선택한 모드는 이미 연동되어 있습니다.",
+      "interlock_no_selected_locked": "선택한 모드에는 제거할 연동이 없습니다.",
       "link_failed": "모드를 연결하지 못했습니다. 나중에 다시 시도하세요. 자세한 내용은 시스템 로그를 참조하세요.",
       "localize_no_workshop_items": "Workshop에서 선택된 모드가 제공되지 않습니다.",
       "scan_already_running": "검사 작업이 이미 실행 중입니다. 현재 스캔이 완료될 때까지 기다리십시오.",
@@ -4448,7 +4465,8 @@
     "mod_list": {
       "search": {
         "filtered_out": "검색 항목 {id}는 {list} 목록 필터에 의해 필터링됩니다. 필터를 지우고 다시 시도해 보세요.",
-        "loop_to_first": "마지막 검색 결과에 도달했습니다. 첫 번째로 포장"
+        "loop_to_first": "마지막 검색 결과에 도달했습니다. 첫 번째로 포장",
+        "loop_to_last": "첫 번째 검색 결과에 도달했습니다. 마지막 결과로 이동합니다"
       }
     },
     "mod_residue": {
@@ -4893,7 +4911,7 @@
           "warn_item": "• 권장: {count}"
         }
       },
-      "search_next": "다음으로 일치하는 결과 찾기",
+      "search_next": "왼쪽 클릭으로 다음 일치 결과를 찾고, 오른쪽 클릭으로 이전 결과를 찾습니다",
       "sort": {
         "asc": "(오름차순)",
         "by_mode": "{mode}로 정렬",
@@ -5363,6 +5381,7 @@
       "image_missing": "이미지를 찾을 수 없습니다",
       "info_incomplete_hint": "* 일부 모드 정보는 형식 및 일관성 제한으로 인해 완전히 제공되지 않을 수 있습니다.",
       "no_available_groups": "사용 가능한 그룹이 없습니다.",
+      "no_available_tags": "사용 가능한 태그가 없습니다",
       "notes_placeholder": "여기에 맞춤 메모를 추가하세요.",
       "relation": {
         "dependencies": "에 따라 다름",

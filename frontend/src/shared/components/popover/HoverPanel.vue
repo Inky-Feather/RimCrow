@@ -8,20 +8,15 @@
     -->
     <Motion v-if="shouldRender" ref="panelRef"
       class="gpu-text-fix fixed top-0 left-0 z-9999 pointer-events-none will-change-transform"
-      :class="containerClasses" :initial="{ opacity: 0, scale: 0.9 }"
+      :class="containerClasses" :initial="{ opacity: 0, scale: 1, rotate: 0 }"
       :animate="{
         x: safeX,
         y: safeY,
-        rotate: rotation, // 文本模式下可以减小旋转幅度，或者直接设为0
+        rotate: rotation,
         opacity: isVisible ? 1 : 0,
-        scale: isVisible ? 1 : 0.9
+        scale: 1
       }"
-      :transition="{
-        type: 'spring',
-        damping: hoverStore.type === 'text' ? 20 : 30, // 阻尼，文本提示可以更灵敏一点
-        stiffness: 350,  // 刚度：控制回弹力度 (参考代码值)
-        mass: 1          // 质量：控制惯性
-      }"
+      :transition="motionTransition"
     >
       <!-- 模式 A: 复杂预览卡片 (data 是对象) -->
       <div v-if="hoverStore.type === 'preview'"
@@ -198,6 +193,26 @@ const containerClasses = computed(() => {
   }
   // Preview 样式：宽大、有背景、圆角大
   return 'w-100 max-h-[min(15rem,calc(100vh-2rem))] rounded-xl shadow-2xl overflow-hidden'
+})
+const followSpring = computed(() => ({ type: 'spring', damping: hoverStore.type === 'text' ? 20 : 30, stiffness: 350, mass: 1 }))
+const motionTransition = computed(() => {
+  // 未显现前坐标立即到位，避免短停留时从旧位置滑入；显现后仍保留原来的鼠标跟随手感。
+  if (!isVisible.value) {
+    return {
+      opacity: { duration: 0.22, ease: 'easeOut' },
+      x: { duration: 0 },
+      y: { duration: 0 },
+      scale: { duration: 0 },
+      rotate: { duration: 0 },
+    }
+  }
+  return {
+    opacity: { duration: 0.22, ease: 'easeOut' },
+    x: followSpring.value,
+    y: followSpring.value,
+    rotate: followSpring.value,
+    scale: { duration: 0 },
+  }
 })
 // --- 2. 窗口尺寸监听 ---
 const winWidth = ref(window.innerWidth)

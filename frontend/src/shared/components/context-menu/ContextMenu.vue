@@ -98,7 +98,7 @@ const menuStyle = computed(() => ({
 onClickOutside(menuRef, () => {
   menuStore.close()
 }, {
-  ignore: ['.context-submenu-surface']
+  ignore: ['.context-submenu-surface', '.vc-colorpicker']
 })
 
 // 监听 ESC 键关闭

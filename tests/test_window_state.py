@@ -167,6 +167,45 @@ def test_window_state_serializes_only_required_fields():
     assert set(payload["display"]) == {"id", "work_x", "work_y", "work_width", "work_height"}
 
 
+def rect(x, y, width, height):
+    return SimpleNamespace(X=x, Y=y, Width=width, Height=height)
+
+
+def native_window(state, bounds, restore_bounds=None, scale=1):
+    return SimpleNamespace(native=SimpleNamespace(
+        WindowState=state,
+        Bounds=bounds,
+        RestoreBounds=restore_bounds or bounds,
+        _scale=scale,
+    ))
+
+
+def test_capture_window_saves_normal_geometry_from_native_snapshot():
+    config = SimpleNamespace(window_state=make_state(placement="maximized"), window_width=1400, window_height=900)
+    manager = WindowStateManager(SimpleNamespace(config=config, save=lambda: None), displays_provider=lambda: [display(width=1920, height=1080)])
+
+    assert manager.capture_window(native_window("Normal", rect(200, 120, 1100, 760), scale=1.25)) is True
+
+    assert config.window_state.placement == "normal"
+    assert config.window_state.normal.x == 160
+    assert config.window_state.normal.y == 96
+    assert config.window_state.normal.width == 880
+    assert config.window_state.normal.height == 608
+    assert config.window_width == 880
+    assert config.window_height == 608
+
+
+def test_capture_window_keeps_maximized_placement_but_saves_restore_bounds():
+    config = SimpleNamespace(window_state=make_state(placement="normal"), window_width=1400, window_height=900)
+    manager = WindowStateManager(SimpleNamespace(config=config, save=lambda: None), displays_provider=lambda: [display(width=1920, height=1080)])
+
+    manager.capture_window(native_window("Maximized", rect(0, 0, 1920, 1040), restore_bounds=rect(180, 100, 1200, 800)))
+
+    assert config.window_state.placement == "maximized"
+    assert config.window_state.normal.x == 180
+    assert config.window_state.normal.width == 1200
+
+
 def test_enable_per_monitor_dpi_awareness_is_noop_on_non_windows():
     with patch("backend.window_state.is_windows", return_value=False):
         enable_per_monitor_dpi_awareness()

@@ -274,8 +274,9 @@ const cancelEditing = () => {
 // 键盘：Enter 提交，Tab 应用建议，空输入 Backspace 删除最后一个 token。
 const handleKeydown = (event) => {
   if (event.key === 'Enter') {
+    event.preventDefault()
     if (inputValue.value) addTag(inputValue.value)
-    emit('search')
+    emit('search', !event.shiftKey)
   } else if (event.key === 'Tab' && showSuggestions.value && suggestionList.value.length > 0) {
     event.preventDefault()
     applySuggestion(suggestionList.value[highlightIndex.value])

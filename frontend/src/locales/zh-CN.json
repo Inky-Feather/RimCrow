@@ -1444,6 +1444,14 @@
         "description": "重新检查所有文件，适合文件状态不确定时使用。",
         "title": "强制扫描 Mod"
       },
+      "link_selected_interlock": {
+        "description": "为当前选中的多个 Mod 创建固定顺序联锁。",
+        "title": "创建选中 Mod 联锁"
+      },
+      "localize_selected_workshop": {
+        "description": "复制选中的工坊 Mod 到本地目录；已有本地版本时会按现有流程处理。",
+        "title": "本地化选中工坊 Mod"
+      },
       "move_selected_to_bottom": {
         "description": "把当前选中的 Mod 移到所在列表底部。",
         "title": "移动选中项到列表底部"
@@ -1491,6 +1499,10 @@
       "undo_list_history": {
         "description": "撤销当前会话内最近一次 Mod 列表变更。",
         "title": "撤销列表操作"
+      },
+      "unlink_selected_interlock": {
+        "description": "解除当前选中 Mod 关联的联锁。",
+        "title": "解除选中 Mod 联锁"
       },
       "unsubscribe_and_delete_selected_workshop": {
         "description": "取消订阅选中的创意工坊 Mod，并删除对应本地文件。",
@@ -2182,7 +2194,7 @@
         "title": "删除确认"
       },
       "disable": {
-        "message": "确定要禁用{target}吗？\n禁用后将无法在游戏中使用，可在“已禁用”列表中重新启用。",
+        "message": "确定要禁用{target}吗？\n\n禁用会把该 Mod 的 About.xml 改名为 About.xml.disabled，让游戏扫描不到它。文件仍保留在原位置，可以在“已禁用”列表中重新启用。\n这里的“禁用”不是游戏内的“停用”。停用只是从当前加载顺序中移除；禁用会让游戏暂时看不到整个 Mod。\n请确保你完全明确后果再确认操作。",
         "selected_count": "选中的 {count} 个 Mod",
         "this_mod": "该 Mod",
         "title": "禁用确认"
@@ -4292,6 +4304,9 @@
       "only_one_file": "一次只能导入一个文件，已自动使用第一个文件",
       "rename_empty": "请输入新的备份名称"
     },
+    "command": {
+      "batch_selection_required": "请至少选择 2 个 Mod 后再执行批量操作"
+    },
     "common": {
       "copied_label": "{label}已复制",
       "copy_empty": "没有可复制的{label}",
@@ -4408,6 +4423,8 @@
       "batch_set_type_failed": "批量设置类型失败，已还原本地状态。请稍后重试。",
       "batch_update_data_failed": "批量更新 Mod 数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。",
       "failed_suffix": "，{count} 个失败",
+      "interlock_all_selected_locked": "选中的 Mod 已经处于联锁中",
+      "interlock_no_selected_locked": "选中的 Mod 没有可解除的联锁",
       "link_failed": "设置 Mod 联锁失败。请稍后重试，详细原因已写入系统日志。",
       "localize_no_workshop_items": "选中的模组中没有来自工坊的项",
       "scan_already_running": "扫描任务已在进行中，请等待当前扫描完成。",
@@ -4448,7 +4465,8 @@
     "mod_list": {
       "search": {
         "filtered_out": "搜索项 {id} 已被 {list} 列表筛选器过滤，请清除筛选后重试。",
-        "loop_to_first": "已到达最后一个搜索结果，循环回到第一个"
+        "loop_to_first": "已到达最后一个搜索结果，循环回到第一个",
+        "loop_to_last": "已到达第一个搜索结果，循环回到最后一个"
       }
     },
     "mod_residue": {
@@ -4893,7 +4911,7 @@
           "warn_item": "• 建议项: {count}"
         }
       },
-      "search_next": "搜索定位下一个符合条件的结果",
+      "search_next": "左键定位下一个符合条件的结果，右键定位上一个",
       "sort": {
         "asc": "（升序）",
         "by_mode": "按{mode}排序",
@@ -5363,6 +5381,7 @@
       "image_missing": "图片不存在",
       "info_incomplete_hint": "* 由于格式和规范性方面的限制，部分模组信息可能无法完全获取。",
       "no_available_groups": "无可用分组",
+      "no_available_tags": "暂无可用标签",
       "notes_placeholder": "在此添加自定义备注",
       "relation": {
         "dependencies": "依赖于",

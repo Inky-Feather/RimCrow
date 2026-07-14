@@ -1,5 +1,7 @@
 import { registerCommands } from '../../shared/commands/commandRegistry'
 import { getCurrentSelectedText } from '../../shared/lib/text'
+import { toast } from '../../shared/lib/common'
+import { t } from '../../shared/i18n.js'
 import { getModListActions } from './modListActions'
 
 let registered = false
@@ -37,6 +39,22 @@ const resolveFirstSelectedModId = (modStore, args = {}) => {
   if (explicitId) return explicitId
   const selectedIds = resolveSelectedModIds(modStore, args)
   return selectedIds[0] || ''
+}
+
+const MIN_BATCH_SELECTION = 2
+
+const resolveSelectedModBatch = (modStore, args = {}) => {
+  const ids = resolveSelectedModIds(modStore, args)
+  return {
+    ids,
+    mods: ids.map(id => modStore?.takeModById?.(id)).filter(Boolean),
+  }
+}
+
+const ensureBatchSelection = (batch) => {
+  if (batch.ids.length >= MIN_BATCH_SELECTION) return true
+  toast.warning(t('toast.command.batch_selection_required', '请至少选择 2 个 Mod 后再执行批量操作'))
+  return false
 }
 
 const resolveNextSelectedActiveState = (modStore, args = {}) => {
@@ -278,6 +296,61 @@ export const registerBuiltinCommands = () => {
       defaultKeys: ['Ctrl+Alt+V'],
       enabled: ({ modStore }, args) => resolveSelectedModIds(modStore, args).some(id => modStore?.canSwitchCoexistenceSource?.(id)),
       run: ({ modStore }, args) => modStore.toggleSelectedCoexistenceSource(resolveSelectedModIds(modStore, args)),
+    },
+    {
+      id: 'mods.localizeSelectedWorkshop',
+      title: '本地化选中工坊 Mod',
+      category: COMMAND_CATEGORIES.modList,
+      description: '复制选中的工坊 Mod 到本地目录；已有本地版本时会按现有流程处理。',
+      scope: 'mod-list',
+      defaultKeys: ['Ctrl+Alt+M'],
+      enabled: () => true,
+      run: async ({ modStore }, args) => {
+        const batch = resolveSelectedModBatch(modStore, args)
+        if (!ensureBatchSelection(batch)) return false
+        const localizeSummary = modStore.resolveLocalizeCandidates(batch.mods, 'workshop')
+        if (!localizeSummary.candidates?.length) {
+          toast.info(t('toast.mod.localize_no_workshop_items', '选中的模组中没有来自工坊的项'))
+          return false
+        }
+        return await modStore.localizeMods(localizeSummary.pathHashes, 'workshop', { existingCount: localizeSummary.existingCount })
+      },
+    },
+    {
+      id: 'mods.linkSelectedInterlock',
+      title: '创建选中 Mod 联锁',
+      category: COMMAND_CATEGORIES.modList,
+      description: '为当前选中的多个 Mod 创建固定顺序联锁。',
+      scope: 'mod-list',
+      defaultKeys: ['Ctrl+Alt+L'],
+      enabled: () => true,
+      run: ({ modStore }, args) => {
+        const batch = resolveSelectedModBatch(modStore, args)
+        if (!ensureBatchSelection(batch)) return false
+        if (batch.mods.every(mod => mod?.interlock_id)) {
+          toast.info(t('toast.mod.interlock_all_selected_locked', '选中的 Mod 已经处于联锁中'))
+          return false
+        }
+        return modStore.linkMods(batch.ids)
+      },
+    },
+    {
+      id: 'mods.unlinkSelectedInterlock',
+      title: '解除选中 Mod 联锁',
+      category: COMMAND_CATEGORIES.modList,
+      description: '解除当前选中 Mod 关联的联锁。',
+      scope: 'mod-list',
+      defaultKeys: ['Ctrl+Alt+U'],
+      enabled: () => true,
+      run: ({ modStore }, args) => {
+        const batch = resolveSelectedModBatch(modStore, args)
+        if (!ensureBatchSelection(batch)) return false
+        if (!batch.mods.some(mod => mod?.interlock_id)) {
+          toast.info(t('toast.mod.interlock_no_selected_locked', '选中的 Mod 没有可解除的联锁'))
+          return false
+        }
+        return modStore.unlinkMods(batch.ids)
+      },
     },
     {
       id: 'mods.revealFirstSelected',

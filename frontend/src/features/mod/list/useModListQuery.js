@@ -294,6 +294,12 @@ export function useModListQuery({
         index = 0 // 循环
         toast.info(t('toast.mod_list.search.loop_to_first', '已到达最后一个搜索结果，循环回到第一个'), { timeout: 2000 })
       }
+    } else {
+      index--
+      if (index < 0) {
+        index = results.length - 1 // 循环
+        toast.info(t('toast.mod_list.search.loop_to_last', '已到达第一个搜索结果，循环回到最后一个'), { timeout: 2000 })
+      }
     }
     // 定位
     const targetId = results[index]

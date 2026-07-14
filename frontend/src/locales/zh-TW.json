@@ -1444,6 +1444,14 @@
         "description": "重新檢查所有檔案，適合檔案狀態不確定時使用。",
         "title": "強制掃描 Mod"
       },
+      "link_selected_interlock": {
+        "description": "為目前選中的多個 Mod 建立固定順序聯鎖。",
+        "title": "建立選中 Mod 聯鎖"
+      },
+      "localize_selected_workshop": {
+        "description": "將選中的工坊 Mod 複製到本地目錄；已有本地版本時會按現有流程處理。",
+        "title": "本地化選中工坊 Mod"
+      },
       "move_selected_to_bottom": {
         "description": "把目前選中的 Mod 移到所在列表底部。",
         "title": "移動選中項到列表底部"
@@ -1491,6 +1499,10 @@
       "undo_list_history": {
         "description": "撤銷目前會話內最近一次 Mod 列表變更。",
         "title": "撤銷列表操作"
+      },
+      "unlink_selected_interlock": {
+        "description": "解除目前選中 Mod 關聯的聯鎖。",
+        "title": "解除選中 Mod 聯鎖"
       },
       "unsubscribe_and_delete_selected_workshop": {
         "description": "取消訂閱選中的創意工坊 Mod，並刪除對應本地檔案。",
@@ -2182,7 +2194,7 @@
         "title": "刪除確認"
       },
       "disable": {
-        "message": "確定要禁用{target}嗎？\n禁用後將無法在遊戲中使用，可在“已禁用”列表中重新啟用。",
+        "message": "確定要禁用{target}嗎？\n\n禁用會把該 Mod 的 About.xml 改名為 About.xml.disabled，讓遊戲掃描不到它。檔案仍保留在原位置，可以在“已禁用”列表中重新啟用。\n這裡的“禁用”不是遊戲內的“停用”。停用只是從目前載入順序中移除；禁用會讓遊戲暫時看不到整個 Mod。\n請確保你完全明確後果再確認操作。",
         "selected_count": "選中的 {count} 個 Mod",
         "this_mod": "該 Mod",
         "title": "禁用確認"
@@ -4292,6 +4304,9 @@
       "only_one_file": "一次只能導入一個檔案，已自動使用第一個檔案",
       "rename_empty": "請輸入新的備份名稱"
     },
+    "command": {
+      "batch_selection_required": "請至少選擇 2 個 Mod 後再執行批量操作"
+    },
     "common": {
       "copied_label": "{label}已複製",
       "copy_empty": "沒有可複製的{label}",
@@ -4408,6 +4423,8 @@
       "batch_set_type_failed": "批量設定類型失敗，已還原本地狀態。請稍後重試。",
       "batch_update_data_failed": "批量更新 Mod 資料失敗，已還原本地狀態。請稍後重試，詳細原因已寫入系統日誌。",
       "failed_suffix": "，{count} 個失敗",
+      "interlock_all_selected_locked": "選中的 Mod 已經處於聯鎖中",
+      "interlock_no_selected_locked": "選中的 Mod 沒有可解除的聯鎖",
       "link_failed": "設定 Mod 聯鎖失敗。請稍後重試，詳細原因已寫入系統日誌。",
       "localize_no_workshop_items": "選中的模組中沒有來自工坊的項",
       "scan_already_running": "掃描任務已在進行中，請等待目前掃描完成。",
@@ -4448,7 +4465,8 @@
     "mod_list": {
       "search": {
         "filtered_out": "搜尋項 {id} 已被 {list} 列表篩選器過濾，請清除篩選後重試。",
-        "loop_to_first": "已到達最後一個搜尋結果，循環回到第一個"
+        "loop_to_first": "已到達最後一個搜尋結果，循環回到第一個",
+        "loop_to_last": "已到達第一個搜尋結果，循環回到最後一個"
       }
     },
     "mod_residue": {
@@ -4893,7 +4911,7 @@
           "warn_item": "• 建議項: {count}"
         }
       },
-      "search_next": "搜尋定位下一個符合條件的結果",
+      "search_next": "左鍵定位下一個符合條件的結果，右鍵定位上一個",
       "sort": {
         "asc": "（升序）",
         "by_mode": "按{mode}排序",
@@ -5363,6 +5381,7 @@
       "image_missing": "圖片不存在",
       "info_incomplete_hint": "* 由於格式和規範性方面的限制，部分模組資訊可能無法完全獲取。",
       "no_available_groups": "無可用分組",
+      "no_available_tags": "暫無可用標籤",
       "notes_placeholder": "在此添加自定義備註",
       "relation": {
         "dependencies": "依賴於",

@@ -2,7 +2,7 @@
   <Teleport to="body">
     <transition name="panel-fade">
       <div v-if="isOpen" ref="panelRef"
-        class="fixed z-140 flex max-h-[calc(100vh-1.5rem)] w-[min(46rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-3xl border border-accent-primary/24 bg-glass-heavy shadow-[0_18px_70px_var(--shadow-color)] backdrop-blur-xl"
+        class="fixed z-140 flex max-h-1/2 w-1/4 flex-col overflow-hidden rounded-3xl border border-accent-primary/24 bg-glass-heavy shadow-[0_18px_70px_var(--shadow-color)] backdrop-blur-xl"
         :style="panelStyle" >
         <div class="absolute -left-16 -top-20 size-52 rounded-full bg-accent-primary/10 blur-3xl pointer-events-none"></div>
         <div class="absolute -bottom-20 -right-16 size-52 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>

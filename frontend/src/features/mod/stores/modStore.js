@@ -1112,7 +1112,7 @@ export const useModStore = defineStore('mods', () => {
         : t('dialog.mod.disable.this_mod', '该 Mod')
       const confirm = await confirmStore.confirmAction(
         t('dialog.mod.disable.title', '禁用确认'),
-        t('dialog.mod.disable.message', '确定要禁用{target}吗？\n禁用后将无法在游戏中使用，可在“已禁用”列表中重新启用。', { target: countText }),
+        t('dialog.mod.disable.message', '确定要禁用{target}吗？\n\n禁用会把该 Mod 的 About.xml 改名为 About.xml.disabled，让游戏扫描不到它。文件仍保留在原位置，可以在“已禁用”列表中重新启用。\n这里的“禁用”不是游戏内的“停用”。停用只是从当前加载顺序中移除；禁用会让游戏暂时看不到整个 Mod。\n请确保你完全明确后果再确认操作。', { target: countText }),
         { type: 'warning' }
       );
       if (!confirm) return false

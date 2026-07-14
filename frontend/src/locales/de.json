@@ -1444,6 +1444,14 @@
         "description": "Überprüfen Sie alle Dateien erneut. Verwenden Sie dies, wenn der Dateistatus unsicher ist.",
         "title": "Scan-Mods erzwingen"
       },
+      "link_selected_interlock": {
+        "description": "Erstellt eine Verriegelung mit fester Reihenfolge für die ausgewählten Mods.",
+        "title": "Verriegelung für ausgewählte Mods erstellen"
+      },
+      "localize_selected_workshop": {
+        "description": "Kopiert ausgewählte Workshop-Mods in den lokalen Ordner. Vorhandene lokale Versionen werden nach dem aktuellen Ablauf verarbeitet.",
+        "title": "Ausgewählte Workshop-Mods lokalisieren"
+      },
       "move_selected_to_bottom": {
         "description": "Verschieben Sie die ausgewählten Mods an das Ende ihrer Liste.",
         "title": "Ausgewählte Elemente nach unten verschieben"
@@ -1491,6 +1499,10 @@
       "undo_list_history": {
         "description": "Machen Sie die letzte Änderung der Mod-Liste in der aktuellen Sitzung rückgängig.",
         "title": "Listenvorgang rückgängig machen"
+      },
+      "unlink_selected_interlock": {
+        "description": "Hebt die Verriegelungen auf, die mit den aktuell ausgewählten Mods verbunden sind.",
+        "title": "Verriegelung ausgewählter Mods aufheben"
       },
       "unsubscribe_and_delete_selected_workshop": {
         "description": "Abonnieren Sie die ausgewählten Workshop-Mods und löschen Sie ihre lokalen Dateien.",
@@ -2182,7 +2194,7 @@
         "title": "Bestätigen Sie Löschen"
       },
       "disable": {
-        "message": "{target} deaktivieren?\nNach der Deaktivierung ist es nicht im Spiel verfügbar. Sie können es aus der Inaktivliste wieder aktivieren.",
+        "message": "{target} wirklich deaktivieren?\n\nDabei wird About.xml dieses Mods in About.xml.disabled umbenannt, sodass das Spiel ihn beim Scannen nicht findet. Die Dateien bleiben am ursprünglichen Ort, und du kannst ihn in der Liste „Deaktiviert“ wieder aktivieren.\nDiese „Deaktivierung“ ist nicht dasselbe wie das Abschalten eines Mods in der Ladefolge des Spiels. Abschalten entfernt ihn nur aus der aktuellen Ladefolge; diese Deaktivierung macht den ganzen Mod vorübergehend für das Spiel unsichtbar.\nBestätige erst, wenn du die Folgen vollständig verstanden hast.",
         "selected_count": "die ausgewählten {count}-Mods",
         "this_mod": "dieser Mod",
         "title": "Bestätigen Sie die Deaktivierung"
@@ -4292,6 +4304,9 @@
       "only_one_file": "Es kann jeweils nur eine Datei importiert werden. Die erste Datei wurde verwendet.",
       "rename_empty": "Geben Sie einen neuen Backup-Namen ein"
     },
+    "command": {
+      "batch_selection_required": "Wählen Sie mindestens 2 Mods aus, bevor Sie eine Stapelaktion ausführen"
+    },
     "common": {
       "copied_label": "{label} kopiert",
       "copy_empty": "Kein {label} zum Kopieren",
@@ -4408,6 +4423,8 @@
       "batch_set_type_failed": "Batch-Festlegen des Typs fehlgeschlagen. Der lokale Zustand wurde wiederhergestellt. Versuchen Sie es später noch einmal.",
       "batch_update_data_failed": "Die Batch-Aktualisierung der Mod-Daten ist fehlgeschlagen. Der lokale Zustand wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
       "failed_suffix": ", {count} fehlgeschlagen",
+      "interlock_all_selected_locked": "Die ausgewählten Mods sind bereits verriegelt",
+      "interlock_no_selected_locked": "Die ausgewählten Mods haben keine Verriegelung zum Aufheben",
       "link_failed": "Mods konnten nicht verknüpft werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
       "localize_no_workshop_items": "Keine ausgewählten Mods stammen von Workshop",
       "scan_already_running": "Eine Scanaufgabe wird bereits ausgeführt. Warten Sie, bis der aktuelle Scan abgeschlossen ist.",
@@ -4448,7 +4465,8 @@
     "mod_list": {
       "search": {
         "filtered_out": "Der Suchbegriff {id} wird durch den Listenfilter {list} herausgefiltert. Löschen Sie die Filter und versuchen Sie es erneut.",
-        "loop_to_first": "Letztes Suchergebnis erreicht; zum ersten gepackt"
+        "loop_to_first": "Letztes Suchergebnis erreicht; zum ersten gepackt",
+        "loop_to_last": "Erstes Suchergebnis erreicht; springe zum letzten"
       }
     },
     "mod_residue": {
@@ -4893,7 +4911,7 @@
           "warn_item": "• Empfohlen: {count}"
         }
       },
-      "search_next": "Finden Sie das nächste passende Ergebnis",
+      "search_next": "Linksklick sucht den nächsten Treffer, Rechtsklick den vorherigen",
       "sort": {
         "asc": "(aufsteigend)",
         "by_mode": "Sortieren nach {mode}",
@@ -5363,6 +5381,7 @@
       "image_missing": "Bild nicht gefunden",
       "info_incomplete_hint": "* Einige Mod-Informationen sind aufgrund von Format- und Konsistenzbeschränkungen möglicherweise nicht vollständig verfügbar.",
       "no_available_groups": "Keine verfügbaren Gruppen",
+      "no_available_tags": "Keine verfügbaren Tags",
       "notes_placeholder": "Fügen Sie hier benutzerdefinierte Notizen hinzu",
       "relation": {
         "dependencies": "Hängt davon ab",

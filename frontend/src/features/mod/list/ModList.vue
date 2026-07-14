@@ -51,11 +51,12 @@
       <div class="flex items-center justify-center gap-1 relative">
         <!-- 搜索定位 (Find) -->
         <TagSearchInput :list-color="listColor" v-model="searchQuery" v-model:logic="searchLogic" ref="searchTagsRef" class="z-10"
-          :controller="engine?.controller" @search="executeSearch(true)" :placeholder="t('ui.mod_list.search.placeholder', '输入关键词定位Mod位置……')">
+          :controller="engine?.controller" @search="executeSearch" :placeholder="t('ui.mod_list.search.placeholder', '输入关键词定位Mod位置……')">
           <template #right>
             <div class="flex gap-1 items-center justify-center">
               <!-- 定位按钮 -->
-              <button @click="searchTagsRef?.addTag();executeSearch(true)" v-tooltip="t('tooltip.mod_list.search_next', '搜索定位下一个符合条件的结果')"
+              <button @click="searchTagsRef?.addTag();executeSearch(true)" @contextmenu.prevent="searchTagsRef?.addTag();executeSearch(false)"
+                v-tooltip="t('tooltip.mod_list.search_next', '左键定位下一个符合条件的结果，右键定位上一个')"
                 :class="`px-2.5 py-1 m-0 relative rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
                 text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 
                 transition-all cursor-pointer hover:scale-105 active:scale-95`">{{ t('ui.mod_list.action.locate', '定位') }}
@@ -161,6 +162,7 @@
                 :show-type-icon="appStore.settings.ui.show_list_modtype_icon"
                 :show-index="appStore.settings.ui.show_list_index"
                 :search-match="resolvedCurrentTargetId === dataKey"
+                :selection-order="selectedOrderMap.get(normalizeId(dataKey)) || 0"
                 :move-menu="moveMenuContext"
                 :current-split-group="getCurrentSplitGroupMeta(dataKey)"
                 :section-feature-enabled="sectionFeatureEnabled"
@@ -272,6 +274,10 @@ const realIndexMap = computed(() => {
   return map
 })
 const getRealIndex = (id: string) => realIndexMap.value.get(normalizeId(id)) ?? 0
+const selectedOrderMap = computed(() => {
+  if ((modStore.selectedIds || []).length <= 1) return new Map<string, number>()
+  return new Map((modStore.selectedIds || []).map((id, index) => [normalizeId(id), index + 1]))
+})
 
 // ===== 问题项筛选及提示 =====
 // 计算当前列表的错误概况
@@ -547,6 +553,17 @@ const restorePosition = () => {
     })
   }
 }
+const filterRestoreOffset = ref(0)
+watch(isFiltered, async (nextFiltered, previousFiltered) => {
+  if (nextFiltered && !previousFiltered) {
+    filterRestoreOffset.value = vListRef.value?.getOffset?.() || 0
+    return
+  }
+  if (!nextFiltered && previousFiltered) {
+    await nextTick()
+    requestAnimationFrame(() => vListRef.value?.scrollToOffset?.(filterRestoreOffset.value || 0))
+  }
+})
 onBeforeUnmount(() => {
   if (isDragging.value) {
     finishDragSession({ suppressDrop: true })
