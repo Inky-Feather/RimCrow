@@ -282,18 +282,20 @@ class AppConfig:
     backup_retention_days: int = 30           # 备份保留天数
     bundle_compress_level: int = 6            # 打包压缩级别：0 最快，9 最省空间
     bundle_mod_folder_name_type: str = "default"  # 模组包内文件夹命名方式
+    
     enable_auto_scan: bool = True             # 启动时自动扫描
     enable_launch_profile_quick_scan: bool = True  # 环境列表直启前是否执行检查同步
     enable_file_size_scan: bool = False         # 扫描时是否检查文件大小
     enable_mod_residue_scan: bool = True      # 扫描完成后是否识别卸载残留
     startup_inventory_prompt_new_only: bool = False  # 启动库存提醒是否只显示新发现的问题
     strict_disabled_mode: bool = False          # 扫描时是否按数据库记录自动恢复被外部解除的禁用状态
+    
     delete_missing_mods_data: bool = False     # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
     auto_sort_strategy: str = "edge_enhanced_sort_logic" # 自动排序策略: classic_sort_logic, edge_enhanced_sort_logic
     sort_mods_by: str = "name"                # 排序方式: name, id, alias
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
-    show_coexistence_message: bool = True      # 是否显示共存Mod提示
+    show_coexistence_message: bool = False      # 是否显示共存Mod提示
     check_language_support: bool = True        # 是否检查语言支持
     enable_action_prechecks: bool = True       # 是否启用操作前检查功能
     skip_language_pack_alias_generation: bool = True  # 批量生成别名备注时是否跳过语言包

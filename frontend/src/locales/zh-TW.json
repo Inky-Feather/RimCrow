@@ -1101,7 +1101,8 @@
       "transfer_failed_suffix": " {count} 個失敗。",
       "transfer_preparing": "準備{action}...",
       "transfer_running": "正在{action}: {name}",
-      "transfer_source_missing": "未找到指定的源檔案"
+      "transfer_source_missing": "未找到指定的源檔案",
+      "localize_conflict_found": "有同名目錄需要確認"
     }
   },
   "brand": {
@@ -1584,7 +1585,9 @@
       "start_localize": "開始本地化",
       "start_processing": "開始處理",
       "update": "更新",
-      "visit_page": "訪問頁面"
+      "visit_page": "訪問頁面",
+      "overwrite": "覆蓋",
+      "save_as": "另存"
     },
     "count": {
       "items": "{count} 項",
@@ -2188,7 +2191,11 @@
         "sync_and_create_message": "選中的 {total} 個{store}模組中，{createCount} 個會本地化為共存模組，{existingCount} 個會同步已有本地共存副本。",
         "sync_and_create_title": "本地化/同步本地共存模組",
         "sync_message": "選中的 {total} 個{store}模組已經存在本地共存模組。\n繼續後會用目前{store}檔案同步已有本地副本。",
-        "sync_title": "同步本地共存模組"
+        "sync_title": "同步本地共存模組",
+        "conflict_item": "目錄 {folder} 已存在：目前 {current}，目標 {target}",
+        "conflict_message": "以下目標目錄已被其他 Mod 使用。請選擇這些衝突項的處理方式，未衝突的 Mod 會正常處理。",
+        "conflict_more": "還有 {count} 個同名目錄需要按相同方式處理。",
+        "conflict_title": "同名目錄需要確認"
       }
     },
     "mod_alias_review": {
@@ -4809,8 +4816,8 @@
     },
     "mod_item": {
       "coexist": {
-        "outdated": "工坊版本已更新，可右鍵同步本地共存模組",
-        "synced": "本地共存副本與工坊版本一致"
+        "outdated": "工坊檔案與本地共存不一致，可右鍵同步",
+        "synced": "工坊檔案與本地共存一致"
       },
       "color": {
         "clear": "清除"
@@ -5913,8 +5920,8 @@
         "enable_tool_mods_desc": "開啟後，將在儲存或自動排序時自動啟用輔助工具模組，如提供日誌獲取等功能。",
         "file_generation_deploy": "檔案生成與部署",
         "file_generation_deploy_desc": "控制共存 Mod 的資料夾命名，以及運行前連結部署方式。",
-        "file_size_scan": "掃描時檢查檔案大小",
-        "file_size_scan_desc": "開啟後，掃描時會自動檢查 Mod 的檔案大小，以此識別新增或更新的內容。該功能會增加掃描耗時，但能顯著提高檔案變動的識別精度。",
+        "file_size_scan": "檢查檔案大小",
+        "file_size_scan_desc": "開啟後，掃描會檢查 Mod 檔案大小，更容易發現檔案變化，但會更慢。",
         "language_packs_follow_targets": "語言包貼緊前置",
         "language_packs_follow_targets_desc": "開啟後，自動排序會盡量讓語言包緊跟在它已啟用的最後一個前置/依賴模組後方；如果找不到目標，就保持原來的預設底層位置。",
         "launch_profile_quick_scan": "環境直啟前檢查同步",

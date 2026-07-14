@@ -1091,6 +1091,7 @@
     },
     "workspace": {
       "local_mods_path_missing": "未指定本地模组路径",
+      "localize_conflict_found": "有同名目录需要确认",
       "localize_started": "本地共存任务已在后台启动",
       "no_localizable_mods": "没有可同步的 {store} 模组",
       "no_refreshable_workshop_items": "没有可刷新的工坊项目",
@@ -1568,6 +1569,7 @@
       "open_mod_folder": "打开模组目录",
       "open_path": "打开路径",
       "open_workshop": "打开工坊",
+      "overwrite": "覆盖",
       "refresh": "刷新",
       "remove": "移除",
       "rename": "重命名",
@@ -1576,6 +1578,7 @@
       "restore_default": "恢复默认",
       "restore_list": "恢复列表",
       "save": "保存",
+      "save_as": "另存",
       "search": "搜索",
       "select_all": "全选",
       "select_file": "选择文件",
@@ -2183,6 +2186,10 @@
         "title": "禁用确认"
       },
       "localize": {
+        "conflict_item": "目录 {folder} 已存在：当前 {current}，目标 {target}",
+        "conflict_message": "以下目标目录已经被其它 Mod 使用。请选择这些冲突项的处理方式，未冲突的 Mod 会正常处理。",
+        "conflict_more": "还有 {count} 个同名目录需要按相同方式处理。",
+        "conflict_title": "同名目录需要确认",
         "create_message": "确定要将选中的 {total} 个{store}模组本地化为共存模组吗？\n本地化后会独立占用磁盘空间，后续{store}更新不会自动改动这些本地副本。",
         "create_title": "本地化共存模组",
         "sync_and_create_message": "选中的 {total} 个{store}模组中，{createCount} 个会本地化为共存模组，{existingCount} 个会同步已有本地共存副本。",
@@ -4809,8 +4816,8 @@
     },
     "mod_item": {
       "coexist": {
-        "outdated": "工坊版本已更新，可右键同步本地共存模组",
-        "synced": "本地共存副本与工坊版本一致"
+        "outdated": "工坊文件与本地共存不一致，可右键同步",
+        "synced": "工坊文件与本地共存一致"
       },
       "color": {
         "clear": "清除"
@@ -5913,8 +5920,8 @@
         "enable_tool_mods_desc": "开启后，将在保存或自动排序时自动启用辅助工具模组，如提供日志获取等功能。",
         "file_generation_deploy": "文件生成与部署",
         "file_generation_deploy_desc": "控制共存 Mod 的文件夹命名，以及运行前链接部署方式。",
-        "file_size_scan": "扫描时检查文件大小",
-        "file_size_scan_desc": "开启后，扫描时会自动检查 Mod 的文件大小，以此识别新增或更新的内容。该功能会增加扫描耗时，但能显著提高文件变动的识别精度。",
+        "file_size_scan": "检查文件大小",
+        "file_size_scan_desc": "开启后，扫描会检查 Mod 文件大小，更容易发现文件变化，但会更慢。",
         "language_packs_follow_targets": "语言包贴紧前置",
         "language_packs_follow_targets_desc": "开启后，自动排序会尽量让语言包紧跟在它已启用的最后一个前置/依赖模组后方；如果找不到目标，就保持原来的默认底层位置。",
         "launch_profile_quick_scan": "环境直启前检查同步",

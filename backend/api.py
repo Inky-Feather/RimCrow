@@ -4824,7 +4824,7 @@ class API:
             )
     
     @log_api_call
-    def localize_workshop_mods(self, path_hashes: List[str], store: str = 'workshop'):
+    def localize_workshop_mods(self, path_hashes: List[str], store: str = 'workshop', conflict_action: str = ''):
         """
         将指定副本本地化或同步为本地共存模组，并推送实时进度。
         这里使用 path_hash 精确定位副本，避免共存场景下 workshop_id/package_id 指向不唯一。
@@ -4840,8 +4840,10 @@ class API:
         # 使用 path_hash 锁定当前副本，并在 DAO 内按当前 Profile 路径范围二次约束。
         query = ModDAO.get_localizable_assets(self.active_context, normalized_hashes, store)
         try:
-            res = file_mgr.localize_workshop_mods(query, local_root, cfg.coexist_mod_folder_name_type)
+            res = file_mgr.localize_workshop_mods(query, local_root, cfg.coexist_mod_folder_name_type, conflict_action)
             if not res: return ApiResponse.warning(tr("api.workspace.no_localizable_mods", "没有可同步的 {store} 模组", store=store))
+            if isinstance(res, dict) and res.get("requires_conflict_action"):
+                return ApiResponse.success(res, message=tr("api.workspace.localize_conflict_found", "有同名目录需要确认"))
         except Exception as e:
             logger.error("启动本地共存任务失败: %s", e, exc_info=True)
             return ApiResponse.error(

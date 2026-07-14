@@ -1101,7 +1101,8 @@
       "transfer_failed_suffix": " {count} failed.",
       "transfer_preparing": "Preparing to {action}...",
       "transfer_running": "{action}: {name}",
-      "transfer_source_missing": "Specified source files were not found"
+      "transfer_source_missing": "Specified source files were not found",
+      "localize_conflict_found": "A folder name conflict needs confirmation"
     }
   },
   "brand": {
@@ -1584,7 +1585,9 @@
       "start_localize": "Start localizing",
       "start_processing": "Start processing",
       "update": "Update",
-      "visit_page": "Visit page"
+      "visit_page": "Visit page",
+      "overwrite": "Overwrite",
+      "save_as": "Save as"
     },
     "count": {
       "items": "{count} items",
@@ -2188,7 +2191,11 @@
         "sync_and_create_message": "Among the selected {total} {store} mods, {createCount} will be localized as separate local copies, and {existingCount} existing local copies will be synced.",
         "sync_and_create_title": "Localize / Sync Local Copies",
         "sync_message": "The selected {total} {store} mods already have local copies.\nContinuing will sync the current {store} files into those local copies.",
-        "sync_title": "Sync Local Copies"
+        "sync_title": "Sync Local Copies",
+        "conflict_item": "Folder {folder} already exists: current {current}, target {target}",
+        "conflict_message": "The target folders below are already used by other mods. Choose how to handle these conflicts; mods without conflicts will be processed normally.",
+        "conflict_more": "{count} more folder conflicts will be handled the same way.",
+        "conflict_title": "Folder Name Conflict"
       }
     },
     "mod_alias_review": {
@@ -4809,8 +4816,8 @@
     },
     "mod_item": {
       "coexist": {
-        "outdated": "The Workshop copy has been updated. Right-click to sync the local coexisting copy.",
-        "synced": "The local coexisting copy matches the Workshop copy"
+        "outdated": "Workshop files differ from the local copy. Right-click to sync.",
+        "synced": "Workshop files match the local copy"
       },
       "color": {
         "clear": "Clear"
@@ -5913,8 +5920,8 @@
         "enable_tool_mods_desc": "When enabled, helper tool mods, such as log collection helpers, are automatically activated while saving or auto-sorting.",
         "file_generation_deploy": "File generation and deployment",
         "file_generation_deploy_desc": "Controls coexisting Mod folder naming and link deployment before launch.",
-        "file_size_scan": "Check file size during scan",
-        "file_size_scan_desc": "When enabled, scans automatically check Mod file sizes to detect new or updated content. This increases scan time but significantly improves file change detection.",
+        "file_size_scan": "Check file sizes",
+        "file_size_scan_desc": "Scans Mod file sizes to catch file changes. More accurate, but slower.",
         "language_packs_follow_targets": "Place language packs next to targets",
         "language_packs_follow_targets_desc": "When enabled, auto-sort tries to place language packs after their last active prerequisite or dependency. If no target is found, the original default lower position is kept.",
         "launch_profile_quick_scan": "Check sync before direct profile launch",

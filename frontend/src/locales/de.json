@@ -1101,7 +1101,8 @@
       "transfer_failed_suffix": "{count} ist fehlgeschlagen.",
       "transfer_preparing": "Vorbereitung auf {action}...",
       "transfer_running": "{action}: {name}",
-      "transfer_source_missing": "Die angegebenen Quelldateien wurden nicht gefunden"
+      "transfer_source_missing": "Die angegebenen Quelldateien wurden nicht gefunden",
+      "localize_conflict_found": "Ein Ordnernamenskonflikt muss bestätigt werden"
     }
   },
   "brand": {
@@ -1584,7 +1585,9 @@
       "start_localize": "Beginnen Sie mit der Lokalisierung",
       "start_processing": "Beginnen Sie mit der Verarbeitung",
       "update": "Aktualisieren",
-      "visit_page": "Seite besuchen"
+      "visit_page": "Seite besuchen",
+      "overwrite": "Überschreiben",
+      "save_as": "Speichern als"
     },
     "count": {
       "items": "{count} Artikel",
@@ -2188,7 +2191,11 @@
         "sync_and_create_message": "Unter den ausgewählten {total} {store}-Mods wird {createCount} als separate lokale Kopien lokalisiert und vorhandene lokale Kopien von {existingCount} werden synchronisiert.",
         "sync_and_create_title": "Lokale Kopien lokalisieren/synchronisieren",
         "sync_message": "Die ausgewählten {total} {store}-Mods verfügen bereits über lokale Kopien.\nWenn Sie fortfahren, werden die aktuellen {store}-Dateien mit diesen lokalen Kopien synchronisiert.",
-        "sync_title": "Lokale Kopien synchronisieren"
+        "sync_title": "Lokale Kopien synchronisieren",
+        "conflict_item": "Ordner {folder} existiert bereits: aktuell {current}, Ziel {target}",
+        "conflict_message": "Die folgenden Zielordner werden bereits von anderen Mods verwendet. Wählen Sie, wie diese Konflikte behandelt werden sollen; Mods ohne Konflikte werden normal verarbeitet.",
+        "conflict_more": "{count} weitere Ordnerkonflikte werden auf die gleiche Weise behandelt.",
+        "conflict_title": "Ordnernamenskonflikt"
       }
     },
     "mod_alias_review": {
@@ -4809,8 +4816,8 @@
     },
     "mod_item": {
       "coexist": {
-        "outdated": "Die Workshop-Kopie wurde aktualisiert. Klicken Sie mit der rechten Maustaste, um die lokal koexistierende Kopie zu synchronisieren.",
-        "synced": "Die lokal koexistierende Kopie stimmt mit der Workshop-Kopie überein"
+        "outdated": "Workshop-Dateien unterscheiden sich von der lokalen Kopie. Rechtsklick zum Synchronisieren.",
+        "synced": "Workshop-Dateien stimmen mit der lokalen Kopie überein"
       },
       "color": {
         "clear": "Klar"
@@ -5913,8 +5920,8 @@
         "enable_tool_mods_desc": "Wenn diese Option aktiviert ist, werden Hilfstool-Mods, wie z. B. Protokollsammlungs-Helfer, beim Speichern oder automatischen Sortieren automatisch aktiviert.",
         "file_generation_deploy": "Dateigenerierung und -bereitstellung",
         "file_generation_deploy_desc": "Steuert die Benennung koexistierender Mod-Ordner und die Bereitstellung von Links vor dem Start.",
-        "file_size_scan": "Überprüfen Sie die Dateigröße während des Scanvorgangs",
-        "file_size_scan_desc": "Wenn diese Option aktiviert ist, überprüfen Scans automatisch die Größe der Mod-Dateien, um neue oder aktualisierte Inhalte zu erkennen. Dies verlängert die Scanzeit, verbessert jedoch die Erkennung von Dateiänderungen erheblich.",
+        "file_size_scan": "Dateigrößen prüfen",
+        "file_size_scan_desc": "Prüft beim Scannen die Größe von Mod-Dateien. Erkennt Änderungen besser, ist aber langsamer.",
         "language_packs_follow_targets": "Platzieren Sie Sprachpakete neben den Zielen",
         "language_packs_follow_targets_desc": "Wenn diese Option aktiviert ist, versucht die automatische Sortierung, Sprachpakete nach ihrer letzten aktiven Voraussetzung oder Abhängigkeit zu platzieren. Wenn kein Ziel gefunden wird, wird die ursprüngliche Standard-Unterposition beibehalten.",
         "launch_profile_quick_scan": "Überprüfen Sie die Synchronisierung, bevor Sie das Profil direkt starten",

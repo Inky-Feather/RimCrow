@@ -360,8 +360,8 @@ const sourceToggleTooltip = computed(() => {
 const coexistSyncOutdated = computed(() => modData.value?.coexist_sync_state === 'outdated')
 const coexistSyncTooltip = computed(() => (
   coexistSyncOutdated.value
-    ? t('tooltip.mod_item.coexist.outdated', '工坊版本已更新，可右键同步本地共存模组')
-    : t('tooltip.mod_item.coexist.synced', '本地共存副本与工坊版本一致')
+    ? t('tooltip.mod_item.coexist.outdated', '工坊文件与本地共存不一致，可右键同步')
+    : t('tooltip.mod_item.coexist.synced', '工坊文件与本地共存一致')
 ))
 const modNoticeTooltip = computed(() => {
   const parts = []

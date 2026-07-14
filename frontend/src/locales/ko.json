@@ -1101,7 +1101,8 @@
       "transfer_failed_suffix": "{count}가 실패했습니다.",
       "transfer_preparing": "{action} 준비 중...",
       "transfer_running": "{action}: {name}",
-      "transfer_source_missing": "지정된 소스 파일을 찾을 수 없습니다"
+      "transfer_source_missing": "지정된 소스 파일을 찾을 수 없습니다",
+      "localize_conflict_found": "폴더 이름 충돌 확인이 필요합니다"
     }
   },
   "brand": {
@@ -1584,7 +1585,9 @@
       "start_localize": "현지화 시작",
       "start_processing": "처리 시작",
       "update": "업데이트",
-      "visit_page": "페이지 방문"
+      "visit_page": "페이지 방문",
+      "overwrite": "덮어쓰기",
+      "save_as": "다른 이름으로 저장"
     },
     "count": {
       "items": "{count} 항목",
@@ -2188,7 +2191,11 @@
         "sync_and_create_message": "선택된 {total} {store} 모드 중 {createCount}는 별도의 로컬 복사본으로 현지화되며, {existingCount} 기존 로컬 복사본은 동기화됩니다.",
         "sync_and_create_title": "로컬 사본 현지화/동기화",
         "sync_message": "선택한 {total} {store} 모드에는 이미 로컬 복사본이 있습니다.\n계속하면 현재 {store} 파일이 해당 로컬 복사본으로 동기화됩니다.",
-        "sync_title": "로컬 복사본 동기화"
+        "sync_title": "로컬 복사본 동기화",
+        "conflict_item": "{folder} 폴더가 이미 있습니다: 현재 {current}, 대상 {target}",
+        "conflict_message": "아래 대상 폴더는 이미 다른 모드가 사용 중입니다. 이 충돌 항목을 처리할 방법을 선택하세요. 충돌이 없는 모드는 정상 처리됩니다.",
+        "conflict_more": "추가 폴더 충돌 {count}개도 같은 방식으로 처리됩니다.",
+        "conflict_title": "폴더 이름 충돌"
       }
     },
     "mod_alias_review": {
@@ -4809,8 +4816,8 @@
     },
     "mod_item": {
       "coexist": {
-        "outdated": "Workshop 사본이 업데이트되었습니다. 로컬 공존 복사본을 동기화하려면 마우스 오른쪽 버튼을 클릭하세요.",
-        "synced": "로컬 공존 복사본이 Workshop 복사본과 일치합니다."
+        "outdated": "Workshop 파일이 로컬 복사본과 다릅니다. 마우스 오른쪽 버튼으로 동기화하세요.",
+        "synced": "Workshop 파일이 로컬 복사본과 일치합니다."
       },
       "color": {
         "clear": "분명한"
@@ -5913,8 +5920,8 @@
         "enable_tool_mods_desc": "활성화되면 로그 수집 도우미와 같은 도우미 도구 모드가 저장 또는 자동 정렬 중에 자동으로 활성화됩니다.",
         "file_generation_deploy": "파일 생성 및 배포",
         "file_generation_deploy_desc": "출시 전에 공존하는 Mod 폴더 이름 지정 및 링크 배포를 제어합니다.",
-        "file_size_scan": "검사 중 파일 크기 확인",
-        "file_size_scan_desc": "활성화되면 스캔에서 Mod 파일 크기를 자동으로 확인하여 새 콘텐츠나 업데이트된 콘텐츠를 감지합니다. 이렇게 하면 검색 시간이 늘어나지만 파일 변경 감지 기능이 크게 향상됩니다.",
+        "file_size_scan": "파일 크기 확인",
+        "file_size_scan_desc": "스캔할 때 Mod 파일 크기를 확인합니다. 파일 변화를 더 잘 찾지만 더 느립니다.",
         "language_packs_follow_targets": "대상 옆에 언어 팩 배치",
         "language_packs_follow_targets_desc": "활성화되면 자동 정렬은 마지막 활성 필수 구성 요소 또는 종속성 뒤에 언어 팩을 배치하려고 시도합니다. 대상을 찾을 수 없으면 원래 기본 하단 위치가 유지됩니다.",
         "launch_profile_quick_scan": "직접 프로필을 실행하기 전에 동기화를 확인하세요",

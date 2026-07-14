@@ -23,13 +23,14 @@ from backend.managers.mgr_network import build_retry_session, merge_headers, net
 from backend.paths.game_locations import normalize_steam_root, resolve_steam_executable_path, resolve_steamcmd_executable_path
 from backend.paths.rimworld_layout import normalize_rimworld_install_root
 from backend.i18n.messages import localized_key, localized_params, tr
+from backend.scanner.parser_xml import ModXMLParser
 from backend.profile import UserDataRoot
 from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR, RIMWORLD_WORKSHOP_CONTENT_PARTS
 from backend.utils.logger import logger
 from backend.utils.text_decode import decode_text_bytes
-from backend.utils.tools import delete_fs_path, normalize_path_for_storage, same_path
+from backend.utils.tools import delete_fs_path, normalize_package_id, normalize_path_for_storage, same_path
 from backend.utils.shortcuts import (
     create_shortcut,
     format_shortcut_arguments,
@@ -1022,7 +1023,7 @@ class FileManager:
         return FileManager.sync_links(local_mods_path, deploy_paths)
     
     @staticmethod
-    def localize_workshop_mods(query, local_root: str, folder_name_type: str = 'workshop_id'):
+    def localize_workshop_mods(query, local_root: str, folder_name_type: str = 'workshop_id', conflict_action: str = ''):
         """
         将工坊模组本地化或同步为本地共存模组，并推送实时进度
         :param query: 包含工坊模组信息的查询结果
@@ -1030,25 +1031,47 @@ class FileManager:
         :param folder_name_type: 文件夹命名类型，可选 'alias_name', 'name', 'package_id', 'workshop_id'
         """
         tasks = []
+        conflicts = []
         task_id = uuid.uuid4().hex
+        normalized_conflict_action = str(conflict_action or '').strip().lower()
         EventBus.resume()   # 恢复事件总线
         for mod_data in query:
-            # 核心退回逻辑：alias_name > name > package_id > workshop_id
-            display_name = mod_data.get('workshop_id')
-            if(folder_name_type=='alias_name'): display_name = ( mod_data.get('alias_name') or mod_data.get('name') or mod_data.get('package_id') or mod_data.get('workshop_id') )
-            elif(folder_name_type=='name'): display_name = ( mod_data.get('name') or mod_data.get('package_id') or mod_data.get('workshop_id') )
-            elif( folder_name_type=='package_id' ): display_name = ( mod_data.get('package_id') or mod_data.get('workshop_id') )
-            else: display_name = mod_data.get('workshop_id')
-            
-            # 净化文件名
-            safe_name = FileManager.sanitize_filename(display_name)
-            folder_name = f"_{safe_name}_"
+            display_name, safe_name = FileManager._resolve_localize_folder_name(mod_data, folder_name_type)
+            package_id = normalize_package_id(mod_data.get('package_id'))
+            target_path = os.path.join(local_root, safe_name)
+            legacy_path = os.path.join(local_root, f"_{safe_name}_")
+            target_package_id = FileManager._read_mod_package_id(target_path) if os.path.exists(target_path) else ""
+            legacy_package_id = FileManager._read_mod_package_id(legacy_path) if os.path.exists(legacy_path) else ""
+
+            if target_package_id and target_package_id == package_id:
+                dst_path = target_path
+            elif not os.path.exists(target_path) and legacy_package_id == package_id:
+                dst_path = legacy_path
+            elif os.path.exists(target_path):
+                conflict = FileManager._build_localize_conflict(mod_data, display_name, safe_name, target_path, target_package_id)
+                if normalized_conflict_action == 'skip':
+                    continue
+                if normalized_conflict_action == 'save_as':
+                    dst_path = legacy_path
+                elif normalized_conflict_action == 'overwrite':
+                    dst_path = target_path
+                else:
+                    conflicts.append(conflict)
+                    continue
+            else:
+                dst_path = target_path
+
             tasks.append({
                 'src': mod_data['path'],
-                'dst': os.path.join(local_root, folder_name),
+                'dst': dst_path,
                 'label': display_name, # 用于进度显示
-                'is_sync': os.path.exists(os.path.join(local_root, folder_name)),
+                'is_sync': os.path.exists(dst_path),
             })
+        if conflicts:
+            return {
+                "requires_conflict_action": True,
+                "conflicts": conflicts,
+            }
         if not tasks: return False
         sync_count = sum(1 for task in tasks if task.get('is_sync'))
         create_count = len(tasks) - sync_count
@@ -1165,6 +1188,43 @@ class FileManager:
             })
         threading.Thread(target=run_task, daemon=True).start()
         return task_id
+
+    @staticmethod
+    def _resolve_localize_folder_name(mod_data: dict, folder_name_type: str) -> tuple[str, str]:
+        # 目录名用于用户查看；同步身份仍以包名判断，避免把下划线当业务标识。
+        display_name = mod_data.get('workshop_id')
+        if(folder_name_type=='alias_name'): display_name = ( mod_data.get('alias_name') or mod_data.get('name') or mod_data.get('package_id') or mod_data.get('workshop_id') )
+        elif(folder_name_type=='name'): display_name = ( mod_data.get('name') or mod_data.get('package_id') or mod_data.get('workshop_id') )
+        elif( folder_name_type=='package_id' ): display_name = ( mod_data.get('package_id') or mod_data.get('workshop_id') )
+        else: display_name = mod_data.get('workshop_id')
+        safe_name = FileManager.sanitize_filename(display_name)
+        return str(display_name or safe_name), safe_name
+
+    @staticmethod
+    def _read_mod_package_id(path: str) -> str:
+        if not path or not os.path.isdir(path):
+            return ""
+        for filename in ("About.xml", "About.xml.disabled"):
+            about_path = os.path.join(path, "About", filename)
+            if not os.path.isfile(about_path):
+                continue
+            try:
+                return normalize_package_id(ModXMLParser().parse(path, about_path=about_path).get("package_id"))
+            except Exception as exc:
+                logger.debug("读取本地共存目录包名失败：path=%s reason=%s", path, exc)
+        return ""
+
+    @staticmethod
+    def _build_localize_conflict(mod_data: dict, display_name: str, safe_name: str, target_path: str, existing_package_id: str) -> dict:
+        return {
+            "path_hash": str(mod_data.get("path_hash") or ""),
+            "name": str(mod_data.get("name") or display_name or safe_name),
+            "package_id": normalize_package_id(mod_data.get("package_id")),
+            "target_folder": safe_name,
+            "target_path": normalize_path_for_storage(target_path),
+            "existing_package_id": existing_package_id,
+            "save_as_folder": f"_{safe_name}_",
+        }
 
     @staticmethod
     def cancel_localize_task(task_id: str) -> bool:

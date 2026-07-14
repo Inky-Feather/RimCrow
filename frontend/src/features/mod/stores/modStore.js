@@ -1023,6 +1023,38 @@ export const useModStore = defineStore('mods', () => {
       actionTitle: getLocalizeActionTitle(candidates.length, existingCount),
     }
   }
+  const formatLocalizeConflictMessage = (conflicts = []) => {
+    const rows = conflicts.slice(0, 6).map(item => {
+      const packageText = item.package_id || t('common.status.unknown', '未知')
+      const existingText = item.existing_package_id || t('common.status.unknown', '未知')
+      return t('dialog.mod.localize.conflict_item', '目录 {folder} 已存在：当前 {current}，目标 {target}', {
+        folder: item.target_folder,
+        current: existingText,
+        target: packageText,
+      })
+    })
+    if (conflicts.length > rows.length) {
+      rows.push(t('dialog.mod.localize.conflict_more', '还有 {count} 个同名目录需要按相同方式处理。', { count: conflicts.length - rows.length }))
+    }
+    return [
+      t('dialog.mod.localize.conflict_message', '以下目标目录已经被其它 Mod 使用。请选择这些冲突项的处理方式，未冲突的 Mod 会正常处理。'),
+      '',
+      ...rows,
+    ].join('\n')
+  }
+  const chooseLocalizeConflictAction = async (conflicts = []) => confirmStore.confirmAction(
+    t('dialog.mod.localize.conflict_title', '同名目录需要确认'),
+    formatLocalizeConflictMessage(conflicts),
+    {
+      type: 'warning',
+      actionButtons: [
+        { label: t('common.action.overwrite', '覆盖'), value: 'overwrite', kind: 'danger' },
+        { label: t('common.action.save_as', '另存'), value: 'save_as', kind: 'primary' },
+        { label: t('common.action.skip', '跳过'), value: 'skip' },
+      ],
+      defaultActionValue: 'save_as',
+    }
+  )
   // 本地化或同步本地共存
   const localizeSelectedMods = async (store='workshop') => {
     if (selectedIds.value.length === 0) return;
@@ -1051,13 +1083,23 @@ export const useModStore = defineStore('mods', () => {
       syncMessage,
       { type: existingCount > 0 ? 'warning' : 'info', confirmText: existingCount > 0 ? t('common.action.start_processing', '开始处理') : t('common.action.start_localize', '开始本地化') }
     );
-    if (confirm) {
-      appStore.isLoading = true;
-      const res = await window.pywebview.api.localize_workshop_mods(pathHashes, store);
-      if (checkResult(res, actionTitle)) {
-        // 成功后会在完成时刷新数据
+    if (!confirm) return false
+
+    let conflictAction = ''
+    while (true) {
+      appStore.isLoading = true
+      let res
+      try {
+        res = await window.pywebview.api.localize_workshop_mods(pathHashes, store, conflictAction)
+      } finally {
+        appStore.isLoading = false
       }
-      appStore.isLoading = false;
+      if (res?.status === 'success' && res.data?.requires_conflict_action) {
+        conflictAction = await chooseLocalizeConflictAction(res.data.conflicts || [])
+        if (!conflictAction) return false
+        continue
+      }
+      return checkResult(res, actionTitle)
     }
   }
   // 批量禁用选中项Mod
