@@ -113,7 +113,8 @@
     <div ref="listContainerRef" class="flex-1 min-h-0 flex pb-0.5 overflow-y-auto after:pointer-events-none 
       after:content-[''] after:absolute after:bottom-0 after:w-full after:h-10 
       after:bg-linear-to-t after:from-bg-deep/80 after:to-transparent focus:outline-none"
-      @click.self="modStore.clearSelection()">
+      @click.self="modStore.clearSelection()"
+      @contextmenu="openListContextMenu">
       
       <!-- 左侧辅助功能区( @wheel.passive 监听滚轮事件) -->
       <div v-if="hasSidebar && appStore.settings.ui.show_dependency_graph" :data-tour="listId=='active'?'list-dependency':null" class="w-[55px] h-full flex-none"
@@ -223,7 +224,7 @@ import { useModListSections } from './useModListSections'
 import { useModListDrag } from './useModListDrag'
 import { setActiveKeyScope } from '../../../shared/commands/keyScopeStore'
 import { registerModListActions } from '../../../app/commands/modListActions'
-import { Megaphone, MegaphoneOff, SearchAlert } from 'lucide-vue-next'
+import { Megaphone, MegaphoneOff, RotateCcw, SearchAlert, Settings } from 'lucide-vue-next'
 import { t } from '../../../shared/i18n.js'
 
 // 这里 modelValue 接收纯 ID 数组
@@ -245,8 +246,18 @@ const vListRef = ref(null)  // 虚拟列表引用, 用于滚动到选中项
 
 const searchTagsRef = ref(null)
 const listContainerRef = ref(null)
+const isActiveList = computed(() => props.listId === 'active')
 // 最近交互过的列表作为键盘作用域兜底；焦点不在列表 DOM 内时也能继续处理列表级快捷键。
 const setListKeyScope = () => setActiveKeyScope(`mod-list:${props.listId}`)
+const openListContextMenu = (event: MouseEvent) => {
+  if (!isActiveList.value) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest?.('[data-id]')) return
+  menuStore.open(event, [
+    { label: t('menu.mod_item.reset_active_list', '重置启用列表'), icon: RotateCcw, level: 'warn', action: () => modStore.resetActiveList() },
+    { label: t('menu.mod_list.manage_reset_preset', '预设列表管理'), icon: Settings, action: () => { appStore.uiState.showResetActiveListManager = true } },
+  ], { listId: props.listId })
+}
 
 const normalizeId = (value: string) => String(value ?? '').trim().toLowerCase()
 const selectedIdSet = computed(() => new Set((modStore.selectedIds || []).map(id => normalizeId(id)).filter(Boolean)))

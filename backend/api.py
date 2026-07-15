@@ -6596,8 +6596,8 @@ class API:
     @log_api_call
     def profile_create(self, data: Dict[str, Any], copy_current_data: bool = False):
         try:
-            self.profile_mgr.create_profile(data, copy_current_data)
-            return ApiResponse.success(message=tr("api.profile.created", "环境创建成功"))
+            profile = self.profile_mgr.create_profile(data, copy_current_data)
+            return ApiResponse.success(model_to_dict(profile), message=tr("api.profile.created", "环境创建成功"))
         except Exception as e:
             return ApiResponse.error("创建环境失败", code="PROFILE.CREATE_FAILED", detail=e, user_message=tr("api.profile.create_failed", "创建环境失败。请检查环境名称、路径配置和文件权限，详细原因已写入系统日志。"))
 

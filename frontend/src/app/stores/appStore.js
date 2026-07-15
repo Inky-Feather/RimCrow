@@ -70,6 +70,7 @@ export const useAppStore = defineStore('app', () => {
     showPackageTransferDialog: false, // 是否显示模组包/数据包传输弹窗
     showRecommendationExportDialog: false, // 是否显示推荐导出弹窗
     showTranslationManager: false, // 是否显示翻译管理弹窗
+    showResetActiveListManager: false, // 是否显示启用列表重置预设管理弹窗
   })
   const packageTransferDialog = reactive({
     mode: 'mod-import',
@@ -398,6 +399,11 @@ export const useAppStore = defineStore('app', () => {
     show_coexistence_message: false,       // 是否显示共存Mod提示
     enable_action_prechecks: true,        // 关键动作前是否执行启用/安装检查
     check_language_support: true,        // 是否检查语言支持
+    reset_active_list: {
+      user_ids: [],
+      excluded_builtin_ids: [],
+      excluded_derived_ids: [],
+    },
     skip_language_pack_alias_generation: true, // 批量生成别名备注时是否跳过语言包
     regular_mods_follow_dependencies: false, // 普通模组是否贴紧其最后一个依赖目标
     language_packs_follow_targets: false, // 语言包是否贴紧其最后一个前置/依赖目标
@@ -1142,6 +1148,9 @@ export const useAppStore = defineStore('app', () => {
         refreshWorkspaceLibraries: scanRequest?.refreshWorkspaceLibraries !== false,
         silentSuccess: !!scanRequest?.silentSuccess,
       })
+      if (detail.status === 'success') {
+        await useProfileStore().applyPendingEmptyActivePreset()
+      }
       if (detail.status === 'success' && scanRequest?.startupWorkshopChanges?.length) {
         void useWorkspaceStore().showStartupWorkshopChangesPrompt(scanRequest.startupWorkshopChanges)
       }

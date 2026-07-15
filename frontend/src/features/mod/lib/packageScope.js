@@ -1,4 +1,4 @@
-import { normalizePackageId } from './modIdentity'
+import { normalizePackageId } from './modIdentity.js'
 
 export const OFFICIAL_PACKAGE_PREFIX = 'ludeon.rimworld'
 export const DEFAULT_TOOL_PACKAGE_IDS = new Set(['rimcrow.companion', 'rmm.companion'])

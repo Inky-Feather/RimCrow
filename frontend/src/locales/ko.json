@@ -1238,6 +1238,7 @@
       "get_interlock_missing": "누락된 링크 모드 받기",
       "heal_interlock": "깨진 링크 복구",
       "link": "모드 링크",
+      "reset_active_sort": "활성 목록 순서 재설정",
       "smart_insert_active": "활성 목록에 모드를 스마트하게 삽입",
       "unlink": "모드 연결 해제",
       "update_time": "마지막 모드 작동 시간 업데이트",
@@ -2210,6 +2211,11 @@
         "sync_and_create_title": "로컬 사본 현지화/동기화",
         "sync_message": "선택한 {total} {store} 모드에는 이미 로컬 복사본이 있습니다.\n계속하면 현재 {store} 파일이 해당 로컬 복사본으로 동기화됩니다.",
         "sync_title": "로컬 복사본 동기화"
+      },
+      "reset_active_list": {
+        "confirm": "비우고 재설정",
+        "message": "현재 활성 목록을 비우고 재설정 프리셋에 따라 공식 모드, 필수 항목, 보완 항목을 다시 추가합니다. 저장되지 않은 활성 목록 순서는 대체됩니다. 계속할까요?",
+        "title": "활성 목록 재설정"
       }
     },
     "mod_alias_review": {
@@ -2598,6 +2604,18 @@
       "preview_title": "시사",
       "start_export": "내보내기 시작",
       "title": "추천 내보내기"
+    },
+    "reset_active_list_manager": {
+      "custom_items": "사용자 지정 항목",
+      "custom_items_desc": "이름이나 패키지 ID로 모드를 검색하거나, 패키지 ID를 직접 입력한 뒤 Enter를 눌러 프리셋에 추가합니다.",
+      "description": "프리셋의 기본 활성화 목록을 관리합니다. 목록을 재설정할 때 아래 목록을 그대로 사용합니다. 공식 DLC 또는 추가 종속성을 클릭해 제외 여부를 전환할 수 있습니다.",
+      "empty_builtin": "표시할 공식 DLC가 없습니다.",
+      "empty_required": "표시할 필수 항목이 없습니다.",
+      "empty_supplement_dependencies": "자동으로 보완된 종속성이 없습니다.",
+      "official_dlc": "공식 DLC(클릭하여 제외)",
+      "required": "필수 항목(편집 불가)",
+      "supplement_dependencies": "추가 종속성(위 모드 항목을 기준으로 자동 보완, 클릭하여 제외)",
+      "title": "프리셋 목록 관리"
     },
     "rule_panel": {
       "delete": {
@@ -3621,6 +3639,7 @@
       "deactivate_count": "{count} 모드 비활성화",
       "delete_local_files_count": "{count} 로컬 파일 삭제",
       "disable_count": "{count} 모드 비활성화",
+      "reset_active_list": "활성 목록 재설정",
       "switch_to_local_count": "{count} 모드를 로컬 복사본으로 전환",
       "switch_to_workshop_count": "{count} 모드를 Workshop 복사본으로 전환",
       "unsubscribe_and_delete_count": "{count} 파일 구독 취소 및 삭제",
@@ -3864,6 +3883,7 @@
         "subscribe": "대체 버전 구독",
         "title": "대사"
       },
+      "reset_active_list": "활성 목록 재설정",
       "section": {
         "collapse_all": "모든 섹션 그룹 ​​축소",
         "collapse_current": "이 섹션 그룹 ​​접기",
@@ -3897,6 +3917,7 @@
         "restore": "복원 경고",
         "restore_all": "모든 경고 복원"
       },
+      "manage_reset_preset": "프리셋 목록 관리",
       "move": {
         "active_section_groups": "활성 목록 섹션 그룹...",
         "current_other_groups": "이 목록의 다른 섹션 그룹...",
@@ -4427,6 +4448,8 @@
       "interlock_no_selected_locked": "선택한 모드에는 제거할 연동이 없습니다.",
       "link_failed": "모드를 연결하지 못했습니다. 나중에 다시 시도하세요. 자세한 내용은 시스템 로그를 참조하세요.",
       "localize_no_workshop_items": "Workshop에서 선택된 모드가 제공되지 않습니다.",
+      "reset_active_list_done": "활성 목록이 재설정되었습니다",
+      "reset_active_list_no_base": "재설정에 사용할 공식 모드나 필수 항목을 찾지 못했습니다. 현재 환경의 게임 폴더와 모드 스캔 결과를 확인하세요.",
       "scan_already_running": "검사 작업이 이미 실행 중입니다. 현재 스캔이 완료될 때까지 기다리십시오.",
       "scan_cancelled": "스캔이 취소되었습니다.",
       "scan_conflicts_found": "스캔이 완료되었습니다. 검토가 필요한 {count} 중복 패키지 ID 충돌이 발견되었습니다.{extra}",
@@ -4631,6 +4654,7 @@
       "actions": {
         "autosort": "모든 활성 모드를 규칙에 따라 자동으로 정렬합니다. 결과가 이전 동작보다 나쁜 경우 설정에서 기존 정렬 논리로 다시 전환하세요.",
         "force_scan": "변경되지 않은 파일을 포함하여 모든 파일을 다시 확인하십시오. 시간이 더 오래 걸릴 수 있습니다.",
+        "reset_active_list": "현재 활성화 목록을 비우고 재설정한 뒤 프리셋으로 다시 생성합니다. 우클릭하면 프리셋 목록을 관리할 수 있습니다.",
         "scan": "파일 변경 사항을 스캔하고 현재 프로필 모드 목록을 동기화합니다."
       }
     },
@@ -5954,8 +5978,8 @@
         },
         "link_deployment_mode": "링크 배포 모드",
         "link_deployment_mode_desc": "프로필 전체에서 관리자 모드 또는 Workshop 모드를 사용할 때 링크 배포를 제어합니다. 증분 배포는 올바른 기존 링크를 유지하고 변경 사항만 처리합니다. 전체 재구축은 먼저 모든 이전 링크를 제거한 다음 현재 검색 결과에서 해당 링크를 다시 만듭니다.",
-        "list_action_checks": "목록 작업 확인",
-        "list_action_checks_desc": "목록을 저장, 실행 및 표시하는 동안 미리 알림 및 도우미 동작을 제어합니다.",
+        "list_action_checks": "목록 기능 및 확인 알림",
+        "list_action_checks_desc": "목록 저장, 실행, 표시 알림, 재설정 프리셋을 제어합니다.",
         "mod_residue_scan": "스캔 후 잔여물 확인",
         "mod_residue_scan_desc": "활성화되면 전체 검사는 제거 후 남겨진 폴더와 설정을 백그라운드에서 확인합니다. 비활성화하면 잔류물 정리를 수동으로 열 때만 잔류물을 확인합니다.",
         "multiplayer_compatibility_check": "멀티플레이어 호환성 확인",
@@ -5964,11 +5988,13 @@
         "persist_temp_mod_list_desc": "활성화되면 임시 목록이 프로필별로 저장되고 다음에 해당 프로필을 입력할 때 복원됩니다. 비활성화하면 임시 목록의 모드가 저장 시 비활성 목록의 맨 위로 반환됩니다.",
         "regular_mods_follow_dependencies": "종속성 근처에 일반 Mod를 유지하십시오.",
         "regular_mods_follow_dependencies_desc": "활성화되면 자동 정렬은 동일한 가중치 계층 내의 마지막 활성 종속성 뒤에 일반 Mod를 배치하여 관련 시리즈를 더 가깝게 유지하려고 시도합니다.",
+        "reset_active_preset_desc": "프리셋의 기본 활성화 목록을 관리합니다. 목록을 재설정할 때 프리셋 목록을 그대로 사용합니다.",
+        "reset_active_preset_manager": "프리셋 목록 관리",
         "scan_maintenance": "스캔 및 데이터 유지 관리",
         "scan_maintenance_desc": "Mod 목록 새로 고침, 파일 변경 감지 및 누락된 데이터 처리를 제어합니다.",
         "show_coexistence_message": "공존하는 충돌 힌트 표시",
         "show_coexistence_message_desc": "비활성화되면 공존하는 Mod 충돌 힌트가 표시되지 않습니다.",
-        "skip_language_pack_alias_generation": "언어 팩에 대한 별칭 메모 건너뛰기",
+        "skip_language_pack_alias_generation": "별칭 메모에서 언어팩 건너뛰기",
         "skip_language_pack_alias_generation_desc": "활성화되면 일괄 별칭 및 메모 생성에서 언어 팩을 건너뜁니다. 단일 Mod의 수동 생성은 영향을 받지 않습니다.",
         "sort_mods_by": "정렬 순서",
         "sort_mods_by_desc": "자동 정렬 중에 동일한 계층 내의 모드 순서에 영향을 미칩니다. 우선 순위는 별칭 > 원래 이름 > 패키지 ID이므로 별칭이 없는 모드도 원래 이름을 기준으로 정렬할 수 있습니다.",

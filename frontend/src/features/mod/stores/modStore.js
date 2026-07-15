@@ -16,6 +16,7 @@ import {
   parsePackageToken,
   stripPackageTokenSuffix,
 } from '../lib/modIdentity'
+import { DEFAULT_TOOL_PACKAGE_IDS, isCorePackageId, isOfficialMod } from '../lib/packageScope.js'
 import { useInstallSourceHints } from './mod-store/installSourceHints'
 import { useModListHistory } from './mod-store/listHistory'
 import { useModSelection } from './mod-store/selection'
@@ -999,6 +1000,107 @@ export const useModStore = defineStore('mods', () => {
     }
     return false
   }
+  const normalizeResetActiveListConfig = (config = {}) => {
+    return {
+      excludedBuiltinIds: config.excluded_builtin_ids || [],
+      userIds: config.user_ids || [],
+      excludedDerivedIds: config.excluded_derived_ids || [],
+    }
+  }
+  const resolveResetActiveListConfig = () => {
+    const config = appStore.settings?.reset_active_list || {}
+    return normalizeResetActiveListConfig(config)
+  }
+  const buildResetActiveListBasePreset = ({ config: configOverride = null, enableToolMods = appStore.settings?.enable_tool_mods } = {}) => {
+    const config = configOverride || resolveResetActiveListConfig()
+    const excludedBuiltinIds = new Set((config.excludedBuiltinIds || []).map(normalizePackageId).filter(Boolean))
+    const officialIds = Array.from(allModsMap.value.values())
+      .filter(mod => isOfficialMod(mod))
+      .map(mod => normalizePackageToken(mod?.active_package_token || mod?.package_id))
+      .filter(Boolean)
+    const coreIds = officialIds.filter(isCorePackageId)
+    const toolIds = enableToolMods
+      ? Array.from(DEFAULT_TOOL_PACKAGE_IDS).filter(id => hasRealModById(id))
+      : []
+    const requiredIds = normalizeHistoryModIds([...coreIds, ...toolIds])
+    const builtinIds = normalizeHistoryModIds(officialIds.filter(id => !isCorePackageId(id) && !excludedBuiltinIds.has(normalizePackageId(id))))
+    const userIds = normalizeHistoryModIds(config.userIds)
+    return {
+      requiredIds,
+      builtinIds,
+      userIds,
+      baseIds: normalizeHistoryModIds([...requiredIds, ...builtinIds, ...userIds]),
+    }
+  }
+  const buildResetActiveListPreset = async (options = {}) => {
+    const supplementStore = useSupplementStore()
+    const config = options.config ? normalizeResetActiveListConfig(options.config) : resolveResetActiveListConfig()
+    const basePreset = buildResetActiveListBasePreset({ config, enableToolMods: options.enableToolMods ?? appStore.settings?.enable_tool_mods })
+    const baseIds = basePreset.baseIds
+    const payload = await supplementStore.resolveSupplementPayloadForList(baseIds, { selectionMode: 'danger' })
+    const removeSet = buildCanonicalIdSet(payload.removeIds || [])
+    const excludedDerivedSet = buildCanonicalIdSet([...(config.excludedDerivedIds || []), ...(config.excludedBuiltinIds || [])])
+    const baseSet = buildCanonicalIdSet(baseIds)
+    const disabledToolSet = options.enableToolMods === false || (options.enableToolMods == null && !appStore.settings?.enable_tool_mods)
+      ? buildCanonicalIdSet(Array.from(DEFAULT_TOOL_PACKAGE_IDS))
+      : new Set()
+    const derivedIds = normalizeHistoryModIds(payload.addIds || [])
+      .filter(id => {
+        const canonicalId = normalizeCanonicalId(id)
+        return !baseSet.has(canonicalId) && !excludedDerivedSet.has(canonicalId) && !disabledToolSet.has(canonicalId)
+      })
+    const finalIds = normalizeHistoryModIds([
+      ...baseIds.filter(id => !removeSet.has(normalizeCanonicalId(id))),
+      ...derivedIds,
+    ])
+    return { ...basePreset, derivedIds, finalIds }
+  }
+  const resolveResetActiveListPreview = async (options = {}) => buildResetActiveListPreset(options)
+  const sortActiveIdsForReset = async (ids = []) => {
+    const targetIds = normalizeHistoryModIds(ids)
+    if (!window.pywebview || targetIds.length === 0) return targetIds
+    const res = await window.pywebview.api.auto_sort_mods(targetIds)
+    if (!checkResult(res, t('check.mod.reset_active_sort', '重置启用列表排序'))) return null
+    if (res.data?.warnings?.length > 0) {
+      toast.warning(res.data.warnings.map(warning => warning.message).filter(Boolean).join('\n'), { position: 'top-center', timeout: 5000 })
+    }
+    return normalizeHistoryModIds(res.data?.sorted_ids || targetIds)
+  }
+  const applyResetActiveListPreset = async ({ silent = false } = {}) => {
+    const preset = await buildResetActiveListPreset()
+    const presetIds = normalizeHistoryModIds(preset.finalIds)
+    if (presetIds.length === 0) {
+      if (!silent) toast.warning(t('toast.mod.reset_active_list_no_base', '未找到可用于重置的官方模组或必要项，请先确认当前环境的游戏目录和模组扫描结果。'))
+      return false
+    }
+    const sortedIds = await sortActiveIdsForReset(presetIds)
+    if (!sortedIds) return false
+    const success = await runListHistoryTransaction({
+      type: 'reset-active-list',
+      label: t('history.mod.reset_active_list', '重置启用列表'),
+      trackedModIds: sortedIds,
+    }, async () => {
+      setListIds('active', sortedIds)
+      updateInactiveIds()
+      takeModListByIds(sortedIds).forEach(mod => {
+        mod.last_moved_time = Date.now()
+        mod.last_active_time = Date.now()
+      })
+    })
+    if (success && !silent) toast.success(t('toast.mod.reset_active_list_done', '启用列表已重置'))
+    return success
+  }
+  const resetActiveList = async ({ silent = false } = {}) => {
+    if (!silent) {
+      const ok = await confirmStore.confirmAction(
+        t('dialog.mod.reset_active_list.title', '重置启用列表'),
+        t('dialog.mod.reset_active_list.message', '此操作会清空当前启用列表，并按重置预设重新加入官方模组、必要项和补齐项。当前未保存的启用顺序会被替换。是否继续？'),
+        { type: 'warning', confirmText: t('dialog.mod.reset_active_list.confirm', '清空并重置'), cancelText: t('common.action.cancel', '取消') },
+      )
+      if (!ok) return false
+    }
+    return await applyResetActiveListPreset({ silent })
+  }
   const getLocalizeActionTitle = (totalCount = 0, existingCount = 0) => {
     const createCount = Math.max(Number(totalCount || 0) - Number(existingCount || 0), 0)
     if (existingCount > 0) return createCount > 0 ? t('dialog.mod.localize.sync_and_create_title', '本地化/同步本地共存模组') : t('dialog.mod.localize.sync_title', '同步本地共存模组')
@@ -1606,7 +1708,7 @@ export const useModStore = defineStore('mods', () => {
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,
     updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, removeDeletedModsFromLocalData, removeUnavailableIdsCompletely, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
     // 扫描、排序与模组操作
-    scanMods, scanComplete, autoSortMods, resolveLocalizeCandidates, localizeSelectedMods, localizeMods, disableMods, disableSelectedMods, deleteMods, deleteSelectedModFiles, unsubscribeSelectedWorkshopMods, smartInsertMods,
+    scanMods, scanComplete, autoSortMods, resetActiveList, applyResetActiveListPreset, resolveResetActiveListPreview, resolveLocalizeCandidates, localizeSelectedMods, localizeMods, disableMods, disableSelectedMods, deleteMods, deleteSelectedModFiles, unsubscribeSelectedWorkshopMods, smartInsertMods,
     canSwitchCoexistenceSource, switchCoexistenceSource, toggleCoexistenceSource, toggleSelectedCoexistenceSource, revealSelectedMod,
     // 用户数据与联锁
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,

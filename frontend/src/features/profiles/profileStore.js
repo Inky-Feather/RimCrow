@@ -18,6 +18,7 @@ export const useProfileStore = defineStore('profile', () => {
   const currentProfileId = ref('default')
   const orphanedProfiles = ref([]) // 磁盘上存在但数据库没记录的配置
   const isLoading = ref(false)   // 环境列表加载状态
+  let pendingEmptyPresetProfileId = ''
 
   // 当前激活的严格上下文 (Active Context)
   const activeContext = ref({
@@ -61,6 +62,18 @@ export const useProfileStore = defineStore('profile', () => {
 
   // === Actions ===
   const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms))
+  const applyResetPresetIfActiveListEmpty = async () => {
+    const modStore = useModStore()
+    if ((modStore.activeIds || []).length > 0) return false
+    return await modStore.applyResetActiveListPreset({ silent: true })
+  }
+
+  const applyPendingEmptyActivePreset = async () => {
+    if (!pendingEmptyPresetProfileId) return false
+    if (pendingEmptyPresetProfileId !== currentProfileId.value) return false
+    pendingEmptyPresetProfileId = ''
+    return await applyResetPresetIfActiveListEmpty()
+  }
 
   const buildSteamShortcutProgressMessage = (steps) => (
     [
@@ -114,7 +127,11 @@ export const useProfileStore = defineStore('profile', () => {
         await appStore.refreshData()
         // 3. 当前环境链接已由后端即时收敛；仅在开启自动扫描时再补磁盘事实
         if (appStore.settings.enable_auto_scan !== false && activeContext.value?.is_healthy !== false) {
-          await appStore.requestModScan()
+          pendingEmptyPresetProfileId = currentProfileId.value
+          const scanStarted = await appStore.requestModScan()
+          if (!scanStarted) await applyPendingEmptyActivePreset()
+        } else {
+          await applyResetPresetIfActiveListEmpty()
         }
         toast.success(t('toast.profiles.switched', '已切换至环境: {name}', { name: currentProfile.value?.name || currentProfileId.value }))
       } else {
@@ -281,7 +298,7 @@ export const useProfileStore = defineStore('profile', () => {
     // 环境管理
     fetchProfiles, createProfile, switchProfile, updateProfile, deleteProfile, createDesktopShortcut,
     // 运行记录与孤立环境
-    applyLastPlayedTime,
+    applyLastPlayedTime, applyPendingEmptyActivePreset,
     scanOrphans, importOrphan,
   }
 })

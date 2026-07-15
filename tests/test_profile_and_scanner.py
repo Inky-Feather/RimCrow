@@ -213,6 +213,50 @@ class TestProfileManager(unittest.TestCase):
             str(target_user_data),
         )
 
+    def test_create_profile_does_not_initialize_modsconfig(self):
+        manager = ProfileManager.__new__(ProfileManager)
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+
+        install_root = temp_root / "RimWorld"
+        target_user_data = temp_root / "target"
+        manager.current_profile = None
+        manager._sync_profile_to_disk = Mock()
+        manager._get_install_inspector = Mock(return_value=SimpleNamespace(
+            inspect=Mock(return_value=SimpleNamespace(is_steam=False, game_version="1.5.4100"))
+        ))
+        fake_profile = SimpleNamespace(
+            id="new-profile",
+            name="Test Profile",
+            description="",
+            game_install_path=str(install_root),
+            user_data_path=str(target_user_data),
+            game_version="1.5.4100",
+            prefer_steam_launch=False,
+            use_workshop_mods=False,
+            use_self_mods=False,
+            is_steam=False,
+            run_commands=[],
+            inactive_mods_order=[],
+            temp_mods_order=[],
+        )
+
+        with patch("backend.managers.mgr_profile.GameManager.detect_executable", return_value=str(install_root / "RimWorldWin64.exe")), \
+             patch("backend.managers.mgr_profile.GameManager.get_game_version", return_value="1.5.4100"), \
+             patch("backend.managers.mgr_profile.GameProfile.create", return_value=fake_profile), \
+             patch("backend.managers.mgr_profile.db.atomic", return_value=nullcontext()):
+            profile = manager.create_profile({
+                "name": "Test Profile",
+                "game_install_path": str(install_root),
+                "user_data_path": str(target_user_data),
+                "use_workshop_mods": False,
+                "use_self_mods": False,
+                "run_commands": [],
+            }, copy_current_data=False)
+
+        self.assertIs(profile, fake_profile)
+        self.assertFalse((target_user_data / "Config" / "ModsConfig.xml").exists())
+
     def test_get_launch_args_includes_savedatafolder_for_default_profile(self):
         manager = ProfileManager.__new__(ProfileManager)
         temp_root = Path(tempfile.mkdtemp())
@@ -3034,7 +3078,7 @@ class TestSettingsPathNormalization(unittest.TestCase):
         self.assertEqual(settings.config.self_mods_path, str(MODS_DIR))
         self.assertEqual(
             warnings,
-            ["管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。"],
+            ["self_mods_path_reset"],
         )
 
 

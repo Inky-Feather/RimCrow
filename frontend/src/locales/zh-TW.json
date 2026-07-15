@@ -1238,6 +1238,7 @@
       "get_interlock_missing": "獲取聯鎖缺失項",
       "heal_interlock": "修復斷裂聯鎖",
       "link": "設定 Mod 聯鎖",
+      "reset_active_sort": "重置啟用列表排序",
       "smart_insert_active": "智能插入 Mod 到 Active 列表",
       "unlink": "解除 Mod 聯鎖",
       "update_time": "更新Mod最後操作時間",
@@ -2210,6 +2211,11 @@
         "sync_and_create_title": "本地化/同步本地共存模組",
         "sync_message": "選中的 {total} 個{store}模組已經存在本地共存模組。\n繼續後會用目前{store}檔案同步已有本地副本。",
         "sync_title": "同步本地共存模組"
+      },
+      "reset_active_list": {
+        "confirm": "清空並重置",
+        "message": "此操作會清空目前啟用列表，並依照重置預設重新加入官方模組、必要項和補齊項。目前未儲存的啟用順序會被取代。是否繼續？",
+        "title": "重置啟用列表"
       }
     },
     "mod_alias_review": {
@@ -2598,6 +2604,18 @@
       "preview_title": "預覽",
       "start_export": "開始導出",
       "title": "推薦導出"
+    },
+    "reset_active_list_manager": {
+      "custom_items": "自訂項",
+      "custom_items_desc": "可輸入名稱或包名查找模組，或直接輸入包名後按 Enter 加入預設。",
+      "description": "管理預設的基底啟用列表，重置列表時會直接依照以下列表重置。點擊官方 DLC 或補充依賴可切換排除狀態。",
+      "empty_builtin": "目前沒有可顯示的官方 DLC。",
+      "empty_required": "目前沒有可顯示的必要項。",
+      "empty_supplement_dependencies": "目前沒有自動補充的依賴項。",
+      "official_dlc": "官方 DLC（可點擊排除）",
+      "required": "必要項（不可編輯）",
+      "supplement_dependencies": "補充依賴（根據上方模組項自動補充，可點擊排除）",
+      "title": "預設列表管理"
     },
     "rule_panel": {
       "delete": {
@@ -3621,6 +3639,7 @@
       "deactivate_count": "停用 {count} 個 Mod",
       "delete_local_files_count": "刪除 {count} 個本地檔案",
       "disable_count": "禁用 {count} 個 Mod",
+      "reset_active_list": "重置啟用列表",
       "switch_to_local_count": "切換 {count} 個 Mod 到本地版",
       "switch_to_workshop_count": "切換 {count} 個 Mod 到工坊版",
       "unsubscribe_and_delete_count": "取消訂閱並刪除 {count} 個檔案",
@@ -3864,6 +3883,7 @@
         "subscribe": "訂閱替代版本",
         "title": "替代版本"
       },
+      "reset_active_list": "重置啟用列表",
       "section": {
         "collapse_all": "摺疊全部分割組",
         "collapse_current": "摺疊本分割組",
@@ -3897,6 +3917,7 @@
         "restore": "恢復警告",
         "restore_all": "恢復所有警告"
       },
+      "manage_reset_preset": "預設列表管理",
       "move": {
         "active_section_groups": "啟用列表分割組...",
         "current_other_groups": "目前列表其他分割組...",
@@ -4427,6 +4448,8 @@
       "interlock_no_selected_locked": "選中的 Mod 沒有可解除的聯鎖",
       "link_failed": "設定 Mod 聯鎖失敗。請稍後重試，詳細原因已寫入系統日誌。",
       "localize_no_workshop_items": "選中的模組中沒有來自工坊的項",
+      "reset_active_list_done": "啟用列表已重置",
+      "reset_active_list_no_base": "未找到可用於重置的官方模組或必要項，請先確認目前環境的遊戲目錄和模組掃描結果。",
       "scan_already_running": "掃描任務已在進行中，請等待目前掃描完成。",
       "scan_cancelled": "掃描已取消",
       "scan_conflicts_found": "掃描已完成，發現 {count} 個包名重複衝突需要處理。{extra}",
@@ -4631,6 +4654,7 @@
       "actions": {
         "autosort": "根據規則設定自動排序目前啟用的所有模組，如果排序效果不如舊版理想，可在設定中切換回舊版排序邏輯。",
         "force_scan": "重新檢查所有檔案，包括未變動的檔案，比較耗時",
+        "reset_active_list": "清空並重置目前啟用列表，並依照預設重新生成；右鍵可管理預設列表。",
         "scan": "掃描檔案變動，並同步目前環境的 Mod 列表"
       }
     },
@@ -5954,8 +5978,8 @@
         },
         "link_deployment_mode": "連結部署模式",
         "link_deployment_mode_desc": "影響啟用管理器 Mod 或多環境下使用創意工坊 Mod 時的連結部署行為模式，增量部署會盡量保留已正確的連結，只處理變化項；完全重建會先移除全部舊連結，再按目前掃描結果重新部署。",
-        "list_action_checks": "列表操作問題檢查",
-        "list_action_checks_desc": "控制儲存、運行和列表顯示時的提醒與輔助行為。",
+        "list_action_checks": "列表功能與檢查提示",
+        "list_action_checks_desc": "控制列表儲存、執行、顯示提示和重置預設。",
         "mod_residue_scan": "掃描後檢查殘留",
         "mod_residue_scan_desc": "開啟後，全量掃描結束會在背景檢查卸載後留下的資料夾和設定檔案；關閉後只在手動打開殘留清理時檢查。",
         "multiplayer_compatibility_check": "檢查 Multiplayer 聯機兼容性",
@@ -5964,11 +5988,13 @@
         "persist_temp_mod_list_desc": "開啟後，臨時列表會按目前環境儲存，下次進入該環境時自動恢復；關閉後，儲存時會把臨時列表裡的 Mod 放回停用列表頂部。",
         "regular_mods_follow_dependencies": "普通模組貼緊依賴",
         "regular_mods_follow_dependencies_desc": "開啟後，自動排序會盡量讓普通 Mod 緊跟在同權重內已啟用的最後一個依賴後方，讓同一系列的模組更聚攏。",
+        "reset_active_preset_desc": "管理預設的基底啟用列表，重置列表時會直接依照預設列表重置。",
+        "reset_active_preset_manager": "預設列表管理",
         "scan_maintenance": "掃描與資料維護",
         "scan_maintenance_desc": "控制 Mod 列表重新整理、檔案變動識別和缺失資料處理。",
         "show_coexistence_message": "顯示共存衝突提示",
         "show_coexistence_message_desc": "關閉後，將不會顯示共存 Mod 的衝突提示資訊。",
-        "skip_language_pack_alias_generation": "跳過語言包生成別名備註",
+        "skip_language_pack_alias_generation": "別名備註時跳過語言包",
         "skip_language_pack_alias_generation_desc": "開啟後，批量生成別名和備註時不處理語言包；單個模組手動生成不受影響。",
         "sort_mods_by": "排序順序",
         "sort_mods_by_desc": "影響自動排序時同檔次的 Mod 順序，處理優先級是 別名>原名>包名，所以即使 Mod 沒有別名，也能按原名參與排序。",

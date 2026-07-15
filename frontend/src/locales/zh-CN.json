@@ -1238,6 +1238,7 @@
       "get_interlock_missing": "获取联锁缺失项",
       "heal_interlock": "修复断裂联锁",
       "link": "设置 Mod 联锁",
+      "reset_active_sort": "重置启用列表排序",
       "smart_insert_active": "智能插入 Mod 到 Active 列表",
       "unlink": "解除 Mod 联锁",
       "update_time": "更新Mod最后操作时间",
@@ -2210,6 +2211,11 @@
         "sync_and_create_title": "本地化/同步本地共存模组",
         "sync_message": "选中的 {total} 个{store}模组已经存在本地共存模组。\n继续后会用当前{store}文件同步已有本地副本。",
         "sync_title": "同步本地共存模组"
+      },
+      "reset_active_list": {
+        "confirm": "清空并重置",
+        "message": "此操作会清空当前启用列表，并按重置预设重新加入官方模组、必要项和补齐项。当前未保存的启用顺序会被替换。是否继续？",
+        "title": "重置启用列表"
       }
     },
     "mod_alias_review": {
@@ -2598,6 +2604,18 @@
       "preview_title": "预览",
       "start_export": "开始导出",
       "title": "推荐导出"
+    },
+    "reset_active_list_manager": {
+      "custom_items": "自定义项",
+      "custom_items_desc": "可输入名称或包名查找模组，或直接输入包名后回车加入预设。",
+      "description": "管理预设的基底启用列表，重置列表时会直接按以下列表重置。点击官方 DLC 或衍生补充项可切换排除状态。",
+      "empty_builtin": "当前没有可显示的官方 DLC。",
+      "empty_required": "当前没有可显示的必要项。",
+      "empty_supplement_dependencies": "当前没有自动补充的依赖项。",
+      "official_dlc": "官方 DLC（可点击排除）",
+      "required": "必要项（不可编辑）",
+      "supplement_dependencies": "补充依赖（根据上方模组项自动补充可点击排除）",
+      "title": "预设列表管理"
     },
     "rule_panel": {
       "delete": {
@@ -3621,6 +3639,7 @@
       "deactivate_count": "停用 {count} 个 Mod",
       "delete_local_files_count": "删除 {count} 个本地文件",
       "disable_count": "禁用 {count} 个 Mod",
+      "reset_active_list": "重置启用列表",
       "switch_to_local_count": "切换 {count} 个 Mod 到本地版",
       "switch_to_workshop_count": "切换 {count} 个 Mod 到工坊版",
       "unsubscribe_and_delete_count": "取消订阅并删除 {count} 个文件",
@@ -3864,6 +3883,7 @@
         "subscribe": "订阅替代版本",
         "title": "替代版本"
       },
+      "reset_active_list": "重置启用列表",
       "section": {
         "collapse_all": "折叠全部分割组",
         "collapse_current": "折叠本分割组",
@@ -3897,6 +3917,7 @@
         "restore": "恢复警告",
         "restore_all": "恢复所有警告"
       },
+      "manage_reset_preset": "预设列表管理",
       "move": {
         "active_section_groups": "启用列表分割组...",
         "current_other_groups": "当前列表其他分割组...",
@@ -4427,6 +4448,8 @@
       "interlock_no_selected_locked": "选中的 Mod 没有可解除的联锁",
       "link_failed": "设置 Mod 联锁失败。请稍后重试，详细原因已写入系统日志。",
       "localize_no_workshop_items": "选中的模组中没有来自工坊的项",
+      "reset_active_list_done": "启用列表已重置",
+      "reset_active_list_no_base": "未找到可用于重置的官方模组或必要项，请先确认当前环境的游戏目录和模组扫描结果。",
       "scan_already_running": "扫描任务已在进行中，请等待当前扫描完成。",
       "scan_cancelled": "扫描已取消",
       "scan_conflicts_found": "扫描已完成，发现 {count} 个包名重复冲突需要处理。{extra}",
@@ -4631,6 +4654,7 @@
       "actions": {
         "autosort": "根据规则设定自动排序当前启用的所有模组，如果排序效果不如旧版理想，可在设置中切换回旧版排序逻辑。",
         "force_scan": "重新检查所有文件，包括未变动的文件，比较耗时",
+        "reset_active_list": "清空并重置当前启用列表，并按预设重新生成，右键可管理预设列表",
         "scan": "扫描文件变动，并同步当前环境的 Mod 列表"
       }
     },
@@ -5954,8 +5978,8 @@
         },
         "link_deployment_mode": "链接部署模式",
         "link_deployment_mode_desc": "影响启用管理器 Mod 或多环境下使用创意工坊 Mod 时的链接部署行为模式，增量部署会尽量保留已正确的链接，只处理变化项；完全重建会先移除全部旧链接，再按当前扫描结果重新部署。",
-        "list_action_checks": "列表操作问题检查",
-        "list_action_checks_desc": "控制保存、运行和列表显示时的提醒与辅助行为。",
+        "list_action_checks": "列表功能与检查提示",
+        "list_action_checks_desc": "控制列表保存、运行、显示提示和重置预设。",
         "mod_residue_scan": "扫描后检查残留",
         "mod_residue_scan_desc": "开启后，全量扫描结束会在后台检查卸载后留下的文件夹和设置文件；关闭后只在手动打开残留清理时检查。",
         "multiplayer_compatibility_check": "检查 Multiplayer 联机兼容性",
@@ -5964,11 +5988,13 @@
         "persist_temp_mod_list_desc": "开启后，临时列表会按当前环境保存，下次进入该环境时自动恢复；关闭后，保存时会把临时列表里的 Mod 放回停用列表顶部。",
         "regular_mods_follow_dependencies": "普通模组贴紧依赖",
         "regular_mods_follow_dependencies_desc": "开启后，自动排序会尽量让普通 Mod 紧跟在同权重内已启用的最后一个依赖后方，让同一系列的模组更聚拢。",
+        "reset_active_preset_desc": "管理预设的基底启用列表，重置列表时会直接按预设列表重置。",
+        "reset_active_preset_manager": "预设列表管理",
         "scan_maintenance": "扫描与数据维护",
         "scan_maintenance_desc": "控制 Mod 列表刷新、文件变动识别和缺失数据处理。",
         "show_coexistence_message": "显示共存冲突提示",
         "show_coexistence_message_desc": "关闭后，将不会显示共存 Mod 的冲突提示信息。",
-        "skip_language_pack_alias_generation": "跳过语言包生成别名备注",
+        "skip_language_pack_alias_generation": "别名备注时跳过语言包",
         "skip_language_pack_alias_generation_desc": "开启后，批量生成别名和备注时不处理语言包；单个模组手动生成不受影响。",
         "sort_mods_by": "排序顺序",
         "sort_mods_by_desc": "影响自动排序时同档次的 Mod 顺序，处理优先级是 别名>原名>包名，所以即使 Mod 没有别名，也能按原名参与排序。",

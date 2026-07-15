@@ -980,6 +980,25 @@ const createEmptySummary = () => ({
       resolvePromise = resolve
     })
   }
+  const resolveSupplementPayloadForList = async (activeIds = modStore.activeIds, { selectionMode = 'danger' } = {}) => {
+    const previousMode = defaultSelectionMode.value
+    const previousToggleOverrides = { ...toggleOverrides }
+    const previousChoiceOverrides = { ...choiceOverrides }
+    try {
+      clearSelectionOverrides()
+      defaultSelectionMode.value = normalizeSelectionMode(selectionMode)
+      const resolvedActiveIds = dedupeNormalizedPackageTokens(activeIds)
+      const prepared = await prepareDialogPlan(resolvedActiveIds)
+      const plan = resolveProjectedPlan(prepared.graph)
+      return plan.payload || { addIds: [], removeIds: [] }
+    } finally {
+      defaultSelectionMode.value = previousMode
+      clearReactiveObject(toggleOverrides)
+      clearReactiveObject(choiceOverrides)
+      Object.assign(toggleOverrides, previousToggleOverrides)
+      Object.assign(choiceOverrides, previousChoiceOverrides)
+    }
+  }
 
   const cancel = () => {
     isVisible.value = false
@@ -1188,7 +1207,7 @@ const createEmptySummary = () => ({
     // 弹窗状态
     isVisible, state, toggleSelections, choiceSelections, selectedCount, totalCount,
     // 摘要与打开入口
-    getSuggestionSummary, openForActiveList, ensureRequiredBeforeSave, ensureRequiredBeforeAutosort,
+    getSuggestionSummary, openForActiveList, resolveSupplementPayloadForList, ensureRequiredBeforeSave, ensureRequiredBeforeAutosort,
     // 选择控制
     isRootChecked, getChoiceSelection, toggleRoot, chooseRootOption,
     selectAll, selectRequiredOnly, clearSelection,

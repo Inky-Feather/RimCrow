@@ -10,10 +10,10 @@
       
       <!-- 已有 Tag -->
       <transition-group name="list">
-        <span v-for="tag in modelValue" :key="tag" 
-          class="flex items-center gap-1.5 px-2 py-0.5 bg-accent-primary/10 border border-accent-primary/30 rounded text-sm text-accent-primary font-mono group animate-in">
-          {{ tag }}
-          <button @click="remove(tag)" class="opacity-50 hover:opacity-100 hover:text-text-main transition-opacity">×</button>
+        <span v-for="tag in modelValue" :key="tag" v-tooltip="tagTooltip(tag)"
+          class="flex items-center max-w-[49%] gap-1.5 px-2 py-0.5 bg-accent-primary/10 border border-accent-primary/30 rounded text-sm text-accent-primary font-mono group animate-in">
+          <span class="flex-1 truncate">{{ tagLabel(tag) }}</span>
+          <button @click="remove(tag)" class="opacity-50 hover:opacity-100 hover:text-accent-danger transition-opacity">×</button>
         </span>
       </transition-group>
 
@@ -33,19 +33,30 @@
           class="flex-1 min-w-20 bg-transparent border-none outline-none text-sm text-text-main py-1 px-1"
         />
         
-        <!-- 标签建议下拉框 -->
-        <div v-if="showTagSuggest && filteredKnownTags.length > 0" 
-            class="popover-surface absolute bottom-full left-0 z-50 mb-1 flex max-h-40 w-48 flex-col overflow-y-auto rounded-lg p-1 shadow-[0_18px_50px_var(--shadow-color)]">
+        <FixedPopover
+          :is-open="showTagSuggest && filteredKnownTags.length > 0"
+          :trigger-ref="tagInputContainer"
+          :min-width="256"
+          :max-width="384"
+          :max-height="260"
+          :z-index="100020"
+          placement="auto"
+          align="start"
+          @request-close="closeSuggest"
+        >
+          <!-- 标签建议下拉框 -->
+          <div class="popover-surface custom-scrollbar flex max-h-64 w-64 max-w-[min(24rem,calc(100vw-2rem))] flex-col gap-1 overflow-y-auto rounded-lg p-1 shadow-[0_18px_50px_var(--shadow-color)]" @mousedown.prevent>
           <button 
             v-for="(tag, idx) in filteredKnownTags" 
             :key="tag.value"  
+            v-tooltip="tagTooltip(tag.value)"
             @mousedown="addTag(tag.value)" 
-            class="text-left px-2 py-1.5 text-xs rounded hover:bg-accent-primary/20 hover:text-accent-primary transition-colors truncate"
+            class="flex min-h-8 shrink-0 flex-col items-start justify-center rounded px-2 py-1.5 text-left text-xs leading-4 transition-colors hover:bg-accent-primary/20 hover:text-accent-primary"
             :class="{'bg-accent-primary/10 text-accent-primary': idx === tagNavIndex}">
-            <span class="font-bold">{{ tag.label }}</span>
-            <span v-if="tag.label !== tag.value" class="opacity-50 ml-1">({{ tag.value }})</span>
+            <span class="max-w-full truncate font-bold">{{ tag.label }}</span>
           </button>
-        </div>
+          </div>
+        </FixedPopover>
       </div>
     </div>
   </div>
@@ -53,6 +64,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import FixedPopover from '../popover/FixedPopover.vue'
 import { sortByDisplayName } from '../../lib/common'
 import { t } from '../../i18n.js'
 
@@ -61,7 +73,7 @@ const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   placeholder: String,
   description: String,
-  allTags: { type: Array, default: () => [] } // 支持 ['a', 'b'] 或 [{label: 'A', value: 'a'}]
+  allTags: { type: Array, default: () => [] } // 支持 ['a', 'b'] 或 [{ label: 'A', value: 'a' }]
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -71,6 +83,9 @@ const showTagSuggest = ref(false)
 const tagNavIndex = ref(-1)
 const tagInputContainer = ref(null)
 
+const normalizeTagText = (value = '') => String(value || '').trim()
+const normalizeComparableTag = (value = '') => normalizeTagText(value).toLowerCase()
+
 // 1. 归一化建议数据
 const normalizedTags = computed(() => {
   return sortByDisplayName(
@@ -78,28 +93,43 @@ const normalizedTags = computed(() => {
       if (typeof item === 'string') {
         return { label: item, value: item }
       }
-      return item
-    }),
+      const value = normalizeTagText(item?.value)
+      const label = normalizeTagText(item?.label || value)
+      if (!value) return null
+      const searchText = [label, value]
+        .map(normalizeComparableTag)
+        .filter(Boolean)
+        .join('\n')
+      return { label, value, searchText }
+    }).filter(Boolean),
     item => item?.label || item?.value
   )
 })
+const tagMap = computed(() => new Map(normalizedTags.value.map(tag => [normalizeComparableTag(tag.value), tag])))
+const tagInfo = (value = '') => {
+  const rawValue = normalizeTagText(value)
+  return tagMap.value.get(normalizeComparableTag(rawValue)) || { label: rawValue, value: rawValue }
+}
+const tagLabel = (value = '') => tagInfo(value).label || normalizeTagText(value)
+const tagTooltip = (value = '') => {
+  const tag = tagInfo(value)
+  return tag.label && tag.label !== tag.value ? `${tag.label}\n${tag.value}` : tag.value
+}
 
 // 2. 过滤建议列表 (排除已存在的，并进行模糊匹配)
 const filteredKnownTags = computed(() => {
   const input = newTag.value.toLowerCase().trim()
+  const usedValues = new Set((props.modelValue || []).map(normalizeComparableTag).filter(Boolean))
   return normalizedTags.value
-    .filter(t => !props.modelValue.includes(t.value)) // 排除已在结果中的
-    .filter(t => 
-      t.label.toLowerCase().includes(input) || 
-      t.value.toLowerCase().includes(input)
-    )
-    .slice(0, 10) // 最多显示10个
+    .filter(tag => !usedValues.has(normalizeComparableTag(tag.value))) // 排除已在结果中的
+    .filter(tag => tag.searchText.includes(input))
 })
 
 // 添加标签核心逻辑
 const addTag = (val) => {
-  const targetValue = val?.trim()
-  if (targetValue && !props.modelValue.includes(targetValue)) {
+  const targetValue = normalizeTagText(val)
+  const usedValues = new Set((props.modelValue || []).map(normalizeComparableTag).filter(Boolean))
+  if (targetValue && !usedValues.has(normalizeComparableTag(targetValue))) {
     emit('update:modelValue', [...props.modelValue, targetValue])
     newTag.value = ''
     tagNavIndex.value = -1

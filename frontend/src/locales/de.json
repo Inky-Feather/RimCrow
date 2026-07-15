@@ -1238,6 +1238,7 @@
       "get_interlock_missing": "Erhalten Sie fehlende verknüpfte Mods",
       "heal_interlock": "Defekte Links reparieren",
       "link": "Link-Mods",
+      "reset_active_sort": "Reihenfolge der aktiven Liste zurücksetzen",
       "smart_insert_active": "Fügen Sie Mods intelligent in die Aktivliste ein",
       "unlink": "Verknüpfung der Mods aufheben",
       "update_time": "Aktualisiere die letzte Mod-Betriebszeit",
@@ -2210,6 +2211,11 @@
         "sync_and_create_title": "Lokale Kopien lokalisieren/synchronisieren",
         "sync_message": "Die ausgewählten {total} {store}-Mods verfügen bereits über lokale Kopien.\nWenn Sie fortfahren, werden die aktuellen {store}-Dateien mit diesen lokalen Kopien synchronisiert.",
         "sync_title": "Lokale Kopien synchronisieren"
+      },
+      "reset_active_list": {
+        "confirm": "Leeren und zurücksetzen",
+        "message": "Dies leert die aktuelle aktive Liste und fügt offizielle Mods, erforderliche Einträge und Ergänzungen aus der Zurücksetzen-Voreinstellung hinzu. Die nicht gespeicherte Reihenfolge der aktiven Liste wird ersetzt. Fortfahren?",
+        "title": "Aktive Liste zurücksetzen"
       }
     },
     "mod_alias_review": {
@@ -2598,6 +2604,18 @@
       "preview_title": "Vorschau",
       "start_export": "Export starten",
       "title": "Empfehlungsexport"
+    },
+    "reset_active_list_manager": {
+      "custom_items": "Eigene Einträge",
+      "custom_items_desc": "Suche Mods nach Name oder Paket-ID, oder gib direkt eine Paket-ID ein und drücke Enter, um sie zur Voreinstellung hinzuzufügen.",
+      "description": "Verwalte die Basisliste der Aktivierungs-Voreinstellung. Beim Zurücksetzen wird die folgende Liste direkt verwendet. Klicke auf offizielle DLCs oder zusätzliche Abhängigkeiten, um sie auszuschließen.",
+      "empty_builtin": "Keine offiziellen DLCs vorhanden.",
+      "empty_required": "Keine erforderlichen Einträge vorhanden.",
+      "empty_supplement_dependencies": "Keine automatisch ergänzten Abhängigkeiten vorhanden.",
+      "official_dlc": "Offizielle DLCs (zum Ausschließen anklicken)",
+      "required": "Erforderliche Einträge (nicht bearbeitbar)",
+      "supplement_dependencies": "Zusätzliche Abhängigkeiten (werden anhand der Mod-Einträge oben automatisch ergänzt; zum Ausschließen anklicken)",
+      "title": "Voreinstellungsliste verwalten"
     },
     "rule_panel": {
       "delete": {
@@ -3621,6 +3639,7 @@
       "deactivate_count": "Deaktivieren Sie {count}-Mods",
       "delete_local_files_count": "Löschen Sie die lokalen {count}-Dateien",
       "disable_count": "Deaktivieren Sie die {count}-Mods",
+      "reset_active_list": "Aktive Liste zurücksetzen",
       "switch_to_local_count": "Schalten Sie {count}-Mods auf lokale Kopien um",
       "switch_to_workshop_count": "Wechseln Sie {count}-Mods zu Workshop-Kopien",
       "unsubscribe_and_delete_count": "Abonnieren und {count}-Dateien löschen",
@@ -3864,6 +3883,7 @@
         "subscribe": "Ersatzversion abonnieren",
         "title": "Ersatz"
       },
+      "reset_active_list": "Aktive Liste zurücksetzen",
       "section": {
         "collapse_all": "Reduzieren Sie alle Abschnittsgruppen",
         "collapse_current": "Reduzieren Sie diese Abschnittsgruppe",
@@ -3897,6 +3917,7 @@
         "restore": "Warnung wiederherstellen",
         "restore_all": "Alle Warnungen wiederherstellen"
       },
+      "manage_reset_preset": "Voreinstellungsliste verwalten",
       "move": {
         "active_section_groups": "Aktive Listenabschnittsgruppen...",
         "current_other_groups": "Andere Abschnittsgruppen in dieser Liste...",
@@ -4427,6 +4448,8 @@
       "interlock_no_selected_locked": "Die ausgewählten Mods haben keine Verriegelung zum Aufheben",
       "link_failed": "Mods konnten nicht verknüpft werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
       "localize_no_workshop_items": "Keine ausgewählten Mods stammen von Workshop",
+      "reset_active_list_done": "Aktive Liste wurde zurückgesetzt",
+      "reset_active_list_no_base": "Keine offiziellen Mods oder erforderlichen Einträge für das Zurücksetzen gefunden. Prüfe das Spielverzeichnis des aktuellen Profils und die Mod-Scan-Ergebnisse.",
       "scan_already_running": "Eine Scanaufgabe wird bereits ausgeführt. Warten Sie, bis der aktuelle Scan abgeschlossen ist.",
       "scan_cancelled": "Scan abgebrochen",
       "scan_conflicts_found": "Scan abgeschlossen. {count} doppelte Paket-ID-Konflikte gefunden, die überprüft werden müssen.{extra}",
@@ -4631,6 +4654,7 @@
       "actions": {
         "autosort": "Sortieren Sie alle aktiven Mods automatisch nach Regeln. Wenn das Ergebnis schlechter ist als das alte Verhalten, wechseln Sie in den Einstellungen zurück zur alten Sortierlogik.",
         "force_scan": "Überprüfen Sie alle Dateien erneut, einschließlich unveränderter Dateien. Dies kann länger dauern.",
+        "reset_active_list": "Leert und setzt die aktuelle aktive Liste zurück und erstellt sie aus der Voreinstellung neu. Rechtsklick öffnet die Verwaltung der Voreinstellungsliste.",
         "scan": "Dateiänderungen scannen und die aktuelle Profil-Mod-Liste synchronisieren"
       }
     },
@@ -5954,8 +5978,8 @@
         },
         "link_deployment_mode": "Link-Bereitstellungsmodus",
         "link_deployment_mode_desc": "Steuert die Linkbereitstellung, wenn Manager-Mods oder Workshop-Mods profilübergreifend verwendet werden. Bei der inkrementellen Bereitstellung bleiben korrekte vorhandene Links erhalten und nur Änderungen werden verarbeitet. Beim vollständigen Neuaufbau werden zunächst alle alten Links entfernt und anschließend anhand des aktuellen Scanergebnisses neu erstellt.",
-        "list_action_checks": "Aktionsprüfungen auflisten",
-        "list_action_checks_desc": "Steuert Erinnerungen und Helferverhalten beim Speichern, Starten und Anzeigen von Listen.",
+        "list_action_checks": "Listenfunktionen und Prüfhinweise",
+        "list_action_checks_desc": "Steuert Speichern, Starten, Anzeigehinweise und Zurücksetzen-Voreinstellungen für Listen.",
         "mod_residue_scan": "Rückstände nach dem Scan prüfen",
         "mod_residue_scan_desc": "Wenn diese Option aktiviert ist, prüft ein vollständiger Scan im Hintergrund, ob nach der Deinstallation noch Ordner und Einstellungen vorhanden sind. Wenn diese Option deaktiviert ist, werden Rückstände nur überprüft, wenn Sie die Rückstandsbereinigung manuell öffnen.",
         "multiplayer_compatibility_check": "Überprüfen Sie die Multiplayer-Kompatibilität",
@@ -5964,11 +5988,13 @@
         "persist_temp_mod_list_desc": "Wenn diese Option aktiviert ist, wird die temporäre Liste pro Profil gespeichert und beim nächsten Aufrufen dieses Profils wiederhergestellt. Wenn deaktiviert, werden Mods in der temporären Liste beim Speichern wieder an den Anfang der inaktiven Liste gesetzt.",
         "regular_mods_follow_dependencies": "Bewahren Sie reguläre Mods in der Nähe von Abhängigkeiten auf",
         "regular_mods_follow_dependencies_desc": "Wenn diese Option aktiviert ist, versucht die automatische Sortierung, reguläre Mods nach der letzten aktiven Abhängigkeit innerhalb derselben Gewichtsstufe zu platzieren, wodurch verwandte Serien näher beieinander bleiben.",
+        "reset_active_preset_desc": "Verwalte die Basisliste der Aktivierungs-Voreinstellung. Beim Zurücksetzen wird die Voreinstellungsliste direkt verwendet.",
+        "reset_active_preset_manager": "Voreinstellungsliste verwalten",
         "scan_maintenance": "Scan und Datenpflege",
         "scan_maintenance_desc": "Steuert die Aktualisierung der Mod-Liste, die Erkennung von Dateiänderungen und die Behandlung fehlender Daten.",
         "show_coexistence_message": "Hinweise auf koexistierende Konflikte anzeigen",
         "show_coexistence_message_desc": "Wenn diese Option deaktiviert ist, werden gleichzeitig vorhandene Mod-Konflikthinweise nicht angezeigt.",
-        "skip_language_pack_alias_generation": "Alias-Notizen für Sprachpakete überspringen",
+        "skip_language_pack_alias_generation": "Sprachpakete bei Aliasnotizen überspringen",
         "skip_language_pack_alias_generation_desc": "Wenn diese Option aktiviert ist, werden bei der Batch-Alias- und Notizgenerierung Sprachpakete übersprungen. Die manuelle Generierung für einen einzelnen Mod ist nicht betroffen.",
         "sort_mods_by": "Sortierreihenfolge",
         "sort_mods_by_desc": "Beeinflusst die Mod-Reihenfolge innerhalb derselben Stufe während der automatischen Sortierung. Priorität ist Alias ​​> Originalname > Paket-ID, sodass Mods ohne Aliase weiterhin nach Originalnamen sortiert werden können.",

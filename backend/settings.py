@@ -298,6 +298,11 @@ class AppConfig:
     show_coexistence_message: bool = False      # 是否显示共存Mod提示
     check_language_support: bool = True        # 是否检查语言支持
     enable_action_prechecks: bool = True       # 是否启用操作前检查功能
+    reset_active_list: Dict[str, Any] = field(default_factory=lambda: {
+        "user_ids": [],
+        "excluded_builtin_ids": [],
+        "excluded_derived_ids": [],
+    })  # 重置启用列表时的用户预设与排除项
     skip_language_pack_alias_generation: bool = True  # 批量生成别名备注时是否跳过语言包
     regular_mods_follow_dependencies: bool = False # 是否让普通模组贴紧其最后一个依赖目标
     language_packs_follow_targets: bool = False # 是否让语言包贴紧其最后一个前置/依赖目标

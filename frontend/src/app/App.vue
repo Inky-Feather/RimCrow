@@ -133,9 +133,22 @@
                     <span>{{ baseActionPending === 'save' ? t('ui.app.actions.saving', '保存中...') : (modStore.isDirty ? t('ui.app.actions.save_changes', '保存变动') : t('common.action.save', '保存')) }}</span>
                   </button>
 
+                  <div class="col-span-3 flex gap-1">
+                  <!-- 重置启用列表 -->
+                  <button :disabled="isBaseActionDisabled('reset-active-list')" :class="isBaseActionDisabled('reset-active-list') ? 'app-action-disabled' : ''"
+                    class="p-3 mt-1 rounded-lg bg-accent-warn/80 text-on-accent-warn shadow-lg shadow-accent-warn/10
+                          flex items-center justify-center transition-all duration-200 hover:bg-accent-warn hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
+                    v-tooltip="t('tooltip.app.actions.reset_active_list', '清空并重置当前启用列表，并按预设重新生成，右键可管理预设列表')"
+                    @click="runBaseAction('reset-active-list', () => modStore.resetActiveList())"
+                    @contextmenu.prevent.stop="appStore.uiState.showResetActiveListManager = true"
+                  >
+                    <LoaderCircle v-if="baseActionPending === 'reset-active-list'" class="size-4 animate-spin" />
+                    <RotateCcw v-else class="size-4" />
+                  </button>
+
                   <!-- 启动游戏 -->
                   <button data-tour="launch-button" :disabled="isBaseActionDisabled('launch')" :class="isBaseActionDisabled('launch') ? 'app-action-disabled' : ''"
-                    class="col-span-3 py-3 mt-1 rounded-lg bg-accent-success text-on-accent-success text-mdfont-bold
+                    class="flex-1 py-3 mt-1 rounded-lg bg-accent-success text-on-accent-success text-mdfont-bold
                           shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2
                           transition-all duration-200 uppercase tracking-widest
                           hover:bg-accent-success/85 hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
@@ -145,6 +158,8 @@
                     <svg v-else class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
                     {{ baseActionPending === 'launch' ? t('ui.app.actions.launching', '启动中...') : t('ui.app.actions.launch_game', '启动游戏') }}
                   </button>
+
+                  </div>
 
                 </div>
 
@@ -250,6 +265,9 @@
     <!-- 设置弹窗 -->
     <SettingsModal v-if="appStore.uiState.showSettingsPanel" />
 
+    <!-- 启用列表重置预设管理 -->
+    <ResetActiveListManagerModal v-if="appStore.uiState.showResetActiveListManager" />
+
     <!-- 翻译管理弹窗 -->
     <TranslationManagerModal v-if="appStore.uiState.showTranslationManager" />
 
@@ -331,7 +349,7 @@ import SegmentedTabs from '../shared/components/tabs/SegmentedTabs.vue'
 import { useFileSearchStore } from '../features/file-search/fileSearchStore'
 import GuideCenter from '../features/guide/GuideCenter.vue'
 import { applyTheme } from '../features/settings/theme/themeManager'
-import { LoaderCircle } from 'lucide-vue-next'
+import { LoaderCircle, RotateCcw } from 'lucide-vue-next'
 import { startupPerfMark } from '../shared/lib/startupPerf'
 import { t } from '../shared/i18n.js'
 
@@ -360,6 +378,7 @@ const PackageTransferDialog = defineAsyncComponent(() => import('../features/pac
 const RecommendationExportModal = defineAsyncComponent(() => import('../features/mod/RecommendationExportModal.vue'))
 const ThemeEditorModal = defineAsyncComponent(() => import('../features/settings/theme/ThemeEditorModal.vue'))
 const TranslationManagerModal = defineAsyncComponent(() => import('../shared/components/translation/TranslationManagerModal.vue'))
+const ResetActiveListManagerModal = defineAsyncComponent(() => import('../features/mod/ResetActiveListManagerModal.vue'))
 
 const updateModal = ref(null);
 

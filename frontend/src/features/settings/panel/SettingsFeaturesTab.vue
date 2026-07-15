@@ -20,9 +20,16 @@
                   </div>
 
                   <div class="modal-section space-y-4 p-5">
-                    <div>
-                      <h4 class="text-sm font-bold text-text-main">{{ t('ui.settings.features.list_action_checks', '列表操作问题检查') }}</h4>
-                      <p class="text-xs text-text-dim mt-1">{{ t('ui.settings.features.list_action_checks_desc', '控制保存、运行和列表显示时的提醒与辅助行为。') }}</p>
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <h4 class="text-sm font-bold text-text-main">{{ t('ui.settings.features.list_action_checks', '列表功能与检查提示') }}</h4>
+                        <p class="text-xs text-text-dim mt-1">{{ t('ui.settings.features.list_action_checks_desc', '控制列表保存、运行、显示提示和重置预设。') }}</p>
+                      </div>
+                      <button type="button" v-tooltip="t('ui.settings.features.reset_active_preset_desc', '管理预设的基底启用列表，重置列表时会直接按预设列表重置。')"
+                        class="inline-flex items-center gap-1 rounded-lg border border-accent-warn/25 bg-accent-warn/10 px-3 py-1.5 text-xs font-bold text-accent-warn transition-all hover:bg-accent-warn/20"
+                        @click="appStore.uiState.showResetActiveListManager = true">
+                        {{ t('ui.settings.features.reset_active_preset_manager', '预设列表管理') }}
+                      </button>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                       <CommonSwitch class="col-span-1" :label="t('ui.settings.features.persist_temp_mod_list', '保存临时列表')" v-model="formData.ui.persist_temp_mod_list" :description="t('ui.settings.features.persist_temp_mod_list_desc', '开启后，临时列表会按当前环境保存，下次进入该环境时自动恢复；关闭后，保存时会把临时列表里的 Mod 放回停用列表顶部。')" />
@@ -30,7 +37,7 @@
                       <CommonSwitch class="col-span-1" :label="t('ui.settings.features.show_coexistence_message', '显示共存冲突提示')" v-model="formData.show_coexistence_message" :description="t('ui.settings.features.show_coexistence_message_desc', '关闭后，将不会显示共存 Mod 的冲突提示信息。')" />
                       <CommonSwitch class="col-span-1" :label="t('ui.settings.features.check_language_support', '检查语言支持')" v-model="formData.check_language_support" :description="t('ui.settings.features.check_language_support_desc', '开启后，将会在 Mod 问题提示增加“语言支持”警告，提示 Mod 是否支持当前语言。')" />
                       <CommonSwitch class="col-span-1" :label="t('ui.settings.features.multiplayer_compatibility_check', '检查 Multiplayer 联机兼容性')" v-model="formData.enable_multiplayer_compatibility_check" :description="t('ui.settings.features.multiplayer_compatibility_check_desc', '开启后，在库存中检测到 Multiplayer 时，会为 Mod 列表显示联机兼容等级和辅助修正提示。')" />
-                      <CommonSwitch class="col-span-1" :label="t('ui.settings.features.skip_language_pack_alias_generation', '跳过语言包生成别名备注')" v-model="formData.skip_language_pack_alias_generation" :description="t('ui.settings.features.skip_language_pack_alias_generation_desc', '开启后，批量生成别名和备注时不处理语言包；单个模组手动生成不受影响。')" />
+                      <CommonSwitch class="col-span-1" :label="t('ui.settings.features.skip_language_pack_alias_generation', '别名备注时跳过语言包')" v-model="formData.skip_language_pack_alias_generation" :description="t('ui.settings.features.skip_language_pack_alias_generation_desc', '开启后，批量生成别名和备注时不处理语言包；单个模组手动生成不受影响。')" />
                       <CommonSwitch class="col-span-1" :label="t('ui.settings.features.enable_tool_mods', '使用辅助工具模组')" v-model="formData.enable_tool_mods" :description="t('ui.settings.features.enable_tool_mods_desc', '开启后，将在保存或自动排序时自动启用辅助工具模组，如提供日志获取等功能。')" />
                     </div>
                   </div>
@@ -97,10 +104,12 @@ import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import TranslationFeatureControls from '../../../shared/components/translation/TranslationFeatureControls.vue'
+import { useAppStore } from '../../../app/stores/appStore'
 import { t } from '../../../shared/i18n.js'
 
 defineProps({ formData: { type: Object, required: true } })
 const showWorkshopTranslationSettings = ref(false)
+const appStore = useAppStore()
 
 const autoSortStrategyOptions = computed(() => [
   { label: t('ui.settings.features.auto_sort_strategy.classic', '经典自动排序（旧版）'), value: 'classic_sort_logic' },

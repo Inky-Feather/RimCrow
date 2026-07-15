@@ -1238,6 +1238,7 @@
       "get_interlock_missing": "Get missing linked mods",
       "heal_interlock": "Repair broken links",
       "link": "Link mods",
+      "reset_active_sort": "Reset active-list order",
       "smart_insert_active": "Smart insert mods into the Active list",
       "unlink": "Unlink mods",
       "update_time": "Update last mod operation time",
@@ -2210,6 +2211,11 @@
         "sync_and_create_title": "Localize / Sync Local Copies",
         "sync_message": "The selected {total} {store} mods already have local copies.\nContinuing will sync the current {store} files into those local copies.",
         "sync_title": "Sync Local Copies"
+      },
+      "reset_active_list": {
+        "confirm": "Clear and reset",
+        "message": "This will clear the current active list and add official mods, required items, and supplemental items from the reset preset. Any unsaved active-list order will be replaced. Continue?",
+        "title": "Reset Active List"
       }
     },
     "mod_alias_review": {
@@ -2598,6 +2604,18 @@
       "preview_title": "Preview",
       "start_export": "Start export",
       "title": "Recommendation export"
+    },
+    "reset_active_list_manager": {
+      "custom_items": "Custom items",
+      "custom_items_desc": "Search mods by name or package ID, or type a package ID and press Enter to add it to the preset.",
+      "description": "Manage the base enabled-list preset. Resetting the list uses the list below as-is. Click Official DLC or additional dependencies to toggle exclusion.",
+      "empty_builtin": "No official DLC to show.",
+      "empty_required": "No required items to show.",
+      "empty_supplement_dependencies": "No auto-filled dependencies to show.",
+      "official_dlc": "Official DLC (click to exclude)",
+      "required": "Required items (not editable)",
+      "supplement_dependencies": "Additional dependencies (auto-filled from the mod items above; click to exclude)",
+      "title": "Preset List Manager"
     },
     "rule_panel": {
       "delete": {
@@ -3621,6 +3639,7 @@
       "deactivate_count": "Deactivate {count} mods",
       "delete_local_files_count": "Delete {count} local files",
       "disable_count": "Disable {count} mods",
+      "reset_active_list": "Reset active list",
       "switch_to_local_count": "Switch {count} mods to local copies",
       "switch_to_workshop_count": "Switch {count} mods to Workshop copies",
       "unsubscribe_and_delete_count": "Unsubscribe and delete {count} files",
@@ -3864,6 +3883,7 @@
         "subscribe": "Subscribe replacement version",
         "title": "Replacement"
       },
+      "reset_active_list": "Reset active list",
       "section": {
         "collapse_all": "Collapse all section groups",
         "collapse_current": "Collapse this section group",
@@ -3897,6 +3917,7 @@
         "restore": "Restore warning",
         "restore_all": "Restore all warnings"
       },
+      "manage_reset_preset": "Preset List Manager",
       "move": {
         "active_section_groups": "Active list section groups...",
         "current_other_groups": "Other section groups in this list...",
@@ -4427,6 +4448,8 @@
       "interlock_no_selected_locked": "The selected Mods have no interlocks to remove",
       "link_failed": "Failed to link mods. Try again later. See system log for details.",
       "localize_no_workshop_items": "No selected mods come from Workshop",
+      "reset_active_list_done": "Active list reset",
+      "reset_active_list_no_base": "No official mods or required items are available for reset. Check the current profile game directory and mod scan results.",
       "scan_already_running": "A scan task is already running. Wait for the current scan to finish.",
       "scan_cancelled": "Scan cancelled",
       "scan_conflicts_found": "Scan completed. Found {count} duplicate package-ID conflicts that need review.{extra}",
@@ -4631,6 +4654,7 @@
       "actions": {
         "autosort": "Automatically sort all active mods by rules. If the result is worse than the old behavior, switch back to the legacy sorting logic in Settings.",
         "force_scan": "Recheck all files, including unchanged files. This may take longer.",
+        "reset_active_list": "Clear and reset the current active list, then regenerate it from the preset. Right-click to manage the preset list.",
         "scan": "Scan file changes and sync the current profile mod list"
       }
     },
@@ -5954,8 +5978,8 @@
         },
         "link_deployment_mode": "Link deployment mode",
         "link_deployment_mode_desc": "Controls link deployment when using manager Mods or Workshop Mods across profiles. Incremental deployment keeps correct existing links and only processes changes. Full rebuild removes all old links first, then recreates them from the current scan result.",
-        "list_action_checks": "List action checks",
-        "list_action_checks_desc": "Controls reminders and helper behavior while saving, launching, and displaying lists.",
+        "list_action_checks": "List features and check prompts",
+        "list_action_checks_desc": "Control list save, launch, display prompts, and reset presets.",
         "mod_residue_scan": "Check residues after scan",
         "mod_residue_scan_desc": "When enabled, a full scan checks in the background for folders and settings left after uninstalls. When disabled, residues are checked only when you open residue cleanup manually.",
         "multiplayer_compatibility_check": "Check Multiplayer compatibility",
@@ -5964,11 +5988,13 @@
         "persist_temp_mod_list_desc": "When enabled, the temporary list is saved per profile and restored next time you enter that profile. When disabled, Mods in the temporary list are returned to the top of the inactive list when saving.",
         "regular_mods_follow_dependencies": "Keep regular Mods near dependencies",
         "regular_mods_follow_dependencies_desc": "When enabled, auto-sort tries to place regular Mods after the last active dependency within the same weight tier, keeping related series closer together.",
+        "reset_active_preset_desc": "Manage the base enabled-list preset. Resetting the list uses the preset list as-is.",
+        "reset_active_preset_manager": "Preset List Manager",
         "scan_maintenance": "Scan and data maintenance",
         "scan_maintenance_desc": "Controls Mod list refresh, file change detection, and missing data handling.",
         "show_coexistence_message": "Show coexisting conflict hints",
         "show_coexistence_message_desc": "When disabled, coexisting Mod conflict hints are not shown.",
-        "skip_language_pack_alias_generation": "Skip alias notes for language packs",
+        "skip_language_pack_alias_generation": "Skip language packs for aliases and notes",
         "skip_language_pack_alias_generation_desc": "When enabled, batch alias and note generation skips language packs. Manual generation for a single Mod is not affected.",
         "sort_mods_by": "Sort order",
         "sort_mods_by_desc": "Affects Mod order within the same tier during auto-sort. Priority is alias > original name > package ID, so Mods without aliases can still be sorted by original name.",
