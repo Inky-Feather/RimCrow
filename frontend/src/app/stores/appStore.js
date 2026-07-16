@@ -462,6 +462,8 @@ export const useAppStore = defineStore('app', () => {
     applyCurrentTheme,
     syncRemoteImageCache: (...args) => syncRemoteImageCache(...args),
     refreshData: (...args) => refreshData(...args),
+    refreshModCoreData: (...args) => refreshModCoreData(...args),
+    refreshModEnrichment: (...args) => refreshModEnrichment(...args),
     requestModScan: (...args) => requestModScan(...args),
   })
 
@@ -557,6 +559,7 @@ export const useAppStore = defineStore('app', () => {
   const pendingModScanRequested = ref(null)
   // 记录当前扫描请求的列表保留策略，等扫描完成事件回来时再交给 Mod Store。
   const activeModScanRequest = ref(null)
+  const modInventoryTaskTypes = new Set(['steamcmd-download', 'steam-workshop-download', 'steam-subscribe', 'steam-unsubscribe'])
   // 这里只保留后端已实现“真实终止点”的任务类型，避免按钮可点但实际上无法取消。
   const cancellableTaskTypes = new Set([
     'scan',
@@ -919,7 +922,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   const requestModScan = async ({ forcedUpdate = false, specificPaths = null, preserveListState = false, forceCoreRefresh = false, sizeCheckOverride = null, sizeCheckPaths = null, startupWorkshopChanges = null, refreshRules = true, refreshBackups = true, refreshWorkspaceLibraries = true, silentSuccess = false } = {}) => {
-    // 多次扫描请求合并时，任意一次要求保留列表状态，最终扫描完成也要保留。
+    // 多次扫描请求合并时，只要有一次需要按新磁盘事实替换列表，就不能继续保留旧列表状态。
     const normalizeScanRequest = (request = {}) => {
       const normalizedPaths = Array.isArray(request.specificPaths)
         ? request.specificPaths.map(path => String(path || '').trim()).filter(Boolean)
@@ -950,7 +953,7 @@ export const useAppStore = defineStore('app', () => {
         specificPaths: (!left.specificPaths || !right.specificPaths)
           ? null
           : [...new Set([...left.specificPaths, ...right.specificPaths])],
-        preserveListState: !!(left.preserveListState || right.preserveListState),
+        preserveListState: !!(left.preserveListState && right.preserveListState),
         forceCoreRefresh: !!(left.forceCoreRefresh || right.forceCoreRefresh),
         sizeCheckOverride: left.sizeCheckOverride === true || right.sizeCheckOverride === true
           ? true
@@ -1257,20 +1260,18 @@ export const useAppStore = defineStore('app', () => {
       if (task.type === 'steamcmd-download' && task.status === 'failed') {
         toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.steamcmd_download.failed', 'SteamCMD 下载失败。请检查网络连接、代理设置、下载源可用性和目标目录权限，详细原因已写入系统日志。')))
       }
-      if (task.type === 'steam-workshop-download' && task.status === 'success') {
+      if (modInventoryTaskTypes.has(task.type) && task.status === 'success') {
         void (async () => {
-          await requestModScan({ preserveListState: true })
-          toast.success(t('messages.app.steam_workshop_download.complete', 'Steam 下载已完成'))
+          await requestModScan({ forceCoreRefresh: true })
+          if (task.type === 'steam-workshop-download') {
+            toast.success(t('messages.app.steam_workshop_download.complete', 'Steam 下载已完成'))
+          } else if (task.type === 'steam-subscribe') {
+            toast.success(t('messages.app.steam_subscribe.complete', 'Steam 订阅已完成'))
+          }
         })()
       }
       if (task.type === 'steam-workshop-download' && task.status === 'failed') {
         toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.steam_workshop_download.failed', 'Steam 下载失败。请确认 Steam 已登录并正常联网，或检查代理设置和工坊项目状态。')))
-      }
-      if (task.type === 'steam-subscribe' && task.status === 'success') {
-        void (async () => {
-          await requestModScan({ preserveListState: true })
-          toast.success(t('messages.app.steam_subscribe.complete', 'Steam 订阅已完成'))
-        })()
       }
       if (task.type === 'steam-subscribe' && task.status === 'failed') {
         toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.steam_subscribe.failed', 'Steam 订阅失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。')))

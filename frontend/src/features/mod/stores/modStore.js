@@ -625,6 +625,8 @@ export const useModStore = defineStore('mods', () => {
     savedTempIds.value = []
     activeLoadModifyTime.value = 0
     activeLoadVersionToken.value = {}
+    conflictList.value = []
+    coexistenceList.value = []
     clearInstallSourceHints()
     dismissedUnavailableIds.clear()
     dataVersion.value++
@@ -1362,6 +1364,8 @@ export const useModStore = defineStore('mods', () => {
   }
 
   // --- Mod数据操作 ---
+  const USER_DATA_RULE_INPUT_FIELDS = new Set(['tags', 'alias_name', 'user_mod_type'])
+  const shouldRefreshAfterUserDataChange = (fields = []) => fields.some(field => USER_DATA_RULE_INPUT_FIELDS.has(field))
   // 更新Mod用户数据
   const updateModUserData = async (modId, userData) => {
     if (!window.pywebview) return
@@ -1374,6 +1378,9 @@ export const useModStore = defineStore('mods', () => {
       if (!checkResult(res, t('check.mod.update_user_data', '更新Mod用户数据'), true)) {
         restoreModSnapshots(rollback)
         return false
+      }
+      if (shouldRefreshAfterUserDataChange(Object.keys(userData || {}))) {
+        await refreshAfterUserMetadataChange(t('check.mod.refresh_after_user_data_change', '自定义信息变更后同步模组规则状态'))
       }
       return true
     } catch (e) {
@@ -1421,6 +1428,15 @@ export const useModStore = defineStore('mods', () => {
   }
 
   // --- 批量数据操作 ---
+  const refreshAfterUserMetadataChange = async (historyLabel) => {
+    return await appStore.refreshModCoreData(historyLabel, {
+      preserveListState: true,
+      refreshRules: false,
+      refreshBackups: false,
+      refreshWorkspaceLibraries: false,
+    })
+  }
+
   // 批量设置颜色
   const setModsColor = async (modIds, color) => {
     if (!window.pywebview) return
@@ -1460,6 +1476,7 @@ export const useModStore = defineStore('mods', () => {
         restoreModSnapshots(rollback)
         return false
       }
+      await refreshAfterUserMetadataChange(t('check.mod.refresh_after_type_change', '类型变更后同步模组规则状态'))
       return true
     } catch (e) {
       toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_set_type_failed', '批量设置类型失败，已还原本地状态。请稍后重试。')))
@@ -1483,6 +1500,7 @@ export const useModStore = defineStore('mods', () => {
         restoreModSnapshots(rollback)
         return false
       }
+      await refreshAfterUserMetadataChange(t('check.mod.refresh_after_tags_change', '标签变更后同步模组规则状态'))
       return true
     } catch (e) {
       toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_add_tags_failed', '批量添加标签失败，已还原本地状态。请稍后重试。')))
@@ -1506,6 +1524,7 @@ export const useModStore = defineStore('mods', () => {
         restoreModSnapshots(rollback)
         return false
       }
+      await refreshAfterUserMetadataChange(t('check.mod.refresh_after_tags_change', '标签变更后同步模组规则状态'))
       return true
     } catch (e) {
       toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_remove_tags_failed', '批量移除标签失败，已还原本地状态。请稍后重试。')))
@@ -1629,6 +1648,9 @@ export const useModStore = defineStore('mods', () => {
       if (!checkResult(res, t('check.mod.batch_update_data', '批量更新Mod数据'), true)) {
         restoreModSnapshots(rollback)
         return false
+      }
+      if (shouldRefreshAfterUserDataChange(updateFields)) {
+        await refreshAfterUserMetadataChange(t('check.mod.refresh_after_user_data_change', '自定义信息变更后同步模组规则状态'))
       }
       return true
     } catch (e) {

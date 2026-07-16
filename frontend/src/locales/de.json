@@ -1184,6 +1184,7 @@
       "delete": "Gruppe löschen",
       "expansion_all": "Alle Gruppenerweiterungsstatus umschalten",
       "get": "Gruppen laden",
+      "refresh_after_group_change": "Mod-Regelstatus nach Gruppenänderungen synchronisieren",
       "remove_mods": "Mods aus der Gruppe entfernen",
       "reorder": "Gruppen neu anordnen",
       "update": "Gruppe aktualisieren"
@@ -1238,6 +1239,9 @@
       "get_interlock_missing": "Erhalten Sie fehlende verknüpfte Mods",
       "heal_interlock": "Defekte Links reparieren",
       "link": "Link-Mods",
+      "refresh_after_tags_change": "Mod-Regelstatus nach Tag-Änderungen synchronisieren",
+      "refresh_after_type_change": "Mod-Regelstatus nach Typänderungen synchronisieren",
+      "refresh_after_user_data_change": "Mod-Regelstatus nach Änderungen an benutzerdefinierten Infos synchronisieren",
       "reset_active_sort": "Reihenfolge der aktiven Liste zurücksetzen",
       "smart_insert_active": "Fügen Sie Mods intelligent in die Aktivliste ein",
       "unlink": "Verknüpfung der Mods aufheben",
@@ -1277,6 +1281,7 @@
       "fetch": "Profilliste laden",
       "import_orphaned": "Profil importieren",
       "launch_steam_client": "Starten Sie den Steam-Client",
+      "refresh_after_source_change": "Mod-Daten nach Änderung der Profil-Mod-Quellen synchronisieren",
       "scan_orphaned": "Scannen Sie wiederherstellbare Profile",
       "switch": "Profil wechseln",
       "update": "Profil „{profileId}“ aktualisieren",
@@ -1307,6 +1312,7 @@
       "delete_user_theme": "Benutzerthema löschen",
       "read_saved_secret": "Gespeichertes Geheimnis lesen",
       "read_user_themes": "Benutzerthemen lesen",
+      "refresh_mod_state_after_change": "Mod-Status nach Einstellungsänderungen synchronisieren",
       "save_one": "Einstellung speichern",
       "save_user_theme": "Benutzerthema speichern"
     },

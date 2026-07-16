@@ -1184,6 +1184,7 @@
       "delete": "刪除分組",
       "expansion_all": "批量展開切換",
       "get": "獲取分組",
+      "refresh_after_group_change": "分組變更後同步模組規則狀態",
       "remove_mods": "分組移除模組",
       "reorder": "分組排序",
       "update": "更新分組"
@@ -1238,6 +1239,9 @@
       "get_interlock_missing": "獲取聯鎖缺失項",
       "heal_interlock": "修復斷裂聯鎖",
       "link": "設定 Mod 聯鎖",
+      "refresh_after_tags_change": "標籤變更後同步模組規則狀態",
+      "refresh_after_type_change": "類型變更後同步模組規則狀態",
+      "refresh_after_user_data_change": "自訂資訊變更後同步模組規則狀態",
       "reset_active_sort": "重置啟用列表排序",
       "smart_insert_active": "智能插入 Mod 到 Active 列表",
       "unlink": "解除 Mod 聯鎖",
@@ -1277,6 +1281,7 @@
       "fetch": "獲取環境列表",
       "import_orphaned": "導入環境",
       "launch_steam_client": "啟動 Steam 客戶端",
+      "refresh_after_source_change": "環境模組來源變更後同步模組資料",
       "scan_orphaned": "掃描待恢復環境",
       "switch": "切換環境",
       "update": "更新環境 \"{profileId}\"",
@@ -1307,6 +1312,7 @@
       "delete_user_theme": "刪除使用者主題",
       "read_saved_secret": "讀取已儲存密鑰",
       "read_user_themes": "讀取使用者主題",
+      "refresh_mod_state_after_change": "設定變更後同步模組狀態",
       "save_one": "儲存單項設定",
       "save_user_theme": "儲存使用者主題"
     },

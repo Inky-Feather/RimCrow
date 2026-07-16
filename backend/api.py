@@ -6609,7 +6609,7 @@ class API:
                 refresh_mode = self._refresh_active_profile_context_after_update(pid, data)
                 return ApiResponse.success(
                     message=tr("api.profile.updated", "配置已更新"),
-                    data={"refresh_mode": refresh_mode},
+                    data={"refresh_mode": refresh_mode, "active_context": self.active_context},
                 )
             return ApiResponse.success(message=tr("api.profile.updated", "配置已更新"))
         except Exception as e:

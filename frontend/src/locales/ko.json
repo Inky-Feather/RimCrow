@@ -1184,6 +1184,7 @@
       "delete": "그룹 삭제",
       "expansion_all": "모든 그룹 확장 상태 전환",
       "get": "그룹 로드",
+      "refresh_after_group_change": "그룹 변경 후 모드 규칙 상태 동기화",
       "remove_mods": "그룹에서 모드 제거",
       "reorder": "그룹 재정렬",
       "update": "그룹 업데이트"
@@ -1238,6 +1239,9 @@
       "get_interlock_missing": "누락된 링크 모드 받기",
       "heal_interlock": "깨진 링크 복구",
       "link": "모드 링크",
+      "refresh_after_tags_change": "태그 변경 후 모드 규칙 상태 동기화",
+      "refresh_after_type_change": "유형 변경 후 모드 규칙 상태 동기화",
+      "refresh_after_user_data_change": "사용자 지정 정보 변경 후 모드 규칙 상태 동기화",
       "reset_active_sort": "활성 목록 순서 재설정",
       "smart_insert_active": "활성 목록에 모드를 스마트하게 삽입",
       "unlink": "모드 연결 해제",
@@ -1277,6 +1281,7 @@
       "fetch": "프로필 목록 로드",
       "import_orphaned": "프로필 가져오기",
       "launch_steam_client": "Steam 클라이언트 시작",
+      "refresh_after_source_change": "프로필 모드 소스 변경 후 모드 데이터 동기화",
       "scan_orphaned": "복구 가능한 프로필 검사",
       "switch": "프로필 전환",
       "update": "프로필 \"{profileId}\" 업데이트",
@@ -1307,6 +1312,7 @@
       "delete_user_theme": "사용자 테마 삭제",
       "read_saved_secret": "저장된 비밀번호 읽기",
       "read_user_themes": "사용자 테마 읽기",
+      "refresh_mod_state_after_change": "설정 변경 후 모드 상태 동기화",
       "save_one": "설정 저장",
       "save_user_theme": "사용자 테마 저장"
     },

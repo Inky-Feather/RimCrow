@@ -94,6 +94,18 @@ export const useGroupStore = defineStore('groups', () => {
     pendingWriteChain = run.catch(() => {})
     return run
   }
+  const refreshAfterGroupRuleInputChange = async () => {
+    return await appStore.refreshModCoreData(t('check.group.refresh_after_group_change', '分组变更后同步模组规则状态'), {
+      preserveListState: true,
+      refreshRules: false,
+      refreshBackups: false,
+      refreshWorkspaceLibraries: false,
+    })
+  }
+  const shouldRefreshAfterGroupUpdate = (updates = {}) => (
+    Object.prototype.hasOwnProperty.call(updates, 'name')
+    || Object.prototype.hasOwnProperty.call(updates, 'mod_ids')
+  )
   // --- 数据操作 ---
   // 获取分组
   const getGroups = async () => {
@@ -155,6 +167,7 @@ export const useGroupStore = defineStore('groups', () => {
         if (checkResult(res, t('check.group.delete', '删除分组'), true)) {
         // 从列表中移除
           groupList.value = groupList.value.filter(group => group.group_id !== groupId)
+          await refreshAfterGroupRuleInputChange()
           return true
         }
         await getGroups()
@@ -182,6 +195,7 @@ export const useGroupStore = defineStore('groups', () => {
         // 失败时才重新拉取数据进行还原
           await getGroups()
         } else {
+          if (shouldRefreshAfterGroupUpdate(updates)) await refreshAfterGroupRuleInputChange()
           return true
         }
       } catch (e) {
@@ -213,6 +227,7 @@ export const useGroupStore = defineStore('groups', () => {
         // 失败时才重新拉取数据进行还原
           await getGroups()
         } else {
+          await refreshAfterGroupRuleInputChange()
           return true
         }
       } catch (e) {
@@ -240,6 +255,7 @@ export const useGroupStore = defineStore('groups', () => {
             const currentIds = Array.isArray(group.mod_ids) ? group.mod_ids : []
             group.mod_ids = currentIds.filter(id => !normalizedIds.includes(normalizePackageId(id)))
           }
+          await refreshAfterGroupRuleInputChange()
           return true
         }
         await getGroups()

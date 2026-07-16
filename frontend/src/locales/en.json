@@ -1184,6 +1184,7 @@
       "delete": "Delete group",
       "expansion_all": "Toggle all group expansion states",
       "get": "Load groups",
+      "refresh_after_group_change": "Sync mod rule status after group changes",
       "remove_mods": "Remove mods from group",
       "reorder": "Reorder groups",
       "update": "Update group"
@@ -1238,6 +1239,9 @@
       "get_interlock_missing": "Get missing linked mods",
       "heal_interlock": "Repair broken links",
       "link": "Link mods",
+      "refresh_after_tags_change": "Sync mod rule status after tag changes",
+      "refresh_after_type_change": "Sync mod rule status after type changes",
+      "refresh_after_user_data_change": "Sync mod rule status after custom info changes",
       "reset_active_sort": "Reset active-list order",
       "smart_insert_active": "Smart insert mods into the Active list",
       "unlink": "Unlink mods",
@@ -1277,6 +1281,7 @@
       "fetch": "Load profile list",
       "import_orphaned": "Import profile",
       "launch_steam_client": "Start Steam client",
+      "refresh_after_source_change": "Sync mod data after profile mod sources change",
       "scan_orphaned": "Scan recoverable profiles",
       "switch": "Switch profile",
       "update": "Update profile \"{profileId}\"",
@@ -1307,6 +1312,7 @@
       "delete_user_theme": "Delete user theme",
       "read_saved_secret": "Read saved secret",
       "read_user_themes": "Read user themes",
+      "refresh_mod_state_after_change": "Sync mod status after settings changes",
       "save_one": "Save setting",
       "save_user_theme": "Save user theme"
     },

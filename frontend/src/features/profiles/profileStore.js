@@ -68,6 +68,14 @@ export const useProfileStore = defineStore('profile', () => {
     return await modStore.applyResetActiveListPreset({ silent: true })
   }
 
+  const PROFILE_SOURCE_KEYS = ['prefer_steam_launch', 'use_workshop_mods', 'use_self_mods']
+  const takeProfileSourceSnapshot = (source = {}) => Object.fromEntries(
+    PROFILE_SOURCE_KEYS.map(key => [key, !!source?.[key]])
+  )
+  const hasProfileSourceChanged = (before = {}, after = {}) => (
+    PROFILE_SOURCE_KEYS.some(key => before[key] !== after[key])
+  )
+
   const applyPendingEmptyActivePreset = async () => {
     if (!pendingEmptyPresetProfileId) return false
     if (pendingEmptyPresetProfileId !== currentProfileId.value) return false
@@ -150,11 +158,34 @@ export const useProfileStore = defineStore('profile', () => {
 
   // 更新环境信息
   const updateProfile = async (profileId, updates) => {
+    const previousSourceSnapshot = takeProfileSourceSnapshot(activeContext.value)
     const res = await window.pywebview.api.profile_update(profileId, updates)
     if (checkResult(res, t('check.profiles.update', '更新环境 "{profileId}"', { profileId }), true)) {
+      const refreshMode = String(res?.data?.refresh_mode || '').trim()
+      const nextContext = res?.data?.active_context || null
       await fetchProfiles()
       if (profileId === currentProfileId.value) {
+        if (nextContext) activeContext.value = nextContext
+        const nextSourceSnapshot = takeProfileSourceSnapshot(nextContext || { ...activeContext.value, ...updates })
+        const sourceChanged = hasProfileSourceChanged(previousSourceSnapshot, nextSourceSnapshot)
+        if (refreshMode !== 'rebootstrap' && sourceChanged && !nextContext) {
+          await appStore.refreshData()
+          return
+        }
+        if (refreshMode !== 'rebootstrap' && sourceChanged) {
+          await appStore.refreshModCoreData(t('check.profiles.refresh_after_source_change', '环境模组来源变更后同步模组数据'), {
+            preserveListState: false,
+            refreshRules: false,
+            refreshBackups: false,
+            refreshWorkspaceLibraries: false,
+          })
+          return
+        }
+        if (refreshMode !== 'rebootstrap') return
         await appStore.refreshData()
+        if (refreshMode === 'rebootstrap' && appStore.settings.enable_auto_scan !== false && activeContext.value?.is_healthy !== false) {
+          await appStore.requestModScan({ forceCoreRefresh: true })
+        }
       }
     }
   }
