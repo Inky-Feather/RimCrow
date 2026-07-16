@@ -138,14 +138,17 @@ import { setLocale, t, translateMessagePayload } from '../../shared/i18n.js'
 const appStore = useAppStore()
 const profileStore = useProfileStore()
 
+// 设置面板只编辑本地副本，保存时再交给 store 统一提交。
 const currentTab = ref('paths')
 const formData = ref({})
 const saving = ref(false)
 
+// lucide 没有 Steam 图标，这里保留内联图标给“外部依赖”页签使用。
 const Steam = h('svg', { viewBox: "0 0 448 512", fill: "currentColor" }, 
   [ h('path', { d: "M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z" })]
 )
 
+// 用 computed 生成页签，语言预览切换时标签能立即刷新。
 const tabs = computed(() => [
   { id: 'paths', label: t('ui.settings.panel.tab.paths', '路径配置'), icon: FolderTree },
   { id: 'general', label: t('ui.settings.panel.tab.general', '界面设置'), icon: AppWindow },
@@ -157,15 +160,28 @@ const tabs = computed(() => [
   { id: 'dev', label: t('ui.settings.panel.tab.dev', '开发调试'), icon: Terminal },
   { id: 'about', label: t('ui.settings.about.title', '关于项目'), icon: Info },
 ])
+// 密钥字段统一登记，保存时用保留列表避免空值覆盖已保存密钥。
 const SECRET_FIELD_PATHS = {
   'ai.api_key': 'ai.api_key',
   'steam.web_api_key': 'steam_web_api_key',
   'network.proxy.username': 'network.proxy.username',
   'network.proxy.password': 'network.proxy.password',
 }
+// 打开版本用于丢弃过期异步结果；保存快照用于跳过无改动提交。
 let settingsPanelOpenVersion = 0
 let settingsPanelLanguageSnapshot = ''
+let settingsPanelSaveSnapshot = ''
+let settingsPathCheckCache = { key: '', result: null, checkedAt: 0 }
 let isApplyingSettings = false
+const PATH_CHECK_CACHE_MS = 30000
+// 这些字段只影响当前面板展示，不参与“表单是否已修改”的判断。
+const transientFormKeys = new Set([
+  'check_info',
+  '_secret_status',
+  '_secret_storage_warning',
+  '_secret_storage_warning_key',
+  '_secret_storage_warning_params',
+])
 
 const currentTabLabel = computed(() => (
   tabs.value.find(item => item.id === currentTab.value)?.label || currentTab.value
@@ -193,6 +209,7 @@ const mergeObject = (base, patch) => ({
   ...(patch && typeof patch === 'object' ? patch : {}),
 })
 
+// 后端全局设置与当前环境共同组成表单；环境字段优先展示当前 Profile 的运行值。
 const buildSettingsFormData = () => {
   const settings = deepClone(appStore.settings || {})
   const context = deepClone(profileStore.activeContext || {})
@@ -216,6 +233,25 @@ const buildSettingsFormData = () => {
   return target
 }
 
+// 保存快照要稳定排序并剔除瞬态字段，避免未改动时误触发保存。
+const toComparableSettingsValue = (value) => {
+  if (Array.isArray(value)) return value.map(toComparableSettingsValue)
+  if (value && typeof value === 'object') {
+    const result = {}
+    Object.keys(value).sort().forEach((key) => {
+      if (transientFormKeys.has(key)) return
+      result[key] = toComparableSettingsValue(value[key])
+    })
+    return result
+  }
+  return value
+}
+
+const buildSettingsSaveSnapshot = (target) => JSON.stringify(toComparableSettingsValue(target || {}))
+
+const hasSettingsFormChanged = () => buildSettingsSaveSnapshot(formData.value) !== settingsPanelSaveSnapshot
+
+// Steam 启动和创意工坊加载互斥，避免同一环境同时走两套 Mod 来源。
 watch(() => !!formData.value?.prefer_steam_launch, (enabled) => {
   if (enabled && formData.value) {
     formData.value.use_workshop_mods = false
@@ -233,6 +269,7 @@ const getSteamLaunchProblem = (installCheck, steamCheck) => {
   return ''
 }
 
+// 只提示 Steam 启动风险，不强行回滚开关，最终保存仍尊重用户选择。
 const validateSteamLaunchEnable = async () => {
   const installPath = String(formData.value?.game_install_path || '').trim()
   const steamPath = String(formData.value?.steam_path || '').trim()
@@ -257,6 +294,7 @@ const validateSteamLaunchEnable = async () => {
   return true
 }
 
+// 工坊目录允许“不完整但可继续”的警告；真正不可用才返回失败。
 const validateWorkshopModsEnable = async () => {
   const workshopPath = String(formData.value?.workshop_mods_path || '').trim()
   if (!workshopPath) {
@@ -274,6 +312,7 @@ const validateWorkshopModsEnable = async () => {
   return true
 }
 
+// 保存前只检查已启用的启动相关选项，避免未使用路径拖慢普通保存。
 const validateEnabledLaunchOptions = async () => {
   let valid = true
   if (formData.value?.prefer_steam_launch) {
@@ -294,7 +333,7 @@ const autoDetect = async (checkAfterDetect = true) => {
   return true
 }
 
-// 检查游戏路径是否有效
+// 检查单个路径，并把结果写回 check_info 供对应页签展示。
 const checkPath = async (type, path, options = {}) => {
   console.debug('检查单项路径:', type, path)
   if (!formData.value['check_info']) {
@@ -316,7 +355,7 @@ const checkPath = async (type, path, options = {}) => {
   }
   return res
 }
-// 检查全部路径
+// 检查全部路径；只收集后端认识的路径字段，避免把整份表单发给路径检查接口。
 const checkPaths = async () => {
   const paths_data = {}
   for (const key in formData.value) {
@@ -328,10 +367,18 @@ const checkPaths = async () => {
   if (textureToolsPath !== undefined) {
     paths_data.texture_tools_path = textureToolsPath
   }
+  const cacheKey = buildSettingsSaveSnapshot(paths_data)
+  const now = Date.now()
+  // 同一批路径短时间内复用结果，避免打开设置页时重复请求后端检测。
+  if (settingsPathCheckCache.result && settingsPathCheckCache.key === cacheKey && now - settingsPathCheckCache.checkedAt < PATH_CHECK_CACHE_MS) {
+    formData.value['check_info'] = deepClone(settingsPathCheckCache.result)
+    return
+  }
   // console.log('检查路径', paths_data)
   const res = await appStore.checkPaths(paths_data)
   if (res) {
     formData.value['check_info'] = res
+    settingsPathCheckCache = { key: cacheKey, result: deepClone(res), checkedAt: Date.now() }
   }
 }
 
@@ -340,6 +387,7 @@ const getNestedField = (target, pathKey) => {
     .reduce((current, key) => current?.[key], target)
 }
 
+// 点号路径用于统一处理嵌套设置项，例如 network.proxy.password。
 const setNestedField = (target, pathKey, value) => {
   const segments = String(pathKey || '').split('.').filter(Boolean)
   if (!segments.length) return
@@ -354,6 +402,7 @@ const setNestedField = (target, pathKey, value) => {
   current[segments[segments.length - 1]] = value
 }
 
+// 关闭面板时清掉运行时密钥值，避免下次打开看到旧输入。
 const clearFormSecrets = (target) => {
   if (!target || typeof target !== 'object') return
   Object.values(SECRET_FIELD_PATHS).forEach(pathKey => setNestedField(target, pathKey, ''))
@@ -364,6 +413,7 @@ const getPreserveSecretKeys = () => (
   Array.isArray(formData.value?._preserve_secret_keys) ? formData.value._preserve_secret_keys : []
 )
 
+// 保留列表只接受已登记的密钥，避免把无关字段传给后端密钥处理。
 const setPreserveSecretKeys = (keys) => {
   const nextKeys = [...new Set(keys.filter(key => SECRET_FIELD_PATHS[key]))]
   if (nextKeys.length) {
@@ -373,6 +423,7 @@ const setPreserveSecretKeys = (keys) => {
   }
 }
 
+// 已有密钥默认保留；用户不重新输入时不会被空字符串清掉。
 const markSavedSecretsPreserved = (target) => {
   const savedKeys = Object.keys(SECRET_FIELD_PATHS).filter(key => target?._secret_status?.[key]?.has_value)
   if (savedKeys.length) target._preserve_secret_keys = [...new Set([...(target._preserve_secret_keys || []), ...savedKeys])]
@@ -389,6 +440,7 @@ const clearFormSecret = (secretKey) => {
   setPreserveSecretKeys(getPreserveSecretKeys().filter(key => key !== secretKey))
 }
 
+// 后端无法写入系统凭据库时，用较长 toast 提醒用户密钥已临时保留。
 const showSecretStorageWarning = (target) => {
   if (!target?._secret_storage_warning) return
   toast.warning(translateMessagePayload({
@@ -398,6 +450,7 @@ const showSecretStorageWarning = (target) => {
   }, t('toast.settings.secret_storage_warning', '部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。')), { timeout: 9000 })
 }
 
+// 语言选择立即预览；取消设置时会恢复打开面板前的语言。
 const previewLocale = (language) => setLocale(language).catch(error => {
   toast.error(error?.message || t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
 })
@@ -410,6 +463,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
     settingsPanelLanguageSnapshot = appStore.settings.language || 'zh-CN'
     markSavedSecretsPreserved(formData.value)
     showSecretStorageWarning(formData.value)
+    settingsPanelSaveSnapshot = buildSettingsSaveSnapshot(formData.value)
     void (async () => {
       if (openVersion !== settingsPanelOpenVersion || !appStore.uiState.showSettingsPanel) return
       const autoDetected = !profileStore.activeContext || profileStore.activeContext.is_healthy === false
@@ -417,6 +471,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
         await autoDetect(false)
         if (openVersion !== settingsPanelOpenVersion || !appStore.uiState.showSettingsPanel) return
       }
+      // 路径检查可能较慢，放在表单渲染之后补齐状态，避免打开设置页卡顿。
       await checkPaths()
     })()
   } else {
@@ -424,6 +479,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
     if (!appStore.themeEditor.isOpen) applyTheme(appStore.currentTheme)
     if (!isApplyingSettings && settingsPanelLanguageSnapshot) void previewLocale(settingsPanelLanguageSnapshot)
     clearFormSecrets(formData.value)
+    settingsPanelSaveSnapshot = ''
     settingsPanelLanguageSnapshot = ''
   }
 }, { immediate: true })
@@ -433,7 +489,7 @@ watch(() => formData.value?.language, (language) => {
   void previewLocale(language)
 })
 
-// 手动选择其他路径
+// 手动选择路径后只检查对应字段，避免一次浏览触发全量路径检测。
 const handleBrowse = async (pathKey, fileTypes, checkTarget = undefined) => {
   console.debug('打开路径选择器:', pathKey, fileTypes)
   const currentValue = getNestedField(formData.value, pathKey) || ''
@@ -453,11 +509,19 @@ const handleBrowse = async (pathKey, fileTypes, checkTarget = undefined) => {
   }
 }
 
+// 未改动时直接关闭；有改动时交给 store 做统一保存和运行态刷新。
 const save = async () => {
   if (saving.value) return
   saving.value = true
   isApplyingSettings = true
   try {
+    if (formData.value?.ui) {
+      formData.value.ui.theme_id = appStore.settings.ui?.theme_id || DEFAULT_THEME_ID
+    }
+    if (!hasSettingsFormChanged()) {
+      appStore.closeSettingsPanel()
+      return
+    }
     await validateEnabledLaunchOptions()
     // 校验拦截
     // const hasError = Object.values(formData.value.check_info || {}).some(info => info && !info.pass)
@@ -465,9 +529,6 @@ const save = async () => {
     //   toast.error("存在无效路径，请修正后再保存！")
     //   return
     // }
-    if (formData.value?.ui) {
-      formData.value.ui.theme_id = appStore.settings.ui?.theme_id || DEFAULT_THEME_ID
-    }
     await appStore.applySettings(formData.value)
   } finally {
     isApplyingSettings = false

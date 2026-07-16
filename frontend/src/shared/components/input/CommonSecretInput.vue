@@ -150,3 +150,10 @@ watch(() => props.preserved, (preserved) => {
   if (!preserved) revealed.value = false
 })
 </script>
+
+<style scoped>
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+</style>

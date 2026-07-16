@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <Transition name="slide-left">
+    <Transition name="slide-left" appear>
       <div v-if="appStore.uiState.showProfileDrawer" class="fixed inset-y-8 top-18 left-0 z-100 flex w-100 max-w-[calc(100vw-1rem)] flex-col" >
         <!-- 1. 上方内凹边角 (对称自 ListDiffView) -->
         <div class="absolute -top-[1.1rem] left-0 w-5 h-5 z-10 ">
@@ -512,8 +512,13 @@ const openExportDialog = async (profile) => {
 </script>
 
 <style scoped>
-.slide-left-enter-active, .slide-left-leave-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-.slide-left-enter-from, .slide-left-leave-to { transform: translateX(-100%); opacity: 0; }
+.slide-left-enter-active, .slide-left-leave-active {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+}
+.slide-left-enter-from, .slide-left-leave-to {
+  transform: translateX(calc(-100% - 1rem));
+  opacity: 0;
+}
 
 .animate-scale-in { animation: scaleIn 0.2s ease-out; }
 @keyframes scaleIn {

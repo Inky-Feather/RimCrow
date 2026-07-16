@@ -257,7 +257,7 @@
     <ModResidueCleanupModal v-if="appStore.uiState.showModResidueCleanup" />
 
     <!-- 环境管理抽屉 -->
-    <ProfileDrawer v-if="appStore.uiState.showProfileDrawer" />
+    <ProfileDrawer v-if="shouldMountProfileDrawer" />
 
     <!-- 缺失项下载管理 -->
     <MissingInstallDialog v-if="missingInstallStore.isVisible" />
@@ -396,6 +396,12 @@ const orderStore = useOrderStore()
 const guideStore = useGuideStore()
 const commandStore = useCommandStore()
 const fileSearchStore = useFileSearchStore()
+const shouldMountProfileDrawer = ref(appStore.uiState.showProfileDrawer)
+
+watch(() => appStore.uiState.showProfileDrawer, (show) => {
+  // 首次打开后保留挂载，交给抽屉内部的 Transition 负责出入场，避免父层 v-if 直接截断动画。
+  if (show) shouldMountProfileDrawer.value = true
+})
 
 const hasPendingConflicts = computed(() => (
   (Array.isArray(modStore.conflictList) && modStore.conflictList.length > 0)

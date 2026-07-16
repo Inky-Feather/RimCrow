@@ -473,7 +473,8 @@ export const createActionExecutorRegistry = ({
       toast.warning(getActionBlockedMessage(action) || t('ai.actions.fallback.setting_blocked', '当前不允许执行这条设置修改动作。'))
       return
     }
-    await appStore.saveSetting(settingKey, payload.value)
+    const saved = await appStore.saveSetting(settingKey, payload.value)
+    if (!saved) return
     const successMessage = getActionSuccessMessage(action)
     if (successMessage) {
       toast.success(successMessage)

@@ -7,6 +7,7 @@ import tempfile
 import threading
 import unittest
 from contextlib import nullcontext, redirect_stdout
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -426,6 +427,51 @@ class TestProfileManager(unittest.TestCase):
         self.assertTrue(result)
         self.assertFalse(update_payload["prefer_steam_launch"])
         self.assertTrue(update_payload["use_workshop_mods"])
+        self.assertTrue(update_payload["is_steam"])
+
+    def test_update_profile_skips_install_inspection_when_path_unchanged(self):
+        manager = ProfileManager.__new__(ProfileManager)
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        install_root = temp_root / "RimWorld"
+        install_root.mkdir(parents=True)
+
+        profile = SimpleNamespace(
+            id="default",
+            game_install_path=str(install_root),
+            user_data_path="",
+            prefer_steam_launch=True,
+            use_workshop_mods=False,
+            is_steam=True,
+        )
+        update_payload = {}
+
+        class _UpdateQuery:
+            def where(self, *_args, **_kwargs):
+                return self
+
+            def execute(self):
+                return 1
+
+        inspector = SimpleNamespace(inspect=Mock())
+        manager._get_install_inspector = Mock(return_value=inspector)
+        manager._sync_profile_to_disk = Mock()
+
+        with patch("backend.managers.mgr_profile.GameProfile.select", return_value=[SimpleNamespace(id="default")]), \
+             patch.object(manager, "get_profile", return_value=profile), \
+             patch("backend.managers.mgr_profile.GameManager.detect_executable") as mock_detect, \
+             patch("backend.managers.mgr_profile.GameManager.get_game_version") as mock_get_version, \
+             patch("backend.managers.mgr_profile.GameProfile.update", side_effect=lambda **kwargs: update_payload.update(kwargs) or _UpdateQuery()), \
+             patch("backend.managers.mgr_profile.GameProfile.get_or_none", return_value=profile):
+            result = manager.update_profile("default", {
+                "game_install_path": str(install_root),
+            })
+
+        self.assertTrue(result)
+        inspector.inspect.assert_not_called()
+        mock_detect.assert_not_called()
+        mock_get_version.assert_not_called()
+        self.assertNotIn("game_version", update_payload)
         self.assertTrue(update_payload["is_steam"])
 
     def test_import_profile_from_disk_re_normalizes_runtime_flags(self):
@@ -2994,6 +3040,11 @@ class TestApiRuntimeLinkSync(unittest.TestCase):
 
 
 class TestSettingsPathNormalization(unittest.TestCase):
+    def test_settings_save_raises_when_atomic_write_fails(self):
+        with patch("backend.settings.write_json_atomic", side_effect=OSError("locked")):
+            with self.assertRaises(OSError):
+                settings.save()
+
     def test_steamcmd_mods_path_is_derived_without_resolving_links(self):
         temp_root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
@@ -3083,6 +3134,77 @@ class TestSettingsPathNormalization(unittest.TestCase):
 
 
 class TestApiSaveSettings(unittest.TestCase):
+    def test_guide_mark_as_done_persists_existing_completed_guides(self):
+        original_guides = settings.config.completed_guides
+        self.addCleanup(setattr, settings.config, "completed_guides", original_guides)
+        settings.config.completed_guides = {"intro": "done"}
+
+        with patch.object(settings, "save") as mock_save:
+            res = API.guide_mark_as_done(API.__new__(API), "paths")
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(settings.config.completed_guides, {"intro": "done", "paths": "done"})
+        mock_save.assert_called_once()
+
+    def test_ai_save_config_saves_once_when_secret_changes(self):
+        original_model = settings.config.ai.model
+        self.addCleanup(setattr, settings.config.ai, "model", original_model)
+
+        with patch("backend.api.settings.apply_secret_inputs", return_value=True) as mock_apply_secret_inputs, \
+             patch("backend.api.settings.save") as mock_save:
+            res = API.ai_save_config(API.__new__(API), {"api_key": "secret", "model": "demo-model"})
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(settings.config.ai.model, "demo-model")
+        mock_apply_secret_inputs.assert_called_once_with({"ai": {"api_key": "secret", "model": "demo-model"}}, save=False)
+        mock_save.assert_called_once()
+
+    def test_data_bundle_import_skips_refreshes_when_settings_unchanged(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="default")
+        api.data_bundle_mgr = SimpleNamespace(import_bundle=Mock(return_value={"warnings": []}))
+        api._reload_current_profile_after_import = Mock(return_value=False)
+        api._bootstrap_context = Mock()
+        api.sorter = SimpleNamespace(rule_mgr=SimpleNamespace(load_all=Mock()))
+        api.steam_mgr = SimpleNamespace(reload_paths_from_settings=Mock())
+
+        with patch("backend.api.network_mgr.apply") as mock_network_apply:
+            res = API.data_bundle_import(api, "bundle.rcdata", {})
+
+        self.assertEqual(res["status"], "success")
+        mock_network_apply.assert_not_called()
+        api._bootstrap_context.assert_not_called()
+        api.sorter.rule_mgr.load_all.assert_not_called()
+        api.steam_mgr.reload_paths_from_settings.assert_not_called()
+
+    def test_data_bundle_import_reloads_runtime_for_imported_global_paths(self):
+        original_steam_path = settings.config.steam_path
+        original_profile_id = settings.config.current_profile_id
+        self.addCleanup(setattr, settings.config, "steam_path", original_steam_path)
+        self.addCleanup(setattr, settings.config, "current_profile_id", original_profile_id)
+        settings.config.current_profile_id = "default"
+
+        def import_bundle(*_args, **_kwargs):
+            settings.config.steam_path = "D:/Steam"
+            return {"warnings": []}
+
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="default")
+        api.data_bundle_mgr = SimpleNamespace(import_bundle=Mock(side_effect=import_bundle))
+        api._reload_current_profile_after_import = Mock(return_value=False)
+        api._bootstrap_context = Mock()
+        api.sorter = SimpleNamespace(rule_mgr=SimpleNamespace(load_all=Mock()))
+        api.steam_mgr = SimpleNamespace(reload_paths_from_settings=Mock())
+
+        with patch("backend.api.network_mgr.apply") as mock_network_apply:
+            res = API.data_bundle_import(api, "bundle.rcdata", {})
+
+        self.assertEqual(res["status"], "success")
+        mock_network_apply.assert_not_called()
+        api._bootstrap_context.assert_called_once_with("default")
+        api._reload_current_profile_after_import.assert_not_called()
+        api.steam_mgr.reload_paths_from_settings.assert_called_once_with()
+
     def test_save_all_settings_emits_warning_toast_when_self_path_conflicts_with_workshop(self):
         temp_root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
@@ -3145,6 +3267,140 @@ class TestApiSaveSettings(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         api._bootstrap_context.assert_called_once_with("default")
         api.steam_mgr.reload_paths_from_settings.assert_called_once_with()
+
+    def test_save_all_settings_skips_profile_reload_when_profile_values_unchanged(self):
+        profile = SimpleNamespace(
+            name="Default",
+            description="",
+            game_install_path="D:/Games/RimWorld",
+            user_data_path="D:/RimWorldData",
+            prefer_steam_launch=False,
+            use_workshop_mods=True,
+            use_self_mods=True,
+            run_commands=[],
+            inactive_mods_order=[],
+            temp_mods_order=[],
+            last_played_time=0,
+        )
+        profile_mgr = SimpleNamespace(
+            PROFILE_KEYS={
+                "name", "description", "game_install_path", "user_data_path", "prefer_steam_launch",
+                "use_workshop_mods", "use_self_mods", "run_commands", "inactive_mods_order",
+                "temp_mods_order", "last_played_time",
+            },
+            get_profile=Mock(return_value=profile),
+            update_profile=Mock(),
+        )
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="default")
+        api.profile_mgr = profile_mgr
+        api.sorter = None
+        api._bootstrap_context = Mock()
+
+        payload = {
+            "name": "Default",
+            "game_install_path": "D:/Games/RimWorld",
+            "user_data_path": "D:/RimWorldData",
+            "prefer_steam_launch": False,
+            "use_workshop_mods": True,
+            "use_self_mods": True,
+            "run_commands": [],
+        }
+        res = API.save_all_settings(api, payload)
+
+        self.assertEqual(res["status"], "success")
+        profile_mgr.update_profile.assert_not_called()
+        api._bootstrap_context.assert_not_called()
+
+    def test_save_all_settings_only_profile_metadata_change_does_not_reload_full_context(self):
+        profile = SimpleNamespace(
+            name="Default",
+            description="",
+            game_install_path="D:/Games/RimWorld",
+            user_data_path="D:/RimWorldData",
+            prefer_steam_launch=False,
+            use_workshop_mods=True,
+            use_self_mods=True,
+            run_commands=[],
+            inactive_mods_order=[],
+            temp_mods_order=[],
+            last_played_time=0,
+        )
+        profile_mgr = SimpleNamespace(
+            PROFILE_KEYS={
+                "name", "description", "game_install_path", "user_data_path", "prefer_steam_launch",
+                "use_workshop_mods", "use_self_mods", "run_commands", "inactive_mods_order",
+                "temp_mods_order", "last_played_time",
+            },
+            get_profile=Mock(return_value=profile),
+            update_profile=Mock(),
+        )
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="default")
+        api.profile_mgr = profile_mgr
+        api.sorter = None
+        api._bootstrap_context = Mock()
+
+        payload = {
+            "name": "Renamed",
+            "game_install_path": "D:/Games/RimWorld",
+            "user_data_path": "D:/RimWorldData",
+            "prefer_steam_launch": False,
+            "use_workshop_mods": True,
+            "use_self_mods": True,
+            "run_commands": [],
+        }
+        res = API.save_all_settings(api, payload)
+
+        self.assertEqual(res["status"], "success")
+        profile_mgr.update_profile.assert_called_once_with("default", {"name": "Renamed"})
+        api._bootstrap_context.assert_not_called()
+
+    def test_save_all_settings_skips_rule_reload_and_network_apply_when_values_unchanged(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="default")
+        api.profile_mgr = SimpleNamespace(PROFILE_KEYS=set())
+        api.sorter = SimpleNamespace(rule_mgr=SimpleNamespace(load_all=Mock()))
+        api._bootstrap_context = Mock()
+        api.steam_mgr = SimpleNamespace(reload_paths_from_settings=Mock())
+
+        payload = {
+            "network": asdict(settings.config.network),
+            "user_rules_path": settings.config.user_rules_path,
+            "community_rules_path": settings.config.community_rules_path,
+            "steam_path": settings.config.steam_path,
+            "steamcmd_path": settings.config.steamcmd_path,
+        }
+        with patch("backend.api.network_mgr.apply") as mock_network_apply:
+            res = API.save_all_settings(api, payload)
+
+        self.assertEqual(res["status"], "success")
+        mock_network_apply.assert_not_called()
+        api.sorter.rule_mgr.load_all.assert_not_called()
+        api._bootstrap_context.assert_not_called()
+        api.steam_mgr.reload_paths_from_settings.assert_not_called()
+
+    def test_update_from_dict_saves_once_when_secret_and_plain_settings_change(self):
+        original_model = settings.config.ai.model
+        self.addCleanup(setattr, settings.config.ai, "model", original_model)
+
+        with patch("backend.settings.secret_store.apply_secret_inputs", return_value=True) as mock_apply_secret_inputs, \
+             patch.object(settings, "save") as mock_save:
+            settings.update_from_dict({"ai": {"api_key": "secret", "model": "demo-model"}})
+
+        self.assertEqual(settings.config.ai.model, "demo-model")
+        mock_apply_secret_inputs.assert_called_once()
+        mock_save.assert_called_once()
+
+    def test_update_from_dict_restores_memory_when_save_fails(self):
+        original_language = settings.config.language
+        self.addCleanup(setattr, settings.config, "language", original_language)
+
+        with patch.object(settings, "save", side_effect=OSError("locked")):
+            with self.assertRaises(OSError):
+                settings.update_from_dict({"language": "en"})
+
+        self.assertEqual(settings.config.language, original_language)
 
     def test_maintenance_check_tools_uses_overrides_without_persisting_timestamp(self):
         api = API.__new__(API)
@@ -3239,8 +3495,13 @@ class TestApiSaveSettings(unittest.TestCase):
         settings.config.self_mods_path = str(mods_root)
         settings.config.steamcmd_mods_path = str(mods_root)
 
-        self.assertTrue(FileManager.sync_steamcmd_root_link())
+        with patch("backend.managers.mgr_files.logger.warning") as mock_warning, \
+             patch("backend.managers.mgr_files.logger.debug") as mock_debug:
+            self.assertTrue(FileManager.sync_steamcmd_root_link())
+
         self.assertTrue(child.exists())
+        mock_warning.assert_not_called()
+        mock_debug.assert_called_once()
 
     def test_bootstrap_context_does_not_crash_when_self_mods_path_is_file(self):
         temp_root = Path(tempfile.mkdtemp())
@@ -3279,6 +3540,39 @@ class TestApiSaveSettings(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         self.assertEqual(res["data"]["runtime_session"]["state"], "running")
         self.assertEqual(res["data"]["runtime_session"]["profile_id"], "profile-b")
+
+    def test_get_initial_data_initializes_missing_theme_store_without_error_log(self):
+        api = API.__new__(API)
+        api._runtime_mode = "desktop"
+        api.file_mgr = SimpleNamespace(get_port=Mock(return_value=0), get_remote_cache_stats=Mock(return_value={}))
+        api.is_first_db_init = False
+        api.active_context = None
+        api._upgrade_context = {}
+        api.game_monitor = SimpleNamespace(get_runtime_session_data=Mock(return_value={}))
+
+        with patch("backend.api.ThemeStore", return_value=SimpleNamespace(list_user_themes=Mock(return_value=[{"id": "custom"}]))), \
+             patch("backend.api.logger.error") as mock_error:
+            res = API.get_initial_data(api)
+
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["data"]["user_themes"], [{"id": "custom"}])
+        mock_error.assert_not_called()
+
+    def test_startup_base_payload_initializes_missing_theme_store_without_error_log(self):
+        api = API.__new__(API)
+        api._runtime_mode = "desktop"
+        api.file_mgr = SimpleNamespace(get_port=Mock(return_value=0))
+        api.is_first_db_init = False
+        api.active_context = None
+        api._upgrade_context = {}
+        api.game_monitor = SimpleNamespace(get_runtime_session_data=Mock(return_value={}))
+
+        with patch("backend.api.ThemeStore", return_value=SimpleNamespace(list_user_themes=Mock(return_value=[{"id": "startup"}]))), \
+             patch("backend.api.logger.error") as mock_error:
+            payload = API._get_startup_base_payload(api)
+
+        self.assertEqual(payload["user_themes"], [{"id": "startup"}])
+        mock_error.assert_not_called()
 
     def test_refresh_active_profile_context_after_update_light_updates_manager_contexts(self):
         api = API.__new__(API)
@@ -3417,6 +3711,7 @@ class TestApiSaveSettings(unittest.TestCase):
         res = API.profile_activate(api, "broken")
 
         self.assertEqual(res["status"], "error")
+        self.assertEqual(res["error_code"], "PROFILE.ACTIVATE_FAILED")
         self.assertIn("已回退 default", res["message"])
         self.assertEqual(res["data"]["requested_profile_id"], "broken")
         self.assertEqual(res["data"]["fallback_profile_id"], "default")
@@ -3435,7 +3730,8 @@ class TestApiSaveSettings(unittest.TestCase):
         api.load_order_mgr = Mock()
         api.sorter = Mock()
 
-        with patch("backend.api.logger.error") as mock_logger_error:
+        with patch("backend.api.logger.error") as mock_logger_error, \
+             patch("backend.api.logger.warning") as mock_logger_warning:
             API._bootstrap_context(api, "missing-profile")
 
         old_log_mgr.stop_realtime_monitor.assert_called_once_with()
@@ -3448,6 +3744,11 @@ class TestApiSaveSettings(unittest.TestCase):
         self.assertIsNone(api.game_log_mgr)
         self.assertIsNone(api.sorter)
         mock_logger_error.assert_called_once()
+        mock_logger_warning.assert_called_once_with(
+            "环境 %s 路径失效，进入锁定模式；请求环境: %s",
+            "default",
+            "missing-profile",
+        )
 
     def test_sync_runtime_links_for_profile_creates_missing_local_mods_dir_before_sync(self):
         api = API.__new__(API)

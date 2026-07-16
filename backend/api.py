@@ -682,6 +682,17 @@ class API:
             return session or {}
         return {}
 
+    def _list_user_themes_safe(self) -> list[dict[str, Any]]:
+        try:
+            theme_store = getattr(self, "_theme_store", None)
+            if theme_store is None:
+                theme_store = ThemeStore()
+                self._theme_store = theme_store
+            return theme_store.list_user_themes()
+        except Exception as e:
+            logger.error("启动时读取用户主题失败: %s", e, exc_info=True)
+            return []
+
     def _settings_payload(self) -> dict[str, Any]:
         payload = settings.to_public_dict()
         if payload.get("_secret_storage_warning_key") == "toast.settings.secret_storage_warning":
@@ -699,6 +710,37 @@ class API:
                 path=str(settings.config.steamcmd_mods_path or ""),
             )
         return warning
+
+    @staticmethod
+    def _changed_settings_keys(before_state: dict[str, Any], after_state: dict[str, Any], keys) -> set[str]:
+        return {key for key in keys if before_state.get(key) != after_state.get(key)}
+
+    def _refresh_runtime_after_settings_change(self, changed_global_keys: set[str], *, env_changed: bool = False, profile_id: str = "", import_result: dict[str, Any] | None = None) -> bool:
+        """按真实变化刷新运行态，避免仅保存同值时重载管理器。"""
+        if "network" in changed_global_keys:
+            network_mgr.apply()
+
+        current_reloaded = False
+        target_profile_id = str(profile_id or settings.config.current_profile_id or "").strip()
+        runtime_path_changed = any(key in changed_global_keys for key in ["steam_path", "steamcmd_path", "workshop_mods_path", "self_mods_path"])
+        if (env_changed or runtime_path_changed) and target_profile_id:
+            logger.info("检测到核心路径变动，正在重新装配执行引擎...")
+            self._bootstrap_context(target_profile_id)
+            current_reloaded = True
+        elif import_result is not None:
+            current_reloaded = self._reload_current_profile_after_import(import_result)
+
+        sorter = getattr(self, "sorter", None)
+        rule_paths_changed = "user_rules_path" in changed_global_keys or "community_rules_path" in changed_global_keys
+        if not current_reloaded and rule_paths_changed and sorter and sorter.rule_mgr:
+            # 规则文件路径切换后必须立即重载，否则本次会话仍会持有旧文件内容。
+            logger.info("检测到规则文件路径变动，正在重载规则缓存...")
+            sorter.rule_mgr.load_all()
+
+        steam_mgr = getattr(self, "steam_mgr", None)
+        if steam_mgr and any(key in changed_global_keys for key in ["steam_path", "steamcmd_path"]):
+            steam_mgr.reload_paths_from_settings()
+        return current_reloaded
 
     def _resolve_ai_request_config(self, config_data: dict | None) -> dict:
         resolved = dict(config_data or {})
@@ -830,7 +872,8 @@ class API:
         
         # 【拦截分流】如果环境不健康，不再实例化底层的业务引擎！
         if not self.active_context.is_healthy:
-            logger.warning(f"环境 {profile_id} 路径失效，进入锁定模式！")
+            active_profile_id = str(getattr(self.active_context, "profile_id", "") or profile_id)
+            logger.warning("环境 %s 路径失效，进入锁定模式；请求环境: %s", active_profile_id, profile_id)
             self.load_order_mgr = None
             self.scanner = None
             self.game_log_mgr = None
@@ -1629,11 +1672,7 @@ class API:
 
     def _get_startup_base_payload(self, *, include_upgrade_context: bool = True) -> dict[str, Any]:
         """构造启动首屏需要的轻量全局数据，不触发 Mod 规则、兼容性和工作区检查。"""
-        try:
-            user_themes = self._theme_store.list_user_themes()
-        except Exception as e:
-            logger.error("启动时读取用户主题失败: %s", e, exc_info=True)
-            user_themes = []
+        user_themes = self._list_user_themes_safe()
         return {
             "app_version": __version__,
             "build_mode": __build__,
@@ -1861,11 +1900,7 @@ class API:
         当前接口保持旧行为不变，兼容非启动场景和旧调用方。
         """
         perf_start_at = time.perf_counter()
-        try:
-            user_themes = self._theme_store.list_user_themes()
-        except Exception as e:
-            logger.error("启动时读取用户主题失败: %s", e, exc_info=True)
-            user_themes = []
+        user_themes = self._list_user_themes_safe()
         result = {
             "app_version": __version__,
             "build_mode": __build__,
@@ -2333,6 +2368,17 @@ class API:
         2. 识别全局字段 -> 更新 settings.config -> 保存 JSON
         """
         try:
+            def _to_plain(value):
+                if is_dataclass(value) and not isinstance(value, type):
+                    return asdict(value)
+                return value
+
+            def _profile_value_changed(profile, key: str, value: Any) -> bool:
+                current_value = getattr(profile, key, None)
+                if key in {"game_install_path", "user_data_path"}:
+                    return normalize_path_for_compare(value) != normalize_path_for_compare(current_value)
+                return _to_plain(current_value) != _to_plain(value)
+
             profile_data = {}
             global_data = {}
             # 这里的 PROFILE_KEYS 来自 ProfileManager 的定义
@@ -2355,30 +2401,28 @@ class API:
             # A. 处理环境数据
             if profile_data:
                 profile_id = pid
-                self.profile_mgr.update_profile(profile_id, profile_data)
-                env_changed = True
+                changed_profile_data = dict(profile_data)
+                if hasattr(self.profile_mgr, "get_profile"):
+                    current_profile = self.profile_mgr.get_profile(profile_id)
+                    changed_profile_data = {
+                        key: value
+                        for key, value in profile_data.items()
+                        if _profile_value_changed(current_profile, key, value)
+                    }
+                if changed_profile_data:
+                    self.profile_mgr.update_profile(profile_id, changed_profile_data)
+                    # 只有会进入 ProfileContext 的字段变化才需要重建管理器；名称、描述等元信息不触发重装。
+                    env_changed = any(key not in {"name", "description", "last_played_time"} for key in changed_profile_data)
             # B. 处理全局设置数据
             if global_data:
+                before_state = asdict(settings.config)
                 normalization_warnings = settings.update_from_dict(global_data)  # recursive_update 批量更新
-                network_mgr.apply() # 应用网络设置
-                # 如果修改了某些会影响环境的全局路径（如 steamcmd_path）
-                if any(key in global_data for key in ['steam_path', 'steamcmd_path', 'workshop_mods_path', 'self_mods_path']):
-                    env_changed = True
-                rule_paths_changed = 'user_rules_path' in global_data or 'community_rules_path' in global_data
+                after_state = asdict(settings.config)
+                changed_global_keys = self._changed_settings_keys(before_state, after_state, global_data)
             else:
                 normalization_warnings = []
-                rule_paths_changed = False
-            if env_changed:
-                logger.info("检测到核心路径变动，正在重新装配执行引擎...")
-                # 重新调用 bootstrap，这会生成新的 ProfileContext 并重建所有 Manager
-                self._bootstrap_context(pid)
-            elif rule_paths_changed and self.sorter and self.sorter.rule_mgr:
-                # 规则文件路径切换后必须立即重载，否则本次会话仍会持有旧文件内容。
-                logger.info("检测到规则文件路径变动，正在重载规则缓存...")
-                self.sorter.rule_mgr.load_all()
-            steam_mgr = getattr(self, "steam_mgr", None)
-            if steam_mgr and any(key in global_data for key in ["steam_path", "steamcmd_path"]):
-                steam_mgr.reload_paths_from_settings()
+                changed_global_keys = set()
+            self._refresh_runtime_after_settings_change(changed_global_keys, env_changed=env_changed, profile_id=pid)
             if normalization_warnings:
                 localized_warnings = [self._localized_settings_warning(item) for item in normalization_warnings]
                 message = localized_warnings[0] if len(localized_warnings) == 1 else "\n".join(str(item) for item in localized_warnings)
@@ -2387,8 +2431,6 @@ class API:
             return ApiResponse.success({
                 "settings": self._settings_payload(),
                 "active_context": self.active_context # 这里的 serialize_data 会自动调用 to_dict
-                ,
-                "remote_image_cache": self.file_mgr.get_remote_cache_stats(),
             }, message=tr("api.settings.save_done", "配置保存成功"))
             
         except Exception as e:
@@ -2432,7 +2474,7 @@ class API:
     @log_api_call
     def get_remote_image_cache_stats(self):
         """获取网络图片缓存统计。"""
-        return ApiResponse.success(self.file_mgr.get_remote_cache_stats())
+        return ApiResponse.success(self.file_mgr.get_remote_cache_stats(force=True))
 
     @log_api_call
     def clear_remote_image_cache(self):
@@ -2440,7 +2482,7 @@ class API:
         cleared_stats = self.file_mgr.clear_remote_cache()
         return ApiResponse.success({
             "cleared": cleared_stats,
-            "current": self.file_mgr.get_remote_cache_stats(),
+            "current": self.file_mgr.get_remote_cache_stats(force=True),
         }, message=tr("api.cache.remote_images_cleared", "网络图片缓存已清空"))
 
     @log_api_call
@@ -2510,6 +2552,7 @@ class API:
         """导入统一软件数据包。"""
         payload = payload or {}
         try:
+            before_settings = asdict(settings.config)
             module_keys = payload.get("module_keys")
             default_profile_mode = str(payload.get("default_profile_mode") or "clone").strip().lower() or "clone"
             profile_import_plan = payload.get("profile_import_plan")
@@ -2520,8 +2563,9 @@ class API:
                 profile_import_plan=profile_import_plan,
             )
 
-            network_mgr.apply()
-            self._reload_current_profile_after_import(import_result)
+            after_settings = asdict(settings.config)
+            changed_global_keys = self._changed_settings_keys(before_settings, after_settings, after_settings.keys())
+            self._refresh_runtime_after_settings_change(changed_global_keys, import_result=import_result)
 
             response_data = {
                 "result": import_result,
@@ -2610,7 +2654,7 @@ class API:
         """
         try:
             # 使用 settings 管理器来安全地修改配置
-            current_guides = settings.config.completed_guides
+            current_guides = dict(settings.config.completed_guides or {})
             current_guides[guide_key] = "done"
             settings.set('completed_guides', current_guides) # 这会自动触发保存
             return ApiResponse.success()
@@ -5992,7 +6036,7 @@ class API:
         try:
             current_ai = settings.config.ai
             config_data = dict(config_data or {})
-            settings.apply_secret_inputs({"ai": config_data})
+            settings.apply_secret_inputs({"ai": config_data}, save=False)
             editable_keys = {
                 "enabled",
                 "provider",
@@ -6666,6 +6710,13 @@ class API:
                     "active_profile_id": fallback_profile_id,
                     "context": fallback_context,
                     "settings": self._settings_payload(),
+                },
+                code="PROFILE.ACTIVATE_FALLBACK_FAILED" if fallback_error else "PROFILE.ACTIVATE_FAILED",
+                detail=e,
+                context={
+                    "requested_profile_id": str(pid or "").strip(),
+                    "fallback_profile_id": fallback_profile_id,
+                    "fallback_error": fallback_error,
                 },
             )
     

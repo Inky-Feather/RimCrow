@@ -380,6 +380,35 @@ async function testSaveSettingToolModsForcesCoreRefreshScan() {
   assert.equal(scans[0].forceCoreRefresh, true)
 }
 
+async function testSaveSettingResetActiveListOnlyUpdatesSetting() {
+  const calls = []
+  resetStores({
+    save_setting: async (key, config) => {
+      calls.push([key, config])
+      return ok({ settings: { reset_active_list: config } })
+    },
+  })
+  const config = {
+    user_ids: ['ludeon.rimworld'],
+    excluded_builtin_ids: ['ludeon.rimworld.royalty'],
+    excluded_derived_ids: [],
+  }
+  const actions = createSettingsActions({
+    settings: { reset_active_list: {} },
+    overrides: {
+      refreshData: async () => assert.fail('预设列表保存不应刷新完整数据'),
+      requestModScan: async () => assert.fail('预设列表保存不应扫描模组目录'),
+      refreshModCoreData: async () => assert.fail('预设列表保存不应刷新核心列表'),
+      refreshModEnrichment: async () => assert.fail('预设列表保存不应刷新补充信息'),
+    },
+  })
+
+  const saved = await actions.saveSetting('reset_active_list', config)
+
+  assert.equal(saved, true)
+  assert.deepEqual(calls, [['reset_active_list', config]])
+}
+
 async function testSaveSettingIssueCoreSettingRefreshesCore() {
   resetStores({
     save_setting: async () => ok({
@@ -743,6 +772,7 @@ for (const test of [
   testRuleSourcePathChangeRefreshesRules,
   testExternalDataPathChangeRefreshesModData,
   testSaveSettingToolModsForcesCoreRefreshScan,
+  testSaveSettingResetActiveListOnlyUpdatesSetting,
   testSaveSettingIssueCoreSettingRefreshesCore,
   testSaveSettingIssueEnrichmentSettingRefreshesEnrichment,
   testResetClearsScanResultData,

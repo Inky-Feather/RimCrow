@@ -143,8 +143,8 @@ const toggleExcluded = (type, id = '') => {
 }
 const save = async () => {
   const config = buildConfig()
-  appStore.settings.reset_active_list = config
-  await appStore.saveSetting('reset_active_list', config)
+  const saved = await appStore.saveSetting('reset_active_list', config)
+  if (!saved) return
   close()
 }
 const close = () => {

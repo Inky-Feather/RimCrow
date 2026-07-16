@@ -491,6 +491,8 @@ class FileManager:
             os.makedirs(THUMBNAIL_CACHE_DIR, exist_ok=True)
         if not os.path.exists(GALLERY_CACHE_DIR):
             os.makedirs(GALLERY_CACHE_DIR, exist_ok=True)
+        self._remote_cache_stats = {"file_count": 0, "total_bytes": 0}
+        self._remote_cache_stats_time = 0.0
             
         # 2. 启动 HTTP Server
         self._port = 0
@@ -519,8 +521,13 @@ class FileManager:
         """返回当前 HTTP 服务器端口"""
         return self._port
 
-    def get_remote_cache_stats(self) -> dict[str, int]:
+    def get_remote_cache_stats(self, force: bool = False) -> dict[str, int]:
         """统计网络图片缓存数量与总占用。"""
+        now = time.monotonic()
+        cached_stats = getattr(self, "_remote_cache_stats", {"file_count": 0, "total_bytes": 0})
+        cached_time = getattr(self, "_remote_cache_stats_time", 0.0)
+        if not force and now - cached_time < 300:
+            return dict(cached_stats)
         total_files = 0
         total_bytes = 0
         for entry in Path(GALLERY_CACHE_DIR).iterdir():
@@ -531,19 +538,23 @@ class FileManager:
                 total_bytes += entry.stat().st_size
             except OSError:
                 continue
-        return {
+        self._remote_cache_stats = {
             "file_count": total_files,
             "total_bytes": total_bytes,
         }
+        self._remote_cache_stats_time = now
+        return dict(self._remote_cache_stats)
 
     def clear_remote_cache(self) -> dict[str, int]:
         """清空网络图片缓存，并返回清理前统计。"""
-        cleared_stats = self.get_remote_cache_stats()
+        cleared_stats = self.get_remote_cache_stats(force=True)
         for entry in Path(GALLERY_CACHE_DIR).iterdir():
             if entry.is_file():
                 delete_fs_path(str(entry))
         with LocalAssetHandler._remote_failure_lock:
             LocalAssetHandler._remote_failure_cache.clear()
+        self._remote_cache_stats = {"file_count": 0, "total_bytes": 0}
+        self._remote_cache_stats_time = time.monotonic()
         return cleared_stats
     
     # =========================================================
@@ -1668,8 +1679,8 @@ class FileManager:
         
         if same_path(steamcmd_link_path, real_storage_path):
             os.makedirs(real_storage_path, exist_ok=True)
-            logger.warning(
-                "跳过 SteamCMD 重定向：源目录和目标目录相同：%s",
+            logger.debug(
+                "SteamCMD 下载目录已关联管理器 Mod 目录，无需创建重定向：%s",
                 real_storage_path,
             )
             return True

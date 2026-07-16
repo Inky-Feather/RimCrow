@@ -5,6 +5,7 @@ import os
 import platform
 import shutil
 import threading
+from copy import deepcopy
 from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
 import sys
@@ -716,6 +717,9 @@ class SettingsManager:
             return getattr(self.config, key)
         return None
 
+    def _snapshot_config(self) -> "AppConfig":
+        return deepcopy(self.config)
+
     def set(self, key: str, value: Any):
         """
         设置配置项并自动处理路径同步逻辑
@@ -723,34 +727,39 @@ class SettingsManager:
         if not hasattr(self.config, key):
             print(f"Warning: Unknown key {key}")
             return
+        old_config = self._snapshot_config()
         before_state = asdict(self.config)
-        current_attr = getattr(self.config, key)
-        if is_dataclass(current_attr) and isinstance(value, dict):
-            self._recursive_update(current_attr, value)
-        else:
-            setattr(self.config, key, value)
-        self._normalize_config()
-        self._sync_derived_paths()
-        after_state = asdict(self.config)
-        if after_state == before_state: return
-        old_self_mods_path = before_state.get('self_mods_path', '')
-        old_steamcmd_path = before_state.get('steamcmd_path', '')
-        new_self_mods_path = after_state.get('self_mods_path', '')
-        new_steamcmd_path = after_state.get('steamcmd_path', '')
-        # --- 逻辑触发区 ---
-        # 1. 重新计算衍生路径
-        # 2. 如果 self_mods_path 变了，触发同步
-        if old_self_mods_path != new_self_mods_path:
-            from backend.managers.mgr_files import FileManager
-            FileManager.sync_steamcmd_root_link(
-                old_mods_path=old_self_mods_path,
-                move_old_data=self.config.move_old_self_mods
-            )
-        # 3. 如果 steamcmd_path 变了，也触发同步
-        if old_steamcmd_path != new_steamcmd_path:
-            from backend.managers.mgr_files import FileManager
-            FileManager.sync_steamcmd_root_link()
-        self.save()
+        try:
+            current_attr = getattr(self.config, key)
+            if is_dataclass(current_attr) and isinstance(value, dict):
+                self._recursive_update(current_attr, value)
+            else:
+                setattr(self.config, key, value)
+            self._normalize_config()
+            self._sync_derived_paths()
+            after_state = asdict(self.config)
+            if after_state == before_state: return
+            old_self_mods_path = before_state.get('self_mods_path', '')
+            old_steamcmd_path = before_state.get('steamcmd_path', '')
+            new_self_mods_path = after_state.get('self_mods_path', '')
+            new_steamcmd_path = after_state.get('steamcmd_path', '')
+            # --- 逻辑触发区 ---
+            # 1. 重新计算衍生路径
+            # 2. 如果 self_mods_path 变了，触发同步
+            if old_self_mods_path != new_self_mods_path:
+                from backend.managers.mgr_files import FileManager
+                FileManager.sync_steamcmd_root_link(
+                    old_mods_path=old_self_mods_path,
+                    move_old_data=self.config.move_old_self_mods
+                )
+            # 3. 如果 steamcmd_path 变了，也触发同步
+            if old_steamcmd_path != new_steamcmd_path:
+                from backend.managers.mgr_files import FileManager
+                FileManager.sync_steamcmd_root_link()
+            self.save()
+        except Exception:
+            self.config = old_config
+            raise
 
     def save(self):
         """保存当前配置到磁盘"""
@@ -761,12 +770,13 @@ class SettingsManager:
             # print("Settings saved.")
         except Exception as e:
             print(f"Error saving settings: {e}")
+            raise
 
-    def apply_secret_inputs(self, data_dict: Dict[str, Any]) -> bool:
+    def apply_secret_inputs(self, data_dict: Dict[str, Any], *, save: bool = True) -> bool:
         """保存设置提交中的密钥：有值则更新，空值则清除，保留列表中的空值不处理。"""
         try:
             changed = secret_store.apply_secret_inputs(self.config, data_dict)
-            if changed:
+            if changed and save:
                 self.save()
             return changed
         except SecretStoreError as e:
@@ -816,35 +826,39 @@ class SettingsManager:
             if isinstance(current, dict):
                 current[path[-1]] = ""
 
-    # 强烈建议新增这个方法供 api.save_all_settings 使用
     def update_from_dict(self, data_dict: Dict[str, Any]) -> list[str]:
         """
         全量更新，同样需要处理逻辑触发
         """
+        old_config = self._snapshot_config()
         before_state = asdict(self.config)
-        self.apply_secret_inputs(data_dict)
-        self._recursive_update(self.config, data_dict)
-        normalization_warnings = self._normalize_config()
-        self._sync_derived_paths()
-        after_state = asdict(self.config)
-        if after_state == before_state:
+        try:
+            self.apply_secret_inputs(data_dict, save=False)
+            self._recursive_update(self.config, data_dict)
+            normalization_warnings = self._normalize_config()
+            self._sync_derived_paths()
+            after_state = asdict(self.config)
+            if after_state == before_state:
+                return normalization_warnings
+            old_self_mods_path = before_state.get('self_mods_path', '')
+            old_steamcmd_path = before_state.get('steamcmd_path', '')
+            new_self_mods_path = after_state.get('self_mods_path', '')
+            new_steamcmd_path = after_state.get('steamcmd_path', '')
+            # 检查并同步
+            if old_self_mods_path != new_self_mods_path or \
+               old_steamcmd_path != new_steamcmd_path:
+                from backend.managers.mgr_files import FileManager
+                sync_ok = FileManager.sync_steamcmd_root_link(
+                    old_mods_path=old_self_mods_path,
+                    move_old_data=self.config.move_old_self_mods
+                )
+                if not sync_ok:
+                    normalization_warnings.append("steamcmd_junction_sync_failed")
+            self.save()
             return normalization_warnings
-        old_self_mods_path = before_state.get('self_mods_path', '')
-        old_steamcmd_path = before_state.get('steamcmd_path', '')
-        new_self_mods_path = after_state.get('self_mods_path', '')
-        new_steamcmd_path = after_state.get('steamcmd_path', '')
-        # 检查并同步
-        if old_self_mods_path != new_self_mods_path or \
-           old_steamcmd_path != new_steamcmd_path:
-            from backend.managers.mgr_files import FileManager
-            sync_ok = FileManager.sync_steamcmd_root_link(
-                old_mods_path=old_self_mods_path,
-                move_old_data=self.config.move_old_self_mods
-            )
-            if not sync_ok:
-                normalization_warnings.append("steamcmd_junction_sync_failed")
-        self.save()
-        return normalization_warnings
+        except Exception:
+            self.config = old_config
+            raise
 
     def update_paths(self, paths_dict: Dict[str, str]):
         """批量更新路径"""

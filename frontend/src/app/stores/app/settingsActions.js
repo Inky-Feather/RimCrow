@@ -169,7 +169,7 @@ export const useSettingsActions = ({
 
   // 保存单项设置
   const saveSetting = async (key, value) => {
-    if (!window.pywebview) return
+    if (!window.pywebview) return false
     isLoading.value = true
     try {
       const profileStore = useProfileStore()
@@ -181,10 +181,13 @@ export const useSettingsActions = ({
         else settings.value[key] = value
         const changes = getRefreshSettingsChanges(previousSnapshot, settings.value, profileStore.activeContext)
         await refreshAfterSettingsSave(changes, profileStore.activeContext)
+        return true
       }
+      return false
     } catch (e) {
       console.error("保存单项设置异常:", e)
       toast.error(toUserMessage(e?.message || e, t('toast.settings.save_failed', '保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。')))
+      return false
     } finally {
       isLoading.value = false
     }
@@ -251,7 +254,7 @@ export const useSettingsActions = ({
         // 更新本地 store
         Object.assign(settings.value, nextSettings)
         applyCurrentTheme()
-        syncRemoteImageCache(res.data.remote_image_cache)
+        if (res.data.remote_image_cache) syncRemoteImageCache(res.data.remote_image_cache)
         profileStore.currentProfileId = nextContext?.profile_id || nextSettings.current_profile_id || profileStore.currentProfileId
         profileStore.activeContext = nextContext
         await profileStore.fetchProfiles()

@@ -21,7 +21,7 @@ from backend.utils.profile_runtime import (
 )
 from backend.settings import BACKUP_DIR, settings, DATA_DIR
 from backend.utils.logger import logger 
-from backend.utils.tools import delete_fs_path, normalize_path_for_storage
+from backend.utils.tools import delete_fs_path, normalize_path_for_compare, normalize_path_for_storage
 
 
 # @dataclass
@@ -295,13 +295,15 @@ class ProfileManager:
             clean_data['user_data_path'] = self._ensure_user_data_structure(clean_data['user_data_path'])
         if 'game_install_path' in clean_data:
             clean_data['game_install_path'] = normalize_rimworld_install_root(clean_data['game_install_path'])
-            if not os.path.exists(clean_data['game_install_path']):
-                raise ValueError(f"Path not found: {clean_data['game_install_path']}")
-            if not GameManager.detect_executable(clean_data['game_install_path']):
-                raise ValueError(f"Game executable not found: {clean_data['game_install_path']}")
-            install_facts = self._get_install_inspector().inspect(clean_data['game_install_path'], force=True)
-            clean_data['game_version'] = install_facts.game_version or GameManager.get_game_version(clean_data['game_install_path'])
-            clean_data['is_steam'] = install_facts.is_steam
+            install_path_changed = normalize_path_for_compare(clean_data['game_install_path']) != normalize_path_for_compare(getattr(profile, 'game_install_path', ''))
+            if install_path_changed:
+                if not os.path.exists(clean_data['game_install_path']):
+                    raise ValueError(f"Path not found: {clean_data['game_install_path']}")
+                if not GameManager.detect_executable(clean_data['game_install_path']):
+                    raise ValueError(f"Game executable not found: {clean_data['game_install_path']}")
+                install_facts = self._get_install_inspector().inspect(clean_data['game_install_path'], force=True)
+                clean_data['game_version'] = install_facts.game_version or GameManager.get_game_version(clean_data['game_install_path'])
+                clean_data['is_steam'] = install_facts.is_steam
 
         target_is_steam = bool(clean_data.get('is_steam', getattr(profile, 'is_steam', False)))
         prefer_input = (
