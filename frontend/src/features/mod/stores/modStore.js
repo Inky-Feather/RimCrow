@@ -140,6 +140,7 @@ export const useModStore = defineStore('mods', () => {
 
   const conflictList = ref([])        // 重复包名冲突列表
   const coexistenceList = ref([])     // 共存Mod列表
+  const pendingSortConflict = ref(null) // 自动排序发现循环后，等待用户持久处理规则
 
   const {
     selectedIds,
@@ -962,11 +963,24 @@ export const useModStore = defineStore('mods', () => {
       mod_ids = activeIds.value
       const res = await window.pywebview.api.auto_sort_mods(mod_ids)
       if (checkResult(res, t('check.mod.auto_sort', '自动排序Mod'))) {
+        const cycleWarnings = (res.data.warnings || []).filter(item => item.type === 'cycle_broken')
+        const sortedIds = res.data.sorted_ids || []
+        if (cycleWarnings.length > 0) {
+          await runListHistoryTransaction({
+            type: 'auto-sort',
+            label: t('history.mod.auto_sort_count', '自动排序 {count} 个 Mod', { count: mod_ids.length })
+          }, async () => {
+            activeIds.value = sortedIds
+            updateInactiveIds()
+          })
+          pendingSortConflict.value = { warnings: cycleWarnings, activeIds: [...mod_ids], sortedIds: [...sortedIds] }
+          return true
+        }
         await runListHistoryTransaction({
           type: 'auto-sort',
           label: t('history.mod.auto_sort_count', '自动排序 {count} 个 Mod', { count: mod_ids.length })
         }, async () => {
-          activeIds.value = res.data.sorted_ids || []
+          activeIds.value = sortedIds
           updateInactiveIds()
         })
         toast.success(t('toast.mod.auto_sort_done', '自动排序已完成'))
@@ -1001,6 +1015,14 @@ export const useModStore = defineStore('mods', () => {
       toast.error(toUserMessage(e?.message || e, t('toast.mod.auto_sort_failed', '自动排序失败。可能是规则数据、缺失项处理或后端排序器暂时不可用，详细原因已写入系统日志。')))
     }
     return false
+  }
+  const clearPendingSortConflict = () => {
+    pendingSortConflict.value = null
+  }
+  const retryAutoSortAfterRuleChange = async () => {
+    const activeIdsToSort = pendingSortConflict.value?.activeIds || activeIds.value
+    clearPendingSortConflict()
+    return await autoSortMods(activeIdsToSort)
   }
   const normalizeResetActiveListConfig = (config = {}) => {
     return {
@@ -1714,7 +1736,7 @@ export const useModStore = defineStore('mods', () => {
   return {
     // 状态
     allModsMap, dataVersion, inactiveIds, tempIds, activeIds, disabledMods, disabledPathHashes, strictDisableRestoreFailures, interlocksMap, savedInactiveIds, savedTempIds, interlockDetailsMap,
-    savedActiveIds, activeLoadModifyTime, activeLoadVersionToken, conflictList, coexistenceList,
+    savedActiveIds, activeLoadModifyTime, activeLoadVersionToken, conflictList, coexistenceList, pendingSortConflict,
     selectedIds, lastSelectedMod, currentTargetId, isDraggingMod,
     listHistoryUndoStack, listHistoryRedoStack, isApplyingListHistory,
 
@@ -1730,7 +1752,7 @@ export const useModStore = defineStore('mods', () => {
     getInstallSourceHints, mergeInstallSourceHintsFromMods, clearInstallSourceHints, clearInstallSourceHintsByOrigin,
     updateInactiveIds, takeInactiveIds, setListIds, removeIdsOnAllList, removeDeletedModsFromLocalData, removeUnavailableIdsCompletely, selectMods, clearSelection, changeModsActive, getModInterlockChain, loadInterlockDetails,
     // 扫描、排序与模组操作
-    scanMods, scanComplete, autoSortMods, resetActiveList, applyResetActiveListPreset, resolveResetActiveListPreview, resolveLocalizeCandidates, localizeSelectedMods, localizeMods, disableMods, disableSelectedMods, deleteMods, deleteSelectedModFiles, unsubscribeSelectedWorkshopMods, smartInsertMods,
+    scanMods, scanComplete, autoSortMods, clearPendingSortConflict, retryAutoSortAfterRuleChange, resetActiveList, applyResetActiveListPreset, resolveResetActiveListPreview, resolveLocalizeCandidates, localizeSelectedMods, localizeMods, disableMods, disableSelectedMods, deleteMods, deleteSelectedModFiles, unsubscribeSelectedWorkshopMods, smartInsertMods,
     canSwitchCoexistenceSource, switchCoexistenceSource, toggleCoexistenceSource, toggleSelectedCoexistenceSource, revealSelectedMod,
     // 用户数据与联锁
     updateModUserData, updateModTime, linkMods, unlinkMods, healInterlock, getInterlockMissingDetails, batchUpdateModsUserData,

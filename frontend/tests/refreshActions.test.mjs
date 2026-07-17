@@ -8,6 +8,7 @@ import { useModStore } from '../src/features/mod/stores/modStore.js'
 import { useGroupStore } from '../src/features/mod/stores/groupStore.js'
 import { useProfileStore } from '../src/features/profiles/profileStore.js'
 import { useTaskStore } from '../src/app/stores/taskStore.js'
+import { useRuleStore } from '../src/features/rules/ruleStore.js'
 
 const print = console.log.bind(console)
 console.log = () => {}
@@ -484,6 +485,99 @@ async function testResetClearsScanResultData() {
   assert.deepEqual(modStore.strictDisableRestoreFailures, {})
 }
 
+async function testRuleLoadingIsSharedBeforeEditorReadsSources() {
+  let resolveRules
+  let requestCount = 0
+  resetStores({
+    rules_get_all: () => {
+      requestCount += 1
+      return new Promise(resolve => { resolveRules = resolve })
+    },
+  })
+
+  const ruleStore = useRuleStore()
+  const firstLoad = ruleStore.ensureRulesLoaded()
+  const secondLoad = ruleStore.ensureRulesLoaded()
+
+  await Promise.resolve()
+  assert.equal(requestCount, 1)
+
+  resolveRules(ok({
+    community_rules: { 'demo.mod': { loadAfter: {} } },
+    community_rules_update_time: 1,
+    workshop_rules: { 'demo.mod': { dependencies: {} } },
+    workshop_rules_update_time: 2,
+    user_mod_rules: { 'demo.mod': { loadBefore: {} } },
+    user_dynamic_rules: [{ rule_id: 'dynamic-1' }],
+    settings: { user_mod_rules_enabled: true },
+  }))
+
+  assert.equal(await firstLoad, true)
+  assert.equal(await secondLoad, true)
+  assert.deepEqual(ruleStore.communityModRules, { 'demo.mod': { loadAfter: {} } })
+  assert.deepEqual(ruleStore.workshopModRules, { 'demo.mod': { dependencies: {} } })
+  assert.deepEqual(ruleStore.userModRules, { 'demo.mod': { loadBefore: {} } })
+  assert.deepEqual(ruleStore.userDynamicRules, [{ rule_id: 'dynamic-1' }])
+}
+
+async function testRuleEditorRuleOperationsHandleMissingState() {
+  resetStores()
+  const ruleStore = useRuleStore()
+  ruleStore.userModRules = { 'demo.mod': {} }
+
+  await ruleStore.removeUserModRuleItem('demo.mod', 'loadAfter', 'missing.mod')
+  await ruleStore.updateComment('demo.mod', 'loadAfter', 'missing.mod', 'ignored')
+
+  assert.deepEqual(ruleStore.getAbsolutePosition(), { pos: 'none', source: null })
+}
+
+async function testWorkshopRuleUpdateResetsBusyStateOnFailure() {
+  resetStores()
+  const appStore = useAppStore()
+  appStore.updateExternalDB = async () => { throw new Error('update failed') }
+  const ruleStore = useRuleStore()
+
+  await assert.rejects(() => ruleStore.updateWorkshop(), /update failed/)
+  assert.equal(ruleStore.isLoading, false)
+}
+
+async function testFailedUserRuleDeleteWaitsForStateRollback() {
+  let resolveRefresh
+  resetStores({
+    rule_update_user_mod: async () => ({ status: 'error', message: 'save failed' }),
+    rules_get_all: () => new Promise(resolve => { resolveRefresh = resolve }),
+  })
+  const ruleStore = useRuleStore()
+  ruleStore.userModRules = {
+    'demo.mod': {
+      loadAfter: { 'other.mod': { comment: [] } },
+      loadBefore: { 'keep.mod': { comment: [] } },
+    },
+  }
+
+  let settled = false
+  const removePromise = ruleStore.removeUserModRuleItem('demo.mod', 'loadAfter', 'other.mod').then(() => { settled = true })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(settled, false)
+  assert.equal(typeof resolveRefresh, 'function')
+  resolveRefresh(ok({
+    user_mod_rules: {
+      'demo.mod': {
+        loadAfter: { 'other.mod': { comment: [] } },
+        loadBefore: { 'keep.mod': { comment: [] } },
+      },
+    },
+  }))
+  await removePromise
+
+  assert.deepEqual(ruleStore.userModRules, {
+    'demo.mod': {
+      loadAfter: { 'other.mod': { comment: [] } },
+      loadBefore: { 'keep.mod': { comment: [] } },
+    },
+  })
+}
+
 async function testUpdateUserDataRuleInputsRefreshRuleState() {
   resetStores({
     mod_user_data_update: async () => ok(),
@@ -766,6 +860,10 @@ async function testQueuedReplaceScanOverridesPreserveScan() {
 for (const test of [
   testSettingsSourceChangeForcesCoreRefresh,
   testIssueSettingsRefreshModData,
+  testRuleLoadingIsSharedBeforeEditorReadsSources,
+  testRuleEditorRuleOperationsHandleMissingState,
+  testWorkshopRuleUpdateResetsBusyStateOnFailure,
+  testFailedUserRuleDeleteWaitsForStateRollback,
   testMultiplayerCompatibilitySettingRefreshesEnrichmentOnly,
   testToolModsSettingForcesCoreRefreshScan,
   testSteamLaunchPreferenceForcesCoreRefreshScan,

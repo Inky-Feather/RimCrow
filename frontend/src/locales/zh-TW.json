@@ -2322,6 +2322,9 @@
         "placeholder": "請輸入說明:",
         "title": "添加說明"
       },
+      "delete_relation": {
+        "message": "這會刪除目前 Mod 與 {name} 的這條模組關係規則。"
+      },
       "position": {
         "bottom_title": "設為置底",
         "placeholder": "選填：為什麼要強制放到這？",
@@ -2589,7 +2592,6 @@
         "supported_versions_desc": "導出模組支持的遊戲版本。",
         "tags_desc": "導出為 #tag1 #tag2 形式。",
         "url_desc": "導出模組來源網址。",
-        "workshop_id": "工坊 ID",
         "workshop_id_desc": "導出 Steam 創意工坊 ID。"
       },
       "preview": {
@@ -2629,6 +2631,49 @@
         "mod_message": "確定刪除該 Mod 規則嗎？",
         "title": "確認刪除"
       }
+    },
+    "sort_conflict": {
+      "action_failed": "規則操作儲存失敗",
+      "apply": "儲存並重新排序",
+      "apply_failed": "儲存規則失敗，請重試。",
+      "back_to_overview": "全部規則線",
+      "card_description": "該模組在{source}中的完整關係規則",
+      "card_disable_tooltip": "儲存後停用 {mod} 的{source}，會影響卡片內顯示的全部關係。",
+      "card_enable_tooltip": "儲存後啟用 {mod} 的{source}。",
+      "count": "{count} 組循環",
+      "delete_relation_message": "儲存後會刪除 {owner} 與 {target} 的這條模組關係規則。",
+      "delete_user_relation": "刪除這條模組關係規則",
+      "edge_count": "{count} 條規則線",
+      "footer_hint": "已按目前能滿足最多規則的順序完成排序；紅色規則線是本次被忽略的規則。\n可選擇要調整的規則，儲存後會寫入規則設定並自動重新排序。",
+      "footer_pending_hint": "已選擇 {count} 項規則修改，左側視圖已預覽影響；儲存後會寫入設定並重新排序。",
+      "global_disable_tooltip": "關閉整套{source}，該來源的排序規則將不會參與自動排序與衝突計算。",
+      "global_enable_tooltip": "啟用整套{source}，該來源的排序規則將會參與自動排序與衝突計算。",
+      "graph_hint": "懸停查看規則來源，點擊規則線查看和處理",
+      "group_number": "衝突 {index}",
+      "groups_title": "衝突鏈路",
+      "ignored_rule": "已忽略",
+      "kept_rule": "已保留",
+      "line_overview_title": "衝突規則線",
+      "map_title": "無法同時滿足的最小閉環",
+      "native_hint": "原生規則由 Mod 內部宣告，不能單獨停用。",
+      "relation_dependency": "依賴模組",
+      "relation_predecessor": "前置模組",
+      "relation_successor": "後置模組",
+      "rule_count": "{count} 條",
+      "rule_sentence": "{target} 是 {owner} 的 {relation}",
+      "rule_sentence_is": "是",
+      "rule_sentence_of": "的",
+      "selected_line_rules": "目前規則線",
+      "shadowed_rule_suffix": "（被{source}覆蓋）",
+      "source_short_community": "社群",
+      "source_short_dynamic": "動態",
+      "source_short_native": "原生",
+      "source_short_user": "使用者",
+      "source_short_workshop": "工坊",
+      "subtitle": "{mods} 個 Mod 的排序規則形成閉環，任何順序都會違反至少一條規則。",
+      "title": "排序規則衝突",
+      "view_all": "總覽",
+      "view_group": "單組"
     },
     "steam": {
       "unsubscribe_confirm": "確認取消訂閱",
@@ -3689,8 +3734,7 @@
       "version_mismatch": "^^{title}^^：不支持目前遊戲版本··[[{version}]]·· \n __(支持: ··{supported}··)__"
     },
     "prefix": {
-      "sort_error": "!!排序錯誤!!",
-      "sort_warning": "^^排序警告^^"
+      "sort_error": "!!排序錯誤!!"
     },
     "source": {
       "unknown_rule": "未知規則"
@@ -5429,7 +5473,6 @@
         "last_active": "最後啟用時間：",
         "workshop_update": "工坊更新時間："
       },
-      "unknown_version": "未知版本",
       "view_all_compact": "查看全部({count})"
     },
     "mod_item": {
@@ -5599,7 +5642,6 @@
         "current_profile": "目前環境",
         "open_manager": "管理環境中心"
       },
-      "unknown_version": "未知版本",
       "unnamed_profile": "未命名環境",
       "version_unknown": "版本未知"
     },
@@ -5637,7 +5679,8 @@
         "enable_rules": "啟用規則",
         "export_bundle": "導出配置包",
         "import_bundle": "導入配置包",
-        "update_library": "手動更新庫"
+        "update_library": "手動更新庫",
+        "delete_relation": "刪除模組關係規則"
       },
       "action_text": {
         "load_after": "在 {name} 之後",
@@ -5705,7 +5748,7 @@
       "source": {
         "community": "社區規則",
         "dynamic": "動態規則",
-        "native": "原版規則",
+        "native": "原生規則",
         "user": "使用者規則",
         "workshop": "創意工坊規則"
       },
@@ -6377,7 +6420,6 @@
       "never_run": "未運行",
       "none": "無",
       "selected": "已選擇",
-      "unknown_version": "未知版本",
       "unsaved_changes": "未儲存更改"
     },
     "tag": {
@@ -7134,7 +7176,6 @@
             "tooltip": "公開點贊數量。適合結合評分一起看口碑。"
           },
           "workshop_id": {
-            "title": "工坊 ID",
             "tooltip": "Steam 工坊項目的唯一編號。單擊可複製。"
           }
         },

@@ -478,7 +478,7 @@ const filterInstalled = ref(true) // 默认开启“仅显示已安装”
 const editingRule = ref(null)
 
 watch(() => appStore.uiState.showRuleDrawer, (visible) => {
-  if (visible && !ruleStore.hasLoaded) void ruleStore.fetchRules({ silent: true })
+  if (visible) void ruleStore.ensureRulesLoaded()
 }, { immediate: true })
 
 const tabs = computed(() => [
@@ -900,7 +900,7 @@ const toggleModRule = (modId) => {
 // --- 优先级排序逻辑 ---
 const sourceNames = computed(() => ({
   user: t('ui.rule_panel.source.user', '用户规则'),
-  native: t('ui.rule_panel.source.native', '原版规则'),
+  native: t('ui.rule_panel.source.native', '原生规则'),
   community: t('ui.rule_panel.source.community', '社区规则'),
   dynamic: t('ui.rule_panel.source.dynamic', '动态规则'),
   workshop: t('ui.rule_panel.source.workshop', '创意工坊规则'),

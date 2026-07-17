@@ -2322,6 +2322,9 @@
         "placeholder": "메모 입력:",
         "title": "메모 추가"
       },
+      "delete_relation": {
+        "message": "현재 Mod와 {name} 사이의 이 모드 관계 규칙을 삭제합니다."
+      },
       "position": {
         "bottom_title": "하단에 고정",
         "placeholder": "선택사항: 왜 이 위치를 강요하나요?",
@@ -2589,7 +2592,6 @@
         "supported_versions_desc": "각 모드에 대해 지원되는 게임 버전을 내보냅니다.",
         "tags_desc": "#tag1 #tag2로 내보냅니다.",
         "url_desc": "모드 소스 URL을 내보냅니다.",
-        "workshop_id": "Workshop ID",
         "workshop_id_desc": "Steam Workshop ID를 내보냅니다."
       },
       "preview": {
@@ -2629,6 +2631,49 @@
         "mod_message": "이 모드 규칙을 삭제하시겠습니까?",
         "title": "삭제 확인"
       }
+    },
+    "sort_conflict": {
+      "action_failed": "규칙 변경 사항을 저장하지 못했습니다",
+      "apply": "저장 후 다시 정렬",
+      "apply_failed": "규칙 저장에 실패했습니다. 다시 시도하세요.",
+      "back_to_overview": "모든 규칙 선",
+      "card_description": "이 모드의 {source} 전체 관계 규칙",
+      "card_disable_tooltip": "저장하면 {mod}의 {source}이(가) 비활성화되며, 카드에 표시된 모든 관계에 영향을 줍니다.",
+      "card_enable_tooltip": "저장하면 {mod}의 {source}이(가) 활성화됩니다.",
+      "count": "{count}개 순환",
+      "delete_relation_message": "저장하면 {owner}와 {target} 사이의 이 모드 관계 규칙이 삭제됩니다.",
+      "delete_user_relation": "이 모드 관계 규칙 삭제",
+      "edge_count": "규칙 선 {count}개",
+      "footer_hint": "현재 가장 많은 규칙을 만족하는 순서로 정렬했습니다. 빨간 규칙 선은 이번에 무시된 규칙입니다.\n조정할 규칙을 선택할 수 있으며, 저장하면 규칙 설정에 반영되고 자동으로 다시 정렬됩니다.",
+      "footer_pending_hint": "규칙 변경 {count}개를 선택했습니다. 왼쪽 보기에서 영향을 미리 보여주며, 저장하면 설정에 반영되고 다시 정렬됩니다.",
+      "global_disable_tooltip": "전체 {source}을(를) 끕니다. 이 출처의 정렬 규칙은 자동 정렬과 충돌 계산에 참여하지 않습니다.",
+      "global_enable_tooltip": "전체 {source}을(를) 켭니다. 이 출처의 정렬 규칙은 자동 정렬과 충돌 계산에 참여합니다.",
+      "graph_hint": "마우스를 올려 규칙 출처를 보고, 규칙 선을 클릭해 확인 및 처리",
+      "group_number": "충돌 {index}",
+      "groups_title": "충돌 체인",
+      "ignored_rule": "무시됨",
+      "kept_rule": "유지됨",
+      "line_overview_title": "충돌 규칙 선",
+      "map_title": "동시에 만족할 수 없는 최소 순환",
+      "native_hint": "원본 규칙은 Mod 내부에서 선언되며 개별적으로 비활성화할 수 없습니다.",
+      "relation_dependency": "의존 모드",
+      "relation_predecessor": "선행 모드",
+      "relation_successor": "후행 모드",
+      "rule_count": "{count}개",
+      "rule_sentence": "{target}은(는) {owner}의 {relation}입니다",
+      "rule_sentence_is": "은(는)",
+      "rule_sentence_of": "의",
+      "selected_line_rules": "현재 규칙 선",
+      "shadowed_rule_suffix": "({source}에 의해 덮어씀)",
+      "source_short_community": "커뮤니티",
+      "source_short_dynamic": "동적",
+      "source_short_native": "원본",
+      "source_short_user": "사용자",
+      "source_short_workshop": "워크샵",
+      "subtitle": "{mods}개 Mod의 정렬 규칙이 순환을 형성하여 어떤 순서에서도 하나 이상의 규칙을 위반합니다.",
+      "title": "정렬 규칙 충돌",
+      "view_all": "개요",
+      "view_group": "단일 그룹"
     },
     "steam": {
       "unsubscribe_confirm": "구독 취소 확인",
@@ -3689,8 +3734,7 @@
       "version_mismatch": "^^{title}^^: 현재 게임 버전을 지원하지 않습니다 ··[[{version}]]·· \n __(지원: ··{supported}··)__"
     },
     "prefix": {
-      "sort_error": "!!정렬 오류!!",
-      "sort_warning": "^^정렬 경고^^"
+      "sort_error": "!!정렬 오류!!"
     },
     "source": {
       "unknown_rule": "알 수 없는 규칙"
@@ -5429,7 +5473,6 @@
         "last_active": "마지막 활성화:",
         "workshop_update": "Workshop 업데이트됨:"
       },
-      "unknown_version": "알 수 없는 버전",
       "view_all_compact": "모두 보기 ({count})"
     },
     "mod_item": {
@@ -5599,7 +5642,6 @@
         "current_profile": "현재 프로필",
         "open_manager": "프로필 관리"
       },
-      "unknown_version": "알 수 없는 버전",
       "unnamed_profile": "이름이 없는 프로필",
       "version_unknown": "버전을 알 수 없음"
     },
@@ -5637,7 +5679,8 @@
         "enable_rules": "규칙 활성화",
         "export_bundle": "구성 번들 내보내기",
         "import_bundle": "구성 번들 가져오기",
-        "update_library": "라이브러리 업데이트"
+        "update_library": "라이브러리 업데이트",
+        "delete_relation": "모드 관계 규칙 삭제"
       },
       "action_text": {
         "load_after": "{name} 이후",
@@ -5705,7 +5748,7 @@
       "source": {
         "community": "커뮤니티 규칙",
         "dynamic": "동적 규칙",
-        "native": "기본 규칙",
+        "native": "원본 규칙",
         "user": "사용자 규칙",
         "workshop": "Workshop 규칙"
       },
@@ -6377,7 +6420,6 @@
       "never_run": "절대",
       "none": "없음",
       "selected": "선택된",
-      "unknown_version": "알 수 없는 버전",
       "unsaved_changes": "저장되지 않은 변경사항"
     },
     "tag": {
@@ -7134,7 +7176,6 @@
             "tooltip": "공개 찬성 투표 수. 평판 평가와 함께 유용합니다."
           },
           "workshop_id": {
-            "title": "Workshop ID",
             "tooltip": "Steam Workshop 항목의 고유 ID입니다. 복사하려면 클릭하세요."
           }
         },

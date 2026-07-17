@@ -843,6 +843,28 @@ class RuleManager:
                 }
         def _is_rule_value_enabled(value: Any) -> bool:
             return value is True or str(value).strip().lower() == "true"
+        def _make_rule(category: str, target_id: str, source_type: str, source_name: str,
+                       is_force: bool, alternatives: list, detail: Any, priority_idx: int):
+            return {
+                "target_id": target_id,
+                "type": category,
+                "version_requirement": ["all"], # 输出时已是清洗过的，统一标为 all 即可
+                "alternatives": alternatives or [],
+                "is_force": is_force,
+                "effective": True,
+                "source": {
+                    "type": source_type,
+                    "name": source_name,
+                    "detail": detail
+                },
+                "priority_idx": priority_idx # 内部计算字段，最终剔除
+            }
+        def _shadow_rule(rule: dict, shadowed_by: dict):
+            # 同一关系的低优先级来源不参与排序，但要保留下来供冲突弹窗解释“还有谁也定义了这条规则”。
+            shadowed = {key: value for key, value in rule.items() if key not in ("priority_idx", "shadowed_rules")}
+            shadowed["effective"] = False
+            shadowed["shadowed_by"] = shadowed_by
+            return shadowed
         def _merge_rule(category: str, target_id: str, source_type: str, source_name: str, 
                         is_force: bool = False, alternatives: list = [], detail: Any = None):
             target_id = str(target_id or "").strip().lower()
@@ -850,6 +872,7 @@ class RuleManager:
             
             new_p_idx = self.get_source_priority(source_type)
             current = rules_map[category].get(target_id)
+            new_rule = _make_rule(category, target_id, source_type, source_name, is_force, alternatives, detail, new_p_idx)
             
             # 如果当前没有规则，或者新规则的优先级更高(索引更小)，则覆盖
             should_override = False
@@ -861,19 +884,12 @@ class RuleManager:
                 should_override = True  # 二者同为强制(或同为非强制)，遵循来源优先级（如：用户的强制 覆盖 原版的强制）
                 
             if should_override:
-                rules_map[category][target_id] = {
-                    "target_id": target_id,
-                    "type": category,
-                    "version_requirement": ["all"], # 输出时已是清洗过的，统一标为 all 即可
-                    "alternatives": alternatives or [],
-                    "is_force": is_force,
-                    "source": {
-                        "type": source_type,
-                        "name": source_name,
-                        "detail": detail
-                    },
-                    "priority_idx": new_p_idx # 内部计算字段，最终剔除
-                }
+                if current:
+                    shadowed_rules = [current, *current.get("shadowed_rules", [])]
+                    new_rule["shadowed_rules"] = [_shadow_rule(rule, new_rule["source"]) for rule in shadowed_rules]
+                rules_map[category][target_id] = new_rule
+            else:
+                current.setdefault("shadowed_rules", []).append(_shadow_rule(new_rule, current["source"]))
 
         # 1. Native (About.xml) - 优先级: native
         # 不受黑名单机制影响，严格执行游戏版本过滤
@@ -952,9 +968,9 @@ class RuleManager:
                 rule_name = rule.get("name", "动态规则")
                 act_type = act.get("type")
                 if act_type == "load_after":
-                    _merge_rule("load_after", act.get("value"), "dynamic", rule_name)
+                    _merge_rule("load_after", act.get("value"), "dynamic", rule_name, detail={"rule_id": rule.get("rule_id")})
                 elif act_type == "load_before":
-                    _merge_rule("load_before", act.get("value"), "dynamic", rule_name)
+                    _merge_rule("load_before", act.get("value"), "dynamic", rule_name, detail={"rule_id": rule.get("rule_id")})
                 # [新增] 集中处理动态规则的权重干预，并利用已有的 _apply_weight_override 参与优先级竞争
                 elif act_type == "weight_shift":
                     shift_value, _, _ = self._clamp_dynamic_shift(act.get("value", 0), default=0)

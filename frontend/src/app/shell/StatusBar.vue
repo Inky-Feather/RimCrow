@@ -114,7 +114,7 @@
     <div class="flex items-center gap-2 hover:text-text-main">
       <span>{{ t('ui.status_bar.last_app_run', '上次软件运行') }}：{{ formatDate(appStore.settings.last_run_time) || t('ui.status_bar.never_run', '未运行') }}</span> |
       <span>{{ t('ui.status_bar.last_game_run', '上次游戏运行') }}：{{ formatDate(profileStore.currentProfile?.last_played_time) || t('ui.status_bar.never_run', '未运行') }}</span> |
-      <span>RimWorld {{ profileStore.activeContext.game_version || t('ui.status_bar.unknown_version', '未知版本') }}</span>
+      <span>RimWorld {{ profileStore.activeContext.game_version || t('common.status.unknown_version', '版本未知') }}</span>
     </div>
   </div>
 </template>

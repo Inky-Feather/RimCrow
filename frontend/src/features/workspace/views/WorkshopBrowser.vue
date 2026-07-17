@@ -243,9 +243,9 @@
             </span>
             <!-- 项目信息 -->
             <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
-              <button type="button" v-tooltip="t('ui.workspace.workshop.detail.workshop_id.tooltip', 'Steam 工坊项目的唯一编号。单击可复制。')" class="group relative workshop-detail-chip border-accent-primary/20 bg-accent-primary/10 pr-7 text-left transition-colors hover:border-accent-primary/36 hover:bg-accent-primary/14 active:scale-[0.99]" @click.stop="copyHeaderValue(t('ui.workspace.workshop.detail.workshop_id.title', '工坊 ID'), selectedIdLabel)">
+              <button type="button" v-tooltip="t('ui.workspace.workshop.detail.workshop_id.tooltip', 'Steam 工坊项目的唯一编号。单击可复制。')" class="group relative workshop-detail-chip border-accent-primary/20 bg-accent-primary/10 pr-7 text-left transition-colors hover:border-accent-primary/36 hover:bg-accent-primary/14 active:scale-[0.99]" @click.stop="copyHeaderValue(t('common.field.workshop_id', '工坊 ID'), selectedIdLabel)">
                 <Hash class="workshop-detail-chip__icon text-accent-primary" />
-                <span class="workshop-detail-chip__title">{{ t('ui.workspace.workshop.detail.workshop_id.title', '工坊 ID') }}</span>
+                <span class="workshop-detail-chip__title">{{ t('common.field.workshop_id', '工坊 ID') }}</span>
                 <span class="workshop-detail-chip__value">{{ selectedIdLabel }}</span>
                 <Copy class="size-3 text-text-dim " />
               </button>

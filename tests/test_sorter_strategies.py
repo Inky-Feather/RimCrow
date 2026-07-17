@@ -94,6 +94,39 @@ class TestOrderSorterStrategies(unittest.TestCase):
         )
         self.assertEqual(result["strategy"], "classic_sort_logic")
 
+    def test_weighted_graph_keeps_shadowed_rule_details(self):
+        source_group = AtomicGroup(["mod.source"])
+        target_group = AtomicGroup(["mod.target"])
+        self.sorter.rule_mgr.get_source_priority.side_effect = lambda source: {"user": 0, "community": 2}.get(source, 999)
+        self.sorter.effective_rules_cache = {
+            "mod.source": {
+                "dependencies": [],
+                "load_after": [{
+                    "target_id": "mod.target",
+                    "source": {"type": "user", "name": "用户前置"},
+                    "shadowed_rules": [{
+                        "target_id": "mod.target",
+                        "source": {"type": "community", "name": "社区前置"},
+                        "effective": False,
+                        "shadowed_by": {"type": "user", "name": "用户前置"},
+                    }],
+                }],
+                "load_before": [],
+            },
+            "mod.target": {"dependencies": [], "load_after": [], "load_before": []},
+        }
+
+        _, edge_details = self.sorter._build_weighted_graph(
+            [source_group, target_group],
+            {},
+            {"mod.source": source_group, "mod.target": target_group},
+        )
+
+        rules = edge_details[(id(target_group), id(source_group))]
+        self.assertEqual([rule["rule_source"]["type"] for rule in rules], ["user", "community"])
+        self.assertTrue(rules[0]["effective"])
+        self.assertFalse(rules[1]["effective"])
+
     def test_sort_uses_coexist_workshop_variant_rules_for_steam_token(self):
         mods_data = [{
             "package_id": "shared.mod",
@@ -692,6 +725,44 @@ class TestOrderSorterStrategies(unittest.TestCase):
 
         self.assertEqual(result["sorted_ids"], ["mod.core", "mod.blocker", "mod.lang"])
         self.assertTrue(any(w["type"] == "language_pack_follow_blocked" for w in result["warnings"]))
+
+
+class TestOrderSorterCycleDiagnostics(unittest.TestCase):
+    def setUp(self):
+        self.sorter = OrderSorter(SimpleNamespace(game_version="1.5.4100"))
+
+    def test_break_cycles_reports_shortest_chain_for_removed_rule(self):
+        group_a = AtomicGroup(["mod.a"])
+        group_b = AtomicGroup(["mod.b"])
+        group_c = AtomicGroup(["mod.c"])
+        groups_map = {id(group_a): group_a, id(group_b): group_b, id(group_c): group_c}
+        edge_details = {
+            (id(group_a), id(group_b)): [{
+                "source_mod": "mod.a", "target_mod": "mod.b", "rule_source": {"type": "dynamic", "name": "测试规则"},
+                "weight": 10, "is_force": False,
+            }],
+            (id(group_b), id(group_c)): [{
+                "source_mod": "mod.b", "target_mod": "mod.c", "rule_source": {"type": "community", "name": "社区前置"},
+                "weight": 20, "is_force": False,
+            }],
+            (id(group_c), id(group_a)): [{
+                "source_mod": "mod.c", "target_mod": "mod.a", "rule_source": {"type": "native", "name": "原生前置"},
+                "weight": 30, "is_force": False,
+            }],
+        }
+        adj = {
+            id(group_a): {id(group_b): 10},
+            id(group_b): {id(group_c): 20},
+            id(group_c): {id(group_a): 30},
+        }
+
+        warning = self.sorter._break_cycles(adj, edge_details, groups_map)[0]
+
+        self.assertEqual(warning["type"], "cycle_broken")
+        self.assertEqual(
+            [(edge["from_id"], edge["to_id"]) for edge in warning["cycle"]],
+            [("mod.a", "mod.b"), ("mod.b", "mod.c"), ("mod.c", "mod.a")],
+        )
 
 
 if __name__ == "__main__":

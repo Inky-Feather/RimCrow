@@ -179,10 +179,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useModStore } from '../mod/stores/modStore'
 import { useRuleStore } from './ruleStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
+import { normalizePackageId } from '../mod/lib/modIdentity'
 import { ArrowUpToLine, ArrowDownToLine } from 'lucide-vue-next'
 
 import ModItem from '../mod/ModItem.vue'
@@ -221,6 +222,16 @@ const absPos = computed(() => {
 })
 
 const targetMod = computed(() => modStore.takeModById(ruleStore.currentId))
+const targetPackageId = computed(() => normalizePackageId(targetMod.value?.package_id || ruleStore.currentId))
+
+watch(
+  () => [ruleStore.currentId, ruleStore.hasLoaded],
+  ([currentId, hasLoaded]) => {
+    if (currentId && !hasLoaded) void ruleStore.ensureRulesLoaded()
+  },
+  { immediate: true },
+)
+
 const isLanguagePackMod = computed(() => {
   const modType = String(targetMod.value?.user_mod_type || targetMod.value?.mod_type || '').trim()
   return modType === 'LanguagePack'
@@ -269,13 +280,13 @@ const getNativeRules = (type) => {
 }
 // 2. Community
 const getCommunityRules = (type) => {
-  const rules = ruleStore.communityModRules[targetMod.value?.package_id]
+  const rules = ruleStore.communityModRules[targetPackageId.value]
   if (!rules || !rules[type]) return []
   return rules[type]
 }
 // 3. Workshop
 const getWorkshopRules = (type) => {
-  const rules = ruleStore.workshopModRules[targetMod.value?.package_id]
+  const rules = ruleStore.workshopModRules[targetPackageId.value]
   if (!rules) return {}
   if (type !== 'loadAfter') return rules[type] || {}
   // 强依赖模式的外置规则保存在 dependencies，展示时仍归入“前置”关系。
@@ -283,7 +294,7 @@ const getWorkshopRules = (type) => {
 }
 // 4. User
 const getUserRules = (type) => {
-  const rules = ruleStore.userModRules[targetMod.value?.package_id]
+  const rules = ruleStore.userModRules[targetPackageId.value]
   if (!rules || !rules[type]) return []
   const userRules = Object.entries(rules[type]).map(([modId, info]) => {
     return {
@@ -295,11 +306,22 @@ const getUserRules = (type) => {
 }
 // 格式化注释为 Tooltip 格式
 const formatCommTooltip = (info) => {
+  if (typeof info === 'string') return info
+  if (!info) return null
   if (!info.comment) return null
   return Array.isArray(info.comment) ? info.comment.join('\n') : info.comment
 }
 // 移除用户规则
-const removeUserRule = async (ruleType, otherId) => {
+const removeUserRule = async (ruleType, otherId, e) => {
+  const ok = await confirmStore.open({
+    title: t('ui.rule_panel.action.delete_relation', '删除模组关系规则'),
+    message: t('dialog.mod_rule_editor.delete_relation.message', '这会删除当前 Mod 与 {name} 的这条模组关系规则。', { name: modStore.displayModName(otherId) }),
+    mode: 'confirm',
+    type: 'warning',
+    confirmText: t('common.action.delete', '删除'),
+    cancelText: t('common.action.cancel', '取消'),
+  }, e)
+  if (!ok) return
   await ruleStore.removeUserModRuleItem(targetMod.value?.package_id, ruleType, otherId)
 }
 // 添加说明
@@ -322,9 +344,10 @@ const onDrop = async (e, ruleType) => {
   const selectedIds = (modStore.selectedIds || []).map(id => String(id || '').toLowerCase()).filter(Boolean)
   const sourceIds = selectedIds.includes(String(sourceId || '').toLowerCase()) ? selectedIds : [sourceId]
   for (const id of sourceIds) {
-    if (!id || id === targetMod.value?.package_id) continue
+    const packageId = normalizePackageId(id)
+    if (!packageId || packageId === targetPackageId.value) continue
     // 调用 RuleStore 添加规则
-    await ruleStore.addUserModRule(targetMod.value?.package_id, ruleType, id)
+    await ruleStore.addUserModRule(targetPackageId.value, ruleType, packageId)
   }
 }
 

@@ -2322,6 +2322,9 @@
         "placeholder": "Enter note:",
         "title": "Add note"
       },
+      "delete_relation": {
+        "message": "This will delete this mod relationship rule between the current Mod and {name}."
+      },
       "position": {
         "bottom_title": "Pin to bottom",
         "placeholder": "Optional: why force this position?",
@@ -2589,7 +2592,6 @@
         "supported_versions_desc": "Export supported game versions for each mod.",
         "tags_desc": "Export as #tag1 #tag2.",
         "url_desc": "Export mod source URL.",
-        "workshop_id": "Workshop ID",
         "workshop_id_desc": "Export Steam Workshop ID."
       },
       "preview": {
@@ -2629,6 +2631,49 @@
         "mod_message": "Delete this mod rule?",
         "title": "Confirm deletion"
       }
+    },
+    "sort_conflict": {
+      "action_failed": "Failed to save rule changes",
+      "apply": "Save and sort again",
+      "apply_failed": "Failed to save rules. Please try again.",
+      "back_to_overview": "All rule lines",
+      "card_description": "All relationship rules for this mod in {source}",
+      "card_disable_tooltip": "After saving, {source} for {mod} will be disabled. This affects all relationships shown in this card.",
+      "card_enable_tooltip": "After saving, {source} for {mod} will be enabled.",
+      "count": "{count} cycles",
+      "delete_relation_message": "Saving will delete this mod relationship rule between {owner} and {target}.",
+      "delete_user_relation": "Delete this mod relationship rule",
+      "edge_count": "{count} rule lines",
+      "footer_hint": "The list has been sorted in the order that satisfies the most rules. Red rule lines are the rules ignored this time.\nChoose rules to adjust; after saving, the rule configuration will be updated and sorted again automatically.",
+      "footer_pending_hint": "{count} rule changes selected. The left view previews the impact; saving will update the configuration and sort again.",
+      "global_disable_tooltip": "Disable all {source}; sorting rules from this source will not participate in auto-sorting or conflict checks.",
+      "global_enable_tooltip": "Enable all {source}; sorting rules from this source will participate in auto-sorting and conflict checks.",
+      "graph_hint": "Hover to view rule sources; click a rule line to view and handle it",
+      "group_number": "Conflict {index}",
+      "groups_title": "Conflict chain",
+      "ignored_rule": "Ignored",
+      "kept_rule": "Kept",
+      "line_overview_title": "Conflicting rule lines",
+      "map_title": "Smallest cycle that cannot be satisfied at the same time",
+      "native_hint": "Native rules are declared inside the Mod and cannot be disabled separately.",
+      "relation_dependency": "Dependency mod",
+      "relation_predecessor": "Preceding mod",
+      "relation_successor": "Following mod",
+      "rule_count": "{count}",
+      "rule_sentence": "{target} is {owner}'s {relation}",
+      "rule_sentence_is": "is",
+      "rule_sentence_of": "'s",
+      "selected_line_rules": "Current rule line",
+      "shadowed_rule_suffix": " (overridden by {source})",
+      "source_short_community": "Community",
+      "source_short_dynamic": "Dynamic",
+      "source_short_native": "Native",
+      "source_short_user": "User",
+      "source_short_workshop": "Workshop",
+      "subtitle": "Sorting rules for {mods} Mods form a cycle. Any order will violate at least one rule.",
+      "title": "Sorting rule conflict",
+      "view_all": "Overview",
+      "view_group": "Single group"
     },
     "steam": {
       "unsubscribe_confirm": "Confirm unsubscribe",
@@ -3689,8 +3734,7 @@
       "version_mismatch": "^^{title}^^: does not support the current game version ··[[{version}]]·· \n __(Supported: ··{supported}··)__"
     },
     "prefix": {
-      "sort_error": "!!Sort Error!!",
-      "sort_warning": "^^Sort Warning^^"
+      "sort_error": "!!Sort Error!!"
     },
     "source": {
       "unknown_rule": "Unknown rule"
@@ -5429,7 +5473,6 @@
         "last_active": "Last activated:",
         "workshop_update": "Workshop updated:"
       },
-      "unknown_version": "Unknown version",
       "view_all_compact": "View all ({count})"
     },
     "mod_item": {
@@ -5599,7 +5642,6 @@
         "current_profile": "Current profile",
         "open_manager": "Manage profiles"
       },
-      "unknown_version": "Unknown version",
       "unnamed_profile": "Unnamed profile",
       "version_unknown": "Version unknown"
     },
@@ -5637,7 +5679,8 @@
         "enable_rules": "Enable rules",
         "export_bundle": "Export config bundle",
         "import_bundle": "Import config bundle",
-        "update_library": "Update library"
+        "update_library": "Update library",
+        "delete_relation": "Delete mod relationship rule"
       },
       "action_text": {
         "load_after": "After {name}",
@@ -6377,7 +6420,6 @@
       "never_run": "Never",
       "none": "None",
       "selected": "Selected",
-      "unknown_version": "Unknown version",
       "unsaved_changes": "Unsaved changes"
     },
     "tag": {
@@ -7134,7 +7176,6 @@
             "tooltip": "Public upvote count. Useful together with rating for reputation."
           },
           "workshop_id": {
-            "title": "Workshop ID",
             "tooltip": "Unique ID of the Steam Workshop item. Click to copy."
           }
         },

@@ -228,6 +228,8 @@
     </div>
     <!-- 重复包名冲突弹窗 -->
     <ConflictResolver v-if="hasPendingConflicts" />
+    <!-- 排序规则冲突弹窗 -->
+    <SortRuleConflictResolver v-if="modStore.pendingSortConflict" />
 
     <!-- AI 生成数据弹窗 -->
     <ModAliasReviewModal v-if="appStore.uiState.showModAliasReviewModal" />
@@ -358,6 +360,7 @@ const SettingsModal = defineAsyncComponent(() => import('../features/settings/Se
 const ListDiffView = defineAsyncComponent(() => import('../features/load-order/ListDiffView.vue'))
 const LogViewer = defineAsyncComponent(() => import('../features/app-log/LogViewer.vue'))
 const ConflictResolver = defineAsyncComponent(() => import('../features/dialogs/ConflictResolver.vue'))
+const SortRuleConflictResolver = defineAsyncComponent(() => import('../features/dialogs/SortRuleConflictResolver.vue'))
 const DebugPanel = defineAsyncComponent(() => import('../dev/DebugPanel.vue'))
 const RulePanel = defineAsyncComponent(() => import('../features/rules/RulePanel.vue'))
 const Confirm = defineAsyncComponent(() => import('../shared/components/modal/Confirm.vue'))

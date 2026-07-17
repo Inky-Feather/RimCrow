@@ -176,16 +176,16 @@ class OrderSorter:
                     targets_to_link = [r['target_id']] + r.get('alternatives', [])
                     for t in targets_to_link:
                         # 依赖关系天然带有强约束性质，但仍遵循 r.get('is_force') 以防特殊指定
-                        flat_rules.append((t, 'after', r['source'], r.get('is_force', True)))
+                        flat_rules.append((t, 'after', r['source'], r.get('is_force', True), r))
                         
                 # 2. 解析 Load After / Before
                 for r in effective_rules.get('load_after', []):
-                    flat_rules.append((r['target_id'], 'after', r['source'], r.get('is_force', False)))
+                    flat_rules.append((r['target_id'], 'after', r['source'], r.get('is_force', False), r))
                 for r in effective_rules.get('load_before', []):
-                    flat_rules.append((r['target_id'], 'before', r['source'], r.get('is_force', False)))
+                    flat_rules.append((r['target_id'], 'before', r['source'], r.get('is_force', False), r))
                     
                 # 3. 注入到图
-                for target_id, r_type, source_info, is_force in flat_rules:
+                for target_id, r_type, source_info, is_force, rule_info in flat_rules:
                     # 如果目标根本没被激活，跳过连线
                     if target_id not in mod_to_group: continue
                     
@@ -211,10 +211,31 @@ class OrderSorter:
                     edge_details[edge_key].append({
                         "source_mod": mid,
                         "target_mod": target_id,
+                        "relation_type": r_type,
                         "rule_source": source_info,
                         "weight": weight,
-                        "is_force": is_force
+                        "is_force": is_force,
+                        "effective": True,
                     })
+                    for shadowed in rule_info.get("shadowed_rules", []):
+                        shadowed_targets = [shadowed.get("target_id"), *shadowed.get("alternatives", [])]
+                        if target_id not in shadowed_targets:
+                            continue
+                        shadowed_source = shadowed.get("source", {})
+                        shadowed_force = shadowed.get("is_force", False)
+                        shadowed_weight = self.get_constraint_edge_weight(shadowed_source.get("type", "unknown"))
+                        if shadowed_force:
+                            shadowed_weight += self.CONSTRAINT_EDGE_FORCE_BONUS
+                        edge_details[edge_key].append({
+                            "source_mod": mid,
+                            "target_mod": target_id,
+                            "relation_type": r_type,
+                            "rule_source": shadowed_source,
+                            "weight": shadowed_weight,
+                            "is_force": shadowed_force,
+                            "effective": False,
+                            "shadowed_by": shadowed.get("shadowed_by"),
+                        })
 
                     # 更新图中的权重（保留同方向中最强的权重）
                     current_w = adj[u].get(v, 0)
@@ -233,6 +254,36 @@ class OrderSorter:
         5. 重复直到无环
         """
         warnings = []
+
+        def group_sort_key(gid):
+            return groups_map[gid].mod_ids[0].lower()
+
+        def find_shortest_path(start, end, removed_edge):
+            queue = deque([start])
+            previous = {start: None}
+            while queue:
+                current = queue.popleft()
+                if current == end:
+                    break
+                for neighbor in sorted(adj.get(current, {}), key=group_sort_key):
+                    if (current, neighbor) == removed_edge or neighbor in previous:
+                        continue
+                    previous[neighbor] = current
+                    queue.append(neighbor)
+            if end not in previous:
+                return []
+            path = []
+            while end is not None:
+                path.append(end)
+                end = previous[end]
+            return list(reversed(path))
+
+        def describe_edge(u, v):
+            return {
+                "from_id": groups_map[u].mod_ids[0],
+                "to_id": groups_map[v].mod_ids[0],
+                "rules": edge_details.get((u, v), []),
+            }
         
         # 辅助函数：深度优先搜索寻找环
         def find_cycle_path(curr, visited, stack, path_nodes):
@@ -240,7 +291,7 @@ class OrderSorter:
             stack.add(curr)
             path_nodes.append(curr)
             
-            for neighbor in list(adj[curr].keys()): # list() copy keys allowing modification
+            for neighbor in sorted(adj.get(curr, {}), key=group_sort_key):
                 if neighbor not in visited:
                     res = find_cycle_path(neighbor, visited, stack, path_nodes)
                     if res: return res
@@ -264,7 +315,7 @@ class OrderSorter:
             cycle_nodes = None
             
             # 遍历所有节点寻找环
-            nodes = list(adj.keys())
+            nodes = sorted(adj, key=group_sort_key)
             for node in nodes:
                 if node not in visited:
                     cycle_nodes = find_cycle_path(node, visited, stack, [])
@@ -282,28 +333,31 @@ class OrderSorter:
                 weight = adj[u][v]
                 cycle_edges.append((u, v, weight))
             
-            # 找到权重最小的边
-            # 如果权重相同，可以按稳定性排序（这里简单按遍历顺序）
-            min_edge = min(cycle_edges, key=lambda x: x[2])
+            # 权重相同时按包名稳定选择，避免规则录入顺序改变提示结果。
+            min_edge = min(cycle_edges, key=lambda x: (x[2], group_sort_key(x[0]), group_sort_key(x[1])))
             u_min, v_min, min_w = min_edge
             
             # 构造警告信息
             broken_rules = edge_details.get((u_min, v_min), [])
             # 取出权重匹配的规则作为“罪魁祸首”
-            culprit_rules = [r for r in broken_rules if r['weight'] == min_w]
+            culprit_rules = [r for r in broken_rules if r['weight'] == min_w and r.get("effective", True)]
             
             u_group_name = groups_map[u_min].mod_ids[0]
             v_group_name = groups_map[v_min].mod_ids[0]
+            shortest_path = find_shortest_path(v_min, u_min, (u_min, v_min))
+            cycle_edges = [(u_min, v_min)] + list(zip(shortest_path, shortest_path[1:]))
+            cycle = [describe_edge(u, v) for u, v in cycle_edges]
 
             for rule in culprit_rules:
                 warnings.append({
                     "type": "cycle_broken",
-                    "level": "warn",
-                    "message": f"为解决循环依赖，已忽略 {rule['rule_source']['name']}：[{rule['source_mod']}] 要求在 [{rule['target_mod']}] 之后/之前 的限制。",
+                    "level": "error",
+                    "message": f"排序规则形成循环，未采用 {rule['rule_source']['name']}：[{rule['source_mod']}] 与 [{rule['target_mod']}] 的顺序限制。",
                     "rule_type": rule['rule_source'],
                     "source_id": rule['source_mod'],
                     "target_id": rule['target_mod'],
                     "detail": rule,
+                    "cycle": cycle,
                 })
             
             # 物理删除边

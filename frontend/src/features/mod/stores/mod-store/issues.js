@@ -302,8 +302,8 @@ export const useModIssues = ({
 
         const targetName = displayModName(targetId)
         const sourceName = rule.source?.name || t('issue.source.unknown_rule', '未知规则')
-        const level = (rule.is_force || rule.source?.type==="native") ? ISSUE_LEVEL.ERROR : ISSUE_LEVEL.WARN
-        const prefix = rule.is_force ? t('issue.prefix.sort_error', '!!排序错误!!') : t('issue.prefix.sort_warning', '^^排序警告^^')
+        const level = ISSUE_LEVEL.ERROR
+        const prefix = t('issue.prefix.sort_error', '!!排序错误!!')
 
         if (activeIndexMap.get(targetId) > i) {
           _add(currentToken, ISSUE_TYPE.WARN_WRONG_ORDER, level,
@@ -319,8 +319,8 @@ export const useModIssues = ({
 
         const targetName = displayModName(targetId)
         const sourceName = rule.source?.name || t('issue.source.unknown_rule', '未知规则')
-        const level = rule.is_force ? ISSUE_LEVEL.ERROR : ISSUE_LEVEL.WARN
-        const prefix = rule.is_force ? t('issue.prefix.sort_error', '!!排序错误!!') : t('issue.prefix.sort_warning', '^^排序警告^^')
+        const level = ISSUE_LEVEL.ERROR
+        const prefix = t('issue.prefix.sort_error', '!!排序错误!!')
 
         if (activeIndexMap.get(targetId) < i) {
           _add(currentToken, ISSUE_TYPE.WARN_WRONG_ORDER, level,

@@ -18,7 +18,7 @@
       </Transition>
       <!-- Mod版本 -->
       <div v-tooltip="t('tooltip.mod_details.mod_version', 'Mod版本')" class="absolute top-1.5 left-2 px-1 py-0.5 rounded text-xs text-text-main font-bold text-shadow-lg bg-bg-surface/20 border border-border-base/5">
-        v {{ selectedMod.version ? selectedMod.version : t('ui.mod_details.unknown_version', '未知版本') }}
+        v {{ selectedMod.version ? selectedMod.version : t('common.status.unknown_version', '版本未知') }}
       </div>
       <!-- 支持版本标签 -->
       <div v-tooltip="t('tooltip.mod_details.supported_versions', '支持的游戏版本')" v-if="displayVersions.length" class="absolute p-0 top-1.5 right-2 z-10 pointer-events-none hover:opacity-20">

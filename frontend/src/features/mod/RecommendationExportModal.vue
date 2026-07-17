@@ -19,7 +19,7 @@
         <CommonSwitch :label="t('common.field.author', '作者')" v-model="form.includeAuthors" :description="t('dialog.recommendation_export.option.authors_desc', '导出模组作者名称。')" />
         <CommonSwitch :label="t('common.field.supported_versions', '支持版本')" v-model="form.includeSupportedVersions" :description="t('dialog.recommendation_export.option.supported_versions_desc', '导出模组支持的游戏版本。')" />
         <CommonSwitch :label="t('dialog.recommendation_export.option.language_packs', '附加语言包')" v-model="form.includeLanguagePacks" :description="t('dialog.recommendation_export.option.language_packs_desc', '把匹配的语言包名称和网址附在对应模组后。')" />
-        <CommonSwitch :label="t('dialog.recommendation_export.option.workshop_id', '工坊 ID')" v-model="form.includeWorkshopId" :description="t('dialog.recommendation_export.option.workshop_id_desc', '导出 Steam 创意工坊 ID。')" />
+        <CommonSwitch :label="t('common.field.workshop_id', '工坊 ID')" v-model="form.includeWorkshopId" :description="t('dialog.recommendation_export.option.workshop_id_desc', '导出 Steam 创意工坊 ID。')" />
         <CommonSwitch :label="t('common.field.url', '网址')" v-model="form.includeUrl" :description="t('dialog.recommendation_export.option.url_desc', '导出模组来源网址。')" />
         <CommonSwitch :label="t('common.field.package_id', '包名')" v-model="form.includePackageId" :description="t('dialog.recommendation_export.option.package_id_desc', '默认隐藏，适合需要精确定位时开启。')" />
       </div>

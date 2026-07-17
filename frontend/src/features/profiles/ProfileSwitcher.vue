@@ -13,7 +13,7 @@
         <span class="text-sm font-black text-text-soft tracking-wide">{{ profileStore.currentProfile?.name || t('ui.profiles.default_name', 'Default') }}</span>
         <div class="flex items-center gap-1">
             <span class="text-[0.6rem] text-text-dim uppercase tracking-tighter opacity-60">{{ t('ui.profiles.switcher.current_profile', '当前环境') }}</span>
-            <span class="text-[0.6rem] text-accent-tip bg-accent-success/20 px-2 py-0.5 rounded-full uppercase tracking-tighter opacity-60">{{ profileStore.currentProfile?.game_version || t('ui.profiles.unknown_version', '未知版本') }}</span>
+            <span class="text-[0.6rem] text-accent-tip bg-accent-success/20 px-2 py-0.5 rounded-full uppercase tracking-tighter opacity-60">{{ profileStore.currentProfile?.game_version || t('common.status.unknown_version', '版本未知') }}</span>
             <span v-if="runtimeProfileId && runtimeProfileId === profileStore.currentProfileId && appStore.runtimeSession?.state === 'running'" class="text-[0.6rem] text-accent-primary bg-accent-primary/15 px-2 py-0.5 rounded-full uppercase tracking-tighter opacity-80">{{ t('ui.profiles.running', '运行中') }}</span>
         </div>
       </div>
@@ -39,7 +39,7 @@
                 <div class="text-sm font-bold" :class="p.id === profileStore.currentProfileId ? 'text-accent-primary' : 'text-text-soft'">{{ p.name }}</div>
                 <span v-if="p.id === runtimeProfileId && appStore.runtimeSession?.state === 'running'" class="text-[0.55rem] px-1.5 py-0.5 rounded-full bg-accent-primary/15 text-accent-primary uppercase tracking-tighter">{{ t('ui.profiles.running', '运行中') }}</span>
               </div>
-              <div class="text-[0.65rem] text-text-dim truncate max-w-50">{{ p.game_version || t('ui.profiles.unknown_version', '未知版本') }}</div>
+              <div class="text-[0.65rem] text-text-dim truncate max-w-50">{{ p.game_version || t('common.status.unknown_version', '版本未知') }}</div>
             </div>
             <Quote v-if="p.description && p.check" v-tooltip="p.description" class="size-4 text-text-dim hover:text-accent-primary hover:scale-120 transition-all duration-300" />
             <AlertOctagon v-if="!p.check" v-tooltip="t('tooltip.profiles.unavailable', '当前环境不可用：\n^^{message}^^', { message: p.msg || '' })" class="size-4 text-accent-danger hover:scale-120 transition-all duration-300 cursor-help" />
