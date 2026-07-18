@@ -21,7 +21,7 @@ from backend.managers.mgr_network import build_retry_session, merge_headers
 from backend.settings import GIT_PROVIDER_CATALOG_DIR, HOME_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
-from backend.utils.tools import current_ms, extract_zip
+from backend.utils.tools import current_ms, extract_zip, normalize_package_id, normalize_package_ids
 
 
 @dataclass(frozen=True)
@@ -1025,6 +1025,48 @@ class GithubManager:
                 if item.get("source_id") == cached_info.get("source_id") and item.get("key") == cached_info.get("key"):
                     return self._refresh_catalog_zip_signature(item)
         return None
+
+    def get_cached_provider_catalog_install_sources_by_package_ids(self, package_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """只从本地 Git 推荐清单缓存按包名读取可用安装来源。"""
+        normalized_package_ids = set(normalize_package_ids(package_ids))
+        if not normalized_package_ids:
+            return {}
+
+        result: dict[str, list[dict[str, Any]]] = {}
+        seen_keys: set[str] = set()
+        for source in self._provider_catalog_sources():
+            cached = self._load_provider_catalog_source_cache(source)
+            if not isinstance(cached, dict):
+                continue
+            for item in cached.get("items") or []:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("not_recommended") or item.get("disabled"):
+                    continue
+                package_id = normalize_package_id(item.get("package_id"))
+                if package_id not in normalized_package_ids:
+                    continue
+                item_type = str(item.get("type") or "git").strip().lower()
+                install_type = "zip" if item_type == "zip" else str(item.get("install_type") or "source").strip() or "source"
+                url = str(item.get("url") or item.get("raw_url") or item.get("info_url") or "").strip()
+                if not url:
+                    continue
+                key = f"{package_id}|{url.lower()}"
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                result.setdefault(package_id, []).append({
+                    "package_id": package_id,
+                    "source_kind": "git",
+                    "install_type": install_type,
+                    "default_branch": str(item.get("branch") or item.get("default_branch") or "").strip(),
+                    "url": url,
+                    "name": str(item.get("name") or package_id).strip() or package_id,
+                    "supported_versions": list(item.get("game_versions") or []),
+                    "source_origin": "git_catalog",
+                    "info": item,
+                })
+        return result
 
     def _build_repo_artifact_request(self, owner: str, repo: str, *, repo_url: str, identity: GitRepoIdentity | None = None, is_release_mode: bool, target_version: str) -> GithubArtifactRequest:
         normalized_version = str(target_version or "").strip()

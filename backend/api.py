@@ -241,12 +241,14 @@ def log_api_call(func):
     def wrapper(self, *args, **kwargs):
         start_time = time.time()
         func_name = func.__name__
-        # 先递归脱敏，再截断过长内容，避免 API Key 等凭据写入调试日志。
+        if hasattr(self, "_mark_api_call_started"):
+            self._mark_api_call_started()
         safe_args = []
-        for arg in args:
-            text = str(redact_sensitive_data(arg))
-            safe_args.append(text[:50] + "..." if len(text) > 50 else text)
         try:
+            # 先递归脱敏，再截断过长内容，避免 API Key 等凭据写入调试日志。
+            for arg in args:
+                text = str(redact_sensitive_data(arg))
+                safe_args.append(text[:50] + "..." if len(text) > 50 else text)
             EventBus.resume() # 在执行操作前恢复事件总线
             # 执行原函数
             result = func(self, *args, **kwargs)
@@ -277,6 +279,9 @@ def log_api_call(func):
                 context={"api": func_name, "duration_ms": round(duration, 2)},
                 user_message=tr("api.errors.internal_api_failed", "操作未完成。软件内部接口执行异常，详细原因已写入系统日志，请稍后重试或重启软件。"),
             )
+        finally:
+            if hasattr(self, "_mark_api_call_finished"):
+                self._mark_api_call_finished()
             
     return wrapper
 
@@ -554,6 +559,8 @@ class API:
         self._native_drop_handler = None
         self._browser_base_url = ""
         self._browser_import_files: set[str] = set()
+        self._api_call_lock = threading.Lock()
+        self._api_call_threads: dict[int, int] = {}
         self._db_maintenance_lock = threading.Lock()
         self._db_background_task_lock = threading.Lock()
         self._db_background_tasks: dict[str, threading.Event] = {}
@@ -1064,6 +1071,37 @@ class API:
 
     def is_browser_runtime(self) -> bool:
         return self._runtime_mode == 'browser'
+
+    def _mark_api_call_started(self):
+        thread_id = threading.get_ident()
+        with self._api_call_lock:
+            self._api_call_threads[thread_id] = self._api_call_threads.get(thread_id, 0) + 1
+
+    def _mark_api_call_finished(self):
+        thread_id = threading.get_ident()
+        with self._api_call_lock:
+            count = self._api_call_threads.get(thread_id, 0) - 1
+            if count > 0:
+                self._api_call_threads[thread_id] = count
+            else:
+                self._api_call_threads.pop(thread_id, None)
+
+    def wait_for_api_idle(self, timeout: float = 2.0, *, exclude_current_thread: bool = True) -> bool:
+        """等待桌面 API 返回给前端后再切页，避免 pywebview 回调对象被页面重载清掉。"""
+        deadline = time.time() + max(0.0, float(timeout or 0))
+        current_thread = threading.get_ident()
+        while True:
+            with self._api_call_lock:
+                active = sum(
+                    count for thread_id, count in self._api_call_threads.items()
+                    if not exclude_current_thread or thread_id != current_thread
+                )
+            if active <= 0:
+                return True
+            if time.time() >= deadline:
+                logger.debug("[Monitor] 等待 API 空闲超时，继续切换静默页面: active_calls=%s", active)
+                return False
+            time.sleep(0.05)
 
     def set_browser_base_url(self, base_url: str):
         self._browser_base_url = str(base_url or "").rstrip("/")
@@ -8359,6 +8397,14 @@ class API:
                 if installed_version:
                     record.installed_version = installed_version
                 record.save()
+        download_version = installed_version
+        if install_type == "source":
+            download_version = target_branch
+        elif install_type == "zip":
+            download_version = str(info.get("catalog_signature") or "").strip()
+        elif install_type == "release":
+            download_version = installed_version or str(info.get("latest_release_tag") or "").strip()
+        self.github_trigger_download(url, install_type, download_version)
         return self.github_get_subscribed() # 返回最新列表
 
     @log_api_call

@@ -238,6 +238,15 @@ class LoadOrderManager:
         except Exception as e:
             logger.warning(f"读取包名补全详情失败: {e}")
 
+        install_sources_by_package_id = {}
+        try:
+            install_sources_by_package_id = ExtDAO.get_install_sources_by_package_ids(
+                parsed.package_ids,
+                current_game_version=self.context.game_version if self.context else "",
+            )
+        except Exception as e:
+            logger.warning(f"读取包名安装来源失败: {e}")
+
         details_by_workshop_id = {}
         try:
             details_by_workshop_id = ExtDAO.get_workshop_details_by_workshop_ids(parsed.workshop_ids)
@@ -249,6 +258,7 @@ class LoadOrderManager:
             parsed,
             installed_mods=installed_mods,
             details_by_package_id=details_by_package_id,
+            install_sources_by_package_id=install_sources_by_package_id,
             details_by_workshop_id=details_by_workshop_id,
             replacements_by_old_workshop_id=replacements_by_workshop_id,
             game_version=self.context.game_version,

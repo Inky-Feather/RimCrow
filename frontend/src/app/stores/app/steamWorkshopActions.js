@@ -112,14 +112,17 @@ export const useSteamWorkshopActions = ({
         .map(source => source.workshopId)
         .filter(Boolean)
     )]
+    const gitSources = normalizedSources.filter(source => source.kind === 'git' && source.url)
     const skippedUrlCount = normalizedSources.filter(source => source.kind === 'url').length
-    if (workshopIds.length === 0) {
+    if (workshopIds.length === 0 && gitSources.length === 0) {
       if (skippedUrlCount > 0) {
         toast.info(t('toast.steam.url_source_subscribe_unsupported', 'URL 来源暂不支持订阅，只能打开来源页或后续扩展下载流程。'))
       }
       return false
     }
-    const success = await subscribeWorkshopIds(workshopIds)
+    const workshopSuccess = workshopIds.length > 0 ? await subscribeWorkshopIds(workshopIds) : null
+    const gitSuccess = gitSources.length > 0 ? await subscribeGitInstallSources(gitSources) : null
+    const success = workshopSuccess || gitSuccess
     if (success && skippedUrlCount > 0) {
       toast.info(t('toast.steam.url_source_subscribe_skipped', '已跳过 {count} 个 URL 来源订阅项', { count: skippedUrlCount }))
     }
@@ -134,17 +137,62 @@ export const useSteamWorkshopActions = ({
         .map(source => source.workshopId)
         .filter(Boolean)
     )]
+    const gitSources = normalizedSources.filter(source => source.kind === 'git' && source.url)
     const urlSources = normalizedSources.filter(source => source.kind === 'url' && source.url)
-    if (workshopIds.length === 0 && urlSources.length === 0) return false
+    if (workshopIds.length === 0 && gitSources.length === 0 && urlSources.length === 0) return false
     let downloadResult = null
     if (workshopIds.length > 0) {
       downloadResult = await downloadWorkshopItems(workshopIds)
     }
+    const gitResult = gitSources.length > 0 ? await subscribeGitInstallSources(gitSources) : null
     if (urlSources.length > 0) {
       urlSources.forEach(source => openUrl(source.url))
       toast.info(t('toast.steam.url_sources_opened', '已打开 {count} 个外部来源，后续可接入专门下载流程。', { count: urlSources.length }))
     }
-    return downloadResult || urlSources.length > 0
+    return downloadResult || gitResult || urlSources.length > 0
+  }
+
+  const safeUrlHost = (url = '') => {
+    try {
+      return new URL(String(url || '')).hostname
+    } catch {
+      return ''
+    }
+  }
+
+  const buildGitSubscribePayload = (source) => {
+    const info = source.info && typeof source.info === 'object' ? source.info : {}
+    return {
+      url: source.url,
+      owner: info.owner || info.source_id || 'catalog',
+      repo: info.repo || info.name || source.packageId || 'catalog_mod',
+      provider: info.provider || '',
+      host: info.host || safeUrlHost(source.url),
+      default_branch: source.defaultBranch || info.branch || '',
+      install_type: source.installType || info.install_type || (info.type === 'zip' ? 'zip' : 'source'),
+      installed_version: '',
+      info: {
+        ...info,
+        package_id: info.package_id || source.packageId,
+        name: info.name || source.title,
+      },
+    }
+  }
+
+  const subscribeGitInstallSources = async (sources = []) => {
+    if (!window.pywebview) return false
+    let successCount = 0
+    for (const source of sources) {
+      const res = await window.pywebview.api.github_subscribe(buildGitSubscribePayload(source))
+      if (checkResult(res, t('check.github.subscribe_install_source', '订阅 Git 来源'), false, { silent: sources.length > 1 })) {
+        successCount += 1
+      }
+    }
+    if (successCount > 0) {
+      toast.info(t('toast.github.install_source_submitted', '已提交 {count} 个 Git 来源订阅，正在开始下载。', { count: successCount }), { timeout: 3000 })
+      return { success: true }
+    }
+    return false
   }
 
   const resolveWorkshopIdsFromPackageIds = async (packageIds) => {

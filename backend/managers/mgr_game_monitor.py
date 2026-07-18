@@ -316,9 +316,13 @@ class GameMonitor:
             
             if hasattr(self.api, 'scanner'): self.api.scanner.stop_scan() 
             
-            window.load_url(f"file://{self._get_default_idle_page_path()}")
-            time.sleep(0.5) 
-            self._trim_memory()
+            if hasattr(self.api, 'wait_for_api_idle'):
+                self.api.wait_for_api_idle(timeout=2.0, exclude_current_thread=True)
+            self._load_url_deferred(f"file://{self._get_default_idle_page_path()}")
+            def _trim_later():
+                time.sleep(0.6)
+                self._trim_memory()
+            threading.Thread(target=_trim_later, daemon=True).start()
         except Exception as e:
             logger.error(f"[Monitor] 进入静默模式失败：{e}")
             EventBus.resume()

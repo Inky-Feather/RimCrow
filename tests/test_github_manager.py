@@ -240,6 +240,52 @@ class TestGithubManager(unittest.TestCase):
         self.assertEqual(items["rimnude"]["depends"], ["rim.job.world"])
         self.assertNotIn("dependency_items", items["rimnude"])
 
+    def test_cached_provider_catalog_sources_by_package_id_skip_disabled_items(self):
+        source = self.manager._parse_provider_json_sources("RJW|https://example.invalid/providers.json")[0]
+        catalog_dir = self.temp_root / "git_catalogs"
+        original_provider_catalog_url = settings.config.git_provider_catalog_url
+        settings.config.git_provider_catalog_url = "RJW|https://example.invalid/providers.json"
+        self.addCleanup(setattr, settings.config, "git_provider_catalog_url", original_provider_catalog_url)
+        with patch("backend.managers.mgr_github.GIT_PROVIDER_CATALOG_DIR", catalog_dir):
+            self.manager._save_provider_catalog_source_cache(source, {
+                "source": {"id": source["id"], "label": "RJW", "type": "provider_json"},
+                "items": [
+                    {
+                        "key": "active",
+                        "source_id": source["id"],
+                        "type": "git",
+                        "name": "Active Git Mod",
+                        "package_id": "author.gitmod",
+                        "url": "https://gitgud.io/team/active",
+                        "raw_url": "https://gitgud.io/team/active.git",
+                        "workshop_url": "https://steamcommunity.com/sharedfiles/filedetails/?id=1234567890",
+                        "branch": "main",
+                        "game_versions": ["1.5"],
+                    },
+                    {
+                        "key": "disabled",
+                        "source_id": source["id"],
+                        "type": "git",
+                        "name": "Disabled Git Mod",
+                        "package_id": "author.disabled",
+                        "url": "https://gitgud.io/team/disabled",
+                        "not_recommended": True,
+                    },
+                ],
+            })
+
+            result = self.manager.get_cached_provider_catalog_install_sources_by_package_ids([
+                "author.gitmod",
+                "author.disabled",
+            ])
+
+        self.assertEqual(result["author.gitmod"][0]["source_kind"], "git")
+        self.assertEqual(result["author.gitmod"][0]["install_type"], "source")
+        self.assertEqual(result["author.gitmod"][0]["default_branch"], "main")
+        self.assertEqual(result["author.gitmod"][0]["url"], "https://gitgud.io/team/active")
+        self.assertEqual(result["author.gitmod"][0]["source_origin"], "git_catalog")
+        self.assertNotIn("author.disabled", result)
+
     def test_provider_catalog_sources_support_multiple_rows_and_builtin_owner(self):
         original_provider_catalog_url = settings.config.git_provider_catalog_url
         settings.config.git_provider_catalog_url = "RJW|https://example.invalid/rjw.json\nOther|https://example.invalid/other.json"

@@ -146,6 +146,33 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
 
         monitor._trim_memory()
 
+    def test_enter_idle_mode_waits_for_api_callbacks_before_loading_idle_page(self):
+        monitor = GameMonitor.__new__(GameMonitor)
+        window = SimpleNamespace(get_current_url=Mock(return_value="http://localhost/app"))
+        api = SimpleNamespace(
+            is_browser_runtime=Mock(return_value=False),
+            get_window=Mock(return_value=window),
+            wait_for_api_idle=Mock(return_value=True),
+        )
+        monitor.api = api
+        monitor.resume_url = None
+        monitor.idle_home_page_path = "idle.html"
+        monitor.manual_override_idle = False
+        monitor._create_idle_pages = Mock()
+        monitor._is_idle_page_url = Mock(return_value=False)
+        monitor._get_default_idle_page_path = Mock(return_value="idle.html")
+        monitor._load_url_deferred = Mock()
+        monitor._trim_memory = Mock()
+
+        with patch("backend.managers.mgr_game_monitor.EventBus.emit"), \
+             patch("backend.managers.mgr_game_monitor.EventBus.pause"), \
+             patch("backend.managers.mgr_game_monitor.threading.Thread") as thread_cls:
+            monitor._enter_idle_mode()
+
+        api.wait_for_api_idle.assert_called_once_with(timeout=2.0, exclude_current_thread=True)
+        monitor._load_url_deferred.assert_called_once_with("file://idle.html")
+        thread_cls.assert_called_once()
+
     def test_linux_detect_executable_accepts_proton_windows_binary(self):
         with TemporaryDirectory() as tmp:
             install_root = Path(tmp)

@@ -1359,6 +1359,9 @@
       "workshop_details_by_package": "Get Workshop details by package ID",
       "workshop_relation": "Get {label}",
       "workshop_search": "Workshop search"
+    },
+    "github": {
+      "subscribe_install_source": "[UNTRANSLATED] 订阅 Git 来源"
     }
   },
   "command": {
@@ -4694,6 +4697,9 @@
       "workshop_retranslated": "Description retranslated",
       "workshop_translated": "Description translated",
       "workshop_translation_cleared": "Translation cleared"
+    },
+    "github": {
+      "install_source_submitted": "[UNTRANSLATED] 已提交 {count} 个 Git 来源订阅，正在开始下载。"
     }
   },
   "tooltip": {

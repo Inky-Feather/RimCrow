@@ -37,12 +37,14 @@ class TestLoadOrderManagerImportCheck(unittest.TestCase):
 
             with patch("backend.managers.mgr_load_order.ModDAO.get_profile_mods", return_value=visible_mods) as get_profile_mods_mock, \
                  patch("backend.managers.mgr_load_order.ExtDAO.get_workshop_details_by_package_ids", return_value={}), \
+                 patch("backend.managers.mgr_load_order.ExtDAO.get_install_sources_by_package_ids", return_value={"author.package": {"original_sources": []}}), \
                  patch("backend.managers.mgr_load_order.ExtDAO.get_workshop_details_by_workshop_ids", return_value={}), \
                  patch("backend.managers.mgr_load_order.build_import_check_report", return_value={"summary": {}, "items": []}) as build_report_mock:
                 manager._build_import_check(parsed)
 
             get_profile_mods_mock.assert_called_once_with(context)
             self.assertEqual(build_report_mock.call_args.kwargs["installed_mods"], visible_mods)
+            self.assertEqual(build_report_mock.call_args.kwargs["install_sources_by_package_id"], {"author.package": {"original_sources": []}})
 
     def test_build_entries_from_parsed_keeps_steam_token_and_collapses_local_suffix(self):
         with tempfile.TemporaryDirectory() as temp_dir:

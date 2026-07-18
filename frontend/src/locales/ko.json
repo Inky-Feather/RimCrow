@@ -1359,6 +1359,9 @@
       "workshop_details_by_package": "패키지 ID로 Workshop 세부 정보 가져오기",
       "workshop_relation": "{label} 가져오기",
       "workshop_search": "Workshop 검색"
+    },
+    "github": {
+      "subscribe_install_source": "[UNTRANSLATED] 订阅 Git 来源"
     }
   },
   "command": {
@@ -4694,6 +4697,9 @@
       "workshop_retranslated": "설명이 다시 번역되었습니다.",
       "workshop_translated": "설명이 번역되었습니다.",
       "workshop_translation_cleared": "번역이 삭제되었습니다."
+    },
+    "github": {
+      "install_source_submitted": "[UNTRANSLATED] 已提交 {count} 个 Git 来源订阅，正在开始下载。"
     }
   },
   "tooltip": {

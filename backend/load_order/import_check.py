@@ -139,6 +139,21 @@ def _describe_source(source: dict[str, Any] | None) -> str:
     return str(source.get("url") or "").strip()
 
 
+def _first_install_source(raw_sources: list[dict[str, Any]] | None, fallback_package_id: str, *, is_replacement: bool = False) -> dict[str, Any] | None:
+    for raw_source in raw_sources or []:
+        if not isinstance(raw_source, dict):
+            continue
+        source = build_install_source(
+            raw_source,
+            fallback_package_id=fallback_package_id,
+            source_origin=str(raw_source.get("source_origin") or raw_source.get("sourceOrigin") or "install_source"),
+            is_replacement=bool(raw_source.get("is_replacement") or raw_source.get("isReplacement") or is_replacement),
+        )
+        if source:
+            return source
+    return None
+
+
 def _build_reason_text(
     status: str,
     import_workshop_id: str,
@@ -200,6 +215,7 @@ def _resolve_package_sources(
     import_workshop_id_valid: bool,
     import_source_url: str,
     package_lookup: dict[str, Any],
+    install_source_bundle: dict[str, Any],
     replacement_rule: dict[str, Any] | None,
     installed_candidates: list[ImportCheckInstalledCandidate],
     game_version: str,
@@ -217,6 +233,16 @@ def _resolve_package_sources(
 
     direct_workshop_id = normalize_workshop_id(direct_detail.get("workshop_id"))
     replacement_workshop_id = normalize_workshop_id(replacement_detail.get("workshop_id"))
+    install_source_bundle = install_source_bundle or {}
+    original_install_source = _first_install_source(
+        install_source_bundle.get("original_sources") or install_source_bundle.get("originalSources"),
+        normalized_package_id,
+    )
+    replacement_install_source = _first_install_source(
+        install_source_bundle.get("replacement_sources") or install_source_bundle.get("replacementSources"),
+        normalized_package_id,
+        is_replacement=True,
+    )
 
     if import_workshop_id_valid or import_source_url:
         original_source = build_install_source(
@@ -240,6 +266,8 @@ def _resolve_package_sources(
             fallback_package_id=normalized_package_id,
             source_origin="external_db",
         )
+    elif original_install_source:
+        original_source = original_install_source
 
     if replacement_workshop_id:
         replacement_source = build_install_source(
@@ -253,6 +281,8 @@ def _resolve_package_sources(
             source_origin="replacement",
             is_replacement=True,
         )
+    elif replacement_install_source:
+        replacement_source = replacement_install_source
 
     original_source_workshop_id = normalize_workshop_id((original_source or {}).get("workshop_id"))
 
@@ -266,6 +296,9 @@ def _resolve_package_sources(
         if direct_workshop_id:
             resolved_workshop_id = direct_workshop_id
             resolved_from = "external_db"
+        elif original_source_workshop_id:
+            resolved_workshop_id = original_source_workshop_id
+            resolved_from = "install_source"
         elif replacement_workshop_id:
             resolved_workshop_id = replacement_workshop_id
             resolved_from = "replacement"
@@ -316,6 +349,7 @@ def build_import_check_report(
     parsed: ParsedLoadOrderData,
     installed_mods: list[dict[str, Any]],
     details_by_package_id: dict[str, dict[str, Any]] | None = None,
+    install_sources_by_package_id: dict[str, dict[str, Any]] | None = None,
     details_by_workshop_id: dict[str, dict[str, Any]] | None = None,
     replacements_by_old_workshop_id: dict[str, dict[str, Any]] | None = None,
     game_version: str = "",
@@ -329,6 +363,7 @@ def build_import_check_report(
     """
 
     details_by_package_id = details_by_package_id or {}
+    install_sources_by_package_id = install_sources_by_package_id or {}
     details_by_workshop_id = details_by_workshop_id or {}
     replacements_by_old_workshop_id = replacements_by_old_workshop_id or {}
 
@@ -376,6 +411,7 @@ def build_import_check_report(
             import_workshop_id_valid=import_workshop_id_valid,
             import_source_url=import_source_url,
             package_lookup=package_lookup,
+            install_source_bundle=install_sources_by_package_id.get(normalized_package_id) or {},
             replacement_rule=replacement_rule,
             installed_candidates=installed_candidates,
             game_version=game_version,

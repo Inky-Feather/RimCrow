@@ -122,6 +122,12 @@ export const normalizeInstallSource = (raw = {}, fallbackPackageId = '') => {
   const source = raw && typeof raw === 'object' ? raw : {}
   const packageId = normalizePackageId(source.packageId || source.package_id || fallbackPackageId)
   const normalizedUrl = normalizeUrl(source.url || source.sourceUrl || source.source_url)
+  const sourceKind = String(source.kind || source.sourceKind || source.source_kind || '').trim().toLowerCase()
+  const installType = String(source.installType || source.install_type || '').trim() || 'source'
+  const defaultBranch = String(source.defaultBranch || source.default_branch || source.branch || '').trim()
+  const sourceOrigin = String(source.sourceOrigin || source.source_origin || '').trim() || 'unknown'
+  const title = String(source.title || source.name || packageId || normalizedUrl).trim()
+  const info = source.info && typeof source.info === 'object' ? source.info : null
   // workshopId 可以直接给，也可以从 url 中反推。
   const workshopId = normalizeWorkshopId(
     source.workshopId
@@ -132,15 +138,32 @@ export const normalizeInstallSource = (raw = {}, fallbackPackageId = '') => {
     ? [...new Set((source.supportedVersions || source.supported_versions).map(value => String(value || '').trim()).filter(Boolean))]
     : []
 
+  if (sourceKind === 'git') {
+    if (!normalizedUrl) return null
+    return {
+      kind: 'git',
+      packageId,
+      url: normalizedUrl,
+      title,
+      supportedVersions,
+      sourceOrigin,
+      isReplacement: !!source.isReplacement,
+      installType,
+      defaultBranch,
+      info,
+      urlSubtype: 'github',
+    }
+  }
+
   if (workshopId) {
     return {
       kind: 'workshop',
       packageId,
       workshopId,
       url: buildWorkshopUrl(workshopId),
-      title: String(source.title || source.name || packageId || workshopId).trim(),
+      title: title || workshopId,
       supportedVersions,
-      sourceOrigin: String(source.sourceOrigin || source.source_origin || '').trim() || 'unknown',
+      sourceOrigin,
       isReplacement: !!source.isReplacement,
       urlSubtype: 'workshop',
     }
@@ -151,9 +174,9 @@ export const normalizeInstallSource = (raw = {}, fallbackPackageId = '') => {
     kind: 'url',
     packageId,
     url: normalizedUrl,
-    title: String(source.title || source.name || packageId || normalizedUrl).trim(),
+    title,
     supportedVersions,
-    sourceOrigin: String(source.sourceOrigin || source.source_origin || '').trim() || 'unknown',
+    sourceOrigin,
     isReplacement: !!source.isReplacement,
     urlSubtype: detectUrlSubtype(normalizedUrl),
   }
