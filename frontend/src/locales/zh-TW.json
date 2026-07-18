@@ -6053,8 +6053,8 @@
         "skip_language_pack_alias_generation_desc": "開啟後，批量生成別名和備註時不處理語言包；單個模組手動生成不受影響。",
         "sort_mods_by": "排序順序",
         "sort_mods_by_desc": "影響自動排序時同檔次的 Mod 順序，處理優先級是 別名>原名>包名，所以即使 Mod 沒有別名，也能按原名參與排序。",
-        "startup_prompt_new_only": "啟動時只提醒新異常",
-        "startup_prompt_new_only_desc": "開啟後，啟動庫存提醒只顯示新發現的變更、缺失和已刪除項；關閉後，只要問題仍存在就會繼續提醒。",
+        "startup_inventory_first_seen_mod_changes": "僅提醒首次模組變動",
+        "startup_inventory_first_seen_mod_changes_desc": "開啟後，軟體啟動時只彈出本次新發現的模組變動；以前已經提醒過但還沒處理的模組變動，不會反覆彈出。關閉後，只要模組變動還存在，每次啟動都會提醒。",
         "strict_disabled_mode": "嚴格禁用模式",
         "strict_disabled_mode_desc": "開啟後，掃描時會按管理器記錄保持禁用狀態；被外部恢復啟用的 Mod 會自動重新禁用。手動解除禁用不受影響。",
         "title": "功能設定",
@@ -6964,6 +6964,10 @@
           "unsubscribe": "取消訂閱{count}",
           "update_redownload": "更新模組[再次下載]{count}",
           "update_resubscribe": "更新模組[再次訂閱]{count}",
+          "update_steam_redownload": {
+            "label": "重新下載更新模組{count}",
+            "tooltip": "直接請求 Steam 重新下載或校驗這些可更新的工坊項。"
+          },
           "view_timeline": "查看變動"
         },
         "no_image": "無圖",

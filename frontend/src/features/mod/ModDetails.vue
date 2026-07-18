@@ -220,10 +220,10 @@
                   <span class="flex-1 font-bold truncate min-w-0">最后移动时间：</span>
                   {{ selectedMod.last_moved_time ? new Date(selectedMod.last_moved_time).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '无' }}
                 </div> -->
-                <div class="flex justify-between items-center">
+                <!-- <div class="flex justify-between items-center">
                   <span class="flex-1 font-bold truncate min-w-0">{{ t('ui.mod_details.time.workshop_update', '工坊更新时间：') }}</span>
                   {{ formatDetailDate(selectedMod.mod_update_time) }}
-                </div>
+                </div> -->
               </div>
             </div>
 
@@ -374,9 +374,12 @@
                 <!-- 现有标签列表 -->
                 <TransitionGroup name="list">
                   <span v-for="tag in sortedUserTags" :key="tag"
-                    class="px-1 py-0.5 rounded truncate text-shadow-lg/20 bg-accent-primary/20 text-accent-primary text-xs border border-accent-primary/20 flex items-center gap-1 group animate-in">
+                    v-tooltip="t('tooltip.mod_details.tags', '在此管理Mod标记的自定义标签')"
+                    @click.stop="toggleMainListExactFilter('tags', tag, t('ui.mod_details.tags', '标签'))"
+                    @contextmenu.prevent.stop="copyDetailValue(t('ui.mod_details.tags', '标签'), tag)"
+                    class="px-1 py-0.5 rounded truncate text-shadow-lg/20 bg-accent-primary/20 text-accent-primary text-xs border border-accent-primary/20 flex items-center gap-1 group animate-in cursor-pointer">
                     {{ tag }}
-                    <button @click="removeTag(tag)" v-tooltip="t('tooltip.mod_details.remove_tag', '移除标签')" class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-text-main transition-colors opacity-50 group-hover:opacity-100">
+                    <button @click.stop="removeTag(tag)" v-tooltip="t('tooltip.mod_details.remove_tag', '移除标签')" class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-text-main transition-colors opacity-50 group-hover:opacity-100">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-2 h-2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                     </button>
                   </span>
@@ -415,10 +418,12 @@
                 <!-- 现有分组列表 -->
                 <TransitionGroup name="list">
                   <span v-for="group in userGroups" :key="group.group_id"
-                    class="px-1 py-0.5 rounded truncate text-xs text-shadow-lg/20 border border-border-base/5 flex items-center gap-1 group hover:border-border-base/18 transition-colors"
+                    v-tooltip="t('tooltip.mod_details.groups', '在此管理Mod的所属分组')"
+                    @click.stop="focusGroupPanel(group)"
+                    class="px-1 py-0.5 rounded truncate text-xs text-shadow-lg/20 border border-border-base/5 flex items-center gap-1 group hover:border-border-base/18 transition-colors cursor-pointer"
                     :style="{'backgroundColor': hexToRgba(group.color, 0.15), 'color': group.color}">
                     {{ group.name }}
-                    <button @click="removeModInGroup(group.group_id, selectedMod.package_id)" v-tooltip="t('tooltip.mod_details.remove_from_group', '从分组移出')"
+                    <button @click.stop="removeModInGroup(group.group_id, selectedMod.package_id)" v-tooltip="t('tooltip.mod_details.remove_from_group', '从分组移出')"
                       class="w-3 h-3 flex items-center justify-center rounded-full hover:bg-accent-danger hover:text-text-main transition-colors opacity-50 group-hover:opacity-100">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="w-2 h-2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                     </button>
@@ -834,6 +839,12 @@ const addGroup = (groupId) => {
 // 从分组中移除模组
 const removeModInGroup =(groupId, modId) => {
   groupStore.groupRemoveMods(groupId, [modId]);
+}
+const focusGroupPanel = (group = {}) => {
+  const groupId = String(group?.group_id || group?.id || '').trim()
+  if (!groupId) return
+  appStore.activeSidebarTab = 'group'
+  groupStore.focusGroup(groupId)
 }
 const openTagSuggest = () => {
   showTagSuggest.value = true

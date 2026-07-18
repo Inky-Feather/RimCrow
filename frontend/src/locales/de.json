@@ -6053,8 +6053,8 @@
         "skip_language_pack_alias_generation_desc": "Wenn diese Option aktiviert ist, werden bei der Batch-Alias- und Notizgenerierung Sprachpakete übersprungen. Die manuelle Generierung für einen einzelnen Mod ist nicht betroffen.",
         "sort_mods_by": "Sortierreihenfolge",
         "sort_mods_by_desc": "Beeinflusst die Mod-Reihenfolge innerhalb derselben Stufe während der automatischen Sortierung. Priorität ist Alias ​​> Originalname > Paket-ID, sodass Mods ohne Aliase weiterhin nach Originalnamen sortiert werden können.",
-        "startup_prompt_new_only": "Warnen Sie nur vor neuen Startproblemen",
-        "startup_prompt_new_only_desc": "Wenn diese Option aktiviert ist, zeigen die Erinnerungen an den Startbestand nur neu gefundene Änderungen, fehlende Artikel und gelöschte Artikel an. Bei Deaktivierung werden bestehende ungelöste Probleme weiterhin angezeigt.",
+        "startup_inventory_first_seen_mod_changes": "Warnen Sie nur vor neuen Startproblemen",
+        "startup_inventory_first_seen_mod_changes_desc": "Wenn diese Option aktiviert ist, zeigen die Erinnerungen an den Startbestand nur neu gefundene Änderungen, fehlende Artikel und gelöschte Artikel an. Bei Deaktivierung werden bestehende ungelöste Probleme weiterhin angezeigt.",
         "strict_disabled_mode": "Strikter Deaktivierungsmodus",
         "strict_disabled_mode_desc": "Wenn die Scans aktiviert sind, bleiben Mods basierend auf Manager-Datensätzen inaktiv. Extern reaktivierte Mods werden automatisch wieder deaktiviert. Das manuelle Entfernen eines Deaktivierungsdatensatzes ist nicht betroffen.",
         "title": "Funktionseinstellungen",
@@ -6964,6 +6964,10 @@
           "unsubscribe": "Abmelden{count}",
           "update_redownload": "Mod aktualisieren [erneut herunterladen]{count}",
           "update_resubscribe": "Mod aktualisieren [erneut abonnieren]{count}",
+          "update_steam_redownload": {
+            "label": "Aktualisierte Mods erneut herunterladen{count}",
+            "tooltip": "Fordern Sie Steam direkt auf, diese aktualisierbaren Workshop-Objekte erneut herunterzuladen oder zu überprüfen."
+          },
           "view_timeline": "Änderungen anzeigen"
         },
         "no_image": "KEIN IMG",

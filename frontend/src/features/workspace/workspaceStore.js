@@ -608,7 +608,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
   const getPromptableStartupEvents = (changes = []) => {
     const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.status)
-    if (!appStore.settings?.startup_inventory_prompt_new_only) return targets
+    if (!appStore.settings?.startup_inventory_first_seen_mod_changes) return targets
     const ack = loadStartupPromptAck()
     return targets.filter(item => !ack.has(getStartupEventFingerprint(item)))
   }

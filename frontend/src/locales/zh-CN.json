@@ -6053,8 +6053,8 @@
         "skip_language_pack_alias_generation_desc": "开启后，批量生成别名和备注时不处理语言包；单个模组手动生成不受影响。",
         "sort_mods_by": "排序顺序",
         "sort_mods_by_desc": "影响自动排序时同档次的 Mod 顺序，处理优先级是 别名>原名>包名，所以即使 Mod 没有别名，也能按原名参与排序。",
-        "startup_prompt_new_only": "启动时只提醒新异常",
-        "startup_prompt_new_only_desc": "开启后，启动库存提醒只显示新发现的变更、缺失和已删除项；关闭后，只要问题仍存在就会继续提醒。",
+        "startup_inventory_first_seen_mod_changes": "仅提醒首次模组变动",
+        "startup_inventory_first_seen_mod_changes_desc": "开启后，软件启动时只弹出本次新发现的模组变动；以前已经提醒过但还没处理的模组变动，不会反复弹出。关闭后，只要模组变动还存在，每次启动都会提醒。",
         "strict_disabled_mode": "严格禁用模式",
         "strict_disabled_mode_desc": "开启后，扫描时会按管理器记录保持禁用状态；被外部恢复启用的 Mod 会自动重新禁用。手动解除禁用不受影响。",
         "title": "功能设置",
@@ -6964,6 +6964,10 @@
           "unsubscribe": "取消订阅{count}",
           "update_redownload": "更新模组[再次下载]{count}",
           "update_resubscribe": "更新模组[再次订阅]{count}",
+          "update_steam_redownload": {
+            "label": "重新下载更新模组{count}",
+            "tooltip": "直接请求 Steam 重新下载或校验这些可更新的工坊项。"
+          },
           "view_timeline": "查看变动"
         },
         "no_image": "无图",

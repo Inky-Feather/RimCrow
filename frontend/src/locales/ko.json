@@ -6053,8 +6053,8 @@
         "skip_language_pack_alias_generation_desc": "활성화되면 일괄 별칭 및 메모 생성에서 언어 팩을 건너뜁니다. 단일 Mod의 수동 생성은 영향을 받지 않습니다.",
         "sort_mods_by": "정렬 순서",
         "sort_mods_by_desc": "자동 정렬 중에 동일한 계층 내의 모드 순서에 영향을 미칩니다. 우선 순위는 별칭 > 원래 이름 > 패키지 ID이므로 별칭이 없는 모드도 원래 이름을 기준으로 정렬할 수 있습니다.",
-        "startup_prompt_new_only": "새로운 시작 문제에 대해서만 경고",
-        "startup_prompt_new_only_desc": "활성화되면 시작 인벤토리 알림에는 새로 발견된 변경 사항, 누락된 항목 및 삭제된 항목만 표시됩니다. 비활성화되면 해결되지 않은 기존 문제가 계속 표시됩니다.",
+        "startup_inventory_first_seen_mod_changes": "새로운 시작 문제에 대해서만 경고",
+        "startup_inventory_first_seen_mod_changes_desc": "활성화되면 시작 인벤토리 알림에는 새로 발견된 변경 사항, 누락된 항목 및 삭제된 항목만 표시됩니다. 비활성화되면 해결되지 않은 기존 문제가 계속 표시됩니다.",
         "strict_disabled_mode": "엄격한 비활성화 모드",
         "strict_disabled_mode_desc": "활성화되면 검사는 관리자 기록을 기반으로 Mod를 비활성 상태로 유지합니다. 외부에서 다시 활성화된 모드는 자동으로 다시 비활성화됩니다. 비활성화 기록을 수동으로 제거하는 것은 영향을 받지 않습니다.",
         "title": "기능 설정",
@@ -6964,6 +6964,10 @@
           "unsubscribe": "구독 취소{count}",
           "update_redownload": "모드 업데이트 [다시 다운로드]{count}",
           "update_resubscribe": "모드 업데이트 [재구독]{count}",
+          "update_steam_redownload": {
+            "label": "업데이트된 모드 다시 다운로드{count}",
+            "tooltip": "Steam에 이러한 업데이트 가능한 워크숍 항목을 다시 다운로드하거나 확인하도록 직접 요청합니다."
+          },
           "view_timeline": "변경사항 보기"
         },
         "no_image": "이미지 없음",

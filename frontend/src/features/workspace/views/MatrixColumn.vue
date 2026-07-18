@@ -455,6 +455,13 @@ const downloadMissingWorkshopItemsViaSteam = async (mods) => {
   return true
 }
 
+const redownloadUpdatedWorkshopItemsViaSteam = async (workshopIds) => {
+  const result = await appStore.downloadWorkshopItemsViaSteam(workshopIds, { highPriority: true, waitSeconds: 30 })
+  if (!result) return false
+  await workspaceStore.fetchLibrariesMods()
+  return true
+}
+
 const clearMissingRecords = async (pathHashes) => {
   if (!window.pywebview) return false
   const hashes = (Array.isArray(pathHashes) ? pathHashes : [pathHashes]).filter(Boolean)
@@ -583,6 +590,11 @@ const handleContextMenu = async (event, targetMod) => {
   if (selectedUpdatedWorkshopIds.length > 0) {
     if (props.storeType === 'workshop') {
       menuItems.push({ label: t('ui.workspace.matrix.menu.update_resubscribe', '更新模组[再次订阅]{count}', { count: selectedUpdatedNumStr }), icon: Upload, action: () => appStore.subscribeWorkshopIds(selectedUpdatedWorkshopIds)
+      })
+      menuItems.push({
+        label: t('ui.workspace.matrix.menu.update_steam_redownload.label', '更新模组[重新下载]{count}', { count: selectedUpdatedNumStr }), icon: DownloadCloud, level: 'success',
+        tooltip: t('ui.workspace.matrix.menu.update_steam_redownload.tooltip', '直接请求 Steam 重新下载或校验这些可更新的工坊项。'),
+        action: () => redownloadUpdatedWorkshopItemsViaSteam(selectedUpdatedWorkshopIds),
       })
     } else {
       menuItems.push({ label: t('ui.workspace.matrix.menu.update_redownload', '更新模组[再次下载]{count}', { count: selectedUpdatedNumStr }), icon: Upload, action: () => appStore.downloadWorkshopItems(selectedUpdatedWorkshopIds)
