@@ -167,7 +167,7 @@ from backend.managers.mgr_rules import resolve_mod_rules
 from backend.managers.mgr_texture_opt import TextureOptimizationManager
 from backend.managers.mgr_recommendation_export import RecommendationExportManager
 from backend.managers.mgr_multiplayer_compat import MultiplayerCompatibilityManager
-from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
+from backend.load_order.language_pack_ownership import is_language_pack_mod, resolve_language_pack_ownership_for_mods
 from backend.load_order.package_tokens import build_steam_package_token, parse_package_token, select_mod_instance
 from backend.browser_runtime import build_sub_browser_target_url
 from backend.utils.restart import launch_new_application
@@ -452,6 +452,14 @@ def _attach_language_pack_ownership_to_mod_instances(
                 build_steam_package_token(package_id),
                 dict(empty_result),
             )
+
+
+def _attach_language_pack_type_flags(mods: list[dict[str, Any]]) -> None:
+    for mod in mods or []:
+        mod["is_language_pack"] = is_language_pack_mod(mod)
+        workshop_variant = mod.get("coexist_workshop_variant")
+        if isinstance(workshop_variant, dict):
+            workshop_variant["is_language_pack"] = is_language_pack_mod(workshop_variant)
 
 
 def _build_mod_map_for_load_order_tokens(mods: list[dict[str, Any]], preferred_tokens: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
@@ -1740,18 +1748,15 @@ class API:
         for mod in disabled_mods:
             if dlc_parser:
                 dlc_parser.translate_record(mod, settings.config.language)
+        _attach_language_pack_type_flags(context_mods)
+        _attach_language_pack_type_flags(disabled_mods)
         _log_startup_perf(perf_scope, "translations_ready", perf_start_at)
 
         rule_mgr = self.sorter.rule_mgr if (self.sorter and self.sorter.rule_mgr) else None
         _attach_effective_rules_to_mod_instances(context_mods, rule_mgr)
-        language_owner_enabled = bool(getattr(settings.config, "check_language_support", True))
-        language_pack_owner_map = (
-            resolve_language_pack_ownership_for_mods(
-                context_mods,
-                user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
-            )
-            if language_owner_enabled
-            else {}
+        language_pack_owner_map = resolve_language_pack_ownership_for_mods(
+            context_mods,
+            user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
         )
         _attach_language_pack_ownership_to_mod_instances(context_mods, language_pack_owner_map)
         _log_startup_perf(perf_scope, "rules_ready", perf_start_at, active=len(context_mods or []))
@@ -1801,18 +1806,16 @@ class API:
             interlocks=len(interlocks or []),
         )
 
-        language_owner_enabled = bool(getattr(settings.config, "check_language_support", True))
-        language_pack_owner_map = (
-            resolve_language_pack_ownership_for_mods(
-                context_mods,
-                user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
-            )
-            if language_owner_enabled
-            else {}
+        _attach_language_pack_type_flags(context_mods)
+        _attach_language_pack_type_flags(disabled_mods)
+        _attach_effective_rules_to_mod_instances(context_mods, rule_mgr)
+        language_pack_owner_map = resolve_language_pack_ownership_for_mods(
+            context_mods,
+            user_mod_rules=(rule_mgr.user_mod_rules if rule_mgr else {}),
         )
-        _log_startup_perf("get_mod_list_enrichment", "language_owner_ready", perf_start_at, enabled=language_owner_enabled)
+        _log_startup_perf("get_mod_list_enrichment", "language_owner_ready", perf_start_at, computed=True)
 
-        _attach_language_pack_ownership_to_mod_instances(context_mods, language_pack_owner_map if language_owner_enabled else {})
+        _attach_language_pack_ownership_to_mod_instances(context_mods, language_pack_owner_map)
         for mod in context_mods:
             mod["replacement"] = replacements_map.get(mod.get("workshop_id")) if mod.get("workshop_id") else None
         for mod in disabled_mods:
@@ -1837,12 +1840,14 @@ class API:
 
         result["mods"] = {
             str(mod.get("package_id") or "").strip().lower(): {
+                "is_language_pack": mod.get("is_language_pack"),
                 "language_pack_owner_result": mod.get("language_pack_owner_result"),
                 "replacement": mod.get("replacement"),
                 "multiplayer_compat": mod.get("multiplayer_compat"),
                 **(
                     {
                         "coexist_workshop_variant": {
+                            "is_language_pack": mod["coexist_workshop_variant"].get("is_language_pack"),
                             "language_pack_owner_result": mod["coexist_workshop_variant"].get("language_pack_owner_result"),
                         }
                     }
@@ -1855,6 +1860,7 @@ class API:
         }
         result["disabled_mods"] = {
             str(mod.get("path_hash") or "").strip(): {
+                "is_language_pack": mod.get("is_language_pack"),
                 "replacement": mod.get("replacement"),
                 "multiplayer_compat": mod.get("multiplayer_compat"),
             }

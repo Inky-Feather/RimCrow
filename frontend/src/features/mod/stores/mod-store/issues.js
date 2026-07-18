@@ -22,6 +22,7 @@ export const useModIssues = ({
   hasRealModById,
   displayModName,
   getLanguagePackOwnerIds,
+  isLanguagePackMod,
   canUseLanguagePackForIssueDetection,
   updateModUserData,
 } = {}) => {
@@ -101,7 +102,7 @@ export const useModIssues = ({
     const langPackFallbackMap = new Map() // 兜底命中：归属可信，但语言作者可能漏标 supported_languages
     if (checkLangEnabled && targetLang) {
       for (const mod of instanceMap.values()) {
-        const isLangPack = (mod.user_mod_type || mod.mod_type) === 'LanguagePack'
+        const isLangPack = isLanguagePackMod(mod)
         if (!isLangPack) continue
         if (!canUseLanguagePackForIssueDetection(mod)) continue
 
@@ -368,7 +369,7 @@ export const useModIssues = ({
 
       // F. 语言支持检查 (Language Support) - 仅当开关开启时
       if (checkLangEnabled && targetLang) {
-        const isSelfLangPack = (mod.user_mod_type || mod.mod_type) === 'LanguagePack'
+        const isSelfLangPack = isLanguagePackMod(mod)
         // 如果 Mod 本身就没有声明支持的语言列表（通常意味着没有文本或是框架），直接跳过检查
         if (!mod.supported_languages || mod.supported_languages.length === 0) {
           // pass

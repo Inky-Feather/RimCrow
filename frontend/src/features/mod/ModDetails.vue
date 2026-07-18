@@ -767,7 +767,7 @@ const tooltipSaveBreaking = computed((index) => {
   return t('tooltip.mod_details.save_breaking.unknown', '未知：暂时无法知道该Mod是否会破坏存档。')
 })
 const tooltipModType = computed(() => {
-  return t('tooltip.mod_details.mod_type', '模组类型：{type}\n__(粗略判断)__', { type: getModTypeLabel(selectedMod.value?.mod_type) })
+  return t('tooltip.mod_details.mod_type', '模组类型：{type}\n__(粗略判断)__', { type: getModTypeLabel(modType.value) })
 })
 
 const displayNameByMod = (mod) => {

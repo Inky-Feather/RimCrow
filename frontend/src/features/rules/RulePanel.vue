@@ -578,7 +578,7 @@ const groupOptionList = computed(() =>
 const modTypeOptionList = computed(() => {
   const modTypes = new Set()
   for (const mod of modStore.allModsMap.values()) {
-    const modType = String(mod.user_mod_type || mod.mod_type || 'Unknown').trim()
+    const modType = String(modStore.displayModType(mod)).trim()
     if (modType) modTypes.add(modType)
   }
   return Array.from(modTypes)

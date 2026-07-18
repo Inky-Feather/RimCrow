@@ -233,8 +233,7 @@ watch(
 )
 
 const isLanguagePackMod = computed(() => {
-  const modType = String(targetMod.value?.user_mod_type || targetMod.value?.mod_type || '').trim()
-  return modType === 'LanguagePack'
+  return modStore.isLanguagePackMod(targetMod.value)
 })
 const resolvedLanguagePackOwnerResult = computed(() => targetMod.value?.language_pack_owner_result || null)
 const analyzedLanguagePackOwnerRows = computed(() => (

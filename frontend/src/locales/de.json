@@ -5676,11 +5676,11 @@
       "action": {
         "as_strict_dependency": "Als harte Abhängigkeit",
         "create_rule": "Neue Regel",
+        "delete_relation": "Mod-Beziehungsregel löschen",
         "enable_rules": "Regeln aktivieren",
         "export_bundle": "Konfigurationspaket exportieren",
         "import_bundle": "Konfigurationspaket importieren",
-        "update_library": "Bibliothek aktualisieren",
-        "delete_relation": "Mod-Beziehungsregel löschen"
+        "update_library": "Bibliothek aktualisieren"
       },
       "action_text": {
         "load_after": "Nach {name}",
@@ -6054,6 +6054,8 @@
         "title": "Funktionseinstellungen",
         "translation": "Übersetzung",
         "translation_desc": "Legen Sie Standardübersetzungseinstellungen und ein separates Verhalten für die Workshop-Beschreibungsübersetzung fest.",
+        "wide_language_pack_detection": "[UNTRANSLATED] 宽泛识别语言包",
+        "wide_language_pack_detection_desc": "[UNTRANSLATED] 开启后，带翻译文件和补丁、但没有程序集、贴图、音频或普通定义的 Mod，也会按语言包参与归属判断。",
         "workshop_description_translation": "Workshop Beschreibungsübersetzung",
         "workshop_description_translation_desc": "Legen Sie die Sprache, den Anbieter und die automatische Übersetzungsstrategie für Workshop-Detailbeschreibungen fest.",
         "workshop_description_translation_only_desc": "Betrifft nur die Übersetzung von Titeln und Beschreibungen auf Workshop-Detailseiten."

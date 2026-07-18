@@ -13,6 +13,7 @@ from backend.utils.logger import logger
 from backend.database.dao import GroupDAO, ModDAO, normalize_interlock_payload, normalize_user_mod_data_payload
 from backend.settings import RULES_DIR, USER_RULES_PATH, settings
 from backend.utils.tools import current_ms, normalize_package_id
+from backend.load_order.language_pack_ownership import get_effective_mod_type
 from backend.load_order.package_tokens import parse_package_token, select_mod_instance
 from backend._version import __version__
 
@@ -334,9 +335,11 @@ class RuleManager:
             # 3. 收集这些依赖中涉及到的所有目标 Workshop ID
             # 需要把这些 Workshop ID 转换回 Package ID，排序引擎才能识别
             all_target_wids = set()
+            raw_dep_count = 0
             for row in active_metas:
                 if row['dependencies_mods']:
                     # 依赖格式: {"2891845502": "Name"}
+                    raw_dep_count += len(row['dependencies_mods'])
                     all_target_wids.update(row['dependencies_mods'].keys())
             if not all_target_wids:
                 self.workshop_rules_cache = {}
@@ -351,6 +354,8 @@ class RuleManager:
             }
             # 5. 组装最终缓存
             new_cache = {}
+            resolved_dep_count = 0
+            unresolved_dep_count = 0
             for row in active_metas:
                 source_pid = row['package_id'].lower()
                 raw_deps = row['dependencies_mods'] # dict
@@ -360,10 +365,16 @@ class RuleManager:
                     target_mod = wid_to_pid_map.get(str(target_wid))
                     if target_mod:
                         resolved_target_pids.append((target_mod.package_id.lower(), target_mod.name))
+                        resolved_dep_count += 1
+                    else:
+                        unresolved_dep_count += 1
                 if resolved_target_pids:
                     new_cache[source_pid] = resolved_target_pids
             self.workshop_rules_cache = new_cache
-            logger.info(f"创意工坊规则缓存已构建，生效 MOD 数量：{len(new_cache)}")
+            logger.info(
+                "创意工坊规则缓存已构建，源记录：%s，原始依赖：%s，成功转换：%s，丢弃：%s，生效 MOD：%s",
+                len(active_metas), raw_dep_count, resolved_dep_count, unresolved_dep_count, len(new_cache),
+            )
         except Exception as e:
             logger.error(f"构建创意工坊规则缓存失败：{e}", exc_info=True)
     
@@ -536,12 +547,13 @@ class RuleManager:
     def _resolve_condition_field(self, mod_data: dict, field: str):
         """解析筛选字段，支持别名与点分路径。"""
         field_aliases = {
-            "mod_type": ["user_mod_type", "mod_type"],
-            "user_mod_type": ["user_mod_type", "mod_type"],
             # 名称只匹配原始 name；别名则允许“别名 / 显示名 / 原名”三者任一命中。
             "name": ["name"],
             "alias_name": ["alias_name", "display_name", "name"],
         }
+
+        if field in {"mod_type", "user_mod_type"}:
+            return get_effective_mod_type(mod_data)
 
         def _resolve_path(data, path: str):
             current = data
@@ -718,7 +730,7 @@ class RuleManager:
         authors = mod_data.get('author', [])
         if 'Ludeon Studios' in authors: return 60
         # 3. 根据 Mod 类型判定 (来自 analyzer.py 的分析结果)
-        mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type', 'Unknown')).strip()
+        mod_type = self._resolve_condition_field(mod_data, "mod_type")
         if mod_type == 'LanguagePack': return 900  # 汉化包置底
         if mod_type == 'Texture': return 850  # 纹理包置后
         if mod_type == 'Audio': return 860  # 音频包置后

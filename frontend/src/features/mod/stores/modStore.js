@@ -10,6 +10,9 @@ import { useProfileStore } from '../../profiles/profileStore'
 import { useSupplementStore } from '../../supplement/supplementStore'
 import {
   buildSteamPackageToken,
+  getEffectiveModType,
+  hasUsableLanguagePackOwnership,
+  isLanguagePackType,
   normalizePackageId,
   normalizePackageToken,
   normalizeWorkshopId,
@@ -100,10 +103,9 @@ export const useModStore = defineStore('mods', () => {
     )]
   }
   const canUseLanguagePackForIssueDetection = (mod) => {
-    const confidence = String(mod?.language_pack_owner_result?.summary_confidence || '').trim().toLowerCase()
-    return confidence === 'high' || confidence === 'medium'
+    return hasUsableLanguagePackOwnership(mod)
   }
-  const isLanguagePackMod = (mod) => (mod?.user_mod_type || mod?.mod_type) === 'LanguagePack'
+  const isLanguagePackMod = (mod) => isLanguagePackType(mod)
   const currentLanguage = computed(() => String(appStore.settings?.language || '').trim())
   const isDeclaredForCurrentLanguage = (mod) => (
     !!currentLanguage.value && (mod?.supported_languages || []).includes(currentLanguage.value)
@@ -336,14 +338,14 @@ export const useModStore = defineStore('mods', () => {
     const res = mod?.alias_name || mod?.display_name || mod?.name || mod?.package_id
     return res || `⚠ ${defaultName} (${modOrId})`
   }
-  // 显示 Mod 类型（优先 user_mod_type -> mod_type -> Unknown）
+  // 显示有效类型：用户定义 > 运行时类型修正 > 原始判定。
   const displayModType = (modOrId) => {
     // 处理输入：Mod 对象或 ID 字符串统统转为Mod对象
     let mod = null
     if(typeof modOrId === 'string') mod = takeModById(modOrId)
     else if(modOrId?.package_id) mod = modOrId
     // 构造显示类型
-    const res = mod?.user_mod_type || mod?.mod_type || 'Unknown'
+    const res = getEffectiveModType(mod)
     return res
   }
   // 显示 Mod 图标，只使用 About 中声明或默认发现的图标。
@@ -1729,6 +1731,7 @@ export const useModStore = defineStore('mods', () => {
     hasRealModById,
     displayModName,
     getLanguagePackOwnerIds,
+    isLanguagePackMod,
     canUseLanguagePackForIssueDetection,
     updateModUserData,
   })

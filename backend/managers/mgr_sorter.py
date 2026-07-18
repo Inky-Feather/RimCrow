@@ -13,7 +13,11 @@ from backend.managers.mgr_rules import (
     RuleManager,
     resolve_mod_rules,
 )
-from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
+from backend.load_order.language_pack_ownership import (
+    is_language_pack_mod,
+    is_usable_language_pack_ownership,
+    resolve_language_pack_ownership_for_mods,
+)
 from backend.load_order.package_tokens import build_steam_package_token, parse_package_token, select_mod_instance
 
 
@@ -565,17 +569,13 @@ class OrderSorter:
         """判断一个原子组是否整体属于语言包。"""
         if not group.mod_ids: return False
         for mid in group.mod_ids:
-            mod_data = mod_map.get(mid, {})
-            mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type') or '').strip()
-            if mod_type != 'LanguagePack': return False
+            if not is_language_pack_mod(mod_map.get(mid, {})): return False
         return True
 
     def _has_language_pack_member(self, group: AtomicGroup, mod_map: Dict[str, dict]) -> bool:
         """判断原子组内是否包含语言包，避免普通依赖贴靠抢走语言包专用规则。"""
         for mid in group.mod_ids:
-            mod_data = mod_map.get(mid, {})
-            mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type') or '').strip()
-            if mod_type == 'LanguagePack': return True
+            if is_language_pack_mod(mod_map.get(mid, {})): return True
         return False
 
     def _get_group_dependency_predecessors(self, group: AtomicGroup, mod_to_group: Dict[str, AtomicGroup]) -> set[int]:
@@ -670,10 +670,8 @@ class OrderSorter:
         for mid in group.mod_ids:
             mod_data = getattr(self, "mod_map", {}).get(mid, {})
             owner_result = mod_data.get("language_pack_owner_result") or {}
-            owner_confidence = str(owner_result.get("summary_confidence") or "").strip().lower()
-            used_high_confidence_owner_result = False
-            if owner_confidence == "high":
-                used_high_confidence_owner_result = True
+            # 自动贴边只使用已采用的可信归属；低置信候选只展示，不参与移动。
+            if is_usable_language_pack_ownership(owner_result):
                 for owner in owner_result.get("owners", []) or []:
                     target_id = str(owner.get("package_id") or "").strip().lower()
                     if not target_id or target_id not in mod_to_group:
@@ -682,20 +680,6 @@ class OrderSorter:
                     target_gid = id(target_group)
                     if target_gid != id(group):
                         target_gids.add(target_gid)
-                # 只要已经存在高置信归属结果，就不要再退回旧的 dependencies/load_after。
-                # 否则当原模组未启用时，旧规则里的 Core/DLC/框架前置会把语言包错误拉到列表前部。
-                if used_high_confidence_owner_result:
-                    continue
-            rules = self.effective_rules_cache.get(mid, {})
-            # 对语言包来说，dependencies 与 load_after 都表示“它应该跟在这些目标之后”。
-            for relation in [*(rules.get('dependencies', []) or []), *(rules.get('load_after', []) or [])]:
-                target_id = str(relation.get('target_id') or '').strip().lower()
-                if not target_id or target_id not in mod_to_group:
-                    continue
-                target_group = mod_to_group[target_id]
-                target_gid = id(target_group)
-                if target_gid != id(group):
-                    target_gids.add(target_gid)
         return target_gids
 
     def _tighten_language_pack_groups(
@@ -833,6 +817,20 @@ class OrderSorter:
                 mod_map[mid] = selected_mod
             self.effective_rules_cache[mid] = effective_rules
             m_data['rules'] = effective_rules
+        for mod in all_mods_data:
+            canonical_id = _canonical_package_id(mod.get("package_id"))
+            if not canonical_id:
+                continue
+            _, local_rules = resolve_mod_rules(self.rule_mgr, canonical_id, mod)
+            mod["rules"] = local_rules
+            workshop_variant = mod.get("coexist_workshop_variant")
+            if isinstance(workshop_variant, dict):
+                _, workshop_rules = resolve_mod_rules(
+                    self.rule_mgr,
+                    build_steam_package_token(canonical_id),
+                    mod,
+                )
+                workshop_variant["rules"] = workshop_rules
         language_pack_owner_map = resolve_language_pack_ownership_for_mods(
             list(all_mods_data),
             user_mod_rules=self.rule_mgr.user_mod_rules,
@@ -858,6 +856,7 @@ class OrderSorter:
                     "analyzed_summary_confidence": "unknown",
                 }
             )
+            m_data["is_language_pack"] = owner_key in language_pack_owner_map
         expanded_active_ids = list(active_ids)
         # 1. 将扩展后的激活列表转化为原子组
         groups, interlock_warnings = self.build_atomic_groups(expanded_active_ids, mod_map)

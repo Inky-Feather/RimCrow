@@ -1,4 +1,6 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 
 class FakeRuleManager:
@@ -24,6 +26,84 @@ class FakeRuleManager:
 
 
 class TestModInstanceRules(unittest.TestCase):
+    def test_enrichment_uses_effective_rules_before_language_pack_ownership(self):
+        from backend.api import API
+
+        language_pack = {
+            "package_id": "translation.pack",
+            "name": "Translation",
+            "mod_type": "LanguagePack",
+            "dependencies_mods": [],
+            "load_after_mods": [],
+        }
+        rule_manager = Mock()
+        rule_manager.user_mod_rules = {}
+        rule_manager.resolve_effective_mod_rules.side_effect = lambda token, mod: (
+            mod,
+            {
+                "dependencies": [],
+                "load_after": [{"target_id": "author.realmod"}],
+                "load_before": [],
+                "incompatible": [],
+                "weight_info": {},
+            },
+        )
+        api = object.__new__(API)
+        api.active_context = SimpleNamespace(is_healthy=True)
+        api.sorter = SimpleNamespace(rule_mgr=rule_manager)
+        api.workshop_db_mgr = SimpleNamespace(get_replacements=Mock(return_value=[]))
+        api.multiplayer_compat_mgr = SimpleNamespace(enrich_mods=Mock(return_value={}))
+
+        class EmptyQuery:
+            def dicts(self):
+                return []
+
+        with patch("backend.api.ModDAO.get_profile_mods", return_value=[language_pack]), \
+             patch("backend.api.ModDAO.get_profile_disabled_mods", return_value=[]), \
+             patch("backend.api.ModInterlock.select", return_value=EmptyQuery()), \
+             patch("backend.api.settings.config", SimpleNamespace(
+                 check_language_support=False,
+                 enable_multiplayer_compatibility_check=False,
+             )):
+            result = API._build_mod_list_enrichment_payload(api)
+
+        owners = result["mods"]["translation.pack"]["language_pack_owner_result"]["owners"]
+        self.assertEqual(owners, [{"package_id": "author.realmod"}])
+
+    def test_core_payload_marks_disabled_wide_language_pack_type(self):
+        from backend.api import API
+
+        disabled_language_pack = {
+            "package_id": "disabled.translation",
+            "name": "Disabled Translation",
+            "mod_type": "XML",
+            "file_stats": {
+                "lang_xml": 2,
+                "patch_xml": 1,
+                "game_xml": 0,
+                "code_dll": 0,
+                "image": 0,
+                "audio": 0,
+            },
+        }
+        api = object.__new__(API)
+        api.active_context = SimpleNamespace(is_healthy=True, game_dlc_path="")
+        api.sorter = SimpleNamespace(rule_mgr=None)
+        api.load_order_mgr = SimpleNamespace(read_active_mods=Mock(return_value={"active_mods": [], "modify_time": 0}))
+        api.is_first_db_init = False
+
+        with patch("backend.api.ModDAO.get_profile_mods", return_value=[]), \
+             patch("backend.api.ModDAO.get_profile_disabled_mods", return_value=[disabled_language_pack]), \
+             patch("backend.api.GroupDAO.get_groups_structured_by_mod_ids", return_value=[]), \
+             patch("backend.api.DLCParser", return_value=None), \
+             patch("backend.api.settings.config", SimpleNamespace(
+                 language="zh-CN",
+                 wide_language_pack_detection=True,
+             )):
+            result = API._read_mod_list_core_payload(api)
+
+        self.assertTrue(result["disabled_mods"][0]["is_language_pack"])
+
     def test_select_mod_instance_drops_stale_steam_token_without_workshop_variant(self):
         from backend.load_order.package_tokens import select_mod_instance
 
@@ -166,6 +246,31 @@ class TestModInstanceRules(unittest.TestCase):
         chosen = manager._select_export_asset(mod, parse_package_token("shared.mod"), set())
 
         self.assertEqual(chosen["source"], "local")
+
+    def test_export_language_pack_map_uses_high_and_medium_confidence_owner(self):
+        from backend.managers.mgr_mod_package import ModPackageManager
+
+        manager = object.__new__(ModPackageManager)
+        mods = [
+            {
+                "package_id": "high.lang",
+                "language_pack_owner_result": {
+                    "owners": [{"package_id": "owner.mod"}],
+                    "summary_confidence": "high",
+                },
+            },
+            {
+                "package_id": "medium.lang",
+                "language_pack_owner_result": {
+                    "owners": [{"package_id": "owner.mod"}],
+                    "summary_confidence": "medium",
+                },
+            },
+        ]
+
+        result = manager._build_language_pack_map(mods)
+
+        self.assertEqual(result, {"owner.mod": ["high.lang", "medium.lang"]})
 
     def test_ai_rule_query_uses_workshop_instance_for_steam_token(self):
         from unittest.mock import patch

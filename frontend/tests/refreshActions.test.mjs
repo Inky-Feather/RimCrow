@@ -135,7 +135,6 @@ async function testIssueSettingsRefreshModData() {
   const profileStore = useProfileStore()
   profileStore.activeContext = context()
 
-  const coreRefreshes = []
   const actions = createSettingsActions({
     settings: {
       enable_auto_scan: true,
@@ -148,11 +147,40 @@ async function testIssueSettingsRefreshModData() {
     overrides: {
       refreshData: async () => assert.fail('问题判定设置变化不需要整套 refreshData'),
       requestModScan: async () => assert.fail('问题判定设置变化不需要扫描磁盘'),
-      refreshModCoreData: async (...args) => { coreRefreshes.push(args) },
+      refreshModCoreData: async () => assert.fail('语言支持问题开关不需要刷新核心列表'),
+      refreshModEnrichment: async () => assert.fail('语言支持问题开关不需要刷新补充信息'),
     },
   })
 
   await actions.applySettings({ check_language_support: false })
+}
+
+async function testWideLanguagePackDetectionRefreshesCore() {
+  resetStores({
+    save_all_settings: async () => ok({
+      settings: {
+        wide_language_pack_detection: true,
+      },
+      active_context: context(),
+      remote_image_cache: {},
+    }),
+  })
+  const profileStore = useProfileStore()
+  profileStore.activeContext = context()
+
+  const coreRefreshes = []
+  const actions = createSettingsActions({
+    settings: {
+      wide_language_pack_detection: false,
+    },
+    overrides: {
+      refreshData: async () => assert.fail('宽泛语言包识别不需要整套 refreshData'),
+      requestModScan: async () => assert.fail('宽泛语言包识别不需要扫描磁盘'),
+      refreshModCoreData: async (...args) => { coreRefreshes.push(args) },
+    },
+  })
+
+  await actions.applySettings({ wide_language_pack_detection: true })
 
   assert.equal(coreRefreshes.length, 1)
   assert.equal(coreRefreshes[0][1].preserveListState, true)
@@ -410,7 +438,7 @@ async function testSaveSettingResetActiveListOnlyUpdatesSetting() {
   assert.deepEqual(calls, [['reset_active_list', config]])
 }
 
-async function testSaveSettingIssueCoreSettingRefreshesCore() {
+async function testSaveSettingLanguageSupportDoesNotRefreshModData() {
   resetStores({
     save_setting: async () => ok({
       settings: {
@@ -421,7 +449,6 @@ async function testSaveSettingIssueCoreSettingRefreshesCore() {
   const profileStore = useProfileStore()
   profileStore.activeContext = context()
 
-  const coreRefreshes = []
   const actions = createSettingsActions({
     settings: {
       check_language_support: true,
@@ -430,11 +457,39 @@ async function testSaveSettingIssueCoreSettingRefreshesCore() {
     overrides: {
       refreshData: async () => assert.fail('语言包检查单项保存不需要整套 refreshData'),
       requestModScan: async () => assert.fail('语言包检查单项保存不需要扫描磁盘'),
-      refreshModCoreData: async (...args) => { coreRefreshes.push(args) },
+      refreshModCoreData: async () => assert.fail('语言包检查单项保存不需要刷新核心列表'),
+      refreshModEnrichment: async () => assert.fail('语言包检查单项保存不需要刷新补充信息'),
     },
   })
 
   await actions.saveSetting('check_language_support', false)
+}
+
+async function testSaveSettingWideLanguagePackDetectionRefreshesCore() {
+  resetStores({
+    save_setting: async () => ok({
+      settings: {
+        wide_language_pack_detection: true,
+      },
+    }),
+  })
+  const profileStore = useProfileStore()
+  profileStore.activeContext = context()
+
+  const coreRefreshes = []
+  const actions = createSettingsActions({
+    settings: {
+      wide_language_pack_detection: false,
+    },
+    uiState: { showSettingsPanel: false },
+    overrides: {
+      refreshData: async () => assert.fail('宽泛语言包识别单项保存不需要整套 refreshData'),
+      requestModScan: async () => assert.fail('宽泛语言包识别单项保存不需要扫描磁盘'),
+      refreshModCoreData: async (...args) => { coreRefreshes.push(args) },
+    },
+  })
+
+  await actions.saveSetting('wide_language_pack_detection', true)
 
   assert.equal(coreRefreshes.length, 1)
   assert.equal(coreRefreshes[0][1].preserveListState, true)
@@ -860,6 +915,7 @@ async function testQueuedReplaceScanOverridesPreserveScan() {
 for (const test of [
   testSettingsSourceChangeForcesCoreRefresh,
   testIssueSettingsRefreshModData,
+  testWideLanguagePackDetectionRefreshesCore,
   testRuleLoadingIsSharedBeforeEditorReadsSources,
   testRuleEditorRuleOperationsHandleMissingState,
   testWorkshopRuleUpdateResetsBusyStateOnFailure,
@@ -871,7 +927,8 @@ for (const test of [
   testExternalDataPathChangeRefreshesModData,
   testSaveSettingToolModsForcesCoreRefreshScan,
   testSaveSettingResetActiveListOnlyUpdatesSetting,
-  testSaveSettingIssueCoreSettingRefreshesCore,
+  testSaveSettingLanguageSupportDoesNotRefreshModData,
+  testSaveSettingWideLanguagePackDetectionRefreshesCore,
   testSaveSettingIssueEnrichmentSettingRefreshesEnrichment,
   testResetClearsScanResultData,
   testUpdateUserDataRuleInputsRefreshRuleState,

@@ -5676,11 +5676,11 @@
       "action": {
         "as_strict_dependency": "하드 의존성",
         "create_rule": "새로운 규칙",
+        "delete_relation": "모드 관계 규칙 삭제",
         "enable_rules": "규칙 활성화",
         "export_bundle": "구성 번들 내보내기",
         "import_bundle": "구성 번들 가져오기",
-        "update_library": "라이브러리 업데이트",
-        "delete_relation": "모드 관계 규칙 삭제"
+        "update_library": "라이브러리 업데이트"
       },
       "action_text": {
         "load_after": "{name} 이후",
@@ -6054,6 +6054,8 @@
         "title": "기능 설정",
         "translation": "번역",
         "translation_desc": "Workshop 설명 번역에 대한 기본 번역 기본 설정과 별도의 동작을 설정합니다.",
+        "wide_language_pack_detection": "[UNTRANSLATED] 宽泛识别语言包",
+        "wide_language_pack_detection_desc": "[UNTRANSLATED] 开启后，带翻译文件和补丁、但没有程序集、贴图、音频或普通定义的 Mod，也会按语言包参与归属判断。",
         "workshop_description_translation": "Workshop 설명 번역",
         "workshop_description_translation_desc": "Workshop 세부 설명에 대한 언어, 공급자 및 자동 번역 전략을 설정합니다.",
         "workshop_description_translation_only_desc": "Workshop 세부 정보 페이지의 제목 및 설명 번역에만 영향을 미칩니다."

@@ -13,6 +13,7 @@ from typing import Any, Callable, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from backend.database.dao import ModDAO, GroupDAO
+from backend.load_order.language_pack_ownership import get_effective_mod_type
 from backend.load_order.package_tokens import parse_package_token, select_mod_instance
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_profile import ProfileContext
@@ -844,7 +845,7 @@ class AIToolExecutor:
             "groups": mod.get("groups", []),
             "notes": str(mod.get("notes") or "").strip() or None,
             "sign_color": mod.get("sign_color"),
-            "mod_type": mod.get("user_mod_type", mod.get("mod_type")),
+            "mod_type": get_effective_mod_type(mod),
         }
         
         return result

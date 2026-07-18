@@ -6054,6 +6054,8 @@
         "title": "功能设置",
         "translation": "翻译",
         "translation_desc": "设置默认翻译偏好，以及工坊说明翻译的单独策略。",
+        "wide_language_pack_detection": "宽泛识别语言包",
+        "wide_language_pack_detection_desc": "开启后，带翻译文件和补丁、但没有程序集、贴图、音频或普通定义的 Mod，也会按语言包参与归属判断。",
         "workshop_description_translation": "工坊说明翻译",
         "workshop_description_translation_desc": "设置工坊详情页说明翻译的语言、翻译器和自动翻译策略。",
         "workshop_description_translation_only_desc": "只影响工坊详情页的标题和说明翻译。"

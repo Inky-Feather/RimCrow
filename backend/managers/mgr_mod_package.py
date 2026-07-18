@@ -10,7 +10,7 @@ from typing import Any, Callable
 from backend._version import __version__
 from backend.database.dao import ModDAO, _ProfilePathScope
 from backend.database.models import ModInterlock
-from backend.load_order.language_pack_ownership import resolve_language_pack_ownership_for_mods
+from backend.load_order.language_pack_ownership import is_usable_language_pack_ownership, resolve_language_pack_ownership_for_mods
 from backend.load_order.package_tokens import build_steam_package_token, parse_package_token, select_mod_instance
 from backend.managers.mgr_rules import resolve_mod_rules
 from backend.utils.bundle_io import (
@@ -757,6 +757,8 @@ class ModPackageManager:
                 active_token_set or set(),
             )
             owner_result = selected.get("language_pack_owner_result") or {}
+            if not is_usable_language_pack_ownership(owner_result):
+                continue
             for owner in owner_result.get("owners", []) or []:
                 owner_id = normalize_package_id(owner.get("package_id"))
                 if not owner_id:

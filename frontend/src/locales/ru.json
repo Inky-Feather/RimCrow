@@ -5676,11 +5676,11 @@
       "action": {
         "as_strict_dependency": "Как жесткая зависимость",
         "create_rule": "Новое правило",
+        "delete_relation": "Удалить правило связи модов",
         "enable_rules": "Включить правила",
         "export_bundle": "Экспортировать пакет конфигурации",
         "import_bundle": "Импортировать пакет конфигурации",
-        "update_library": "Обновить библиотеку",
-        "delete_relation": "Удалить правило связи модов"
+        "update_library": "Обновить библиотеку"
       },
       "action_text": {
         "load_after": "После {name}",
@@ -6054,6 +6054,8 @@
         "title": "Настройки функции",
         "translation": "Перевод",
         "translation_desc": "Установите настройки перевода по умолчанию и отдельное поведение для перевода описания Workshop.",
+        "wide_language_pack_detection": "[UNTRANSLATED] 宽泛识别语言包",
+        "wide_language_pack_detection_desc": "[UNTRANSLATED] 开启后，带翻译文件和补丁、但没有程序集、贴图、音频或普通定义的 Mod，也会按语言包参与归属判断。",
         "workshop_description_translation": "Workshop перевод описания",
         "workshop_description_translation_desc": "Установите язык, поставщика и стратегию автоматического перевода для подробных описаний Workshop.",
         "workshop_description_translation_only_desc": "Влияет только на перевод заголовка и описания на страницах сведений о Workshop."

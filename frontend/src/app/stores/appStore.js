@@ -399,6 +399,7 @@ export const useAppStore = defineStore('app', () => {
     show_coexistence_message: false,       // 是否显示共存Mod提示
     enable_action_prechecks: true,        // 关键动作前是否执行启用/安装检查
     check_language_support: true,        // 是否检查语言支持
+    wide_language_pack_detection: false, // 是否启用宽泛语言包判定
     reset_active_list: {
       user_ids: [],
       excluded_builtin_ids: [],

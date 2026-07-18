@@ -298,6 +298,7 @@ class AppConfig:
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
     show_coexistence_message: bool = False      # 是否显示共存Mod提示
     check_language_support: bool = True        # 是否检查语言支持
+    wide_language_pack_detection: bool = False # 是否启用宽泛语言包判定
     enable_action_prechecks: bool = True       # 是否启用操作前检查功能
     reset_active_list: Dict[str, Any] = field(default_factory=lambda: {
         "user_ids": [],
@@ -635,6 +636,7 @@ class SettingsManager:
             except (TypeError, ValueError):
                 ai_cfg.context_window_tokens = 0
         self.config.skip_language_pack_alias_generation = bool(self.config.skip_language_pack_alias_generation)
+        self.config.wide_language_pack_detection = bool(self.config.wide_language_pack_detection)
         if not isinstance(self.config.ui.mod_list_simple_view, dict):
             self.config.ui.mod_list_simple_view = {}
         else:

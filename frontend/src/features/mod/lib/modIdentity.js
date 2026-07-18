@@ -27,6 +27,24 @@ export const stripPackageTokenSuffix = (value = '') => {
 
 export const normalizePackageId = (value = '') => stripPackageTokenSuffix(value)
 
+export const getEffectiveModType = (mod = {}) => {
+  const userModType = String(mod?.user_mod_type || '').trim()
+  if (userModType) return userModType
+  if (mod?.is_language_pack === true) return 'LanguagePack'
+  return String(mod?.mod_type || '').trim() || 'Unknown'
+}
+
+export const isLanguagePackType = (mod = {}) => getEffectiveModType(mod) === 'LanguagePack'
+
+export const isUsableLanguagePackOwnership = (ownerResult = {}) => {
+  const confidence = String(ownerResult?.summary_confidence || '').trim().toLowerCase()
+  return confidence === 'high' || confidence === 'medium'
+}
+
+export const hasUsableLanguagePackOwnership = (mod = {}) => (
+  isUsableLanguagePackOwnership(mod?.language_pack_owner_result)
+)
+
 export const isSteamPackageToken = (value = '') => normalizePackageToken(value).endsWith(STEAM_PACKAGE_SUFFIX)
 
 export const buildSteamPackageToken = (value = '') => {

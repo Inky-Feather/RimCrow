@@ -5676,11 +5676,11 @@
       "action": {
         "as_strict_dependency": "As hard dependency",
         "create_rule": "New rule",
+        "delete_relation": "Delete mod relationship rule",
         "enable_rules": "Enable rules",
         "export_bundle": "Export config bundle",
         "import_bundle": "Import config bundle",
-        "update_library": "Update library",
-        "delete_relation": "Delete mod relationship rule"
+        "update_library": "Update library"
       },
       "action_text": {
         "load_after": "After {name}",
@@ -6054,6 +6054,8 @@
         "title": "Feature settings",
         "translation": "Translation",
         "translation_desc": "Set default translation preferences and separate behavior for Workshop description translation.",
+        "wide_language_pack_detection": "[UNTRANSLATED] 宽泛识别语言包",
+        "wide_language_pack_detection_desc": "[UNTRANSLATED] 开启后，带翻译文件和补丁、但没有程序集、贴图、音频或普通定义的 Mod，也会按语言包参与归属判断。",
         "workshop_description_translation": "Workshop description translation",
         "workshop_description_translation_desc": "Set the language, provider, and auto-translation strategy for Workshop detail descriptions.",
         "workshop_description_translation_only_desc": "Only affects title and description translation on Workshop detail pages."

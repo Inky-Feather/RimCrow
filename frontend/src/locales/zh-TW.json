@@ -5676,11 +5676,11 @@
       "action": {
         "as_strict_dependency": "作為強依賴",
         "create_rule": "新建規則",
+        "delete_relation": "刪除模組關係規則",
         "enable_rules": "啟用規則",
         "export_bundle": "導出配置包",
         "import_bundle": "導入配置包",
-        "update_library": "手動更新庫",
-        "delete_relation": "刪除模組關係規則"
+        "update_library": "手動更新庫"
       },
       "action_text": {
         "load_after": "在 {name} 之後",
@@ -6054,6 +6054,8 @@
         "title": "功能設定",
         "translation": "翻譯",
         "translation_desc": "設定預設翻譯偏好，以及工坊說明翻譯的單獨策略。",
+        "wide_language_pack_detection": "[UNTRANSLATED] 宽泛识别语言包",
+        "wide_language_pack_detection_desc": "[UNTRANSLATED] 开启后，带翻译文件和补丁、但没有程序集、贴图、音频或普通定义的 Mod，也会按语言包参与归属判断。",
         "workshop_description_translation": "工坊說明翻譯",
         "workshop_description_translation_desc": "設定工坊詳情頁說明翻譯的語言、翻譯器和自動翻譯策略。",
         "workshop_description_translation_only_desc": "隻影響工坊詳情頁的標題和說明翻譯。"

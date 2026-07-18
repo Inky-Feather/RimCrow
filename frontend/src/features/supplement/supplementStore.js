@@ -7,7 +7,8 @@ import { useProfileStore } from '../profiles/profileStore'
 import { ISSUE_TYPE } from '../../shared/lib/constants'
 import {
   dedupeNormalizedPackageIds, dedupeNormalizedPackageTokens,
-  mapUniqueDisplayNames, normalizePackageId, normalizePackageToken, pushUnique
+  hasUsableLanguagePackOwnership, isLanguagePackType, mapUniqueDisplayNames,
+  normalizePackageId, normalizePackageToken, pushUnique
 } from '../mod/lib/modIdentity'
 import { DEFAULT_TOOL_PACKAGE_IDS, isCorePackageId, isOfficialDlcPackageId } from '../mod/lib/packageScope'
 import { getVersionInfo as getVersionInfoByVersions, normalizeVersion } from '../mod/lib/versioning'
@@ -26,7 +27,7 @@ const CATEGORY_ORDER = CATEGORY_DEFS.map(([key]) => key)
 const CATEGORY_SEVERITY = Object.fromEntries(CATEGORY_DEFS)
 
 const dedupeValues = (values = []) => [...new Set((values || []).filter(Boolean))]
-const isLanguagePackMod = (mod) => (mod?.user_mod_type || mod?.mod_type) === 'LanguagePack'
+const isLanguagePackMod = (mod) => isLanguagePackType(mod)
 
 const clearReactiveObject = (target) => {
   Object.keys(target).forEach(key => {
@@ -79,10 +80,7 @@ const getResolvedLanguagePackOwnerIds = (mod) => (
       .filter(Boolean)
   )]
 )
-const canUseLanguagePackForSupplement = (mod) => {
-  const confidence = String(mod?.language_pack_owner_result?.summary_confidence || '').trim().toLowerCase()
-  return confidence === 'high' || confidence === 'medium'
-}
+const canUseLanguagePackForSupplement = (mod) => hasUsableLanguagePackOwnership(mod)
 const isLanguagePackDeclaredForCurrentLanguage = (mod, targetLanguage) => (
   (mod?.supported_languages || []).includes(String(targetLanguage || '').trim())
 )
@@ -168,7 +166,7 @@ export const useSupplementStore = defineStore('supplement', () => {
   const getLanguagePackTargetMap = () => {
     const strictTargetMap = new Map()
     const fallbackTargetMap = new Map()
-    if (!appStore.settings.check_language_support || !currentLanguage.value) {
+    if (!currentLanguage.value) {
       return { strictTargetMap, fallbackTargetMap }
     }
     for (const mod of modStore.getAvailableModInstances()) {
@@ -365,7 +363,7 @@ export const useSupplementStore = defineStore('supplement', () => {
   // 语言包补缺与“问题提示”保持同一口径：
   // 仅当原模组不支持当前语言、且当前路径上没有已满足的对应语言包时，才补出首个候选语言包。
   const collectLanguageEntries = (ownerIds = [], ctx, satisfiedSet = ctx.activeSet, trailSet = new Set()) => {
-    if (!appStore.settings.check_language_support || !currentLanguage.value) return []
+    if (!currentLanguage.value) return []
     const entryMap = new Map()
 
     ownerIds.forEach(ownerId => {

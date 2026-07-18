@@ -502,6 +502,48 @@ class TestOrderSorterStrategies(unittest.TestCase):
                 },
                 "mod.lang": {
                     "weight_info": {"final_weight": 900, "absolute_type": None},
+                    "dependencies": [{"target_id": "mod.core"}],
+                    "load_after": [],
+                    "load_before": [],
+                },
+            },
+            groups,
+            adj,
+            {"language_packs_follow_targets": True},
+        )
+
+        self.assertEqual(result["sorted_ids"], ["mod.core", "mod.lang", "mod.unrelated"])
+
+    def test_language_pack_follow_targets_uses_medium_owner_result(self):
+        group_core = AtomicGroup(["mod.core"])
+        group_unrelated = AtomicGroup(["mod.unrelated"])
+        group_lang = AtomicGroup(["mod.lang"])
+        groups = [group_core, group_unrelated, group_lang]
+        adj = {
+            id(group_core): {id(group_lang): 1},
+        }
+        result = self._run_sort(
+            "classic_sort_logic",
+            [
+                {"package_id": "mod.core", "name": "Core", "mod_type": "XML"},
+                {"package_id": "mod.unrelated", "name": "Unrelated", "mod_type": "XML"},
+                {"package_id": "mod.lang", "name": "Lang", "mod_type": "LanguagePack"},
+            ],
+            {
+                "mod.core": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.unrelated": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.lang": {
+                    "weight_info": {"final_weight": 900, "absolute_type": None},
                     "dependencies": [],
                     "load_after": [{"target_id": "mod.core"}],
                     "load_before": [],
@@ -510,6 +552,63 @@ class TestOrderSorterStrategies(unittest.TestCase):
             groups,
             adj,
             {"language_packs_follow_targets": True},
+        )
+
+        self.assertEqual(result["sorted_ids"], ["mod.core", "mod.lang", "mod.unrelated"])
+
+    def test_wide_language_pack_detection_allows_sort_follow_targets(self):
+        group_core = AtomicGroup(["mod.core"])
+        group_unrelated = AtomicGroup(["mod.unrelated"])
+        group_lang = AtomicGroup(["mod.lang"])
+        groups = [group_core, group_unrelated, group_lang]
+        adj = {
+            id(group_core): {id(group_lang): 1},
+        }
+        result = self._run_sort(
+            "classic_sort_logic",
+            [
+                {"package_id": "mod.core", "name": "Core", "mod_type": "XML"},
+                {"package_id": "mod.unrelated", "name": "Unrelated", "mod_type": "XML"},
+                {
+                    "package_id": "mod.lang",
+                    "name": "Lang",
+                    "mod_type": "XML",
+                    "file_stats": {
+                        "lang_xml": 2,
+                        "patch_xml": 1,
+                        "game_xml": 0,
+                        "code_dll": 0,
+                        "image": 0,
+                        "audio": 0,
+                    },
+                },
+            ],
+            {
+                "mod.core": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.unrelated": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.lang": {
+                    "weight_info": {"final_weight": 900, "absolute_type": None},
+                    "dependencies": [{"target_id": "mod.core"}],
+                    "load_after": [],
+                    "load_before": [],
+                },
+            },
+            groups,
+            adj,
+            {
+                "language_packs_follow_targets": True,
+                "wide_language_pack_detection": True,
+            },
         )
 
         self.assertEqual(result["sorted_ids"], ["mod.core", "mod.lang", "mod.unrelated"])
@@ -713,8 +812,8 @@ class TestOrderSorterStrategies(unittest.TestCase):
                 },
                 "mod.lang": {
                     "weight_info": {"final_weight": 900, "absolute_type": None},
-                    "dependencies": [],
-                    "load_after": [{"target_id": "mod.core"}],
+                    "dependencies": [{"target_id": "mod.core"}],
+                    "load_after": [],
                     "load_before": [],
                 },
             },

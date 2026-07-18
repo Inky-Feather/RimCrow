@@ -107,7 +107,7 @@ export const useModExportPlan = ({
   const exportLanguagePackMaps = computed(() => {
     const strictMap = new Map()
     const fallbackMap = new Map()
-    if (!appSettings.value.check_language_support || !currentLanguage.value) {
+    if (!currentLanguage.value) {
       return { strictMap, fallbackMap }
     }
     exportableModsMap.value.forEach(mod => {

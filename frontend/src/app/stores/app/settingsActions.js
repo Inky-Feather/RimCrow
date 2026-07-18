@@ -13,7 +13,7 @@ const SETTING_KEYS_REQUIRING_LIST_SCAN = [
 // 改变核心状态判定：只需要重拉核心数据，保留当前列表滚动、选择等前端状态。
 const SETTING_KEYS_REQUIRING_MOD_CORE_REFRESH = [
   'language',
-  'check_language_support',
+  'wide_language_pack_detection',
 ]
 
 // 改变补充信息判定：只刷新联机兼容等补充数据，不重拉核心列表。
