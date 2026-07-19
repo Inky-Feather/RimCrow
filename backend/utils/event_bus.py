@@ -1,5 +1,6 @@
 # backend/utils/event_bus.py
 import threading
+from collections.abc import Mapping
 from typing import Any
 
 from backend.i18n.messages import localized_key, localized_params
@@ -98,22 +99,39 @@ class EventBus:
                 # 捕获异常后，将就绪状态置为 False，防止后续事件继续撞墙
                 cls._frontend_ready = False
 
+    @staticmethod
+    def _structured_message_payload(message: Any) -> dict[str, Any]:
+        if not isinstance(message, Mapping):
+            payload: dict[str, Any] = {"message": str(message or "")}
+            key = localized_key(message)
+            params = localized_params(message)
+            if key:
+                payload["message_key"] = key
+            if params:
+                payload["message_params"] = params
+            return payload
+        payload = dict(message)
+        text = str(payload.get("message") or payload.get("user_message") or "")
+        if text:
+            payload["message"] = text
+        key = localized_key(payload)
+        params = localized_params(payload)
+        if key:
+            payload["message_key"] = key
+        if params:
+            payload["message_params"] = params
+        return payload
+
     @classmethod
     def send_toast(cls, message: str, type: str = 'info', duration: int = 3000):
         """快捷发送 Toast"""
         print(f"[EventBus] send_toast: {message}")
         payload: dict[str, Any] = {
             'mode': 'toast',
-            'message': str(message or ""),
             'type': type,
             'duration': duration
         }
-        key = localized_key(message)
-        params = localized_params(message)
-        if key:
-            payload["message_key"] = key
-        if params:
-            payload["message_params"] = params
+        payload.update(cls._structured_message_payload(message))
         cls.emit('backend-popup', payload)
 
     @classmethod
@@ -122,15 +140,9 @@ class EventBus:
         payload: dict[str, Any] = {
             'mode': 'modal',
             'title': title,
-            'message': str(message or ""),
             'type': type
         }
-        message_key = localized_key(message)
-        message_params = localized_params(message)
-        if message_key:
-            payload["message_key"] = message_key
-        if message_params:
-            payload["message_params"] = message_params
+        payload.update(cls._structured_message_payload(message))
         cls.emit('backend-popup', payload)
 
     @staticmethod

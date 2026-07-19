@@ -51,11 +51,16 @@ def tr(key: str, default_text: str, params: Mapping[str, Any] | None = None, **k
 
 
 def localized_key(value: Any) -> str:
+    if isinstance(value, Mapping):
+        return str(value.get("message_key", "") or "").strip()
     return str(getattr(value, "message_key", "") or "").strip()
 
 
 def localized_params(value: Any) -> dict[str, Any]:
-    params = getattr(value, "message_params", None)
+    if isinstance(value, Mapping):
+        params = value.get("message_params", None)
+    else:
+        params = getattr(value, "message_params", None)
     return dict(params or {}) if isinstance(params, Mapping) else {}
 
 
