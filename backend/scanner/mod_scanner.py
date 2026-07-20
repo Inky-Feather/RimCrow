@@ -129,16 +129,39 @@ class ModScanner:
                 metrics={ "forced_update": forced_update, "size_check_override": size_check_override, "size_check_paths_count": len(size_check_paths or []) },
             )
         # 提交到线程池
-        self.executor.submit( self._scan_paths_task, task_id, search_paths, forced_update, size_check_override, size_check_paths, emit_events, residue_scan_enabled )
+        try:
+            self.executor.submit( self._scan_paths_task, task_id, search_paths, forced_update, size_check_override, size_check_paths, emit_events, residue_scan_enabled )
+        except Exception as e:
+            self._is_scanning = False
+            self._stop_requested = False
+            self._current_task_id = None
+            logger.error("提交扫描任务失败: task_id=%s reason=%s", task_id, e, exc_info=True)
+            failed_message = tr("tasks.scan.start_failed", "启动扫描失败。请检查搜索路径、数据库状态和文件权限后重试。")
+            if emit_events:
+                self._finish_scan(
+                    {
+                        "status": "failed",
+                        "message": failed_message,
+                        "task_id": task_id,
+                        "metrics": {"stage": "submit_task", "exception_type": type(e).__name__, "error": str(failed_message)},
+                    },
+                    task_id,
+                    emit_events=emit_events,
+                )
+            raise
         return {'status': 'started', 'task_id': task_id}
 
     def _scan_paths_task( self, task_id, search_paths, forced_update=False, size_check_override: bool | None = None, size_check_paths: list[str] | set[str] | None = None, emit_events: bool = True, residue_scan_enabled: bool | None = None ):
         """
         后台执行的扫描主逻辑
         """
-        logger.info(f"扫描已开始，路径：{search_paths}")
-        start_time = time.time()
-        db.connect(reuse_if_open=True) # 确保线程有连接
+        logger.info("扫描已开始: task_id=%s paths=%s", task_id, search_paths)
+        scan_stage = "connect_db"
+        current_path = ""
+        current_index = 0
+        total_count = 0
+        stage_started_at = time.perf_counter()
+
         stats = {
             'added': 0, 'updated': 0, 'skipped': 0, 'removed': 0, 'duration': 0.0,
             'external_enabled': 0, 'strict_restored_disabled': 0, 'strict_restore_failed': 0,
@@ -150,21 +173,44 @@ class ModScanner:
             'strict_restore_failed_mods': [],
             'about_conflict_cleaned_mods': [],
         }
-        if emit_events:
-            EventBus.emit_progress(
-                task_id,
-                "scan",
-                status="running",
-                progress=1,
-                message=tr("tasks.scan.preparing", "正在准备扫描..."),
-                metrics={'stage': 'preparing', 'current': 0, 'total': 0},
-            )
-        with db.atomic() as txn:
-            try:
+        try:
+            db.connect(reuse_if_open=True) # 确保线程有连接
+            scan_stage = "prepare_cleanup"
+            stage_started_at = time.perf_counter()
+            if emit_events:
+                EventBus.emit_progress(
+                    task_id,
+                    "scan",
+                    status="running",
+                    progress=1,
+                    message=tr("tasks.scan.preparing", "正在准备扫描..."),
+                    metrics={'stage': scan_stage, 'current': 0, 'total': 0},
+                )
+            workshop_status = SteamManager().workshop_merged_data()
+            subscribed_workshop_ids = [wid for wid, data in workshop_status.items() if data.get("is_subscribed")]
+            scan_stage = "validate_paths"
+            stage_started_at = time.perf_counter()
+            valid_paths = [
+                normalize_path_for_storage(p)
+                for p in search_paths
+                if p and os.path.exists(p)
+            ]
+            if not valid_paths:
+                error_metrics = {'stage': scan_stage, 'current': current_index, 'total': total_count}
+                self._finish_scan({
+                    'status': 'failed',
+                    'message': tr("tasks.scan.no_valid_paths", "没有有效路径"),
+                    'task_id': task_id,
+                    'metrics': error_metrics,
+                }, task_id, emit_events=emit_events)
+                return
+
+            scan_stage = "prepare_cleanup"
+            stage_started_at = time.perf_counter()
+            # atomic 会在异常时自动回滚，避免失效库存和 Shadow Path 只清理一部分。
+            with db.atomic():
                 # --- 5. 清理失效数据 ---
                 # 扫描缺失的 Mod (物理文件没了)
-                workshop_status = SteamManager().workshop_merged_data()
-                subscribed_workshop_ids = [wid for wid, data in workshop_status.items() if data.get("is_subscribed")]
                 deletion_result = ModMaintenanceDAO.find_missing_mods(settings.config.delete_missing_mods_data, subscribed_workshop_ids)
                 missing_count = len(deletion_result.get('missing_mods') or [])
                 deleted_count = len(deletion_result.get('deleted_mods') or [])
@@ -178,25 +224,13 @@ class ModScanner:
                 )
                 # 清理失效的 Shadow Paths
                 stats['shadow_path_cleaned'] = ModMaintenanceDAO.clean_invalid_shadow_paths()
-            except Exception as e:
-                txn.rollback() # 万一出错，回滚所有改动
-                raise e
-        try:
             # --- 0. 预检查与准备 ---
             # SteamCMD 下载目录与管理器自管目录当前共用同一份物理数据。
             # 扫描前先把 ACF 中“目录已不存在”的陈旧安装记录清掉，
             # 避免后续任何 SteamCMD 下载又被旧记录拖入 Missing game files 校验失败。
+            scan_stage = "steamcmd_reconcile"
+            stage_started_at = time.perf_counter()
             SteamManager().reconcile_steamcmd_acf()
-            valid_paths = [
-                normalize_path_for_storage(p)
-                for p in search_paths
-                if p and os.path.exists(p)
-            ]
-            if not valid_paths:
-                if emit_events:
-                    EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message=tr("tasks.scan.no_valid_paths", "没有有效路径"))
-                self._finish_scan({'error': tr("tasks.scan.no_valid_paths", "没有有效路径"), 'task_id': task_id}, task_id, emit_events=emit_events)
-                return
             size_check_path_set = {
                 normalize_path_for_storage(path)
                 for path in (size_check_paths or [])
@@ -209,9 +243,11 @@ class ModScanner:
                     status="running",
                     progress=3,
                     message=tr("tasks.scan.reading_game_info", "正在读取游戏基础信息..."),
-                    metrics={'stage': 'preparing', 'current': 0, 'total': 0},
+                    metrics={'stage': 'load_snapshots', 'current': 0, 'total': 0},
                 )
             # 扫描只需要 DLC 基础定义；全语言 tar 缓存按需或后台同步，避免首次扫描被解包阻塞。
+            scan_stage = "load_snapshots"
+            stage_started_at = time.perf_counter()
             dlc_parser = DLCParser(self.context.game_dlc_path, sync_translations=False, current_language_code=settings.config.language)
             existing_snapshots = ModDAO.get_mod_snapshots()   # 从数据库获取已存在的 Mod 时间戳及大小
             # --- 1. 快速搜集所有待扫描文件夹 (用于计算进度总数) ---
@@ -228,7 +264,10 @@ class ModScanner:
             official_data_root = str(getattr(self.context, "game_dlc_path", "") or "").strip()
             install_layout = resolve_rimworld_layout(str(getattr(self.context, "game_install_path", "") or "").strip())
             resource_data_root = install_layout.resource_data_root
+            scan_stage = "indexing"
+            stage_started_at = time.perf_counter()
             for base_path in valid_paths:
+                current_path = base_path
                 try:
                     is_data_dir = bool(official_data_root and same_path(base_path, official_data_root))
                     if resource_data_root and same_path(base_path, resource_data_root):
@@ -247,6 +286,7 @@ class ModScanner:
                 except OSError as e:
                     logger.warning(f"无法访问路径 {base_path}: {e}")
             total_count = len(mod_folders)
+            current_path = ""
             # 优化：根据总数动态决定发送频率
             report_interval = max(1, total_count // 50) 
             # --- 2. 扫描与解析阶段 ---
@@ -254,7 +294,11 @@ class ModScanner:
             # 结构: { package_id: [mod_data_1, mod_data_2] }
             temp_registry = defaultdict(list)
             start_time = time.time()
+            scan_stage = "scanning"
+            stage_started_at = time.perf_counter()
             for idx, (mod_path, is_dlc) in enumerate(mod_folders):
+                current_index = idx + 1
+                current_path = mod_path
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
                     logger.info("扫描在解析阶段停止。")
@@ -291,6 +335,7 @@ class ModScanner:
                     else:
                         stats['updated'] += 1
                         
+            current_path = ""
             # 【关键检查点】：解析完成后检查中断标志
             if self._stop_requested:
                 logger.info("扫描在解析阶段停止。")
@@ -311,6 +356,8 @@ class ModScanner:
             mods_to_touch = []
 
             shadow_paths_map = {}
+            scan_stage = "build_write_sets"
+            stage_started_at = time.perf_counter()
             for entries in temp_registry.values():
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
@@ -341,21 +388,24 @@ class ModScanner:
 
             # --- 4. 批量入库 ---
             # 这是数据安全最关键的一步
-            try:
-                if mods_to_upsert: 
+            scan_stage = "database_write"
+            stage_started_at = time.perf_counter()
+            # 三类写入必须作为一个整体提交，任一步失败都回滚本轮数据库变更。
+            with db.atomic():
+                if mods_to_upsert:
                     ModDAO.batch_upsert_mods(mods_to_upsert)
                 if mods_to_touch:
                     ModDAO.batch_update_mods(mods_to_touch)
                 if shadow_paths_map:
                     ModDAO.batch_update_shadow_paths(shadow_paths_map)
-                # 扫描完成后再基于本轮 self 域磁盘结果补齐 SteamCMD ACF，
-                # 让 ACF 记录集合与真实目录集合保持同步。
-                SteamManager().reconcile_steamcmd_acf(scan_mods=mods_to_upsert)
-            except Exception as e:
-                # txn.rollback() # 万一出错，回滚所有改动
-                logger.error(f"批量入库失败: {e}", exc_info=True)
-                raise e
+            # 扫描完成后再基于本轮 self 域磁盘结果补齐 SteamCMD ACF，
+            # 让 ACF 记录集合与真实目录集合保持同步。异常由外层统一记录阶段和路径。
+            scan_stage = "steamcmd_finalize"
+            stage_started_at = time.perf_counter()
+            SteamManager().reconcile_steamcmd_acf(scan_mods=mods_to_upsert)
             # 入库完成后，再按当前 Profile 的启用域统一分析冲突与运行态收敛依据。
+            scan_stage = "runtime_analysis"
+            stage_started_at = time.perf_counter()
             runtime_caps = resolve_profile_runtime_capabilities(self.context)
             runtime_analysis = ModDAO.get_profile_conflict_analysis(
                 self.context,
@@ -366,6 +416,8 @@ class ModScanner:
             final_coexistences = runtime_analysis['coexistences']
             # --- 6. 扫描后通知运行态收敛 ---
             runtime_sync_msg = "Runtime link sync not configured"
+            scan_stage = "runtime_sync"
+            stage_started_at = time.perf_counter()
             if callable(self.runtime_link_sync_handler):
                 runtime_sync_msg = self.runtime_link_sync_handler(self.context.profile_id)
 
@@ -373,26 +425,6 @@ class ModScanner:
             stats['duration'] = time.time() - start_time
             should_check_mod_residue = bool(getattr(settings.config, "enable_mod_residue_scan", True)) if residue_scan_enabled is None else bool(residue_scan_enabled)
             core_refresh_required = self._should_refresh_core_after_scan(stats, forced_update)
-            
-            if emit_events:
-                EventBus.emit_progress(
-                    task_id,
-                    "scan",
-                    status="success",
-                    progress=100,
-                    message=tr("tasks.scan.finished", "扫描完成"),
-                    metrics={
-                        'stage': 'finished',
-                        'current': total_count,
-                        'total': total_count,
-                        'stats': stats,
-                        'conflict_count': len(final_conflicts),
-                        'coexistence_count': len(final_coexistences),
-                        'should_check_mod_residue': should_check_mod_residue,
-                        'core_refresh_required': core_refresh_required,
-                        'runtime_sync_message': runtime_sync_msg,
-                    },
-                )
             
             result = {
                 'status': 'success',
@@ -445,12 +477,23 @@ class ModScanner:
             logger.debug("扫描禁用状态详情: %s", disabled_debug)
             logger.debug("扫描冲突详情: conflicts=%s coexistences=%s should_check_mod_residue=%s", conflict_debug, coexistence_debug, should_check_mod_residue)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            logger.error("扫描任务失败", exc_info=True)
-            if emit_events:
-                EventBus.emit_progress(task_id, "scan", status="failed", progress=0, message=tr("tasks.scan.failed_with_reason", "扫描失败: {reason}", reason=e))
-            self._finish_scan({'status': 'error', 'message': str(e), 'task_id': task_id}, task_id, emit_events=emit_events)
+            failed_message = tr("tasks.scan.failed", "扫描失败。请检查搜索路径、数据库状态和文件权限后重试。")
+            error_metrics = {
+                'stage': scan_stage,
+                'current': current_index,
+                'total': total_count,
+                'current_path': current_path,
+                'exception_type': type(e).__name__,
+                'error': str(failed_message),
+                'stage_elapsed_ms': round((time.perf_counter() - stage_started_at) * 1000, 2),
+            }
+            logger.error(
+                "扫描任务失败: task_id=%s stage=%s current=%s/%s path=%s reason=%s",
+                task_id, scan_stage, current_index, total_count, current_path, e,
+                exc_info=True,
+                extra={"extra_context": error_metrics},
+            )
+            self._finish_scan({'status': 'error', 'message': str(failed_message), 'task_id': task_id, 'metrics': error_metrics}, task_id, emit_events=emit_events)
         finally:
             self._is_scanning = False
             self._stop_requested = False # 清理状态
@@ -461,8 +504,6 @@ class ModScanner:
     def _handle_interruption(self, task_id: str, emit_events: bool = True):
         """处理中断后的清理和通知"""
         self._is_scanning = False
-        if emit_events:
-            EventBus.emit_progress(task_id, "scan", status="cancelled", progress=0, message=tr("tasks.scan.cancelled", "扫描已由用户中止"))
         self._finish_scan({
             'status': 'cancelled',
             'message': tr("tasks.scan.cancelled_no_changes", "扫描已由用户中止，未对数据库进行任何修改。"),

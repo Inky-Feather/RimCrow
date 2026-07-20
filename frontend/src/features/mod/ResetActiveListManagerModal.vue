@@ -5,6 +5,9 @@
     accent="warn"
     :title="t('dialog.reset_active_list_manager.title', '预设列表管理')"
     :description="t('dialog.reset_active_list_manager.description', '管理预设的基底启用列表，重置列表时会直接按以下列表重置。点击官方 DLC 或衍生补充项可切换排除状态。')"
+    :show-close="!saving"
+    :close-on-backdrop="!saving"
+    :close-on-esc="!saving"
     @close="close"
   >
     <div class="flex max-h-[70vh] flex-col gap-3 overflow-y-auto px-5 py-2 custom-scrollbar">
@@ -49,11 +52,11 @@
 
     <template #footer>
       <div class="flex items-center justify-end gap-2">
-        <button type="button" class="rounded-xl border border-border-base/10 bg-bg-overlay/5 px-4 py-2 text-xs font-bold text-text-main transition-all hover:bg-bg-overlay/10" @click="close">
+        <button type="button" class="rounded-xl border border-border-base/10 bg-bg-overlay/5 px-4 py-2 text-xs font-bold text-text-main transition-all hover:bg-bg-overlay/10 disabled:opacity-50" :disabled="saving" @click="close">
           {{ t('common.action.cancel', '取消') }}
         </button>
-        <button type="button" class="rounded-xl bg-accent-warn px-5 py-2 text-sm font-black text-on-accent-warn transition-all hover:bg-accent-warn/85" @click="save">
-          {{ t('common.action.save', '保存') }}
+        <button type="button" class="rounded-xl bg-accent-warn px-5 py-2 text-sm font-black text-on-accent-warn transition-all hover:bg-accent-warn/85 disabled:cursor-not-allowed disabled:opacity-50" :disabled="saving" @click="save">
+          {{ saving ? t('common.status.processing', '处理中') : t('common.action.save', '保存') }}
         </button>
       </div>
     </template>
@@ -73,6 +76,7 @@ const EXCLUDED_TAG_CLASS = 'cursor-pointer border-border-base/10 bg-bg-overlay/5
 
 const appStore = useAppStore()
 const modStore = useModStore()
+const saving = ref(false)
 const draft = reactive({
   user_ids: [],
   excluded_builtin_ids: [],
@@ -142,12 +146,18 @@ const toggleExcluded = (type, id = '') => {
     : [...draft[key], normalizedId]
 }
 const save = async () => {
-  const config = buildConfig()
-  const saved = await appStore.saveSetting('reset_active_list', config)
-  if (!saved) return
-  close()
+  if (saving.value) return
+  saving.value = true
+  try {
+    const config = buildConfig()
+    const saved = await appStore.saveSetting('reset_active_list', config)
+    if (saved) appStore.uiState.showResetActiveListManager = false
+  } finally {
+    saving.value = false
+  }
 }
 const close = () => {
+  if (saving.value) return
   appStore.uiState.showResetActiveListManager = false
 }
 </script>

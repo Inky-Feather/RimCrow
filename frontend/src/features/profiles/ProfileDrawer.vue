@@ -149,7 +149,7 @@
       <div class="modal-surface flex max-h-[calc(100vh-2rem)] w-[min(52rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl bg-bg-highlight/90 animate-scale-in">
         <header class="modal-header flex items-center justify-between px-6 py-4">
           <h3 class="text-lg font-bold text-text-main">{{ isEditing ? t('ui.profiles.form.edit_title', '编辑环境属性') : t('ui.profiles.form.create_title', '创建新环境快照') }}</h3>
-          <button @click="showModal = false" class="text-text-dim hover:text-text-main"><X class="size-5" /></button>
+          <button @click="showModal = false" :disabled="submitting" :class="submitting ? 'app-action-disabled' : ''" class="text-text-dim hover:text-text-main"><X class="size-5" /></button>
         </header>
 
         <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-6 custom-scrollbar">
@@ -176,9 +176,9 @@
         </div>
 
         <footer class="modal-footer flex justify-end gap-3 px-6 py-4">
-          <button @click="showModal = false" class="px-4 py-2 text-sm text-text-dim hover:text-text-main">{{ t('common.action.cancel', '取消') }}</button>
-          <button @click="submitForm" class="px-6 py-2 rounded-xl bg-accent-primary text-on-accent-primary font-black text-sm shadow-lg shadow-accent-primary/20 transition-all hover:scale-105 active:scale-95">
-            {{ isEditing ? t('ui.profiles.action.save_changes', '保存变更') : t('ui.profiles.action.confirm_create', '确认创建') }}
+          <button @click="showModal = false" :disabled="submitting" :class="submitting ? 'app-action-disabled' : ''" class="px-4 py-2 text-sm text-text-dim hover:text-text-main">{{ t('common.action.cancel', '取消') }}</button>
+          <button @click="submitForm" :disabled="submitting" :class="submitting ? 'app-action-disabled' : ''" class="px-6 py-2 rounded-xl bg-accent-primary text-on-accent-primary font-black text-sm shadow-lg shadow-accent-primary/20 transition-all hover:scale-105 active:scale-95">
+            {{ submitting ? t('common.status.processing', '处理中') : (isEditing ? t('ui.profiles.action.save_changes', '保存变更') : t('ui.profiles.action.confirm_create', '确认创建')) }}
           </button>
         </footer>
       </div>
@@ -214,6 +214,7 @@ const isEditing = ref(false)
 const gameInfo = ref('')
 const steamLaunchChecking = ref(false)
 const workshopModsChecking = ref(false)
+const submitting = ref(false)
 const form = reactive({
   id: '',
   name: '',
@@ -245,7 +246,7 @@ const showWorkshopRuntimeBadge = (profile) => {
 
 // --- 逻辑 ---
 watch(() => appStore.uiState.showProfileDrawer, (val) => {
-  if (val) profileStore.scanOrphans()
+  if (val) void profileStore.scanOrphans()
 })
 watch(() => form.prefer_steam_launch, (enabled) => {
   if (enabled) {
@@ -253,6 +254,7 @@ watch(() => form.prefer_steam_launch, (enabled) => {
   }
 })
 const openCreate = () => {
+  submitting.value = false
   form.id = ''
   form.name = ''
   form.description = ''
@@ -269,6 +271,7 @@ const openCreate = () => {
 }
 
 const handleEdit = async (p) => {
+  submitting.value = false
   form.id = p.id
   form.name = p.name
   form.description = p.description
@@ -294,6 +297,7 @@ const browsePath = async (type) => {
 }
 
 const submitForm = async () => {
+  if (submitting.value) return
   if (!form.name) {
     toast.warning(t('toast.profiles.name_required', '请输入显示名称'))
     return
@@ -306,32 +310,37 @@ const submitForm = async () => {
     toast.warning(t('toast.profiles.user_data_path_required', '请输入用户数据目录'))
     return
   }
-  await checkPath('user_data_path', form.user_data_path)
-  await checkPath('game_install_path', form.game_install_path)
-  if (form['check_info']['game_install_path'] && !form['check_info']['game_install_path']['pass']) {
-    toast.warning(t('toast.profiles.game_install_path_invalid', '请选择一个有效的游戏执行目录'))
-    return
+  submitting.value = true
+  try {
+    await checkPath('user_data_path', form.user_data_path)
+    await checkPath('game_install_path', form.game_install_path)
+    if (form['check_info']['game_install_path'] && !form['check_info']['game_install_path']['pass']) {
+      toast.warning(t('toast.profiles.game_install_path_invalid', '请选择一个有效的游戏执行目录'))
+      return
+    }
+    if (form['check_info']['user_data_path'] && !form['check_info']['user_data_path']['pass'] && isEditing.value) {
+      toast.warning(t('toast.profiles.user_data_path_invalid', '请输入一个有效的用户数据目录'))
+      return
+    }
+    if (form.prefer_steam_launch) {
+      await validateSteamLaunchEnable()
+    }
+    if (form.use_workshop_mods) {
+      await validateWorkshopModsEnable()
+    }
+    if (isEditing.value) {
+      const cleanForm = { ...form }
+      delete cleanForm.copy_current_data
+      await profileStore.updateProfile(form.id, cleanForm)
+    } else {
+      const cleanForm = { ...form }
+      delete cleanForm.copy_current_data
+      await profileStore.createProfile(cleanForm, form.copy_current_data)
+    }
+    showModal.value = false
+  } finally {
+    submitting.value = false
   }
-  if (form['check_info']['user_data_path'] && !form['check_info']['user_data_path']['pass'] && isEditing.value) {
-    toast.warning(t('toast.profiles.user_data_path_invalid', '请输入一个有效的用户数据目录'))
-    return
-  }
-  if (form.prefer_steam_launch) {
-    await validateSteamLaunchEnable()
-  }
-  if (form.use_workshop_mods) {
-    await validateWorkshopModsEnable()
-  }
-  if (isEditing.value) {
-    const cleanForm = { ...form }
-    delete cleanForm.copy_current_data
-    await profileStore.updateProfile(form.id, cleanForm)
-  } else {
-    const cleanForm = { ...form }
-    delete cleanForm.copy_current_data
-    await profileStore.createProfile(cleanForm, form.copy_current_data)
-  }
-  showModal.value = false
 }
 
 // 检查游戏路径是否有效
@@ -432,9 +441,6 @@ const handleDelete = async (p) => {
     }
   )
   if (decision?.confirmed) {
-    if (p.id === appStore.settings.current_profile_id) {
-      profileStore.switchProfile('default')
-    }
     await profileStore.deleteProfile(p.id, !!decision.force)
   }
 }

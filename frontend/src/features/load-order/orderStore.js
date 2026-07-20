@@ -145,6 +145,24 @@ export const useOrderStore = defineStore('order', () => {
   const clearTempImports = () => {
     tempImports.value = []
   }
+  const clearProfileRefs = (profileId = '', fallbackProfileId = '') => {
+    const deletedId = String(profileId || '').trim()
+    if (!deletedId) return false
+    const fallbackId = String(fallbackProfileId || '').trim()
+    let changed = false
+    const deletedProfileIsViewed = backupProfileId.value === deletedId
+    const deletedProfileIsBackupSource = currentBackupSourceProfileId.value === deletedId
+    if (deletedProfileIsViewed || deletedProfileIsBackupSource) {
+      backupProfileId.value = fallbackId
+      backupProfileDir.value = ''
+      backups.value = { today: [], earlier: [], other: [], last_backup: [] }
+      clearBackupOrder()
+      changed = true
+    }
+    const prevLength = tempImports.value.length
+    tempImports.value = tempImports.value.filter(item => String(item?.source_profile_id || '').trim() !== deletedId)
+    return changed || tempImports.value.length !== prevLength
+  }
   const buildEditingMods = (ids = []) => (
     (ids || []).map(id => {
       const normalizedId = normalizePackageToken(id)
@@ -772,6 +790,6 @@ export const useOrderStore = defineStore('order', () => {
     // 导入检查处理
     subscribeImportCheckItems, downloadImportCheckItems, removeImportCheckItems, confirmImportStripping,
     // 备份状态维护
-    setBackupOrder, clearBackupOrder, setBackupProfile, registerTempImport, removeTempImport, clearTempImports, openBackupPath, getBackups, captureRuntimeRefreshSnapshot, presentRuntimeRefreshDiff,
+    setBackupOrder, clearBackupOrder, setBackupProfile, clearProfileRefs, registerTempImport, removeTempImport, clearTempImports, openBackupPath, getBackups, captureRuntimeRefreshSnapshot, presentRuntimeRefreshDiff,
   }
 })

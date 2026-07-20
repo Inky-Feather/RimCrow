@@ -160,17 +160,22 @@ const tabs = computed(() => [
   { id: 'dev', label: t('ui.settings.panel.tab.dev', '开发调试'), icon: Terminal },
   { id: 'about', label: t('ui.settings.about.title', '关于项目'), icon: Info },
 ])
-// 密钥字段统一登记，保存时用保留列表避免空值覆盖已保存密钥。
+// 密钥字段统一登记；未修改的已保存密钥不提交，显式清除通过空值提交。
 const SECRET_FIELD_PATHS = {
   'ai.api_key': 'ai.api_key',
   'steam.web_api_key': 'steam_web_api_key',
   'network.proxy.username': 'network.proxy.username',
   'network.proxy.password': 'network.proxy.password',
 }
+const PROFILE_SETTING_KEYS = new Set([
+  'name', 'description', 'game_install_path', 'user_data_path', 'prefer_steam_launch',
+  'use_workshop_mods', 'use_self_mods', 'run_commands', 'inactive_mods_order',
+  'temp_mods_order', 'last_played_time',
+])
 // 打开版本用于丢弃过期异步结果；保存快照用于跳过无改动提交。
 let settingsPanelOpenVersion = 0
 let settingsPanelLanguageSnapshot = ''
-let settingsPanelSaveSnapshot = ''
+let settingsPanelSaveBaseline = {}
 let settingsPathCheckCache = { key: '', result: null, checkedAt: 0 }
 let isApplyingSettings = false
 const PATH_CHECK_CACHE_MS = 30000
@@ -249,7 +254,93 @@ const toComparableSettingsValue = (value) => {
 
 const buildSettingsSaveSnapshot = (target) => JSON.stringify(toComparableSettingsValue(target || {}))
 
-const hasSettingsFormChanged = () => buildSettingsSaveSnapshot(formData.value) !== settingsPanelSaveSnapshot
+const hasSettingsFormChanged = () => (
+  buildSettingsSaveSnapshot(comparableSettingsForSave(formData.value))
+  !== buildSettingsSaveSnapshot(comparableSettingsForSave(settingsPanelSaveBaseline))
+)
+
+const getTopLevelKeyFromPath = (pathKey) => String(pathKey || '').split('.').filter(Boolean)[0] || ''
+
+const getNestedField = (target, pathKey) => {
+  return String(pathKey || '').split('.').filter(Boolean)
+    .reduce((current, key) => current?.[key], target)
+}
+
+const deleteNestedField = (target, pathKey) => {
+  const segments = String(pathKey || '').split('.').filter(Boolean)
+  if (!segments.length) return
+  let current = target
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    if (!current || typeof current !== 'object') return
+    current = current[segments[index]]
+  }
+  if (current && typeof current === 'object') delete current[segments[segments.length - 1]]
+}
+
+const comparableSettingsForSave = (target) => {
+  const result = toComparableSettingsValue(target || {})
+  const preservedKeys = new Set(Array.isArray(target?._preserve_secret_keys) ? target._preserve_secret_keys : [])
+  Object.entries(SECRET_FIELD_PATHS).forEach(([secretKey, pathKey]) => {
+    if (!preservedKeys.has(secretKey)) return
+    const topLevelKey = getTopLevelKeyFromPath(pathKey)
+    if (topLevelKey && Object.prototype.hasOwnProperty.call(result, topLevelKey)) {
+      deleteNestedField(result, pathKey)
+    }
+  })
+  return result
+}
+
+const buildSettingsSavePayload = () => {
+  const before = comparableSettingsForSave(settingsPanelSaveBaseline)
+  const after = comparableSettingsForSave(formData.value)
+  const payload = {}
+  const allKeys = new Set([...Object.keys(before), ...Object.keys(after)])
+  allKeys.forEach((key) => {
+    if (transientFormKeys.has(key)) return
+    const beforeValue = before[key]
+    const afterValue = after[key]
+    if (JSON.stringify(beforeValue) === JSON.stringify(afterValue)) return
+    if (key === '_preserve_secret_keys') return
+    if (Object.prototype.hasOwnProperty.call(formData.value || {}, key)) {
+      payload[key] = deepClone(formData.value[key])
+    }
+  })
+
+  const beforePreserved = new Set(settingsPanelSaveBaseline?._preserve_secret_keys || [])
+  const afterPreserved = new Set(formData.value?._preserve_secret_keys || [])
+  const clearedKeys = new Set(Array.isArray(formData.value?._clear_secret_keys) ? formData.value._clear_secret_keys : [])
+  Object.entries(SECRET_FIELD_PATHS).forEach(([secretKey, pathKey]) => {
+    const preserveChanged = beforePreserved.has(secretKey) !== afterPreserved.has(secretKey)
+    if (!preserveChanged) return
+    const topLevelKey = getTopLevelKeyFromPath(pathKey)
+    if (topLevelKey && Object.prototype.hasOwnProperty.call(formData.value || {}, topLevelKey)) {
+      payload[topLevelKey] = deepClone(formData.value[topLevelKey])
+    }
+  })
+
+  // 已保存密钥仍处于保留状态时，从提交内容中移除字段；明确清除或重新输入则保留字段。
+  Object.entries(SECRET_FIELD_PATHS).forEach(([secretKey, pathKey]) => {
+    const currentValue = String(getNestedField(formData.value, pathKey) || '')
+    const shouldOmit = !clearedKeys.has(secretKey) && (
+      afterPreserved.has(secretKey)
+      || (!beforePreserved.has(secretKey) && !currentValue.trim())
+    )
+    if (!shouldOmit) return
+    const topLevelKey = getTopLevelKeyFromPath(pathKey)
+    if (topLevelKey && Object.prototype.hasOwnProperty.call(payload, topLevelKey)) {
+      deleteNestedField(payload, pathKey)
+    }
+  })
+  const changedKeys = Object.keys(payload).filter(key => !key.startsWith('_'))
+  if (changedKeys.length) {
+    payload._changed_keys = changedKeys
+    if (changedKeys.some(key => PROFILE_SETTING_KEYS.has(key))) {
+      const profileId = String(profileStore.activeContext?.profile_id || '').trim()
+      if (profileId) payload._profile_id = profileId
+    }
+  }
+  return payload
+}
 
 // Steam 启动和创意工坊加载互斥，避免同一环境同时走两套 Mod 来源。
 watch(() => !!formData.value?.prefer_steam_launch, (enabled) => {
@@ -324,11 +415,19 @@ const validateEnabledLaunchOptions = async () => {
   return valid
 }
 
-// 自动检测路径
-const autoDetect = async (checkAfterDetect = true) => {
+// 自动检测路径；后台补全只填空字段，避免覆盖当前环境已保存的隔离目录。
+const autoDetect = async (checkAfterDetect = true, overwrite = true) => {
   const paths = await appStore.autoDetectPaths(false)
   if (!paths) return false
-  Object.assign(formData.value, paths)
+  const currentProfileId = String(profileStore.activeContext?.profile_id || appStore.settings.current_profile_id || 'default')
+  const isDefaultProfile = currentProfileId === 'default'
+  Object.entries(paths).forEach(([key, value]) => {
+    const currentValue = String(formData.value?.[key] || '').trim()
+    if (!isDefaultProfile && key === 'user_data_path') return
+    if (!isDefaultProfile && key === 'game_install_path' && currentValue) return
+    if (!overwrite && currentValue) return
+    formData.value[key] = value
+  })
   if (checkAfterDetect) await checkPaths()
   return true
 }
@@ -382,11 +481,6 @@ const checkPaths = async () => {
   }
 }
 
-const getNestedField = (target, pathKey) => {
-  return String(pathKey || '').split('.').filter(Boolean)
-    .reduce((current, key) => current?.[key], target)
-}
-
 // 点号路径用于统一处理嵌套设置项，例如 network.proxy.password。
 const setNestedField = (target, pathKey, value) => {
   const segments = String(pathKey || '').split('.').filter(Boolean)
@@ -407,19 +501,33 @@ const clearFormSecrets = (target) => {
   if (!target || typeof target !== 'object') return
   Object.values(SECRET_FIELD_PATHS).forEach(pathKey => setNestedField(target, pathKey, ''))
   delete target._preserve_secret_keys
+  delete target._clear_secret_keys
 }
 
 const getPreserveSecretKeys = () => (
   Array.isArray(formData.value?._preserve_secret_keys) ? formData.value._preserve_secret_keys : []
 )
 
-// 保留列表只接受已登记的密钥，避免把无关字段传给后端密钥处理。
+// 保留列表只接受已登记的密钥，避免无关字段进入表单状态。
 const setPreserveSecretKeys = (keys) => {
   const nextKeys = [...new Set(keys.filter(key => SECRET_FIELD_PATHS[key]))]
   if (nextKeys.length) {
     formData.value._preserve_secret_keys = nextKeys
   } else {
     delete formData.value._preserve_secret_keys
+  }
+}
+
+const getClearSecretKeys = () => (
+  Array.isArray(formData.value?._clear_secret_keys) ? formData.value._clear_secret_keys : []
+)
+
+const setClearSecretKeys = (keys) => {
+  const nextKeys = [...new Set(keys.filter(key => SECRET_FIELD_PATHS[key]))]
+  if (nextKeys.length) {
+    formData.value._clear_secret_keys = nextKeys
+  } else {
+    delete formData.value._clear_secret_keys
   }
 }
 
@@ -432,13 +540,27 @@ const markSavedSecretsPreserved = (target) => {
 const isSecretPreserved = (secretKey) => getPreserveSecretKeys().includes(secretKey)
 
 const preserveFormSecret = (secretKey) => {
+  setClearSecretKeys(getClearSecretKeys().filter(key => key !== secretKey))
   setPreserveSecretKeys([...getPreserveSecretKeys(), secretKey])
 }
 
 const clearFormSecret = (secretKey) => {
-  setNestedField(formData.value, SECRET_FIELD_PATHS[secretKey], '')
+  const pathKey = SECRET_FIELD_PATHS[secretKey]
+  if (!pathKey) return
+  setNestedField(formData.value, pathKey, '')
   setPreserveSecretKeys(getPreserveSecretKeys().filter(key => key !== secretKey))
+  setClearSecretKeys([...getClearSecretKeys(), secretKey])
 }
+
+// 清除后重新输入新值时，自动取消待清除状态；读取已保存密钥仍由 preserve 事件维持保留状态。
+Object.entries(SECRET_FIELD_PATHS).forEach(([secretKey, pathKey]) => {
+  watch(() => getNestedField(formData.value, pathKey), (value) => {
+    if (!String(value || '').trim()) return
+    if (getClearSecretKeys().includes(secretKey)) {
+      setClearSecretKeys(getClearSecretKeys().filter(key => key !== secretKey))
+    }
+  })
+})
 
 // 后端无法写入系统凭据库时，用较长 toast 提醒用户密钥已临时保留。
 const showSecretStorageWarning = (target) => {
@@ -463,12 +585,12 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
     settingsPanelLanguageSnapshot = appStore.settings.language || 'zh-CN'
     markSavedSecretsPreserved(formData.value)
     showSecretStorageWarning(formData.value)
-    settingsPanelSaveSnapshot = buildSettingsSaveSnapshot(formData.value)
+    settingsPanelSaveBaseline = deepClone(formData.value)
     void (async () => {
       if (openVersion !== settingsPanelOpenVersion || !appStore.uiState.showSettingsPanel) return
       const autoDetected = !profileStore.activeContext || profileStore.activeContext.is_healthy === false
       if (autoDetected) {
-        await autoDetect(false)
+        await autoDetect(false, false)
         if (openVersion !== settingsPanelOpenVersion || !appStore.uiState.showSettingsPanel) return
       }
       // 路径检查可能较慢，放在表单渲染之后补齐状态，避免打开设置页卡顿。
@@ -479,7 +601,7 @@ watch(() => appStore.uiState.showSettingsPanel, (val) => {
     if (!appStore.themeEditor.isOpen) applyTheme(appStore.currentTheme)
     if (!isApplyingSettings && settingsPanelLanguageSnapshot) void previewLocale(settingsPanelLanguageSnapshot)
     clearFormSecrets(formData.value)
-    settingsPanelSaveSnapshot = ''
+    settingsPanelSaveBaseline = {}
     settingsPanelLanguageSnapshot = ''
   }
 }, { immediate: true })
@@ -529,7 +651,7 @@ const save = async () => {
     //   toast.error("存在无效路径，请修正后再保存！")
     //   return
     // }
-    await appStore.applySettings(formData.value)
+    await appStore.applySettings(buildSettingsSavePayload())
   } finally {
     isApplyingSettings = false
     saving.value = false

@@ -1,7 +1,7 @@
 <template>
   <CommonModalShell :show="show" size="default" :z-index="120" accent="primary" panel-class="border-accent-primary/20" content-class="min-h-0 flex flex-col"
     :title="t('ui.settings.data_export.title', '导出软件数据')" :description="t('ui.settings.data_export.description', '勾选要打包的数据；如果选择环境数据，会打包对应环境的完整目录。')"
-    @close="emit('close')"
+    :show-close="!exporting" :close-on-backdrop="!exporting" :close-on-esc="!exporting" @close="closeModal"
   >
     <div class="absolute -top-20 -left-16 w-56 h-56 rounded-full bg-accent-primary/10 blur-3xl pointer-events-none"></div>
     <div class="absolute -bottom-20 -right-16 w-56 h-56 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>
@@ -65,10 +65,10 @@
         <span class="text-accent-tip font-bold">{{ t('ui.settings.data_export.excluded_data', '路径绑定、敏感信息、当前激活环境 ID') }}</span> {{ t('ui.settings.data_export.excluded_data_notice', '不会导出。') }}
         <span class="text-accent-warn font-bold">{{ t('ui.settings.data_export.import_conflicts', '环境导入冲突') }}</span> {{ t('ui.settings.data_export.import_conflicts_notice', '会在导入面板统一处理新建/覆盖。') }}
       </p>
-      <button @click="handleExportDataBundle"
-        class="shrink-0 px-5 py-2 rounded-xl bg-accent-primary hover:bg-accent-primary/85 text-on-accent-primary text-sm font-black shadow-[0_0_18px_rgba(var(--rgb-accent-primary),0.24)] transition-all"
+      <button @click="handleExportDataBundle" :disabled="exporting"
+        class="shrink-0 px-5 py-2 rounded-xl bg-accent-primary hover:bg-accent-primary/85 text-on-accent-primary text-sm font-black shadow-[0_0_18px_rgba(var(--rgb-accent-primary),0.24)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {{ t('ui.settings.data_export.export_selected', '导出当前选择') }}
+        {{ exporting ? t('common.status.processing', '处理中') : t('ui.settings.data_export.export_selected', '导出当前选择') }}
       </button>
     </footer>
   </CommonModalShell>
@@ -92,6 +92,7 @@ const appStore = useAppStore()
 const showBundleProfilePicker = ref(false)
 const dataBundleModuleSelection = ref({})
 const dataBundleProfileSelection = ref([])
+const exporting = ref(false)
 
 const bundleModuleDefs = computed(() => props.schema?.modules || [])
 const bundleProfileDefs = computed(() => props.schema?.profiles || [])
@@ -170,7 +171,13 @@ const buildBundleModuleTooltip = (module) => {
   return lines.join('\n')
 }
 
+const closeModal = () => {
+  if (exporting.value) return
+  emit('close')
+}
+
 const handleExportDataBundle = async () => {
+  if (exporting.value) return
   // 导出前只校验用户当前选择，实际打包规则仍由后端 schema 和导出接口决定。
   const moduleKeys = selectedBundleModuleKeys.value
   if (moduleKeys.length === 0) {
@@ -182,13 +189,18 @@ const handleExportDataBundle = async () => {
     return
   }
 
-  const exported = await appStore.exportDataBundle({
-    preset: 'custom',
-    module_keys: moduleKeys,
-    profile_ids: dataBundleProfileSelection.value,
-  })
-  if (exported) {
-    emit('close')
+  exporting.value = true
+  try {
+    const exported = await appStore.exportDataBundle({
+      preset: 'custom',
+      module_keys: moduleKeys,
+      profile_ids: dataBundleProfileSelection.value,
+    })
+    if (exported) {
+      emit('close')
+    }
+  } finally {
+    exporting.value = false
   }
 }
 

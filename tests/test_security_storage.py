@@ -81,11 +81,24 @@ class TestSecurityStorage(unittest.TestCase):
         self.assertEqual(fake.values.get(("RimCrow", "ai.api_key")), "sk-legacy-secret")
         self.assertNotIn(("RimModManager", "ai.api_key"), fake.values)
 
-    def test_empty_secret_input_deletes_saved_secret(self):
+    def test_empty_secret_input_without_clear_marker_keeps_saved_secret(self):
         fake = FakeKeyring()
         store = SecretStore(service_name="test-service", backend=fake)
         runtime_config = {"ai": {"api_key": "sk-old-secret"}}
         data = {"ai": {"api_key": ""}}
+        store.set_secret("ai.api_key", "sk-old-secret")
+
+        changed = store.apply_secret_inputs(runtime_config, data)
+
+        self.assertFalse(changed)
+        self.assertEqual(store.get_secret("ai.api_key"), "sk-old-secret")
+        self.assertEqual(runtime_config["ai"]["api_key"], "sk-old-secret")
+
+    def test_explicit_clear_marker_deletes_saved_secret(self):
+        fake = FakeKeyring()
+        store = SecretStore(service_name="test-service", backend=fake)
+        runtime_config = {"ai": {"api_key": "sk-old-secret"}}
+        data = {"ai": {"api_key": ""}, "_clear_secret_keys": ["ai.api_key"]}
         store.set_secret("ai.api_key", "sk-old-secret")
 
         changed = store.apply_secret_inputs(runtime_config, data)

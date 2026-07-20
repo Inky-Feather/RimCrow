@@ -1,6 +1,8 @@
 <template>
   <CommonModalShell :show="appStore.uiState.showModAliasReviewModal" :title="t('dialog.mod_alias_review.title', '模组别名检阅')" :description="t('dialog.mod_alias_review.description', '待检阅任务 {taskCount} 组，待检阅条目 {itemCount} 项。', { taskCount: totalTaskCount, itemCount: totalPendingItems })"
-    size="page" :z-index="120" accent="special" panel-class="border-accent-special/25" content-class="h-full flex flex-col" @close="closeModal" >
+    size="page" :z-index="120" accent="special" panel-class="border-accent-special/25" content-class="h-full flex flex-col"
+    :show-close="!applying" :close-on-backdrop="!applying" :close-on-esc="!applying"
+    @close="closeModal" >
 
         <!-- 主滚动区：按任务组展示待检阅结果 -->
         <div class="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
@@ -80,11 +82,12 @@
 
                   <div class="absolute right-1 top-1 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-glass-medium backdrop-blur-sm p-1 rounded-lg border border-border-base/10">
                     <button class="p-2 rounded-md hover:bg-accent-special/20 text-accent-special transition-colors disabled:opacity-50"
-                      :disabled="regeneratingIds.has(item.package_id)" @click="regenerateItem(group.taskId, item)" >
+                      :disabled="applying || regeneratingIds.has(item.package_id)" @click="regenerateItem(group.taskId, item)" >
 	                      <Wand2 v-if="!regeneratingIds.has(item.package_id)" class="size-4" v-tooltip="t('dialog.mod_alias_review.regenerate', '重新生成')" />
                       <svg v-else class="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
                     </button>
-                    <button class="p-2 rounded-md hover:bg-accent-danger/20 text-accent-danger transition-colors" @click="removeItem(group.taskId, index)">
+                    <button class="p-2 rounded-md hover:bg-accent-danger/20 text-accent-danger transition-colors disabled:opacity-50"
+                      :disabled="applying" @click="removeItem(group.taskId, index)">
 	                      <Trash2 class="size-4" v-tooltip="t('common.action.remove', '移除')" />
                     </button>
                   </div>
@@ -93,14 +96,15 @@
             </div>
 
             <div class="modal-footer flex items-center justify-end gap-3 px-5 py-3">
-              <button class="px-4 py-2 rounded-lg text-sm text-accent-danger bg-accent-danger/10 hover:bg-accent-danger/20 transition-colors"
+              <button class="px-4 py-2 rounded-lg text-sm text-accent-danger bg-accent-danger/10 hover:bg-accent-danger/20 transition-colors disabled:opacity-40"
+                :disabled="applying"
                 @click="removeTaskGroup(group.taskId)" >
-	                {{ t('dialog.mod_alias_review.remove_group', '移除此组') }}
-              </button>
+		                {{ t('dialog.mod_alias_review.remove_group', '移除此组') }}
+		              </button>
               <button class="px-5 py-2 rounded-lg bg-accent-special text-on-accent-special text-sm font-black disabled:opacity-40"
-                :disabled="!group.items.length" @click="saveTaskGroup(group.taskId)" >
-	                {{ t('dialog.mod_alias_review.apply_group', '应用本组 ({count})', { count: group.items.length }) }}
-              </button>
+                :disabled="applying || !group.items.length" @click="saveTaskGroup(group.taskId)" >
+		                {{ applying ? t('common.status.processing', '处理中') : t('dialog.mod_alias_review.apply_group', '应用本组 ({count})', { count: group.items.length }) }}
+		              </button>
             </div>
           </div>
         </div>
@@ -113,17 +117,18 @@
           </div>
           <div class="flex items-center gap-3">
             <button class="px-4 py-2 rounded-lg text-sm text-accent-danger bg-accent-danger/10 hover:bg-accent-danger/20 transition-colors disabled:opacity-40"
-              :disabled="reviewTasks.length === 0" @click="clearAll" >
-	              {{ t('dialog.mod_alias_review.clear_all', '清空全部') }}
-            </button>
-            <button class="px-5 py-2 rounded-lg bg-bg-overlay/10 text-text-main text-sm font-bold hover:bg-bg-overlay/10 transition-colors"
+              :disabled="applying || reviewTasks.length === 0" @click="clearAll" >
+		              {{ t('dialog.mod_alias_review.clear_all', '清空全部') }}
+	            </button>
+            <button class="px-5 py-2 rounded-lg bg-bg-overlay/10 text-text-main text-sm font-bold hover:bg-bg-overlay/10 transition-colors disabled:opacity-40"
+              :disabled="applying"
               @click="closeModal" >
-	              {{ t('dialog.mod_alias_review.later', '稍后处理') }}
-            </button>
+		              {{ t('dialog.mod_alias_review.later', '稍后处理') }}
+	            </button>
             <button class="px-5 py-2 rounded-lg bg-accent-special text-on-accent-special text-sm font-black disabled:opacity-40"
-              :disabled="reviewTasks.length === 0" @click="applyAll" >
-	              {{ t('dialog.mod_alias_review.apply_all', '应用全部 ({count})', { count: totalPendingItems }) }}
-            </button>
+              :disabled="applying || reviewTasks.length === 0" @click="applyAll" >
+		              {{ applying ? t('common.status.processing', '处理中') : t('dialog.mod_alias_review.apply_all', '应用全部 ({count})', { count: totalPendingItems }) }}
+	            </button>
           </div>
         </div>
     </template>
@@ -155,6 +160,7 @@ const confirmStore = useConfirmStore()
 // 状态定义 (State / Refs)
 // -----------------------------------------------------------------
 const regeneratingIds = ref(new Set())
+const applying = ref(false)
 
 // -----------------------------------------------------------------
 // 计算属性 (Computed)
@@ -208,30 +214,38 @@ const taskStatusClass = (group) => {
 // -----------------------------------------------------------------
 const closeModal = () => {
   /** 关闭检阅弹窗，但不主动丢弃当前待审数据。 */
+  if (applying.value) return
   appStore.uiState.showModAliasReviewModal = false
 }
 
 const closeWhenEmpty = () => {
   if (reviewTasks.value.length === 0 || totalPendingItems.value === 0) {
-    closeModal()
+    appStore.uiState.showModAliasReviewModal = false
   }
 }
 
 const removeTaskGroup = async (taskId) => {
   /** 从待审池中移除整组任务结果。 */
-  const group = aiStore.getModAliasReviewTask(taskId)
-	  const ok = await confirmStore.confirmAction(
-	    t('dialog.mod_alias_review.remove_group', '移除此组'),
-	    t('dialog.mod_alias_review.remove_group_message', '确定要移除「{title}」吗？\n这组未应用的别名和备注结果会被丢弃。', { title: group?.title || t('dialog.mod_alias_review.default_task_title', '模组别名生成任务') }),
-	    { type: 'error', confirmText: t('common.action.remove', '移除') }
-	  )
-  if (!ok) return
-  aiStore.removeModAliasReviewTask(taskId)
-  closeWhenEmpty()
+  if (applying.value) return
+  applying.value = true
+  try {
+    const group = aiStore.getModAliasReviewTask(taskId)
+    const ok = await confirmStore.confirmAction(
+      t('dialog.mod_alias_review.remove_group', '移除此组'),
+      t('dialog.mod_alias_review.remove_group_message', '确定要移除「{title}」吗？\n这组未应用的别名和备注结果会被丢弃。', { title: group?.title || t('dialog.mod_alias_review.default_task_title', '模组别名生成任务') }),
+      { type: 'error', confirmText: t('common.action.remove', '移除') }
+    )
+    if (!ok) return
+    aiStore.removeModAliasReviewTask(taskId)
+    closeWhenEmpty()
+  } finally {
+    applying.value = false
+  }
 }
 
 const removeItem = (taskId, index) => {
   /** 从任务组中移除单个条目。 */
+  if (applying.value) return
   const group = aiStore.getModAliasReviewTask(taskId)
   if (!group) return
   const item = group.items[index]
@@ -241,6 +255,7 @@ const removeItem = (taskId, index) => {
 }
 
 const regenerateItem = async (taskId, item) => {
+  if (applying.value || regeneratingIds.value.has(item.package_id)) return
   const mod = getMod(item.package_id)
   if (!mod) return
   // 单项重生只回填当前条目，避免整组任务重新排队带来额外等待。
@@ -277,35 +292,11 @@ const saveTaskGroup = async (taskId) => {
    *
    * 写回后整组会从待审池移除，因为它已经不再处于“需要人工确认”的状态。
    */
-  const group = aiStore.getModAliasReviewTask(taskId)
-  if (!group || !Array.isArray(group.items) || group.items.length === 0) return
-  const updates = group.items
-    .map(item => ({
-      mod_id: item.package_id,
-      alias_name: normalizeText(item.alias_name),
-      notes: normalizeText(item.notes),
-    }))
-    .filter(item => item.alias_name || item.notes)
-  // 空字符串不会写回，避免把用户已有别名/备注误清空。
-	  if (updates.length === 0) {
-	    toast.warning(t('toast.mod_alias_review.no_valid_result', '当前任务还没有可应用的有效结果'))
-	    return
-  }
-  const success = await modStore.batchUpdateModsUserData(updates)
-  if (success) {
-    aiStore.removeModAliasReviewTask(taskId)
-    closeWhenEmpty()
-  }
-}
-
-const applyAll = async () => {
-  // 这里按任务组串行写回，避免一次性堆太多批量更新请求，
-  // 也方便在某一组失败时保留其余组的待审状态。
-  const taskIds = reviewTasks.value.map(group => group.taskId)
-  let appliedCount = 0
-  for (const taskId of taskIds) {
+  if (applying.value) return
+  applying.value = true
+  try {
     const group = aiStore.getModAliasReviewTask(taskId)
-    if (!group || !Array.isArray(group.items) || group.items.length === 0) continue
+    if (!group || !Array.isArray(group.items) || group.items.length === 0) return
     const updates = group.items
       .map(item => ({
         mod_id: item.package_id,
@@ -313,26 +304,68 @@ const applyAll = async () => {
         notes: normalizeText(item.notes),
       }))
       .filter(item => item.alias_name || item.notes)
-    if (updates.length === 0) continue
+    // 空字符串不会写回，避免把用户已有别名/备注误清空。
+    if (updates.length === 0) {
+      toast.warning(t('toast.mod_alias_review.no_valid_result', '当前任务还没有可应用的有效结果'))
+      return
+    }
     const success = await modStore.batchUpdateModsUserData(updates)
     if (success) {
-      appliedCount += 1
       aiStore.removeModAliasReviewTask(taskId)
+      closeWhenEmpty()
     }
+  } finally {
+    applying.value = false
   }
-  if (appliedCount > 0) closeWhenEmpty()
+}
+
+const applyAll = async () => {
+  if (applying.value) return
+  applying.value = true
+  try {
+    // 这里按任务组串行写回，避免一次性堆太多批量更新请求，
+    // 也方便在某一组失败时保留其余组的待审状态。
+    const taskIds = reviewTasks.value.map(group => group.taskId)
+    let appliedCount = 0
+    for (const taskId of taskIds) {
+      const group = aiStore.getModAliasReviewTask(taskId)
+      if (!group || !Array.isArray(group.items) || group.items.length === 0) continue
+      const updates = group.items
+        .map(item => ({
+          mod_id: item.package_id,
+          alias_name: normalizeText(item.alias_name),
+          notes: normalizeText(item.notes),
+        }))
+        .filter(item => item.alias_name || item.notes)
+      if (updates.length === 0) continue
+      const success = await modStore.batchUpdateModsUserData(updates)
+      if (success) {
+        appliedCount += 1
+        aiStore.removeModAliasReviewTask(taskId)
+      }
+    }
+    if (appliedCount > 0) closeWhenEmpty()
+  } finally {
+    applying.value = false
+  }
 }
 
 const clearAll = async () => {
   /** 清空全部待审结果并关闭弹窗。 */
-	  const ok = await confirmStore.confirmAction(
-	    t('dialog.mod_alias_review.clear_all', '清空全部'),
-	    t('dialog.mod_alias_review.clear_all_message', '确定要清空全部 {count} 组待审结果吗？\n所有未应用的别名和备注结果都会被丢弃。', { count: totalTaskCount.value }),
-	    { type: 'error', confirmText: t('common.action.clear', '清空') }
-	  )
-  if (!ok) return
-  aiStore.clearModAliasReviewTaskPool()
-  closeModal()
+  if (applying.value) return
+  applying.value = true
+  try {
+    const ok = await confirmStore.confirmAction(
+      t('dialog.mod_alias_review.clear_all', '清空全部'),
+      t('dialog.mod_alias_review.clear_all_message', '确定要清空全部 {count} 组待审结果吗？\n所有未应用的别名和备注结果都会被丢弃。', { count: totalTaskCount.value }),
+      { type: 'error', confirmText: t('common.action.clear', '清空') }
+    )
+    if (!ok) return
+    aiStore.clearModAliasReviewTaskPool()
+    appStore.uiState.showModAliasReviewModal = false
+  } finally {
+    applying.value = false
+  }
 }
 </script>
 

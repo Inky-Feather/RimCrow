@@ -19,6 +19,7 @@ export const useProfileStore = defineStore('profile', () => {
   const orphanedProfiles = ref([]) // 磁盘上存在但数据库没记录的配置
   const isLoading = ref(false)   // 环境列表加载状态
   let pendingEmptyPresetProfileId = ''
+  let orphanScanRequestId = 0
 
   // 当前激活的严格上下文 (Active Context)
   const activeContext = ref({
@@ -192,15 +193,27 @@ export const useProfileStore = defineStore('profile', () => {
 
   // 删除环境
   const deleteProfile = async (profileId, force = false) => {
-    const res = await window.pywebview.api.profile_delete(profileId, !!force)
-    if (checkResult(res, t('check.profiles.delete', '删除环境'))) {
-      await fetchProfiles()
-      // 如果删的是当前的，后端会自动切回 default，前端需要同步
-      if (profileId === currentProfileId.value) {
-        currentProfileId.value = 'default'
-        switchProfile('default')
-      }
+    const targetProfileId = String(profileId || '').trim()
+    if (!targetProfileId) return false
+    const wasCurrentProfile = targetProfileId === currentProfileId.value || targetProfileId === appStore.settings.current_profile_id
+    if (wasCurrentProfile && targetProfileId !== 'default') {
+      await switchProfile('default')
+      if (currentProfileId.value === targetProfileId) return false
     }
+    const res = await window.pywebview.api.profile_delete(targetProfileId, !!force)
+    if (checkResult(res, t('check.profiles.delete', '删除环境'))) {
+      const orderStore = useOrderStore()
+      const fallbackProfileId = currentProfileId.value || appStore.settings.current_profile_id || 'default'
+      if (orderStore.clearProfileRefs(targetProfileId, fallbackProfileId)) {
+        await orderStore.getBackups(fallbackProfileId, { silent: true })
+      }
+      // 先移除本地记录，避免环境列表刷新失败时继续显示已删除环境。
+      profiles.value = profiles.value.filter(profile => profile.id !== targetProfileId)
+      await fetchProfiles()
+      await scanOrphans()
+      return true
+    }
+    return false
   }
 
   // 创建环境桌面快捷方式
@@ -307,10 +320,15 @@ export const useProfileStore = defineStore('profile', () => {
 
   // 扫描孤立配置
   const scanOrphans = async () => {
+    if (!window.pywebview) return false
+    const requestId = ++orphanScanRequestId
     const res = await window.pywebview.api.profiles_scan_orphaned()
+    if (requestId !== orphanScanRequestId) return false
     if (checkResult(res, t('check.profiles.scan_orphaned', '扫描待恢复环境'))) {
-      orphanedProfiles.value = res.data
+      orphanedProfiles.value = Array.isArray(res.data) ? res.data : []
+      return true
     }
+    return false
   }
 
   // 导入孤立配置

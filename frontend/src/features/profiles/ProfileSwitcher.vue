@@ -24,9 +24,9 @@
     <!-- 下拉列表 -->
     <FixedPopover :is-open="isOpen" :trigger-ref="containerRef" :offset="6"
       @request-close="isOpen = false" >
-      <div class="w-64 bg-glass-light backdrop-blur-2xl border border-border-base/10 rounded-2xl overflow-hidden z-100">
+      <div class="w-64 max-h-[min(28rem,calc(100vh-5rem))] bg-glass-light backdrop-blur-2xl border border-border-base/10 rounded-2xl overflow-hidden z-100 flex flex-col">
 
-        <div class="p-1 space-y-1">
+        <div class="p-1 space-y-1 overflow-y-auto">
           <button v-for="p in profileStore.profiles" :key="p.id" @click="p.check ? handleSwitch(p.id) : null"
             class="w-full flex items-center gap-3 px-2 py-1 rounded-xl transition-all duration-200 group/item"
             :class="p.check ? (p.id === profileStore.currentProfileId ? 'bg-accent-primary/10 border border-accent-primary/20 cursor-pointer'

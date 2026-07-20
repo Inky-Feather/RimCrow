@@ -44,15 +44,17 @@ class ProfileContext:
     is_healthy: bool = True
     health_report: dict = field(default_factory=dict) 
     
-    # 动态计算出来的绝对路径（初始化时即确定，拒绝中途修改）
+    def __post_init__(self):
+        # 环境上下文创建时固定布局，避免系统类型或路径探测变化后派生路径前后不一致。
+        object.__setattr__(self, '_resolved_layout', resolve_rimworld_layout(self.game_install_path))
+
+    # 根据创建上下文固定得到的布局计算绝对路径。
     @property
     def local_mods_path(self):
-        install_path = str(self.game_install_path or "").strip()
-        return resolve_rimworld_layout(install_path).local_mods_root if install_path else ""
+        return self._resolved_layout.local_mods_root
     @property
     def game_dlc_path(self):
-        install_path = str(self.game_install_path or "").strip()
-        return resolve_rimworld_layout(install_path).official_data_root if install_path else ""
+        return self._resolved_layout.official_data_root
     @property
     def _user_data_root(self):
         user_data_path = str(self.user_data_path or "").strip()
@@ -211,6 +213,69 @@ class ProfileManager:
             default_roots=GameManager.get_default_user_data_paths(),
         ).root_path
 
+    def _orphan_folder_has_user_data(self, folder_path: str) -> bool:
+        folder = Path(str(folder_path or "").strip())
+        if not folder.is_dir():
+            return False
+        return any((folder / name).is_dir() for name in ("Config", "Saves", "Scenarios"))
+
+    def _validated_orphan_folder(self, profile_id: str, folder_path: str) -> Path | None:
+        """只接受应用数据目录下与快照 ID 一致的环境目录。"""
+        normalized_id = str(profile_id or "").strip()
+        if not normalized_id or normalized_id in {".", ".."} or Path(normalized_id).name != normalized_id:
+            return None
+        try:
+            # 只规范化文本路径，不解析符号链接或展开 Windows 短路径，恢复时保留用户实际目录。
+            profiles_root = Path(normalize_path_for_storage(DATA_DIR / "profiles"))
+            orphan_folder = Path(normalize_path_for_storage(folder_path))
+        except (OSError, RuntimeError, TypeError, ValueError):
+            return None
+        expected_folder = profiles_root / normalized_id
+        if normalize_path_for_compare(orphan_folder) != normalize_path_for_compare(expected_folder):
+            return None
+        snapshot_path = orphan_folder / "profile.json"
+        if not snapshot_path.is_file():
+            return None
+        try:
+            with snapshot_path.open("r", encoding="utf-8") as file:
+                snapshot = json.load(file)
+        except (OSError, TypeError, ValueError):
+            return None
+        if not isinstance(snapshot, dict):
+            return None
+        if str(snapshot.get("id") or "").strip() != normalized_id:
+            return None
+        return orphan_folder
+
+    def _user_data_path_has_user_data(self, user_data_path: str) -> bool:
+        try:
+            normalized_path = self._normalize_user_data_path(user_data_path)
+        except (TypeError, ValueError, OSError):
+            return False
+        root = Path(normalized_path)
+        return root.is_dir() and any((root / name).is_dir() for name in ("Config", "Saves", "Scenarios"))
+
+    def _resolve_import_user_data_path(self, profile_id: str, user_data_path: str, orphan_folder_path: str) -> tuple[str, str]:
+        declared_path = str(user_data_path or "").strip()
+        normalized_declared_path = ""
+        if declared_path:
+            try:
+                normalized_declared_path = self._normalize_user_data_path(declared_path)
+            except (TypeError, ValueError, OSError):
+                normalized_declared_path = ""
+
+        orphan_folder = self._validated_orphan_folder(profile_id, orphan_folder_path)
+        if orphan_folder_path and orphan_folder is None:
+            raise ValueError("环境目录无效，无法恢复")
+        # 恢复时以当前实际发现的孤立目录为准，避免快照里的旧路径指向搬迁前的位置。
+        if orphan_folder and self._orphan_folder_has_user_data(str(orphan_folder)):
+            return str(orphan_folder), "orphan_folder"
+        if normalized_declared_path and self._user_data_path_has_user_data(normalized_declared_path):
+            return normalized_declared_path, "snapshot_fallback"
+        if declared_path and not normalized_declared_path:
+            raise ValueError("用户数据路径无效，无法恢复环境")
+        return normalized_declared_path, "snapshot_fallback"
+
     def _profile_snapshot_path(self, profile_id: str) -> Path:
         return DATA_DIR / "profiles" / str(profile_id or "").strip() / "profile.json"
 
@@ -356,11 +421,31 @@ class ProfileManager:
         if not profile: return False
         # 1. 删除隔离文件
         default_profile = self.get_profile('default')
-        if profile.user_data_path and os.path.exists(profile.user_data_path) and (Path(profile.user_data_path) != Path(default_profile.user_data_path)):
+        default_user_data_path = normalize_path_for_compare(default_profile.user_data_path)
+        deleted_paths = set()
+        if profile.user_data_path and os.path.exists(profile.user_data_path) and normalize_path_for_compare(profile.user_data_path) != default_user_data_path:
             try:
                 delete_fs_path(profile.user_data_path, force=force)
+                deleted_paths.add(normalize_path_for_compare(profile.user_data_path))
             except Exception as e:
                 logger.warning(f"清理配置数据失败：{e}")
+        backup_dir = BACKUP_DIR / "profile" / str(profile_id)
+        backup_dir_key = normalize_path_for_compare(backup_dir)
+        if backup_dir.exists() and backup_dir_key not in deleted_paths:
+            try:
+                delete_fs_path(str(backup_dir), force=force)
+                deleted_paths.add(backup_dir_key)
+            except Exception as e:
+                logger.warning(f"清理环境备份失败：{e}")
+        snapshot_dir = self._profile_snapshot_path(profile_id).parent
+        default_snapshot_dir = self._profile_snapshot_path('default').parent
+        snapshot_dir_key = normalize_path_for_compare(snapshot_dir)
+        default_snapshot_dir_key = normalize_path_for_compare(default_snapshot_dir)
+        if snapshot_dir.exists() and snapshot_dir_key not in deleted_paths and snapshot_dir_key != default_snapshot_dir_key:
+            try:
+                delete_fs_path(str(snapshot_dir), force=force)
+            except Exception as e:
+                logger.warning(f"清理环境快照失败：{e}")
         # 2. 删库
         profile.delete_instance()
         # 3. 如果删的是当前激活的，回退到 default
@@ -564,7 +649,9 @@ class ProfileManager:
         返回: List[Dict] (可以直接用于展示给用户确认导入)
         """
         profiles_root = DATA_DIR / "profiles"
-        if not profiles_root.exists(): return []
+        if not profiles_root.exists():
+            logger.info(f"扫描待恢复环境完成：root={profiles_root}，count=0，原因=目录不存在")
+            return []
 
         orphans = []
         
@@ -583,9 +670,9 @@ class ProfileManager:
                         # 检查 ID 是否冲突
                         # 情况 1: 文件夹名就是 ID，且数据库里没有 -> 孤儿
                         # 情况 2: data['id'] 数据库里没有 -> 孤儿
-                        pid = data.get('id', entry.name)
+                        pid = str(data.get('id') or entry.name).strip()
                         
-                        if pid not in existing_ids:
+                        if pid == entry.name and pid not in existing_ids:
                             # 额外检查：路径有效性校验 (可选)
                             # 如果游戏本体都被删了，可能标个 invalid
                             is_valid = GameManager.detect_executable(data.get('game_install_path', '')) is not None
@@ -596,13 +683,17 @@ class ProfileManager:
                     except Exception as e:
                         logger.error(f"读取配置失败：{entry.name}，错误：{e}")
         
+        orphan_labels = [f"{item.get('id', '')}:{item.get('name', '')}" for item in orphans]
+        logger.info(f"扫描待恢复环境完成：root={profiles_root}，count={len(orphans)}，items={orphan_labels}")
         return orphans
 
     def import_profile_from_disk(self, profile_data):
         """
         将扫描到的 json 数据重新写入数据库
         """
+        orphan_folder_path = ""
         try:
+            profile_data = dict(profile_data or {})
             # 数据清洗，防止脏数据
             # 转换时间字符串回 datetime 对象
             if 'created_time' in profile_data and isinstance(profile_data['created_time'], str):
@@ -612,15 +703,24 @@ class ProfileManager:
             
             # 移除临时字段
             profile_data.pop('_is_valid', None)
-            profile_data.pop('_folder_path', None)
+            orphan_folder_path = str(profile_data.pop('_folder_path', "") or "").strip()
 
             # 确保 ID 存在
-            if 'id' not in profile_data: return False, "Profile data missing ID"
+            profile_id = str(profile_data.get('id') or '').strip()
+            if not profile_id: return False, "Profile data missing ID"
 
             valid_field_names = set(GameProfile._meta.fields.keys()) # type: ignore[attr-defined]
             clean_data = {key: value for key, value in profile_data.items() if key in valid_field_names}
+            clean_data['id'] = profile_id
+            original_user_data_path = clean_data.get('user_data_path', '')
             if 'user_data_path' in clean_data:
-                clean_data['user_data_path'] = self._normalize_user_data_path(clean_data['user_data_path'])
+                clean_data['user_data_path'], user_data_path_source = self._resolve_import_user_data_path(
+                    profile_id,
+                    original_user_data_path,
+                    orphan_folder_path,
+                )
+            else:
+                user_data_path_source = "snapshot"
 
             install_path = str(clean_data.get('game_install_path') or '').strip()
             install_facts = None
@@ -646,6 +746,13 @@ class ProfileManager:
                 # 使用 upsert 防止并发冲突
                 GameProfile.insert(**clean_data).on_conflict_replace().execute()
              
+            logger.info(
+                f"恢复环境完成：id={clean_data.get('id', '')}，name={clean_data.get('name', '')}，source={orphan_folder_path}，"
+                f"original_user_data_path={original_user_data_path}，user_data_path={clean_data.get('user_data_path', '')}，"
+                f"path_source={user_data_path_source}"
+            )
             return True, "导入成功"
-        except Exception as e: return False, str(e)
+        except Exception as e:
+            logger.error(f"恢复环境失败：id={profile_data.get('id', '') if isinstance(profile_data, dict) else ''}，source={orphan_folder_path}，错误：{e}")
+            return False, str(e)
             

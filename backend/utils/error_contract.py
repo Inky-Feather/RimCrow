@@ -145,6 +145,7 @@ def coerce_error_envelope(
     elif isinstance(error, BaseException):
         envelope = classify_exception(error, module=str((context or {}).get("module", "")), action=str((context or {}).get("action", "")), context=context)
         envelope.error_id = error_id or envelope.error_id
+        envelope.data = data
         envelope.user_message = str(user_message or message or envelope.user_message or "").strip()
         envelope.message_key = str(message_key or envelope.message_key or "").strip()
         if message_params:

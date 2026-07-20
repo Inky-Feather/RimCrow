@@ -825,6 +825,33 @@ async function testCurrentProfileUnchangedSourceFieldsDoNotRefreshCore() {
   })
 }
 
+async function testRefreshModCoreDataSyncsActiveContext() {
+  resetStores({
+    get_mod_list_core: async () => ok({
+      groups: [],
+      all_mods: [],
+      active_load_order: [],
+      inactive_load_order: [],
+      temp_load_order: [],
+      interlocks: {},
+      active_context: context({ profile_id: 'profile-b', user_data_path: 'U:/ProfileB' }),
+    }),
+  })
+  const profileStore = useProfileStore()
+  profileStore.currentProfileId = 'profile-a'
+  profileStore.activeContext = context({ profile_id: 'profile-a', user_data_path: 'U:/ProfileA' })
+
+  const appStore = useAppStore()
+  const refreshed = await appStore.refreshModCoreData('测试同步环境上下文', {
+    refreshRelated: false,
+    refreshEnrichment: false,
+  })
+
+  assert.equal(refreshed, true)
+  assert.equal(profileStore.currentProfileId, 'profile-b')
+  assert.equal(profileStore.activeContext.user_data_path, 'U:/ProfileB')
+}
+
 async function testModInventoryTasksScanAndReplaceListState() {
   const scanStarts = []
   resetStores({
@@ -912,6 +939,26 @@ async function testQueuedReplaceScanOverridesPreserveScan() {
   assert.equal(coreRefreshes[0][1].preserveListState, false)
 }
 
+async function testScanTaskDoesNotGuessFailureFromElapsedTime() {
+  resetStores()
+  const taskStore = useTaskStore()
+  taskStore.upsertTask({
+    id: 'scan-timeout',
+    type: 'scan',
+    status: 'running',
+    progress: 1,
+    message: 'preparing',
+    metrics: { stage: 'prepare_cleanup', active_timeout_ms: 5 },
+    timestamp: Date.now(),
+  })
+
+  await new Promise(resolve => setTimeout(resolve, 20))
+
+  const task = taskStore.getTask('scan-timeout')
+  assert.equal(task.status, 'running')
+  assert.equal(task.progress, 1)
+}
+
 for (const test of [
   testSettingsSourceChangeForcesCoreRefresh,
   testIssueSettingsRefreshModData,
@@ -939,8 +986,10 @@ for (const test of [
   testCurrentProfileSourceUpdateRefreshesCoreOnly,
   testCurrentProfileSteamLaunchPreferenceRefreshesCoreOnly,
   testCurrentProfileUnchangedSourceFieldsDoNotRefreshCore,
+  testRefreshModCoreDataSyncsActiveContext,
   testModInventoryTasksScanAndReplaceListState,
   testQueuedReplaceScanOverridesPreserveScan,
+  testScanTaskDoesNotGuessFailureFromElapsedTime,
 ]) {
   await test()
 }

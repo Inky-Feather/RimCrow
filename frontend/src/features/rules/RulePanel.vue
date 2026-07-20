@@ -361,7 +361,7 @@
                   </div>
                   <h2 class="text-lg font-bold text-text-main">{{ editingRule.rule_id.startsWith('new_') ? t('ui.rule_panel.editor.create_title', '新建动态规则') : t('ui.rule_panel.editor.edit_title', '编辑规则') }}</h2>
                 </div>
-                <button @click="editingRule = null" class="modal-close-button" :aria-label="t('ui.rule_panel.editor.close', '关闭编辑面板')"><X class="w-4 h-4"/></button>
+                <button @click="editingRule = null" :disabled="savingDynamicRule" class="modal-close-button disabled:opacity-50" :aria-label="t('ui.rule_panel.editor.close', '关闭编辑面板')"><X class="w-4 h-4"/></button>
               </header>
               
               <div class="modal-body flex-1 overflow-y-auto p-6 space-y-6">
@@ -429,8 +429,8 @@
               </div>
 
               <footer class="modal-footer flex justify-end gap-3 p-4">
-                <button @click="editingRule = null" class="px-5 py-2 rounded-lg hover:bg-bg-overlay/5 text-sm font-bold text-text-dim transition-colors">{{ t('common.action.cancel', '取消') }}</button>
-                <button @click="saveDynamicRule" class="px-6 py-2 bg-accent-primary hover:bg-accent-primary/90 text-on-accent-primary rounded-lg text-sm font-bold shadow-lg transition-transform active:scale-95">{{ t('ui.rule_panel.editor.save_rule', '保存规则') }}</button>
+                <button @click="editingRule = null" :disabled="savingDynamicRule" class="px-5 py-2 rounded-lg hover:bg-bg-overlay/5 text-sm font-bold text-text-dim transition-colors disabled:opacity-50">{{ t('common.action.cancel', '取消') }}</button>
+                <button @click="saveDynamicRule" :disabled="savingDynamicRule" class="px-6 py-2 bg-accent-primary hover:bg-accent-primary/90 text-on-accent-primary rounded-lg text-sm font-bold shadow-lg transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-50">{{ savingDynamicRule ? t('common.status.processing', '处理中') : t('ui.rule_panel.editor.save_rule', '保存规则') }}</button>
               </footer>
             </div>
           </div>
@@ -476,6 +476,7 @@ const filterInstalled = ref(true) // 默认开启“仅显示已安装”
 
 
 const editingRule = ref(null)
+const savingDynamicRule = ref(false)
 
 watch(() => appStore.uiState.showRuleDrawer, (visible) => {
   if (visible) void ruleStore.ensureRulesLoaded()
@@ -844,21 +845,26 @@ const addFilter = () => {
 }
 // 保存动态规则
 const saveDynamicRule = async () => {
-  if (!window.pywebview) return
+  if (savingDynamicRule.value || !window.pywebview) return
   if (!editingRule.value.name) {
     toast.warning(t('toast.rule_panel.name_required', '请输入规则名称'))
     return
   }
-  // 如果是新建，生成正式ID
-  if (editingRule.value.rule_id.startsWith('new_')) {
-    editingRule.value.rule_id = 'dyn_' + Date.now()
+  savingDynamicRule.value = true
+  try {
+    // 如果是新建，生成正式ID
+    if (editingRule.value.rule_id.startsWith('new_')) {
+      editingRule.value.rule_id = 'dyn_' + Date.now()
+    }
+    const wasAdjusted = normalizeDynamicRuleAction(editingRule.value)
+    if (wasAdjusted) {
+      toast.info(t('toast.rule_panel.weight_clamped', '动态权重已自动限制到允许范围内（权重 {weightMin}-{weightMax}，偏移 {shiftMin} 到 {shiftMax}）。', { weightMin: POSITION_WEIGHT_MIN, weightMax: POSITION_WEIGHT_MAX, shiftMin: POSITION_SHIFT_MIN, shiftMax: POSITION_SHIFT_MAX }))
+    }
+    const res = await ruleStore.saveDynamicRules(editingRule.value)
+    if (res) { editingRule.value = null }
+  } finally {
+    savingDynamicRule.value = false
   }
-  const wasAdjusted = normalizeDynamicRuleAction(editingRule.value)
-  if (wasAdjusted) {
-    toast.info(t('toast.rule_panel.weight_clamped', '动态权重已自动限制到允许范围内（权重 {weightMin}-{weightMax}，偏移 {shiftMin} 到 {shiftMax}）。', { weightMin: POSITION_WEIGHT_MIN, weightMax: POSITION_WEIGHT_MAX, shiftMin: POSITION_SHIFT_MIN, shiftMax: POSITION_SHIFT_MAX }))
-  }
-  const res = await ruleStore.saveDynamicRules(editingRule.value)
-  if (res) { editingRule.value = null }
 }
 // 删除动态规则
 const deleteDynamicRule = async (rule, event) => {

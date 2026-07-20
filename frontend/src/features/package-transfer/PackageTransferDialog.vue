@@ -1,6 +1,7 @@
 <template>
   <CommonModalShell :show="appStore.uiState.showPackageTransferDialog" :title="dialogTitle" :description="dialogDesc" size="default" :z-index="140" accent="primary"
     panel-class="border-accent-primary/20" content-class="min-h-0 flex flex-col"
+    :show-close="!submitting" :close-on-backdrop="!submitting" :close-on-esc="!submitting"
     @close="closeDialog" >
       <div class="absolute -top-18 -left-12 h-52 w-52 rounded-full bg-accent-primary/30 blur-3xl pointer-events-none"></div>
       <div class="absolute -bottom-18 -right-12 h-52 w-52 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>
@@ -383,13 +384,14 @@
           </template>
         </div>
         <div class="flex items-center gap-2">
-          <button class="rounded-xl border border-border-base/10 bg-bg-overlay/5 px-4 py-2 text-xs font-bold text-text-main transition-all hover:bg-bg-overlay/10"
+          <button class="rounded-xl border border-border-base/10 bg-bg-overlay/5 px-4 py-2 text-xs font-bold text-text-main transition-all hover:bg-bg-overlay/10 disabled:opacity-50"
+            :disabled="submitting"
             @click="closeDialog" >
             {{ t('common.action.close', '关闭') }}
           </button>
           <button class="rounded-xl bg-accent-primary px-5 py-2 text-sm font-black text-on-accent-primary transition-all hover:bg-accent-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
             :disabled="!canSubmit" @click="handleSubmit" >
-            {{ submitLabel }}
+            {{ submitting ? t('common.status.processing', '处理中') : submitLabel }}
           </button>
         </div>
       </div>
@@ -423,6 +425,7 @@ const inspectData = ref(null)
 const selectedBundlePath = ref('')
 const lastPreparedImportTargetKey = ref('')
 const dataImportModuleSelection = ref({})
+const submitting = ref(false)
 
 const exportForm = reactive({
   profile_id: '',
@@ -680,6 +683,7 @@ const extraExportSummary = computed(() => {
 })
 
 const canSubmit = computed(() => {
+  if (submitting.value) return false
   if (dialogMode.value === 'mod-export') {
     if (isProfileSourceExport.value) {
       if (!exportForm.profile_id || dialogPreset.value?.scopeOptionsLoading) return false
@@ -929,41 +933,47 @@ watch(
 )
 
 const handleSubmit = async () => {
-  if (dialogMode.value === 'mod-export') {
-    const exportPromise = appStore.exportModPackage({
-      profile_id: exportForm.profile_id,
-      export_scope: exportForm.export_scope,
-      mod_ids: isProfileSourceExport.value ? [] : resolvedExportModIds.value,
-      include_dependencies: showExportExtraOptions.value ? false : exportForm.include_dependencies,
-      include_interlocks: showExportExtraOptions.value ? false : exportForm.include_interlocks,
-      include_language_packs: showExportExtraOptions.value ? false : exportForm.include_language_packs,
-      include_environment_data: allowExportEnvironmentAttach.value && exportForm.include_environment_data,
-      folder_name_type: exportForm.folder_name_type || 'default',
-    })
-    closeDialog()
-    const exported = await exportPromise
-    if (!exported) return
-    return
-  }
+  if (submitting.value || !canSubmit.value) return
+  submitting.value = true
+  try {
+    if (dialogMode.value === 'mod-export') {
+      const exportPromise = appStore.exportModPackage({
+        profile_id: exportForm.profile_id,
+        export_scope: exportForm.export_scope,
+        mod_ids: isProfileSourceExport.value ? [] : resolvedExportModIds.value,
+        include_dependencies: showExportExtraOptions.value ? false : exportForm.include_dependencies,
+        include_interlocks: showExportExtraOptions.value ? false : exportForm.include_interlocks,
+        include_language_packs: showExportExtraOptions.value ? false : exportForm.include_language_packs,
+        include_environment_data: allowExportEnvironmentAttach.value && exportForm.include_environment_data,
+        folder_name_type: exportForm.folder_name_type || 'default',
+      })
+      closeDialog()
+      const exported = await exportPromise
+      if (!exported) return
+      return
+    }
 
-  if (dialogMode.value === 'data-import') {
-    const imported = await appStore.importDataBundle(selectedBundlePath.value, {
-      module_keys: selectedDataImportModuleKeys.value,
+    if (dialogMode.value === 'data-import') {
+      const imported = await appStore.importDataBundle(selectedBundlePath.value, {
+        module_keys: selectedDataImportModuleKeys.value,
+        profile_import_plan: buildProfileImportPlan(),
+      })
+      if (imported) closeDialog()
+      return
+    }
+
+    const imported = await appStore.importModPackage(selectedBundlePath.value, {
+      import_mods: modImportForm.import_mods,
+      target_kind: modImportForm.target_kind,
+      game_install_path: modImportForm.game_install_path,
+      apply_environment_data: modImportForm.apply_environment_data,
       profile_import_plan: buildProfileImportPlan(),
+      mod_conflict_plan: buildModConflictPlan(),
     })
     if (imported) closeDialog()
-    return
+  } finally {
+    submitting.value = false
   }
-
-  const imported = await appStore.importModPackage(selectedBundlePath.value, {
-    import_mods: modImportForm.import_mods,
-    target_kind: modImportForm.target_kind,
-    game_install_path: modImportForm.game_install_path,
-    apply_environment_data: modImportForm.apply_environment_data,
-    profile_import_plan: buildProfileImportPlan(),
-    mod_conflict_plan: buildModConflictPlan(),
-  })
-  if (imported) closeDialog()
 }
 </script>
 

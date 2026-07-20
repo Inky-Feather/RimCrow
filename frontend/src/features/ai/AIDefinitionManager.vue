@@ -2,6 +2,7 @@
 <template>
   <CommonModalShell :show="appStore.uiState.showAIDefinitionManager" :title="t('dialog.ai_definitions.title', 'AI 定义管理')" :description="t('dialog.ai_definitions.description', '在这里集中管理 AI 助手、任务和模板。')"
     size="page" :z-index="130" accent="special" panel-class="border-accent-special/30" content-class="h-full flex flex-col"
+    :show-close="!savingDefinition" :close-on-backdrop="!savingDefinition" :close-on-esc="!savingDefinition"
     @close="closeModal" >
     <template #icon>
       <Drama class="size-5 text-accent-special" />
@@ -97,8 +98,8 @@
                     {{ currentEntryKindLabel }}
                   </span>
                 </div>
-                <button @click="handleSaveEntry" class="rounded bg-accent-special px-6 py-1.5 text-xs font-bold text-on-accent-special transition-all hover:bg-accent-special/80">
-                  {{ t('dialog.ai_definitions.save_entry', '保存入口配置') }}
+                <button @click="handleSaveEntry" :disabled="savingDefinition" class="rounded bg-accent-special px-6 py-1.5 text-xs font-bold text-on-accent-special transition-all hover:bg-accent-special/80 disabled:cursor-not-allowed disabled:opacity-50">
+                  {{ savingDefinition ? t('common.status.processing', '处理中') : t('dialog.ai_definitions.save_entry', '保存入口配置') }}
                 </button>
               </div>
 
@@ -152,11 +153,11 @@
                 </div>
                 <div class="flex items-center gap-2">
                   <span v-if="currentPromptForm.is_system" class="text-xs text-text-dim">{{ t('dialog.ai_definitions.system_prompt_readonly', '系统模板只读') }}</span>
-                  <button v-if="!currentPromptForm.is_system && !isPromptNew" @click="handleDeletePrompt" class="rounded border border-accent-danger/30 bg-accent-danger/10 px-4 py-1.5 text-xs font-bold text-accent-danger transition-all hover:bg-accent-danger hover:text-on-accent-danger">
+                  <button v-if="!currentPromptForm.is_system && !isPromptNew" @click="handleDeletePrompt" :disabled="savingDefinition" class="rounded border border-accent-danger/30 bg-accent-danger/10 px-4 py-1.5 text-xs font-bold text-accent-danger transition-all hover:bg-accent-danger hover:text-on-accent-danger disabled:cursor-not-allowed disabled:opacity-50">
                     {{ t('dialog.ai_definitions.delete_prompt', '删除模板') }}
                   </button>
-                  <button v-if="!currentPromptForm.is_system" @click="handleSavePrompt" class="rounded bg-accent-special px-6 py-1.5 text-xs font-bold text-on-accent-special transition-all hover:bg-accent-special/80">
-                    {{ t('dialog.ai_definitions.save_prompt', '保存模板') }}
+                  <button v-if="!currentPromptForm.is_system" @click="handleSavePrompt" :disabled="savingDefinition" class="rounded bg-accent-special px-6 py-1.5 text-xs font-bold text-on-accent-special transition-all hover:bg-accent-special/80 disabled:cursor-not-allowed disabled:opacity-50">
+                    {{ savingDefinition ? t('common.status.processing', '处理中') : t('dialog.ai_definitions.save_prompt', '保存模板') }}
                   </button>
                 </div>
               </div>
@@ -319,6 +320,7 @@ const assistants = ref({})
 const tasks = ref({})
 const definitionEditorMeta = ref(EMPTY_PROMPT_EDITOR_META)
 const isLoadingDefinitions = ref(false)
+const savingDefinition = ref(false)
 const loadErrorText = ref('')
 
 const currentPromptId = ref(null)
@@ -511,6 +513,7 @@ const entryTooltip = (entry) => {
 }
 
 const closeModal = () => {
+  if (savingDefinition.value) return
   appStore.uiState.showAIDefinitionManager = false
 }
 
@@ -519,14 +522,16 @@ const normalizeAssistantEntryOverrideForm = (entry = {}) => ({
   tool_scope_selectable: Array.isArray(entry?.tool_scope_selectable) ? [...entry.tool_scope_selectable] : [],
 })
 
-const selectEntry = (entry) => {
+const selectEntry = (entry, force = false) => {
+  if (savingDefinition.value && !force) return
   currentEntryId.value = entry.id
   currentEntryForm.value = entry.type === 'assistant'
     ? normalizeAssistantEntryOverrideForm(entry.raw)
     : deepClone(entry.raw)
 }
 
-const selectPrompt = (promptId) => {
+const selectPrompt = (promptId, force = false) => {
+  if (savingDefinition.value && !force) return
   currentPromptId.value = promptId
   isPromptNew.value = false
   currentPromptForm.value = deepClone(prompts.value[promptId])
@@ -540,6 +545,7 @@ const selectPrompt = (promptId) => {
 }
 
 const createNewPrompt = () => {
+  if (savingDefinition.value) return
   activeTab.value = 'prompts'
   currentPromptId.value = null
   isPromptNew.value = true
@@ -630,53 +636,75 @@ const toggleProjectionField = (attachmentKind, fieldPath, checked) => {
 }
 
 const handleSaveEntry = async () => {
-  if (!currentEntryId.value || !currentEntryForm.value) return
-  if (currentEntryType.value === 'assistant') {
-    const payload = {
-      prompt_id: currentEntryForm.value.prompt_id || '',
-      tool_scope_selectable: Array.isArray(currentEntryForm.value.tool_scope_selectable)
-        ? [...currentEntryForm.value.tool_scope_selectable]
-        : [],
+  if (savingDefinition.value || !currentEntryId.value || !currentEntryForm.value) return
+  savingDefinition.value = true
+  try {
+    const entryId = currentEntryId.value
+    const entryType = currentEntryType.value
+    if (entryType === 'assistant') {
+      const payload = {
+        prompt_id: currentEntryForm.value.prompt_id || '',
+        tool_scope_selectable: Array.isArray(currentEntryForm.value.tool_scope_selectable)
+          ? [...currentEntryForm.value.tool_scope_selectable]
+          : [],
+      }
+      const resData = await aiStore.saveAssistant(entryId, payload)
+      if (resData) {
+        assistants.value = resData
+        const nextEntry = entryList.value.find(entry => entry.id === entryId && entry.type === 'assistant')
+        if (nextEntry) selectEntry(nextEntry, true)
+      }
+      return
     }
-    const resData = await aiStore.saveAssistant(currentEntryId.value, payload)
-    if (resData) {
-      assistants.value = resData
-      const nextEntry = entryList.value.find(entry => entry.id === currentEntryId.value && entry.type === 'assistant')
-      if (nextEntry) selectEntry(nextEntry)
-    }
-    return
-  }
 
-  const resData = await aiStore.saveTask(currentEntryId.value, currentEntryForm.value)
-  if (resData) {
-    tasks.value = resData
-    const nextEntry = entryList.value.find(entry => entry.id === currentEntryId.value && entry.type === 'task')
-    if (nextEntry) selectEntry(nextEntry)
+    const payload = deepClone(currentEntryForm.value)
+    const resData = await aiStore.saveTask(entryId, payload)
+    if (resData) {
+      tasks.value = resData
+      const nextEntry = entryList.value.find(entry => entry.id === entryId && entry.type === 'task')
+      if (nextEntry) selectEntry(nextEntry, true)
+    }
+  } finally {
+    savingDefinition.value = false
   }
 }
 
 const handleSavePrompt = async () => {
-  const resData = await aiStore.savePrompt(currentPromptId.value || '', currentPromptForm.value)
-  if (resData) {
-    prompts.value = resData.prompts || {}
-    selectPrompt(resData.prompt_id)
+  if (savingDefinition.value || !currentPromptForm.value) return
+  savingDefinition.value = true
+  try {
+    const promptId = currentPromptId.value || ''
+    const payload = deepClone(currentPromptForm.value)
+    const resData = await aiStore.savePrompt(promptId, payload)
+    if (resData) {
+      prompts.value = resData.prompts || {}
+      selectPrompt(resData.prompt_id, true)
+    }
+  } finally {
+    savingDefinition.value = false
   }
 }
 
 const handleDeletePrompt = async () => {
-  if (!currentPromptId.value) return
-  const ok = await confirmStore.confirmAction(
-    t('dialog.ai_definitions.delete_title', '危险操作'),
-    t('dialog.ai_definitions.delete_message', '确定要删除模板 {id} 吗？此操作不可逆。', { id: currentPromptId.value }),
-    { type: 'error' },
-  )
-  if (!ok) return
-  const resData = await aiStore.deletePrompt(currentPromptId.value)
-  if (resData) {
-    prompts.value = resData
-    currentPromptForm.value = null
-    currentPromptId.value = null
-    if (sortedPromptEntries.value.length > 0) selectPrompt(sortedPromptEntries.value[0][0])
+  if (savingDefinition.value || !currentPromptId.value) return
+  savingDefinition.value = true
+  try {
+    const promptId = currentPromptId.value
+    const ok = await confirmStore.confirmAction(
+      t('dialog.ai_definitions.delete_title', '危险操作'),
+      t('dialog.ai_definitions.delete_message', '确定要删除模板 {id} 吗？此操作不可逆。', { id: promptId }),
+      { type: 'error' },
+    )
+    if (!ok) return
+    const resData = await aiStore.deletePrompt(promptId)
+    if (resData) {
+      prompts.value = resData
+      currentPromptForm.value = null
+      currentPromptId.value = null
+      if (sortedPromptEntries.value.length > 0) selectPrompt(sortedPromptEntries.value[0][0], true)
+    }
+  } finally {
+    savingDefinition.value = false
   }
 }
 </script>

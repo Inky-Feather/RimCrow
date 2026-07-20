@@ -556,6 +556,145 @@ class TestProfileManager(unittest.TestCase):
             os.path.normpath("C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios"),
         )
 
+    def test_import_profile_from_disk_uses_orphan_folder_when_snapshot_points_to_default_user_data(self):
+        manager = ProfileManager.__new__(ProfileManager)
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        default_user_data = temp_root / "default-userdata"
+        orphan_root = temp_root / "profiles" / "profile-a"
+        (orphan_root / "Config").mkdir(parents=True)
+        (orphan_root / "profile.json").write_text(json.dumps({"id": "profile-a"}), encoding="utf-8")
+        imported_profile = {
+            "id": "profile-a",
+            "name": "Profile A",
+            "game_install_path": "D:/Games/RimWorld",
+            "game_version": "1.5.0",
+            "prefer_steam_launch": False,
+            "use_workshop_mods": False,
+            "user_data_path": str(default_user_data),
+            "_folder_path": str(orphan_root),
+        }
+
+        inserted_rows = []
+
+        class _InsertQuery:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def on_conflict_replace(self):
+                return self
+
+            def execute(self):
+                inserted_rows.append(self.payload)
+                return 1
+
+        manager._get_install_inspector = Mock(return_value=SimpleNamespace(
+            inspect=Mock(return_value=SimpleNamespace(is_steam=False, game_version="1.6.4100"))
+        ))
+
+        with patch("backend.managers.mgr_profile.GameProfile.insert", side_effect=lambda **payload: _InsertQuery(payload)), \
+             patch("backend.managers.mgr_profile.db.atomic", return_value=nullcontext()), \
+             patch("backend.managers.mgr_profile.DATA_DIR", temp_root), \
+             patch("backend.managers.mgr_profile.GameManager.get_default_user_data_paths", return_value=[str(default_user_data)]), \
+             patch("backend.managers.mgr_profile.logger.info") as mock_log_info:
+            ok, _ = manager.import_profile_from_disk(imported_profile)
+
+        self.assertTrue(ok)
+        self.assertEqual(inserted_rows[0]["user_data_path"], os.path.normpath(str(orphan_root)))
+        self.assertTrue(any("恢复环境完成" in str(call.args[0]) for call in mock_log_info.call_args_list))
+
+    def test_import_profile_from_disk_uses_declared_user_data_when_orphan_has_no_data(self):
+        manager = ProfileManager.__new__(ProfileManager)
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        default_user_data = temp_root / "default-userdata"
+        custom_user_data = temp_root / "custom-userdata"
+        orphan_root = temp_root / "profiles" / "profile-a"
+        (custom_user_data / "Config").mkdir(parents=True)
+        orphan_root.mkdir(parents=True)
+        (orphan_root / "profile.json").write_text(json.dumps({"id": "profile-a"}), encoding="utf-8")
+        imported_profile = {
+            "id": "profile-a",
+            "name": "Profile A",
+            "game_install_path": "D:/Games/RimWorld",
+            "game_version": "1.5.0",
+            "prefer_steam_launch": False,
+            "use_workshop_mods": False,
+            "user_data_path": str(custom_user_data),
+            "_folder_path": str(orphan_root),
+        }
+
+        inserted_rows = []
+
+        class _InsertQuery:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def on_conflict_replace(self):
+                return self
+
+            def execute(self):
+                inserted_rows.append(self.payload)
+                return 1
+
+        manager._get_install_inspector = Mock(return_value=SimpleNamespace(
+            inspect=Mock(return_value=SimpleNamespace(is_steam=False, game_version="1.6.4100"))
+        ))
+
+        with patch("backend.managers.mgr_profile.GameProfile.insert", side_effect=lambda **payload: _InsertQuery(payload)), \
+             patch("backend.managers.mgr_profile.db.atomic", return_value=nullcontext()), \
+             patch("backend.managers.mgr_profile.DATA_DIR", temp_root), \
+             patch("backend.managers.mgr_profile.GameManager.get_default_user_data_paths", return_value=[str(default_user_data)]):
+            ok, _ = manager.import_profile_from_disk(imported_profile)
+
+        self.assertTrue(ok)
+        self.assertEqual(inserted_rows[0]["user_data_path"], os.path.normpath(str(custom_user_data)))
+
+    def test_import_path_resolution_does_not_write_profile_during_restore(self):
+        manager = ProfileManager.__new__(ProfileManager)
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        default_user_data = temp_root / "default-userdata"
+        snapshot_root = temp_root / "profiles" / "profile-a"
+        (snapshot_root / "Config").mkdir(parents=True)
+        (snapshot_root / "profile.json").write_text(json.dumps({"id": "profile-a"}), encoding="utf-8")
+
+        with patch("backend.managers.mgr_profile.DATA_DIR", temp_root), \
+             patch("backend.managers.mgr_profile.GameManager.get_default_user_data_paths", return_value=[str(default_user_data)]):
+            resolved_path, source = manager._resolve_import_user_data_path(
+                "profile-a", str(default_user_data), str(snapshot_root)
+            )
+
+        self.assertEqual(resolved_path, os.path.normpath(str(snapshot_root)))
+        self.assertEqual(source, "orphan_folder")
+
+    def test_get_all_profiles_keeps_declared_user_data_path_without_writing(self):
+        manager = ProfileManager.__new__(ProfileManager)
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        default_user_data = temp_root / "default-userdata"
+        profile_row = {
+            "id": "profile-a",
+            "name": "Profile A",
+            "game_install_path": "D:/Games/RimWorld",
+            "user_data_path": str(default_user_data),
+            "is_steam": False,
+            "prefer_steam_launch": False,
+            "use_workshop_mods": False,
+        }
+        manager._get_install_inspector = Mock(return_value=SimpleNamespace(
+            quick_inspect=Mock(return_value=SimpleNamespace(is_steam_managed=False))
+        ))
+
+        with patch("backend.managers.mgr_profile.DATA_DIR", temp_root), \
+             patch("backend.managers.mgr_profile.GameManager.get_default_user_data_paths", return_value=[str(default_user_data)]), \
+             patch("backend.managers.mgr_profile.GameProfile.select", return_value=SimpleNamespace(dicts=Mock(return_value=[profile_row]))), \
+             patch("backend.managers.mgr_profile.PathChecker.check_install_path", return_value={"pass": True, "msg": ""}), \
+             patch("backend.managers.mgr_profile.PathChecker.check_user_data_path", return_value={"pass": True, "msg": ""}):
+            profiles = manager.get_all_profiles()
+
+        self.assertEqual(profiles[0]["user_data_path"], os.path.normpath(str(default_user_data)))
+
     def test_get_all_profiles_does_not_switch_environment_when_profile_invalid(self):
         manager = ProfileManager.__new__(ProfileManager)
         manager._get_install_inspector = Mock(return_value=SimpleNamespace(
@@ -639,6 +778,28 @@ class TestProfileManager(unittest.TestCase):
 
         self.assertEqual(len(orphans), 1)
         self.assertEqual(orphans[0]["id"], "profile-a")
+
+    def test_delete_profile_removes_snapshot_dir_when_user_data_is_default(self):
+        manager = ProfileManager.__new__(ProfileManager)
+        temp_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_root, ignore_errors=True)
+        default_user_data = temp_root / "default-userdata"
+        snapshot_dir = temp_root / "profiles" / "profile-a"
+        default_user_data.mkdir(parents=True, exist_ok=True)
+        (snapshot_dir / "Config").mkdir(parents=True, exist_ok=True)
+        (snapshot_dir / "profile.json").write_text("{}", encoding="utf-8")
+
+        profile = SimpleNamespace(id="profile-a", user_data_path=str(default_user_data), delete_instance=Mock())
+        default_profile = SimpleNamespace(id="default", user_data_path=str(default_user_data))
+
+        with patch("backend.managers.mgr_profile.DATA_DIR", temp_root), \
+             patch("backend.managers.mgr_profile.GameProfile.get_or_none", side_effect=[profile, default_profile]), \
+             patch("backend.managers.mgr_profile.settings.config", SimpleNamespace(current_profile_id="default")):
+            self.assertTrue(manager.delete_profile("profile-a", force=True))
+
+        self.assertTrue(default_user_data.exists())
+        self.assertFalse(snapshot_dir.exists())
+        profile.delete_instance.assert_called_once()
 
     def test_normalize_user_data_path_returns_empty_for_blank_value(self):
         manager = ProfileManager.__new__(ProfileManager)
@@ -1816,7 +1977,7 @@ class TestModScanner(unittest.TestCase):
         self.assertEqual(payload["message"], "boom")
         self.assertEqual(payload["metrics"], {})
 
-    def test_handle_interruption_emits_progress_and_standard_complete_payload(self):
+    def test_handle_interruption_emits_only_standard_complete_payload(self):
         scanner = ModScanner(SimpleNamespace(profile_id="profile-a"))
         scanner._is_scanning = True
 
@@ -1824,7 +1985,7 @@ class TestModScanner(unittest.TestCase):
              patch("backend.scanner.mod_scanner.EventBus.emit") as emit:
             scanner._handle_interruption("task-2")
 
-        emit_progress.assert_called_once()
+        emit_progress.assert_not_called()
         emit.assert_called_once()
         event_name, payload = emit.call_args.args
         self.assertEqual(event_name, "scan-complete")
@@ -1833,6 +1994,88 @@ class TestModScanner(unittest.TestCase):
         self.assertEqual(payload["type"], "scan")
         self.assertEqual(payload["id"], "task-2")
         self.assertEqual(payload["progress"], 0)
+
+    def test_scan_paths_async_resets_state_when_submit_fails(self):
+        scanner = ModScanner(SimpleNamespace(profile_id="profile-a"))
+        scanner.executor = Mock()
+        scanner.executor.submit.side_effect = RuntimeError("pool closed")
+
+        with patch("backend.scanner.mod_scanner.EventBus.emit") as emit:
+            with self.assertRaises(RuntimeError):
+                scanner.scan_paths_async(["unused"])
+
+        self.assertFalse(scanner.is_scanning)
+        self.assertIsNone(scanner._current_task_id)
+        scan_complete_calls = [call for call in emit.call_args_list if call.args[0] == "scan-complete"]
+        self.assertEqual(len(scan_complete_calls), 1)
+        self.assertEqual(scan_complete_calls[0].args[1]["status"], "failed")
+
+    def test_scan_paths_task_reports_failure_when_db_connect_fails(self):
+        scanner = ModScanner(SimpleNamespace(profile_id="profile-a"))
+        scanner._is_scanning = True
+        scanner._current_task_id = "task-db"
+
+        with patch("backend.scanner.mod_scanner.db.connect", side_effect=RuntimeError("db down")), \
+             patch("backend.scanner.mod_scanner.db.is_closed", return_value=True), \
+             patch("backend.scanner.mod_scanner.EventBus.emit_progress") as emit_progress, \
+             patch("backend.scanner.mod_scanner.EventBus.emit") as emit:
+            scanner._scan_paths_task("task-db", ["unused"])
+
+        self.assertFalse(scanner.is_scanning)
+        self.assertIsNone(scanner._current_task_id)
+        emit_progress.assert_not_called()
+        event_name, payload = emit.call_args.args
+        self.assertEqual(event_name, "scan-complete")
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["metrics"]["stage"], "connect_db")
+
+    def test_scan_paths_task_reports_failure_when_prepare_cleanup_fails(self):
+        scanner = ModScanner(SimpleNamespace(profile_id="profile-a"))
+        scanner._is_scanning = True
+        scanner._current_task_id = "task-prepare"
+        txn = Mock()
+
+        with patch("backend.scanner.mod_scanner.db.connect"), \
+             patch("backend.scanner.mod_scanner.db.atomic", return_value=nullcontext(txn)), \
+             patch("backend.scanner.mod_scanner.db.is_closed", return_value=True), \
+             patch("backend.scanner.mod_scanner.SteamManager") as steam_manager_cls, \
+             patch("backend.scanner.mod_scanner.EventBus.emit_progress") as emit_progress, \
+             patch("backend.scanner.mod_scanner.EventBus.emit") as emit:
+            steam_manager_cls.return_value.workshop_merged_data.side_effect = RuntimeError("acf broken")
+
+            scanner._scan_paths_task("task-prepare", ["unused"])
+
+        self.assertFalse(scanner.is_scanning)
+        self.assertIsNone(scanner._current_task_id)
+        self.assertTrue(all(call.kwargs.get("status") in {"running", "pending"} for call in emit_progress.call_args_list))
+        event_name, payload = emit.call_args.args
+        self.assertEqual(event_name, "scan-complete")
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["message"], "扫描失败。请检查搜索路径、数据库状态和文件权限后重试。")
+        self.assertNotIn("acf broken", payload["message"])
+        self.assertEqual(payload["metrics"]["stage"], "prepare_cleanup")
+
+    def test_scan_paths_task_reports_failed_complete_for_no_valid_paths(self):
+        scanner = ModScanner(SimpleNamespace(profile_id="profile-a", game_dlc_path="", game_install_path=""))
+        scanner._is_scanning = True
+        scanner._current_task_id = "task-empty"
+
+        with patch("backend.scanner.mod_scanner.db.connect"), \
+             patch("backend.scanner.mod_scanner.db.atomic", return_value=nullcontext(Mock())), \
+             patch("backend.scanner.mod_scanner.db.is_closed", return_value=True), \
+             patch("backend.scanner.mod_scanner.SteamManager") as steam_manager_cls, \
+             patch("backend.scanner.mod_scanner.ModMaintenanceDAO.find_missing_mods", return_value={"missing_mods": [], "deleted_mods": []}), \
+             patch("backend.scanner.mod_scanner.ModMaintenanceDAO.clean_invalid_shadow_paths", return_value=0), \
+             patch("backend.scanner.mod_scanner.EventBus.emit_progress"), \
+             patch("backend.scanner.mod_scanner.EventBus.emit") as emit:
+            steam_manager_cls.return_value.workshop_merged_data.return_value = {}
+            steam_manager_cls.return_value.reconcile_steamcmd_acf = Mock()
+
+            scanner._scan_paths_task("task-empty", [""])
+
+        event_name, payload = emit.call_args.args
+        self.assertEqual(event_name, "scan-complete")
+        self.assertEqual(payload["status"], "failed")
 
     def test_process_single_mod_uses_size_check_for_target_path_only(self):
         temp_root = Path(tempfile.mkdtemp())
@@ -3342,6 +3585,8 @@ class TestApiSaveSettings(unittest.TestCase):
         api._bootstrap_context = Mock()
 
         payload = {
+            "_changed_keys": ["name"],
+            "_profile_id": "default",
             "name": "Renamed",
             "game_install_path": "D:/Games/RimWorld",
             "user_data_path": "D:/RimWorldData",
@@ -3355,6 +3600,136 @@ class TestApiSaveSettings(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         profile_mgr.update_profile.assert_called_once_with("default", {"name": "Renamed"})
         api._bootstrap_context.assert_not_called()
+
+    def test_save_all_settings_ignores_profile_path_without_explicit_profile_target(self):
+        profile = SimpleNamespace(
+            name="Profile A",
+            description="",
+            game_install_path="D:/Games/RimWorld",
+            user_data_path="F:/programe/Python/RimModManager/data/profiles/profile-a",
+            prefer_steam_launch=False,
+            use_workshop_mods=False,
+            use_self_mods=True,
+            run_commands=[],
+            inactive_mods_order=[],
+            temp_mods_order=[],
+            last_played_time=0,
+        )
+        profile_mgr = SimpleNamespace(
+            PROFILE_KEYS={
+                "name", "description", "game_install_path", "user_data_path", "prefer_steam_launch",
+                "use_workshop_mods", "use_self_mods", "run_commands", "inactive_mods_order",
+                "temp_mods_order", "last_played_time",
+            },
+            get_profile=Mock(return_value=profile),
+            update_profile=Mock(),
+        )
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="profile-a")
+        api.profile_mgr = profile_mgr
+        api.sorter = None
+        api._bootstrap_context = Mock()
+
+        payload = {
+            "user_data_path": "C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
+        }
+        with self.assertLogs("RimCrow", level="WARNING") as logs:
+            res = API.save_all_settings(api, payload)
+
+        self.assertEqual(res["status"], "success")
+        self.assertTrue(any("忽略缺少明确目标环境的设置页环境字段写入" in item for item in logs.output))
+        profile_mgr.get_profile.assert_not_called()
+        profile_mgr.update_profile.assert_not_called()
+        api._bootstrap_context.assert_not_called()
+
+    def test_save_all_settings_writes_profile_path_only_with_matching_profile_target(self):
+        profile = SimpleNamespace(
+            name="Profile A",
+            description="",
+            game_install_path="D:/Games/RimWorld",
+            user_data_path="F:/programe/Python/RimModManager/data/profiles/profile-a",
+            prefer_steam_launch=False,
+            use_workshop_mods=False,
+            use_self_mods=True,
+            run_commands=[],
+            inactive_mods_order=[],
+            temp_mods_order=[],
+            last_played_time=0,
+        )
+        profile_mgr = SimpleNamespace(
+            PROFILE_KEYS={
+                "name", "description", "game_install_path", "user_data_path", "prefer_steam_launch",
+                "use_workshop_mods", "use_self_mods", "run_commands", "inactive_mods_order",
+                "temp_mods_order", "last_played_time",
+            },
+            get_profile=Mock(return_value=profile),
+            update_profile=Mock(),
+        )
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="profile-a")
+        api.profile_mgr = profile_mgr
+        api.sorter = None
+        api._bootstrap_context = Mock()
+
+        next_path = "F:/programe/Python/RimModManager/data/profiles/profile-a-fixed"
+        payload = {
+            "_changed_keys": ["user_data_path"],
+            "_profile_id": "profile-a",
+            "user_data_path": next_path,
+        }
+        res = API.save_all_settings(api, payload)
+
+        self.assertEqual(res["status"], "success")
+        profile_mgr.update_profile.assert_called_once_with("profile-a", {"user_data_path": next_path})
+        api._bootstrap_context.assert_called_once_with("profile-a")
+
+    def test_save_all_settings_uses_changed_keys_marker_to_ignore_context_fields(self):
+        profile_mgr = SimpleNamespace(
+            PROFILE_KEYS={
+                "name", "description", "game_install_path", "user_data_path", "prefer_steam_launch",
+                "use_workshop_mods", "use_self_mods", "run_commands", "inactive_mods_order",
+                "temp_mods_order", "last_played_time",
+            },
+            get_profile=Mock(),
+            update_profile=Mock(),
+        )
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="profile-a")
+        api.profile_mgr = profile_mgr
+        api.sorter = None
+        api._bootstrap_context = Mock()
+
+        payload = {
+            "_changed_keys": ["language"],
+            "language": settings.config.language,
+            "user_data_path": "C:/Users/Test/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
+        }
+        res = API.save_all_settings(api, payload)
+
+        self.assertEqual(res["status"], "success")
+        profile_mgr.get_profile.assert_not_called()
+        profile_mgr.update_profile.assert_not_called()
+        api._bootstrap_context.assert_not_called()
+
+    def test_save_all_settings_keeps_clear_secret_marker_with_changed_keys(self):
+        api = API.__new__(API)
+        api.active_context = SimpleNamespace(profile_id="default")
+        api.profile_mgr = SimpleNamespace(PROFILE_KEYS=set())
+        api.sorter = None
+        api._bootstrap_context = Mock()
+
+        payload = {
+            "_changed_keys": ["ai"],
+            "_clear_secret_keys": ["ai.api_key"],
+            "ai": asdict(settings.config.ai),
+        }
+        with patch("backend.api.network_mgr.apply"), \
+             patch.object(settings, "update_from_dict", return_value=[]) as mock_update:
+            res = API.save_all_settings(api, payload)
+
+        self.assertEqual(res["status"], "success")
+        mock_update.assert_called_once()
+        self.assertEqual(mock_update.call_args.args[0]["_clear_secret_keys"], ["ai.api_key"])
 
     def test_save_all_settings_skips_rule_reload_and_network_apply_when_values_unchanged(self):
         api = API.__new__(API)

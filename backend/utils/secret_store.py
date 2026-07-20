@@ -129,7 +129,7 @@ class SecretStore:
 
     def set_secret(self, key: str, value: str) -> None:
         normalized = self.validate_key(key)
-        text = str(value or "")
+        text = str(value or "").strip()
         backend = self.backend
         if backend is None:
             raise self._fail(_tr("secret.errors.local_store_unavailable", "本机安全存储不可用，请检查系统凭据服务后重试"))
@@ -210,26 +210,35 @@ class SecretStore:
         return changed
 
     def apply_secret_inputs(self, runtime_config: Any, data: dict[str, Any]) -> bool:
-        """保存设置表单中的密钥：有值则更新，空值则删除；读取失败的字段由前端显式标记保留。"""
+        """应用设置中的密钥输入：未提交或普通空值保持不变，显式清除才删除。"""
+        data.pop("_preserve_secret_keys", None)
+        raw_clear_keys = data.pop("_clear_secret_keys", []) or []
+        if isinstance(raw_clear_keys, str):
+            raw_clear_keys = [raw_clear_keys]
+        if not isinstance(raw_clear_keys, (list, tuple, set)):
+            raw_clear_keys = []
+        clear_keys = {
+            self.validate_key(key)
+            for key in raw_clear_keys
+            if str(key or "").strip()
+        }
         changed = False
-        preserve_keys = {self.validate_key(key) for key in (data.pop("_preserve_secret_keys", []) or [])}
         for key, path in SECRET_FIELDS.items():
             present, value = _pop_nested_value(data, path)
-            if not present:
+            if not present and key not in clear_keys:
                 continue
-            text = str(value or "")
+            text = str(value or "").strip()
             if text:
+                clear_keys.discard(key)
                 self.set_secret(key, text)
                 _set_nested_value(runtime_config, path, text)
                 changed = True
-            elif key in preserve_keys:
                 continue
-            elif not str(_get_nested_value(runtime_config, path) or ""):
+            if key not in clear_keys:
                 continue
-            else:
-                self.delete_secret(key)
-                _set_nested_value(runtime_config, path, "")
-                changed = True
+            self.delete_secret(key)
+            _set_nested_value(runtime_config, path, "")
+            changed = True
         return changed
 
     def clear_runtime_secret(self, runtime_config: Any, key: str) -> None:

@@ -15,7 +15,7 @@ from backend.migrations.app_relocation import apply_config_relocation
 from backend.utils.json_io import write_json_atomic
 from backend.utils.secret_store import SECRET_FIELDS, SecretStoreError, secret_store
 from backend.paths.game_locations import normalize_steam_root
-from backend.utils.tools import normalize_path_for_storage, same_path
+from backend.utils.tools import normalize_path_for_storage, normalize_string_list, normalize_text, same_path
 from backend.window_state import WindowStateConfig
 
 
@@ -598,6 +598,37 @@ class SettingsManager:
         self.config.mp_compat_package_ids_path = normalize_path_for_storage(self.config.mp_compat_package_ids_path) or str(MP_COMPAT_PACKAGE_IDS_PATH)
         self.config.user_rules_path = normalize_path_for_storage(self.config.user_rules_path) or str(USER_RULES_PATH)
         self.config.texture_opt.texture_tools_path = normalize_path_for_storage(self.config.texture_opt.texture_tools_path) or str(TOOLS_DIR / "texture_tools")
+        for url_key in (
+            "community_workshop_db_url",
+            "community_instead_db_url",
+            "community_rules_url",
+            "multiplayer_compatibility_url",
+            "mp_compat_package_ids_url",
+            "git_provider_catalog_url",
+        ):
+            setattr(self.config, url_key, normalize_text(getattr(self.config, url_key, "")))
+
+        proxy = self.config.network.proxy
+        proxy.host = normalize_text(proxy.host)
+        proxy.type = normalize_text(proxy.type, default="http").lower()
+        if proxy.type not in {"http", "socks5"}:
+            proxy.type = "http"
+        raw_bypass_list = proxy.bypass_list
+        proxy.bypass_list = normalize_string_list(
+            raw_bypass_list if isinstance(raw_bypass_list, (list, tuple)) else []
+        )
+        raw_hosts = self.config.network.hosts
+        if isinstance(raw_hosts, dict):
+            normalized_hosts = {}
+            for host, address in raw_hosts.items():
+                host_text = normalize_text(host)
+                address_text = normalize_text(address)
+                if host_text and address_text:
+                    normalized_hosts[host_text] = address_text
+            self.config.network.hosts = normalized_hosts
+        else:
+            self.config.network.hosts = {}
+
         self.config.language = normalize_language_code(self.config.language, default="zh-CN") or "zh-CN"
         valid_modes = {"default", "remember", "custom"}
         if str(self.config.load_order_import_dir_mode or "").strip().lower() not in valid_modes:
@@ -623,6 +654,7 @@ class SettingsManager:
         self.config.bundle_mod_folder_name_type = mod_folder_name_type if mod_folder_name_type in valid_mod_folder_name_types else "default"
         ai_cfg = self.config.ai
         if isinstance(ai_cfg, AIConfig):
+            ai_cfg.base_url = normalize_text(ai_cfg.base_url)
             try:
                 ai_cfg.max_output_tokens = max(0, int(ai_cfg.max_output_tokens or 0))
             except (TypeError, ValueError):
@@ -775,7 +807,7 @@ class SettingsManager:
             raise
 
     def apply_secret_inputs(self, data_dict: Dict[str, Any], *, save: bool = True) -> bool:
-        """保存设置提交中的密钥：有值则更新，空值则清除，保留列表中的空值不处理。"""
+        """应用设置提交中的密钥：只有显式清除标记才删除已保存密钥。"""
         try:
             changed = secret_store.apply_secret_inputs(self.config, data_dict)
             if changed and save:

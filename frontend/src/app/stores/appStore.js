@@ -706,6 +706,12 @@ export const useAppStore = defineStore('app', () => {
   const applyModsPayload = (payload, { isInit = false, historyLabel = t('messages.app.history.refresh_disk_state', '刷新磁盘状态'), preserveListState = false } = {}) => {
     if (!payload) return false
 
+    if (payload.active_context) {
+      const profileStore = useProfileStore()
+      profileStore.activeContext = payload.active_context
+      profileStore.currentProfileId = payload.active_context.profile_id || profileStore.currentProfileId
+    }
+
     const groupStore = useGroupStore()
     groupStore.setGroups(payload.groups || [])
 

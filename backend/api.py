@@ -2458,27 +2458,52 @@ class API:
 
             profile_data = {}
             global_data = {}
+            changed_keys_marker = settings_obj.get("_changed_keys") if isinstance(settings_obj, dict) else None
+            changed_keys = None
+            if isinstance(changed_keys_marker, (list, tuple, set)):
+                # 设置页可能同时提交表单上下文；只处理明确声明过的实际修改字段。
+                changed_keys = {str(key or "").strip() for key in changed_keys_marker if str(key or "").strip()}
+            requested_profile_id = str(settings_obj.get("_profile_id") or "").strip() if isinstance(settings_obj, dict) else ""
             # 这里的 PROFILE_KEYS 来自 ProfileManager 的定义
             profile_keys = self.profile_mgr.PROFILE_KEYS
+            pid = self.active_context.profile_id if self.active_context else settings.config.current_profile_id
+            pid = str(pid or "").strip()
+            can_write_profile = bool(changed_keys is not None and requested_profile_id and requested_profile_id == pid)
+            ignored_profile_keys = []
             # 批量更新
             for k, v in settings_obj.items():
+                if k == "_clear_secret_keys":
+                    # 这是密钥操作元数据，由 SettingsManager 消费，不能写入普通配置。
+                    global_data[k] = v
+                    continue
+                if k in {"_changed_keys", "_profile_id"}:
+                    continue
+                if changed_keys is not None and k not in changed_keys:
+                    continue
                 # 如果修改的是核心路径，同步到当前环境
                 if k in profile_keys:
+                    if not can_write_profile:
+                        ignored_profile_keys.append(k)
+                        continue
                     profile_data[k] = v
-                elif k == "_preserve_secret_keys":
-                    global_data[k] = v
                 else:
                     # 只有 AppConfig 里定义的字段才进全局配置（过滤掉冗余的 UI 状态）
                     if hasattr(settings.config, k):
                         global_data[k] = v
+            if ignored_profile_keys:
+                logger.warning(
+                    "忽略缺少明确目标环境的设置页环境字段写入: requested_profile_id=%s, active_profile_id=%s, keys=%s",
+                    requested_profile_id,
+                    pid,
+                    sorted(set(ignored_profile_keys)),
+                )
             env_changed = False
-            
-            pid = self.active_context.profile_id if self.active_context else settings.config.current_profile_id
             
             # A. 处理环境数据
             if profile_data:
                 profile_id = pid
                 changed_profile_data = dict(profile_data)
+                current_profile = None
                 if hasattr(self.profile_mgr, "get_profile"):
                     current_profile = self.profile_mgr.get_profile(profile_id)
                     changed_profile_data = {
@@ -2487,6 +2512,13 @@ class API:
                         if _profile_value_changed(current_profile, key, value)
                     }
                 if changed_profile_data:
+                    logger.info(
+                        "设置页写入环境字段: profile_id=%s, keys=%s, before_user_data_path=%s, requested_user_data_path=%s",
+                        profile_id,
+                        sorted(changed_profile_data.keys()),
+                        getattr(current_profile, "user_data_path", ""),
+                        changed_profile_data.get("user_data_path", ""),
+                    )
                     self.profile_mgr.update_profile(profile_id, changed_profile_data)
                     # 只有会进入 ProfileContext 的字段变化才需要重建管理器；名称、描述等元信息不触发重装。
                     env_changed = any(key not in {"name", "description", "last_played_time"} for key in changed_profile_data)
@@ -2800,7 +2832,7 @@ class API:
                     return ApiResponse.error(tr("api.mods.no_active_profile", "当前环境未激活，无法扫描 Mods"))
             if not paths_to_scan: return ApiResponse.error(tr("api.mods.no_scan_paths", "没有配置有效的扫描路径"))
             # 调用异步扫描
-            # 注意：这里不需要 try-catch 包裹整个逻辑，因为异常在线程内被捕获并通过事件发回了
+            # 后台执行异常由扫描器通过任务事件返回；线程池提交异常由本方法转换为 API 错误。
             # 1. 扫描所有路径入库
             # 2. 识别 Local vs Workshop 冲突
             # 3. 触发当前环境的运行态收敛回调（若仍是当前环境）
@@ -6113,7 +6145,11 @@ class API:
         try:
             current_ai = settings.config.ai
             config_data = dict(config_data or {})
-            settings.apply_secret_inputs({"ai": config_data}, save=False)
+            clear_secret_keys = config_data.pop("_clear_secret_keys", [])
+            secret_inputs = {"ai": config_data}
+            if clear_secret_keys:
+                secret_inputs["_clear_secret_keys"] = clear_secret_keys
+            settings.apply_secret_inputs(secret_inputs, save=False)
             editable_keys = {
                 "enabled",
                 "provider",
