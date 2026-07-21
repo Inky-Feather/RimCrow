@@ -127,8 +127,8 @@ import CommonModalShell from '../modal/CommonModalShell.vue'
 import CommonSelect from '../input/CommonSelect.vue'
 import { useConfirmStore } from '../modal/confirmStore'
 import { useAppStore } from '../../../app/stores/appStore'
-import { DEFAULT_LOCALE, getCurrentLocale, getLocaleMessagesForManagement, getTranslationValidationIssue, setLocale, t, translateMessagePayload, UNTRANSLATED_PREFIX } from '../../i18n.js'
-import { toast } from '../../lib/common'
+import { DEFAULT_LOCALE, getCurrentLocale, getLocaleMessagesForManagement, getTranslationValidationIssue, setLocale, t, UNTRANSLATED_PREFIX } from '../../i18n.js'
+import { showUserErrorToast, toast } from '../../lib/common'
 
 const appStore = useAppStore()
 const confirmStore = useConfirmStore()
@@ -285,7 +285,7 @@ const loadMessages = async () => {
     if (!selectedRow.value) selectedKey.value = filteredRows.value[0]?.key || ''
     return true
   } catch (error) {
-    toast.error(error?.message || t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
+    showUserErrorToast(error?.response || error, t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
     return false
   }
 }
@@ -357,7 +357,7 @@ const saveSelected = async () => {
       ? await window.pywebview.api.locale_delete_user_message(selectedLanguage.value, selectedRow.value.key)
       : await window.pywebview.api.locale_save_user_message(selectedLanguage.value, selectedRow.value.key, draftText.value)
     if (res?.status !== 'success') {
-      toast.error(translateMessagePayload(res, t('messages.i18n.translation_mode.save_failed', '保存翻译失败。')))
+      showUserErrorToast(res, t('messages.i18n.translation_mode.save_failed', '保存翻译失败。'))
       return
     }
     await loadMessages()
@@ -380,7 +380,7 @@ const autoTranslateSelected = async () => {
       segments: [{ key: selectedRow.value.key, text: selectedRow.value.sourceText, role: 'ui' }],
     }, selectedLanguage.value, provider)
     if (res?.status !== 'success') {
-      toast.error(translateMessagePayload(res, t('messages.i18n.translation_mode.auto_translate_failed', '自动翻译失败。')))
+      showUserErrorToast(res, t('messages.i18n.translation_mode.auto_translate_failed', '自动翻译失败。'))
       return
     }
     const segment = Array.isArray(res.data?.segments) ? res.data.segments.find(item => item.key === selectedRow.value.key) : null
@@ -419,7 +419,7 @@ const autoTranslateBatch = async () => {
         segments: batch.map(row => ({ key: row.key, text: row.sourceText, role: 'ui' })),
       }, selectedLanguage.value, provider)
       if (res?.status !== 'success') {
-        toast.error(translateMessagePayload(res, t('messages.i18n.translation_mode.auto_translate_failed', '自动翻译失败。')))
+        showUserErrorToast(res, t('messages.i18n.translation_mode.auto_translate_failed', '自动翻译失败。'))
         return
       }
       for (const item of (res.data?.segments || [])) {
@@ -438,7 +438,7 @@ const autoTranslateBatch = async () => {
     }
     const saveRes = await window.pywebview.api.locale_save_user_messages(selectedLanguage.value, messages)
     if (saveRes?.status !== 'success') {
-      toast.error(translateMessagePayload(saveRes, t('messages.i18n.translation_mode.save_failed', '保存翻译失败。')))
+      showUserErrorToast(saveRes, t('messages.i18n.translation_mode.save_failed', '保存翻译失败。'))
       return
     }
     await loadMessages()
@@ -478,7 +478,7 @@ const exportWorkfile = async () => {
       )
       if (action === 'open' && targetPath) await appStore.openPath(targetPath)
     } else if (res?.status !== 'warning') {
-      toast.error(translateMessagePayload(res, t('dialog.translation_manager.workfile_export_failed', '导出翻译文件失败。')))
+      showUserErrorToast(res, t('dialog.translation_manager.workfile_export_failed', '导出翻译文件失败。'))
     }
   } finally {
     busy.value = false
@@ -511,7 +511,7 @@ const importWorkfile = async () => {
     const importRes = await window.pywebview.api.locale_import_workfile()
     if (importRes?.status === 'warning') return
     if (importRes?.status !== 'success') {
-      toast.error(translateMessagePayload(importRes, t('dialog.translation_manager.workfile_import_failed', '导入翻译文件失败。请确认文件格式正确。')))
+      showUserErrorToast(importRes, t('dialog.translation_manager.workfile_import_failed', '导入翻译文件失败。请确认文件格式正确。'))
       return
     }
     const fileLanguage = String(importRes.data?.language || '').trim()
@@ -532,7 +532,7 @@ const importWorkfile = async () => {
     await appStore.createUserLocale(selectedLanguage.value, selectedLanguageLabel.value)
     const res = await window.pywebview.api.locale_save_user_messages(selectedLanguage.value, messages)
     if (res?.status !== 'success') {
-      toast.error(translateMessagePayload(res, t('messages.i18n.translation_mode.save_failed', '保存翻译失败。')))
+      showUserErrorToast(res, t('messages.i18n.translation_mode.save_failed', '保存翻译失败。'))
       return
     }
     await loadMessages()
@@ -540,7 +540,7 @@ const importWorkfile = async () => {
     toast.success(t('dialog.translation_manager.workfile_imported', '已导入 {count} 条译文。', { count: Object.keys(messages).length }))
   } catch (error) {
     console.warn('导入翻译工作文件失败:', error)
-    toast.error(t('dialog.translation_manager.workfile_import_failed', '导入翻译文件失败。请确认文件格式正确。'))
+    showUserErrorToast(error, t('dialog.translation_manager.workfile_import_failed', '导入翻译文件失败。请确认文件格式正确。'))
   } finally {
     busy.value = false
   }

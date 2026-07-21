@@ -1,4 +1,4 @@
-import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
+import { toast, checkResult, showUserErrorToast, toUserMessage } from '../../../shared/lib/common'
 import { useWorkspaceStore } from '../../../features/workspace/workspaceStore'
 import { normalizeInstallSource, normalizeInstallSources } from '../../../features/mod/lib/modIdentity'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
@@ -44,7 +44,7 @@ export const useSteamWorkshopActions = ({
         try {
           task = await useTaskStore().waitForTaskCompletion(taskId)
         } catch (e) {
-        toast.error(toUserMessage(e?.message || e, t('toast.steam.download_incomplete', 'Steam 下载未完成。请确认 Steam 已登录并正常联网，或稍后在 Steam 下载队列中查看进度。')))
+          if (!e?.from_task) showUserErrorToast(e, t('toast.steam.download_incomplete', 'Steam 下载未完成。请确认 Steam 已登录并正常联网，或稍后在 Steam 下载队列中查看进度。'))
           return false
         }
       }
@@ -54,11 +54,11 @@ export const useSteamWorkshopActions = ({
       if (res?.data?.action === 'steam_not_ready') {
         showSteamNotReadyHint(res)
       } else {
-        toast.warning(toUserMessage(res?.message, t('toast.steam.download_temporarily_unavailable', 'Steam 暂时无法处理工坊下载请求。请确认 Steam 已登录、网络可用，稍后重试。')))
+        toast.warning(toUserMessage(res, t('toast.steam.download_temporarily_unavailable', 'Steam 暂时无法处理工坊下载请求。请确认 Steam 已登录、网络可用，稍后重试。')))
       }
       return false
     }
-    toast.error(toUserMessage(res?.message, t('toast.steam.download_failed', 'Steam 工坊下载请求失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。')))
+    showUserErrorToast(res, t('toast.steam.download_failed', 'Steam 工坊下载请求失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。'))
     return false
   }
 
@@ -72,7 +72,7 @@ export const useSteamWorkshopActions = ({
     if (res?.status === 'success') return res.data
     if (res?.status === 'warning') {
       if (res?.data?.action === 'steam_not_ready') showSteamNotReadyHint(res)
-      else toast.warning(toUserMessage(res?.message, t('toast.steam.details_temporarily_unavailable', 'Steam 暂时无法查询工坊详情。请确认 Steam 已登录、网络可用，稍后重试。')))
+      else toast.warning(toUserMessage(res, t('toast.steam.details_temporarily_unavailable', 'Steam 暂时无法查询工坊详情。请确认 Steam 已登录、网络可用，稍后重试。')))
     }
     return null
   }
@@ -231,7 +231,7 @@ export const useSteamWorkshopActions = ({
       showSteamNotReadyHint(res)
       return false
     }
-    toast.error(toUserMessage(res?.message, t('toast.steam.subscribe_failed', '订阅失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。')))
+    showUserErrorToast(res, t('toast.steam.subscribe_failed', '订阅失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。'))
     return false
   }
 
@@ -273,7 +273,7 @@ export const useSteamWorkshopActions = ({
         try {
           task = await useTaskStore().waitForTaskCompletion(taskId)
         } catch (e) {
-          toast.error(toUserMessage(e?.message || e, t('toast.steam.unsubscribe_incomplete', '取消订阅未完成。请确认 Steam 已登录并正常联网，稍后刷新订阅状态。')))
+          if (!e?.from_task) showUserErrorToast(e, t('toast.steam.unsubscribe_incomplete', '取消订阅未完成。请确认 Steam 已登录并正常联网，稍后刷新订阅状态。'))
           return false
         }
         toast.success(t('toast.steam.unsubscribe_success_refreshing', '取消订阅成功，正在更新列表。'), { timeout: 2500 })
@@ -282,7 +282,7 @@ export const useSteamWorkshopActions = ({
         const deleteRes = await window.pywebview.api.mods_delete(normalizedDeleteHashes, !!options.force, shouldDeleteFiles)
         if (deleteRes?.status !== 'success') {
           const actionName = shouldDeleteFiles ? t('steam.action.local_file_delete', '本地文件删除') : t('steam.action.inventory_cleanup', '库存记录清理')
-          toast.error(toUserMessage(deleteRes?.message, t('toast.steam.unsubscribe_followup_failed', '已向 Steam 提交取消订阅，但{action}失败。请检查本地文件权限、文件占用状态和目标路径是否可访问。', { action: actionName })))
+          showUserErrorToast(deleteRes, t('toast.steam.unsubscribe_followup_failed', '已向 Steam 提交取消订阅，但{action}失败。请检查本地文件权限、文件占用状态和目标路径是否可访问。', { action: actionName }))
           return false
         }
         toast.info(
@@ -299,7 +299,7 @@ export const useSteamWorkshopActions = ({
       showSteamNotReadyHint(res)
       return false
     }
-    toast.error(toUserMessage(res?.message, t('toast.steam.unsubscribe_failed', '取消订阅失败。请确认 Steam 已登录、网络可用，稍后重试。')))
+    showUserErrorToast(res, t('toast.steam.unsubscribe_failed', '取消订阅失败。请确认 Steam 已登录、网络可用，稍后重试。'))
     return false
   }
 

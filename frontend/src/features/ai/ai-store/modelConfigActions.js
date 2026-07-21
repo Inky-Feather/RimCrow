@@ -1,4 +1,4 @@
-import { checkResult, getApiResponseMessage, normalizeText, toast, toUserMessage } from '../../../shared/lib/common'
+import { checkResult, normalizeText, toast, toUserMessage } from '../../../shared/lib/common'
 import { t } from '../../../shared/i18n.js'
 
 const PENDING_REASONING_CAPABILITIES = {
@@ -216,12 +216,13 @@ export const useModelConfigActions = ({
 
   const chatWithAI = async (prompt, tempConfig) => {
     if (!window.pywebview) {
-      return { ok: false, text: '', error: t('ai.config.ui_not_ready', '界面尚未完成初始化'), isEmpty: false }
+      const userMessage = t('ai.config.ui_not_ready', '界面尚未完成初始化')
+      return { ok: false, text: '', error: userMessage, user_message: userMessage, isEmpty: false }
     }
     isLoading.value = true
     try {
       const res = await window.pywebview.api.ai_chat(prompt, tempConfig)
-      if (checkResult(res, t('ai.config.test_reply_action', '测试 AI 回复'))) {
+      if (checkResult(res, t('ai.config.test_reply_action', '测试 AI 回复'), false, { silent: true })) {
         const payload = res.data
         const text = typeof payload === 'string'
           ? payload
@@ -234,18 +235,23 @@ export const useModelConfigActions = ({
           raw: payload,
         }
       }
+      const userMessage = toUserMessage(res, t('ai.config.test_failed', 'AI 测试请求失败。请检查模型名称、Base URL、API Key、代理设置和服务状态。'))
       return {
+        ...(res && typeof res === 'object' ? res : {}),
         ok: false,
         text: '',
-        error: getApiResponseMessage(res, t('ai.config.test_failed', 'AI 测试请求失败。请检查模型名称、Base URL、API Key、代理设置和服务状态，详细原因已写入系统日志。')),
+        error: userMessage,
+        user_message: res?.user_message || userMessage,
         isEmpty: false,
       }
     } catch (error) {
       console.error('AI 聊天请求异常:', error)
+      const userMessage = toUserMessage(error, t('ai.config.test_exception', 'AI 测试请求异常。可能是软件后端暂时不可用、网络连接失败或模型服务无响应，请稍后重试。'))
       return {
         ok: false,
         text: '',
-        error: toUserMessage(error?.message || String(error), t('ai.config.test_exception', 'AI 测试请求异常。可能是软件后端暂时不可用、网络连接失败或模型服务无响应，请稍后重试。')),
+        error: userMessage,
+        user_message: userMessage,
         isEmpty: false,
       }
     } finally {

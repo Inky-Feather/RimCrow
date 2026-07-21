@@ -1,4 +1,6 @@
 # backend/utils/event_bus.py
+import json
+import sys
 import threading
 from collections.abc import Mapping
 from typing import Any
@@ -15,6 +17,10 @@ class EventBus:
     _paused = False  # 暂停标志
     _frontend_ready = False  # 新增：前端是否彻底就绪的标志
     _lock = threading.Lock() # 线程锁
+    _pending_events: list[tuple[str, Any]] = []
+    _max_pending_events = 100
+    _dropped_event_count = 0
+    _dispatch_error_count = 0
     
     
     def __new__(cls):
@@ -40,7 +46,23 @@ class EventBus:
     @classmethod
     def mark_ready(cls):
         """标记前端已挂载完毕"""
-        cls._frontend_ready = True
+        with cls._lock:
+            cls._frontend_ready = True
+            pending_events = list(cls._pending_events)
+            cls._pending_events.clear()
+            dispatcher = cls._browser_dispatcher
+            window = cls._window
+            paused = cls._paused
+        if paused or not pending_events:
+            return
+        for index, (event_name, data) in enumerate(pending_events):
+            if not cls._dispatch_to_target(event_name, data, dispatcher, window):
+                with cls._lock:
+                    cls._frontend_ready = False
+                    cls._dispatch_error_count += 1
+                    for queued_event_name, queued_data in pending_events[index:]:
+                        cls._queue_pending_event(queued_event_name, queued_data)
+                break
         
     @classmethod
     def pause(cls):
@@ -53,6 +75,41 @@ class EventBus:
         cls._paused = False
 
     @classmethod
+    def _queue_pending_event(cls, event_name: str, data: Any):
+        # Toast/弹窗是即时反馈，前端未就绪后补发容易造成过期提示堆积；状态和日志事件保留最近一批用于恢复。
+        if event_name == 'backend-popup':
+            cls._dropped_event_count += 1
+            return
+        cls._pending_events.append((str(event_name), data))
+        overflow = len(cls._pending_events) - cls._max_pending_events
+        if overflow > 0:
+            del cls._pending_events[:overflow]
+            cls._dropped_event_count += overflow
+
+    @staticmethod
+    def _dispatch_to_target(event_name: str, data: Any, dispatcher, window: Any) -> bool:
+        try:
+            if dispatcher:
+                dispatcher(event_name, data)
+                return True
+            if not window or not hasattr(window, 'evaluate_js'):
+                return False
+            js_payload = json.dumps(data, ensure_ascii=False)
+            js_code = f"""
+                setTimeout(() => {{
+                    if (window.dispatchEvent) {{
+                        const detail = JSON.parse({json.dumps(js_payload)});
+                        window.dispatchEvent(new CustomEvent({json.dumps(str(event_name))}, {{ detail: detail }}));
+                    }}
+                }}, 0);
+            """
+            window.evaluate_js(js_code)
+            return True
+        except Exception as exc:
+            print(f"[EventBus] Event dispatch failed: event={event_name}, error={exc}", file=sys.stderr)
+            return False
+
+    @classmethod
     def emit(cls, event_name, data=None):
         """
         向前端发送事件。
@@ -60,44 +117,19 @@ class EventBus:
         使用 evaluate_js 原生 CustomEvent，兼容性好。
         """
         with cls._lock:
-            if cls._browser_dispatcher and cls._frontend_ready and not cls._paused:
-                try:
-                    cls._browser_dispatcher(event_name, data)
-                except Exception:
-                    pass
+            if cls._paused or not cls._frontend_ready:
+                cls._queue_pending_event(event_name, data)
                 return
-            # 增加 _frontend_ready 的严格判断，前端没准备好时，静默丢弃事件，不引发报错
-            if cls._paused or not cls._window or not cls._frontend_ready:  return
-            # 增加窗口就绪状态的预检
-            # 如果窗口正在加载 URL (idle <-> vue 切换中)，evaluate_js 会抛出不可逆异常
-            if not hasattr(cls._window, 'evaluate_js'): return
-            
-            # 如果暂停或窗口不存在，直接丢弃事件
-            if cls._paused or not cls._window: 
-                print(f"[EventBus] Event {event_name} dropped: paused={cls._paused}, window={cls._window}")
+            dispatcher = cls._browser_dispatcher
+            window = cls._window
+            if not dispatcher and (not window or not hasattr(window, 'evaluate_js')):
+                cls._queue_pending_event(event_name, data)
                 return
-        
-            import json
-            try:
-                # 构造 JS 代码触发 CustomEvent
-                # 前端监听: window.addEventListener('global-progress', (e) => console.log(e.detail))
-                js_payload = json.dumps(data)
-                # 使用 setTimeout 0 异步执行，减少对 Python 线程的阻塞
-                js_code = f"""
-                    setTimeout(() => {{
-                        if (window.dispatchEvent) {{
-                            const detail = JSON.parse({json.dumps(js_payload)});
-                            window.dispatchEvent(new CustomEvent('{event_name}', {{ detail: detail }}));
-                        }}
-                    }}, 0);
-                """
-                # 在主线程执行 JS (pywebview 可以在任意线程调用 evaluate_js，它内部会处理线程安全)
-                cls._window.evaluate_js(js_code)
-            except Exception:
-                # 窗口可能还没准备好，或者已经关闭
-                # 这种情况下，静默失败，只在控制台打印简单的 stderr，防止递归调用 logger
-                # 捕获异常后，将就绪状态置为 False，防止后续事件继续撞墙
+        if not cls._dispatch_to_target(event_name, data, dispatcher, window):
+            with cls._lock:
                 cls._frontend_ready = False
+                cls._dispatch_error_count += 1
+                cls._queue_pending_event(event_name, data)
 
     @staticmethod
     def _structured_message_payload(message: Any) -> dict[str, Any]:
@@ -122,20 +154,68 @@ class EventBus:
             payload["message_params"] = params
         return payload
 
+    @staticmethod
+    def _normalize_error_type(error_type: str = "", error_code: str = "") -> str:
+        value = str(error_type or "").strip()
+        if value and "." not in value:
+            return value
+        code = str(error_code or value or "").strip()
+        return code.split(".", 1)[0] if code else ""
+
     @classmethod
-    def send_toast(cls, message: str, type: str = 'info', duration: int = 3000):
+    def send_toast(
+        cls,
+        message: Any,
+        type: str = 'info',
+        duration: int = 3000,
+        *,
+        error_type: str = '',
+        error_code: str = '',
+        error_id: str = '',
+        user_message: str = '',
+        message_key: str = '',
+        message_params: Mapping[str, Any] | None = None,
+        extra_context: Mapping[str, Any] | None = None,
+    ):
         """快捷发送 Toast"""
-        print(f"[EventBus] send_toast: {message}")
         payload: dict[str, Any] = {
             'mode': 'toast',
             'type': type,
             'duration': duration
         }
         payload.update(cls._structured_message_payload(message))
+        normalized_type = cls._normalize_error_type(error_type or payload.get("error_type", ""), error_code or payload.get("error_code", ""))
+        if normalized_type:
+            payload['error_type'] = normalized_type
+        if error_code:
+            payload['error_code'] = str(error_code)
+        if error_id:
+            payload['error_id'] = str(error_id)
+        if user_message:
+            payload['user_message'] = str(user_message)
+        if message_key:
+            payload['message_key'] = str(message_key)
+        if message_params:
+            payload['message_params'] = dict(message_params)
+        if extra_context:
+            payload['extra_context'] = dict(extra_context)
         cls.emit('backend-popup', payload)
 
     @classmethod
-    def send_alert(cls, title: str, message: str, type: str = 'info'):
+    def send_alert(
+        cls,
+        title: str,
+        message: Any,
+        type: str = 'info',
+        *,
+        error_type: str = '',
+        error_code: str = '',
+        error_id: str = '',
+        user_message: str = '',
+        message_key: str = '',
+        message_params: Mapping[str, Any] | None = None,
+        extra_context: Mapping[str, Any] | None = None,
+    ):
         """快捷发送 Modal/Alert"""
         payload: dict[str, Any] = {
             'mode': 'modal',
@@ -143,6 +223,21 @@ class EventBus:
             'type': type
         }
         payload.update(cls._structured_message_payload(message))
+        normalized_type = cls._normalize_error_type(error_type or payload.get("error_type", ""), error_code or payload.get("error_code", ""))
+        if normalized_type:
+            payload['error_type'] = normalized_type
+        if error_code:
+            payload['error_code'] = str(error_code)
+        if error_id:
+            payload['error_id'] = str(error_id)
+        if user_message:
+            payload['user_message'] = str(user_message)
+        if message_key:
+            payload['message_key'] = str(message_key)
+        if message_params:
+            payload['message_params'] = dict(message_params)
+        if extra_context:
+            payload['extra_context'] = dict(extra_context)
         cls.emit('backend-popup', payload)
 
     @staticmethod
@@ -162,7 +257,23 @@ class EventBus:
         return normalized
     
     @classmethod
-    def emit_progress(cls, task_id, task_type, status="running", progress=0, message="", metrics=None, message_key="", message_params=None):
+    def emit_progress(
+        cls,
+        task_id,
+        task_type,
+        status="running",
+        progress=0,
+        message="",
+        metrics=None,
+        message_key="",
+        message_params=None,
+        *,
+        error_type: str = "",
+        error_code: str = "",
+        error_id: str = "",
+        user_message: str = "",
+        extra_context: Mapping[str, Any] | None = None,
+    ):
         """
         统一进度发送器
         :param task_id: 任务唯一ID (uuid)
@@ -189,6 +300,17 @@ class EventBus:
             payload["message_key"] = key
         if params:
             payload["message_params"] = params
+        normalized_type = cls._normalize_error_type(error_type, error_code)
+        if normalized_type:
+            payload["error_type"] = normalized_type
+        if error_code:
+            payload["error_code"] = str(error_code)
+        if error_id:
+            payload["error_id"] = str(error_id)
+        if user_message:
+            payload["user_message"] = str(user_message)
+        if extra_context:
+            payload["extra_context"] = dict(extra_context)
         payload["metrics"].setdefault("task_created_at", now)
         cls.emit('global-progress', payload)
         

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, nextTick } from 'vue'
-import { deepClone, toast, checkResult, toUserMessage } from '../../../shared/lib/common'
+import { deepClone, toast, checkResult, showUserErrorToast, toUserMessage } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useGroupStore } from './groupStore'
 import { useTaskStore } from '../../../app/stores/taskStore'
@@ -25,7 +25,7 @@ import { useModListHistory } from './mod-store/listHistory'
 import { useModSelection } from './mod-store/selection'
 import { useModExportPlan } from './mod-store/exportPlan'
 import { useModIssues } from './mod-store/issues'
-import { t } from '../../../shared/i18n.js'
+import { t, translateMessagePayload } from '../../../shared/i18n.js'
 
 export const useModStore = defineStore('mods', () => {
   const appStore = useAppStore()
@@ -837,12 +837,12 @@ export const useModStore = defineStore('mods', () => {
       // 调用 API，会立即返回 { status: 'started' }
       const res = await window.pywebview.api.scan_mods(path_list, forced_update, size_check_override, size_check_paths)
       if (res.status === 'warning') {
-        toast.info(res.message || t('toast.mod.scan_already_running', '扫描任务已在进行中，请等待当前扫描完成。'))
+        toast.info(toUserMessage(res, t('toast.mod.scan_already_running', '扫描任务已在进行中，请等待当前扫描完成。')))
         return false
       }
       if (res.status !== 'success' && res.status !== 'started') {
         console.error("启动扫描失败:", res)
-        toast.error(toUserMessage(res.message, t('toast.mod.scan_start_failed', '扫描启动失败。可能是当前环境路径无效、扫描器未初始化或后台任务暂时不可用，详细原因已写入系统日志。')))
+        showUserErrorToast(res, t('toast.mod.scan_start_failed', '扫描启动失败。可能是当前环境路径无效、扫描器未初始化或后台任务暂时不可用。'))
         return false
       }
       const taskDetail = res?.data?.details || {}
@@ -864,7 +864,7 @@ export const useModStore = defineStore('mods', () => {
       return true
     } catch (e) {
       console.error("扫描请求异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.scan_request_failed', '扫描请求异常。可能是软件后端暂时不可用或当前环境路径配置异常，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.mod.scan_request_failed', '扫描请求异常。可能是软件后端暂时不可用或当前环境路径配置异常。'))
       return false
     }
   }
@@ -878,13 +878,13 @@ export const useModStore = defineStore('mods', () => {
     )
 
     if (detail?.status === 'cancelled') {
-      toast.info(detail.message || t('toast.mod.scan_cancelled', '扫描已取消'))
+      toast.info(toUserMessage(detail, t('toast.mod.scan_cancelled', '扫描已取消')))
       console.info("扫描已取消:", detail)
       return
     }
 
     if (detail?.status && detail.status !== 'success') {
-      toast.error(toUserMessage(detail.message, t('toast.mod.scan_failed', '扫描异常。可能是路径权限、文件占用或扫描器内部状态暂时不可用，详细原因已写入系统日志。')))
+      showUserErrorToast(detail, t('toast.mod.scan_failed', '扫描异常。可能是路径权限、文件占用或扫描器内部状态暂时不可用。'))
       console.error("扫描完成事件异常:", detail)
       return
     }
@@ -991,12 +991,13 @@ export const useModStore = defineStore('mods', () => {
           let warningMessages = ''
           let warnModRule= []
           res.data.warnings.forEach(warning => {
-            warningMessages += warning.message + '\n'
+            const warningMessage = translateMessagePayload(warning, typeof warning === 'string' ? warning : warning?.message || '')
+            if (warningMessage) warningMessages += warningMessage + '\n'
             if(warning.source_id) {
               warnModRule.push({mod_id: warning.source_id, target_id: warning.target_id||null ,type: warning.rule_type})
             }
           })
-          toast.warning(warningMessages,{position: "top-center",timeout: 5000})
+          if (warningMessages) toast.warning(warningMessages,{position: "top-center",timeout: 5000})
           if (warnModRule.length > 0) {
             console.debug("自动排序警告:",warnModRule)
             let msg = t('toast.mod.auto_sort_rule_warning_intro', '请检查以下Mod规则是否正确：\n')
@@ -1014,7 +1015,7 @@ export const useModStore = defineStore('mods', () => {
       }
     } catch (e) {
       console.error("自动排序Mod异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.auto_sort_failed', '自动排序失败。可能是规则数据、缺失项处理或后端排序器暂时不可用，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.mod.auto_sort_failed', '自动排序失败。可能是规则数据、缺失项处理或后端排序器暂时不可用。'))
     }
     return false
   }
@@ -1088,7 +1089,12 @@ export const useModStore = defineStore('mods', () => {
     const res = await window.pywebview.api.auto_sort_mods(targetIds)
     if (!checkResult(res, t('check.mod.reset_active_sort', '重置启用列表排序'))) return null
     if (res.data?.warnings?.length > 0) {
-      toast.warning(res.data.warnings.map(warning => warning.message).filter(Boolean).join('\n'), { position: 'top-center', timeout: 5000 })
+      const warningMessages = res.data.warnings
+        .map(warning => translateMessagePayload(warning, typeof warning === 'string' ? warning : warning?.message || ''))
+        .filter(Boolean)
+      if (warningMessages.length > 0) {
+        toast.warning(warningMessages.join('\n'), { position: 'top-center', timeout: 5000 })
+      }
     }
     return normalizeHistoryModIds(res.data?.sorted_ids || targetIds)
   }
@@ -1409,7 +1415,7 @@ export const useModStore = defineStore('mods', () => {
       return true
     } catch (e) {
       console.error("更新Mod用户数据异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.update_user_data_failed', '更新 Mod 用户数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.mod.update_user_data_failed', '更新 Mod 用户数据失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1440,7 +1446,7 @@ export const useModStore = defineStore('mods', () => {
       return true
     } catch (e) {
       console.error("更新Mod最后操作时间异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.update_time_failed', '更新 Mod 操作时间失败。正在重新同步模组数据，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.mod.update_time_failed', '更新 Mod 操作时间失败。正在重新同步模组数据。'))
       await appStore.refreshModCoreData('Mod 时间更新异常后同步模组数据', {
         preserveListState: true,
         refreshRules: false,
@@ -1479,7 +1485,7 @@ export const useModStore = defineStore('mods', () => {
       }
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_set_color_failed', '批量设置颜色失败，已还原本地状态。请稍后重试。')))
+      showUserErrorToast(e, t('toast.mod.batch_set_color_failed', '批量设置颜色失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1503,7 +1509,7 @@ export const useModStore = defineStore('mods', () => {
       await refreshAfterUserMetadataChange(t('check.mod.refresh_after_type_change', '类型变更后同步模组规则状态'))
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_set_type_failed', '批量设置类型失败，已还原本地状态。请稍后重试。')))
+      showUserErrorToast(e, t('toast.mod.batch_set_type_failed', '批量设置类型失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1527,7 +1533,7 @@ export const useModStore = defineStore('mods', () => {
       await refreshAfterUserMetadataChange(t('check.mod.refresh_after_tags_change', '标签变更后同步模组规则状态'))
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_add_tags_failed', '批量添加标签失败，已还原本地状态。请稍后重试。')))
+      showUserErrorToast(e, t('toast.mod.batch_add_tags_failed', '批量添加标签失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1551,7 +1557,7 @@ export const useModStore = defineStore('mods', () => {
       await refreshAfterUserMetadataChange(t('check.mod.refresh_after_tags_change', '标签变更后同步模组规则状态'))
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_remove_tags_failed', '批量移除标签失败，已还原本地状态。请稍后重试。')))
+      showUserErrorToast(e, t('toast.mod.batch_remove_tags_failed', '批量移除标签失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     }
@@ -1609,7 +1615,7 @@ export const useModStore = defineStore('mods', () => {
       }
     } catch (e) {
       console.error("设置 Mod 联锁异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.link_failed', '设置 Mod 联锁失败。请稍后重试，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.mod.link_failed', '设置 Mod 联锁失败。请稍后重试。'))
       return false
     }
   }
@@ -1679,7 +1685,7 @@ export const useModStore = defineStore('mods', () => {
       return true
     } catch (e) {
       console.error("批量更新Mod数据异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.mod.batch_update_data_failed', '批量更新 Mod 数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.mod.batch_update_data_failed', '批量更新 Mod 数据失败，已还原本地状态。请稍后重试。'))
       restoreModSnapshots(rollback)
       return false
     } finally {

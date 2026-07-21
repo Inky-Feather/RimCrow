@@ -148,7 +148,7 @@ class AIManager:
         except Exception as e:
             logger.error(
                 "AI 结构化输出解析失败，已放弃 JSON 修复。",
-                extra={"error_code": "AI.STRUCTURED.JSON_REPAIR_FAILED", "extra_context": {"original_error": str(e), "raw_preview": text[:200]}},
+                extra={"error_code": "AI.STRUCTURED.JSON_REPAIR_FAILED", "extra_context": {"raw_preview": text[:200]}},
             )
             return None
 
@@ -165,7 +165,7 @@ class AIManager:
             logger.warning(
                 "[AI结构化输出] 校验失败，准备退回宽松解析。task=%s",
                 task_key,
-                extra={"error_code": "AI.STRUCTURED.VALIDATION_FAILED", "extra_context": {"task_key": task_key, "original_error": str(e)}},
+                extra={"error_code": "AI.STRUCTURED.VALIDATION_FAILED", "extra_context": {"task_key": task_key}},
             )
             return self._extract_json_from_text(text, is_batch=(task_key == "task.mod_alias_generation"))
 
@@ -541,11 +541,16 @@ class AIManager:
                             "chunk_id": chunk_id,
                             "task_key": task_key,
                             "item_count": len(chunk_data),
-                            "original_error": str(exc),
+                            "exception": exc.__class__.__name__,
                         },
                     },
                 )
-                return {"chunk_id": chunk_id, "status": "error", "error": str(exc), "data": None}
+                return {
+                    "chunk_id": chunk_id,
+                    "status": "error",
+                    "error": tr("tasks.ai.chunk_failed", "AI 分块处理失败。请稍后重试。"),
+                    "data": None,
+                }
 
     async def execute_task_async(self, task_key: str, payload: Dict[str, Any], task_id: str) -> dict[str, Any]:
         """统一异步任务调度中心。"""
@@ -929,26 +934,9 @@ class AIManager:
                 )
                 return result
             return result
-        except Exception as e:
-            logger.error(
-                "AI 测试对话失败：%s",
-                e,
-                exc_info=True,
-                extra={"error_code": "AI.TEST_CHAT.FAILED", "extra_context": {"original_error": str(e)}},
-            )
-            err_text = str(e)
-            err_lower = err_text.lower()
-            if "unknown provider for model" in err_lower:
-                raise Exception(
-                    "请求失败：当前代理接口无法正确路由这个模型。"
-                    "很可能该模型需要走 /v1/responses，或者该中转尚未为此模型配置 provider 映射。"
-                ) from e
-            if "temperature" in err_lower and "unsupported" in err_lower:
-                raise Exception(
-                    "请求失败：当前模型不接受你传入的 temperature。"
-                    "建议将 temperature 留空，或使用自动兼容模式。"
-                ) from e
-            raise Exception("请求失败：AI 服务没有返回可用结果。请检查模型名称、Base URL、API Key、代理设置和服务状态。") from e
+        except Exception:
+            # 中间层不包装用户提示，保留真实异常给 API 边界统一分类和记录。
+            raise
         
 
 

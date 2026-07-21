@@ -99,7 +99,7 @@ import { Languages, Minimize2, MousePointer2, Save, WandSparkles, X } from 'luci
 import { useAppStore } from '../../../app/stores/appStore'
 import CommonSelect from '../input/CommonSelect.vue'
 import { DEFAULT_LOCALE, findTranslationEntriesForText, findTranslationEntryByKey, getCurrentLocale, getTranslationValidationIssue, setLocale, t, translateMessagePayload } from '../../i18n.js'
-import { toast } from '../../lib/common'
+import { showUserErrorToast, toast } from '../../lib/common'
 
 const appStore = useAppStore()
 const overlayRef = ref(null)
@@ -281,7 +281,7 @@ const saveTranslation = async () => {
     const locale = getCurrentLocale()
     const res = await window.pywebview.api.locale_save_user_message(locale, selectedEntry.value.key, draftText.value)
     if (res?.status !== 'success') {
-      toast.error(translateMessagePayload(res, t('messages.i18n.translation_mode.save_failed', '保存翻译失败。')))
+      showUserErrorToast(res, t('messages.i18n.translation_mode.save_failed', '保存翻译失败。'))
       return
     }
     await setLocale(locale)
@@ -317,7 +317,7 @@ const autoTranslate = async () => {
       segments: [{ key: 'value', text: selectedEntry.value.defaultText, role: 'ui' }],
     }, locale, provider)
     if (res?.status !== 'success') {
-      toast.error(translateMessagePayload(res, t('messages.i18n.translation_mode.auto_translate_failed', '自动翻译失败。')))
+      showUserErrorToast(res, t('messages.i18n.translation_mode.auto_translate_failed', '自动翻译失败。'))
       return
     }
     const segment = Array.isArray(res.data?.segments) ? res.data.segments.find(item => item.key === 'value') : null

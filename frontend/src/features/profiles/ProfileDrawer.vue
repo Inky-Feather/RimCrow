@@ -200,7 +200,7 @@ import CommonSwitch from '../../shared/components/input/CommonSwitch.vue'
 import CommonTagInput from '../../shared/components/input/CommonTagInput.vue'
 import { getRunCommandTags } from '../../shared/lib/constants'
 import { formatDate } from '../../shared/lib/format'
-import { t } from '../../shared/i18n.js'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
 
 const profileStore = useProfileStore()
 const modStore = useModStore()
@@ -390,11 +390,12 @@ const validateWorkshopModsEnable = async () => {
     return false
   }
   const workshopCheck = await checkPath('workshop_mods_path', workshopPath)
+  const workshopCheckMessage = translateMessagePayload(workshopCheck, t('toast.profiles.workshop_path_incomplete', '创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。'))
   if (workshopCheck?.pass && workshopCheck?.type === 'warn') {
-    toast.warning(workshopCheck.msg || t('toast.profiles.workshop_path_incomplete', '创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。'))
+    toast.warning(workshopCheckMessage)
   }
   if (!workshopCheck?.pass) {
-    toast.warning(t('toast.profiles.workshop_path_problem', '创意工坊目录可能无法使用：{message}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。', { message: workshopCheck?.msg || t('toast.profiles.choose_workshop_path', '请先到设置页重新选择创意工坊目录') }))
+    toast.warning(t('toast.profiles.workshop_path_problem', '创意工坊目录可能无法使用：{message}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。', { message: workshopCheckMessage || t('toast.profiles.choose_workshop_path', '请先到设置页重新选择创意工坊目录') }))
     return false
   }
   return true

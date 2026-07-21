@@ -700,8 +700,8 @@ class FileManager:
                 "file-delete",
                 status="running",
                 progress=min(95, int((index - 1) / max(total, 1) * 90) + 5),
-                message=f"正在删除: {os.path.basename(path)}",
-                metrics={"title": "删除文件", "current": index, "total": total},
+                message=tr("tasks.file_delete.deleting", "正在删除: {filename}", filename=os.path.basename(path)),
+                metrics={"title": str(tr("tasks.title.file_delete", "删除文件")), "current": index, "total": total},
             )
             try:
                 deleted = delete_fs_path(path, force=force)
@@ -709,8 +709,8 @@ class FileManager:
                 if deleted or not os.path.exists(os.path.abspath(path)):
                     success_count += 1
             except Exception as e:
-                logger.error(f"批量删除出错: {path} -> {e}")
-                error_list.append(f"删除失败 ({os.path.basename(path)}): {str(e)}")
+                logger.error(f"批量删除出错: {path} -> {e}", exc_info=True)
+                error_list.append(str(tr("errors.files.delete_failed", "删除失败 ({filename}): 请检查文件是否被占用或权限是否不足。", filename=os.path.basename(path))))
 
         final_status = "failed" if success_count <= 0 and error_list else "success"
         EventBus.emit_progress(
@@ -718,8 +718,8 @@ class FileManager:
             "file-delete",
             status=final_status,
             progress=100,
-            message=f"删除完成：成功 {success_count} 个，失败 {len(error_list)} 个",
-            metrics={"title": "删除文件", "current": total, "total": total, "success_count": success_count, "error_count": len(error_list)},
+            message=tr("tasks.file_delete.complete", "删除完成：成功 {success_count} 个，失败 {error_count} 个", success_count=success_count, error_count=len(error_list)),
+            metrics={"title": str(tr("tasks.title.file_delete", "删除文件")), "current": total, "total": total, "success_count": success_count, "error_count": len(error_list)},
         )
         return success_count, error_list
     
@@ -1211,7 +1211,7 @@ class FileManager:
                 final_message = f"{action_title}已取消"
             except Exception as e:
                 logger.error(f"本地化任务失败：{e}", exc_info=True)
-                errors.append(str(e))
+                errors.append(str(tr("errors.files.localize_failed", "本地化失败，请检查源目录、目标目录和文件权限。")))
                 final_status = "failed"
                 final_message = f"{action_title}失败"
             finally:
@@ -1393,7 +1393,7 @@ class FileManager:
                     except Exception as cleanup_error:
                         logger.debug(f"清理失败本地化临时文件夹失败：{cleanup_path} - {cleanup_error}")
                 logger.error(f"复制文件失败：{src} -> {dst}，错误：{e}")
-                error_list.append(f"模组 {label} 处理失败: {str(e)}")
+                error_list.append(str(tr("errors.files.mod_process_failed", "模组 {label} 处理失败: 请检查文件是否被占用或权限是否不足。", label=label)))
 
         return success_list, error_list, total
     
@@ -1929,7 +1929,8 @@ class PathChecker:
                 default_roots=GameManager.get_default_user_data_paths(),
             ).root_path
         except ValueError as e:
-            return cls._format_res(False, msg=str(e))
+            logger.warning("用户数据路径校验失败: path=%s error=%s", path_str, e)
+            return cls._format_res(False, msg=tr("api.path.user_data_invalid", "用户数据路径无效，请检查路径是否正确。"))
         # 哪怕目录不存在，只要父目录存在且有写入权限，我们就认为合法（因为我们可以创建它）
         parent_dir = os.path.dirname(normalized_path)
         if parent_dir and not os.path.exists(parent_dir):

@@ -718,11 +718,11 @@ const loadRepoReadme = async (url, branch, targetRef) => {
       targetRef.value.content = String(res.data?.content || '')
       targetRef.value.error = ''
     } else {
-      targetRef.value.error = toUserMessage(res?.message, t('ui.workspace.github.readme.error', '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。'))
+      targetRef.value.error = toUserMessage(res, t('ui.workspace.github.readme.error', '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。'))
     }
   } catch (error) {
     console.warn('读取 Git 仓库 README 失败:', error)
-    targetRef.value.error = toUserMessage(error?.message || error, t('ui.workspace.github.readme.error', '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。'))
+    targetRef.value.error = toUserMessage(error, t('ui.workspace.github.readme.error', '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。'))
   } finally {
     targetRef.value.isLoading = false
   }

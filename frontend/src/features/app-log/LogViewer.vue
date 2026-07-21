@@ -103,7 +103,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Terminal, Gamepad2, Copy } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore'
 import { useLogStore } from './logStore'
@@ -112,7 +112,7 @@ import UnifiedLogPanel from './UnifiedLogPanel.vue';
 import AiDiagnosticSidebar from '../ai/AiDiagnosticSidebar.vue'
 import CommonSwitch from '../../shared/components/input/CommonSwitch.vue';
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
-import { toUserMessage } from '../../shared/lib/common'
+import { showUserErrorToast } from '../../shared/lib/common'
 import { t } from '../../shared/i18n.js'
 
 
@@ -228,6 +228,35 @@ const fetchTokenEstimate = async (logs, requestSeq) => {
   }
 }
 
+const getActiveLogPanel = () => Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value
+
+const openSystemLogTarget = async (target = {}) => {
+  const errorId = String(target?.errorId || target?.error_id || '').trim()
+  logStore.setPendingFocusErrorId('app', errorId)
+  appStore.uiState.showLogDrawer = true
+  currentTab.value = 'app'
+  showAiSidebar.value = false
+  await nextTick()
+  await nextTick()
+  const panel = getActiveLogPanel()
+  if (panel?.focusErrorLog) {
+    const focused = await panel.focusErrorLog(errorId)
+    if (focused || !errorId) logStore.consumePendingFocusErrorId('app')
+  }
+}
+
+const consumePendingSystemLogTarget = () => {
+  const target = window.__RIMCROW_PENDING_LOG_TARGET__
+  if (!target) return
+  window.__RIMCROW_PENDING_LOG_TARGET__ = null
+  void openSystemLogTarget(target)
+}
+
+const handleOpenSystemLogTarget = (event) => {
+  window.__RIMCROW_PENDING_LOG_TARGET__ = null
+  void openSystemLogTarget(event?.detail || {})
+}
+
 const getTokenColor = (est, limit) => {
   /** 根据 token 占用比例返回提示色，帮助用户快速判断是否接近模型上限。 */
   if (!limit || limit === 0) return 'text-text-main'
@@ -267,6 +296,15 @@ const clearLogSelection = () => {
 watch(currentTab, () => {
   isGlobalScanning.value = false
   autoDiagnosisRequest.value = null
+})
+
+onMounted(() => {
+  window.addEventListener('rimcrow-open-system-log-target', handleOpenSystemLogTarget)
+  consumePendingSystemLogTarget()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('rimcrow-open-system-log-target', handleOpenSystemLogTarget)
 })
 
 const autoAnalyzeGlobalErrors = async () => {
@@ -317,7 +355,7 @@ const autoAnalyzeGlobalErrors = async () => {
     }
   } catch (e) {
     clearLogSelection()
-	  toast.error(toUserMessage(e?.message || e, t('toast.log_viewer.global_scan_failed', '全局日志扫描失败。可能是日志文件暂时不可读、内容过大或 AI 诊断上下文生成失败，详细原因已写入系统日志。')))
+	  showUserErrorToast(e, t('toast.log_viewer.global_scan_failed', '全局日志扫描失败。可能是日志文件暂时不可读、内容过大或 AI 诊断上下文生成失败。'))
   }
 }
 </script>

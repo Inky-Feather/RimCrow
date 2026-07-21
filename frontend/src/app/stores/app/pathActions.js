@@ -1,6 +1,7 @@
 import { toast, checkResult } from '../../../shared/lib/common'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
 import { isBrowserRuntime, openManagedSubBrowserUrl } from '../../bridge/runtimeBridge'
+import { showUserErrorToast } from '../../../shared/lib/common'
 import { t } from '../../../shared/i18n.js'
 
 export const usePathActions = ({ settings, requestModScan } = {}) => {
@@ -166,7 +167,7 @@ export const usePathActions = ({ settings, requestModScan } = {}) => {
       return false
     }
     if (res?.status === 'warning') {
-      toast.warning(res?.message || t('toast.path.batch_delete_warning', '{label}完成，但有部分项目需要确认', { label: checkLabel }))
+      showUserErrorToast(res, t('toast.path.batch_delete_warning', '{label}完成，但有部分项目需要确认', { label: checkLabel }), { variant: 'warning' })
     } else {
       const messageText = typeof successMessage === 'function'
         ? successMessage({ paths: targetPaths, force: !!decision.force, res })

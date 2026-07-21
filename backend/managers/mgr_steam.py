@@ -42,6 +42,7 @@ if __name__ == "__main__":
 # 只在 run_steam_worker 函数内部 import
 from backend.utils.logger import logger
 from backend.settings import BASE_RESOURCE_DIR, CACHE_DIR, HOME_DIR, TOOLS_DIR, settings
+from backend.i18n.messages import tr
 from backend.managers.mgr_network import network_mgr
 from backend.utils.event_bus import EventBus
 from backend.managers.mgr_download import TaskStatus
@@ -946,8 +947,8 @@ class SteamManager:
                 "steamcmd-init",
                 status="pending",
                 progress=0,
-                message="准备初始化 SteamCMD...",
-                metrics={"title": "SteamCMD 初始化"},
+                message=tr("tasks.steamcmd.init.prepare", "准备初始化 SteamCMD..."),
+                metrics={"title": str(tr("tasks.title.steamcmd_init", "SteamCMD 初始化"))},
             )
             
             def on_progress(percent, msg):
@@ -962,21 +963,21 @@ class SteamManager:
                     status="running",
                     progress=percent,
                     message=msg,
-                    metrics={"title": "SteamCMD 初始化"},
+                    metrics={"title": str(tr("tasks.title.steamcmd_init", "SteamCMD 初始化"))},
                 )
             self._register_steamcmd_controller(steamcmd_task_id, controller)
             success, msg = controller.initialize_steamcmd(on_progress)
             self._clear_steamcmd_controller(steamcmd_task_id)
             if self._is_steamcmd_task_cancelled(steamcmd_task_id):
-                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="cancelled", progress=0, message="SteamCMD 初始化已取消", metrics={"title": "SteamCMD 初始化"})
+                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="cancelled", progress=0, message=tr("tasks.steamcmd.init.cancelled", "SteamCMD 初始化已取消"), metrics={"title": str(tr("tasks.title.steamcmd_init", "SteamCMD 初始化"))})
                 with self._steamcmd_lock:
                     self._steamcmd_cancelled.discard(steamcmd_task_id)
                 return tasks
             if not success:
-                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="failed", progress=0, message=msg, metrics={"title": "SteamCMD 初始化"})
+                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="failed", progress=0, message=msg, metrics={"title": str(tr("tasks.title.steamcmd_init", "SteamCMD 初始化"))})
                 logger.error(f"SteamCMD 初始化彻底失败: {msg}")
             else:
-                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="success", progress=100, message="SteamCMD 初始化完成", metrics={"title": "SteamCMD 初始化"})
+                EventBus.emit_progress(steamcmd_task_id, "steamcmd-init", status="success", progress=100, message=tr("tasks.steamcmd.init.complete", "SteamCMD 初始化完成"), metrics={"title": str(tr("tasks.title.steamcmd_init", "SteamCMD 初始化"))})
             
         return tasks
     
@@ -1480,23 +1481,23 @@ class SteamManager:
                         current_item_idx = current_item_idx_ref[0]
 
             if self._is_steamcmd_task_cancelled(task_id):
-                self._emit_progress_event(task_id, "SteamCMD 下载已取消", int((current_item_idx / max(total_items, 1)) * 100), TaskStatus.CANCELLED, target_dir, "SteamCMD", task_type="steamcmd-download")
+                self._emit_progress_event(task_id, tr("tasks.steamcmd.download.cancelled", "SteamCMD 下载已取消"), int((current_item_idx / max(total_items, 1)) * 100), TaskStatus.CANCELLED, target_dir, "SteamCMD", task_type="steamcmd-download")
             elif failed_ids:
                 failed_text = ", ".join(sorted(failed_ids)[:5])
                 if len(failed_ids) > 5:
                     failed_text += " ..."
                 self._emit_progress_event(
                     task_id,
-                    f"SteamCMD 下载失败 ({current_item_idx}/{total_items})",
+                    tr("tasks.steamcmd.download.failed_progress", "SteamCMD 下载失败 ({current}/{total})", current=current_item_idx, total=total_items),
                     int((current_item_idx / max(total_items, 1)) * 100),
                     TaskStatus.ERROR,
                     target_dir,
                     "SteamCMD",
-                    error=f"失败项: {failed_text}",
+                    error=str(tr("tasks.steamcmd.download.failed_items", "失败项: {items}", items=failed_text)),
                     task_type="steamcmd-download",
                 )
             elif current_item_idx >= total_items:
-                self._emit_progress_event(task_id, f"全部下载完成 ({total_items})", 100, TaskStatus.COMPLETED, target_dir, "SteamCMD", task_type="steamcmd-download")
+                self._emit_progress_event(task_id, tr("tasks.steamcmd.download.complete", "全部下载完成 ({total})", total=total_items), 100, TaskStatus.COMPLETED, target_dir, "SteamCMD", task_type="steamcmd-download")
                 if callable(on_success):
                     try:
                         on_success()
@@ -1510,18 +1511,18 @@ class SteamManager:
                     pending_text += " ..."
                 self._emit_progress_event(
                     task_id,
-                    f"SteamCMD 下载失败 ({current_item_idx}/{total_items})",
+                    tr("tasks.steamcmd.download.failed_progress", "SteamCMD 下载失败 ({current}/{total})", current=current_item_idx, total=total_items),
                     int((current_item_idx / max(total_items, 1)) * 100),
                     TaskStatus.ERROR,
                     target_dir,
                     "SteamCMD",
-                    error=f"未完成项: {pending_text or pending_count}",
+                    error=str(tr("tasks.steamcmd.download.pending_items", "未完成项: {items}", items=pending_text or pending_count)),
                     task_type="steamcmd-download",
                 )
 
         except Exception as e:
-            logger.error(f"SteamCMD 执行失败：{e}")
-            self._emit_progress_event(task_id, str(e), 0, TaskStatus.ERROR, target_dir, "SteamCMD", task_type="steamcmd-download")
+            logger.error(f"SteamCMD 执行失败：{e}", exc_info=True)
+            self._emit_progress_event(task_id, tr("errors.steamcmd.execution_failed_with_target", "SteamCMD 执行失败，请检查 Steam 安装、网络连接和下载目录权限。"), 0, TaskStatus.ERROR, target_dir, "SteamCMD", task_type="steamcmd-download")
         finally:
             with self._steamcmd_lock:
                 self._steamcmd_processes.pop(task_id, None)
@@ -2120,7 +2121,7 @@ class SteamManager:
                 "total": 100,
                 "error": error,
                 "provider": "steamcmd" if str(task_type).startswith("steamcmd-") else "steam",
-                "title": title or "Steam 任务",
+                "title": title or str(tr("tasks.title.steam", "Steam 任务")),
                 "targets": list(targets or []),
                 "target_details": normalized_details,
                 "completed_targets": completed_targets,
@@ -2226,9 +2227,9 @@ class SteamManager:
         try:
             process = subprocess.Popen(cmd)
         except Exception as e:
-            error = str(e)
-            logger.error("Steam 客户端启动失败: app_id=%s, cmd=%s, error=%s", app_id, cmd, error, exc_info=True)
-            return {"ok": False, "method": "steam_client", "cmd": cmd, "error": error}
+            error = tr("errors.steam.launch_client_failed", "无法启动 Steam 客户端，请检查 Steam 安装路径和当前权限。")
+            logger.error("Steam 客户端启动失败: app_id=%s, cmd=%s, error=%s", app_id, cmd, e, exc_info=True)
+            return {"ok": False, "method": "steam_client", "cmd": cmd, "error": str(error), "message_key": error.message_key, "message_params": error.message_params}
         logger.info("已提交 Steam 客户端启动: app_id=%s, pid=%s, args_count=%s", app_id, process.pid, len(extra_args or []))
         return {"ok": True, "method": "steam_client", "cmd": cmd, "pid": process.pid}
 
@@ -2238,13 +2239,13 @@ class SteamManager:
         try:
             ok = bool(open_system_uri(uri))
         except Exception as e:
-            error = str(e)
-            logger.error("Steam URL 启动失败: app_id=%s, uri=%s, error=%s", app_id, uri, error, exc_info=True)
-            return {"ok": False, "method": "steam_url", "uri": uri, "error": error}
+            error = tr("errors.steam.launch_url_failed", "无法通过 Steam URL 启动游戏，请检查 Steam 客户端和系统协议关联。")
+            logger.error("Steam URL 启动失败: app_id=%s, uri=%s, error=%s", app_id, uri, e, exc_info=True)
+            return {"ok": False, "method": "steam_url", "uri": uri, "error": str(error), "message_key": error.message_key, "message_params": error.message_params}
         if not ok:
-            error = "系统未接受 Steam URL 启动请求"
+            error = tr("errors.steam.launch_url_not_accepted", "系统未接受 Steam URL 启动请求")
             logger.warning("Steam URL 启动未提交: app_id=%s, uri=%s", app_id, uri)
-            return {"ok": False, "method": "steam_url", "uri": uri, "error": error}
+            return {"ok": False, "method": "steam_url", "uri": uri, "error": str(error), "message_key": error.message_key, "message_params": error.message_params}
         logger.info("已提交 Steam URL 启动: app_id=%s, uri=%s", app_id, uri)
         return {"ok": True, "method": "steam_url", "uri": uri}
 
@@ -2762,7 +2763,8 @@ class SteamManager:
                 payload = cast(dict[str, Any], vdf.load(f) or {})
         except Exception as e:
             logger.warning(f"读取 SteamCMD ACF 失败，跳过收敛: {e}")
-            return {"updated": False, "removed_ids": [], "acf_path": str(acf_path), "error": str(e)}
+            error = tr("errors.steamcmd.acf_read_failed", "读取 SteamCMD 工坊记录失败。请检查文件权限或稍后重试。")
+            return {"updated": False, "removed_ids": [], "acf_path": str(acf_path), "error": str(error), "error_code": "STEAMCMD.ACF_READ_FAILED", "message_key": error.message_key, "message_params": error.message_params}
 
         app_workshop = cast(dict[str, Any], payload.get("AppWorkshop") or {})
         installed = cast(dict[str, Any], app_workshop.get("WorkshopItemsInstalled") or {})

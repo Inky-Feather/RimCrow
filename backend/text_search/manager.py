@@ -231,17 +231,18 @@ class FileSearchManager:
             )
         except Exception as exc:
             logger.error(f"文件搜索任务失败: {exc}", exc_info=True)
-            self._emit_results(task_id, [], done=True, status="failed", matched_count=0, message=str(exc))
+            failed_message = tr("tasks.file_search.failed", "搜索失败。请检查搜索路径、ripgrep 工具状态和文件访问权限。")
+            self._emit_results(task_id, [], done=True, status="failed", matched_count=0, message=failed_message)
             EventBus.emit_progress(
                 task_id,
                 "file-search",
                 status="failed",
                 progress=0,
-                message=tr("tasks.file_search.failed_with_reason", "搜索失败: {reason}", reason=exc),
+                message=failed_message,
                 metrics={
                     "query": request.query,
                     "scope": request.scope,
-                    "error": str(exc),
+                    "error": failed_message,
                 },
             )
         finally:

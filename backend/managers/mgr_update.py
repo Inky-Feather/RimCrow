@@ -12,6 +12,7 @@ import requests
 from packaging import version
 from backend._version import __version__
 from backend.utils.lanzou_parser import LanzouParser
+from backend.i18n.messages import tr
 from backend.utils.logger import logger
 from backend.utils.restart import PYINSTALLER_ENV_VARS_TO_CLEAR, launch_new_application
 from backend.settings import BASE_RESOURCE_DIR, HOME_DIR, settings, UPDATE_DIR, backup_config_for_update
@@ -389,7 +390,8 @@ class UpdateManager:
                     remote_success_count += 1
             except Exception as e:
                 logger.error(f"检查更新源失败: source={src.__class__.__name__}, error={e}")
-                source_results.append({"source_name": source_name, "status": "failed", "error": str(e)})
+                error_message = tr("errors.update.source_check_failed", "检查更新源失败。请检查网络连接、代理设置或稍后重试。")
+                source_results.append({"source_name": source_name, "status": "failed", "error": str(error_message), "error_code": "UPDATE.SOURCE_CHECK_FAILED", "message_key": error_message.message_key, "message_params": error_message.message_params})
                 if is_remote_source:
                     remote_failure_count += 1
                 continue
@@ -472,7 +474,7 @@ class UpdateManager:
             info = self.check_all()
         
         if not info.has_update:
-            raise Exception("没有可用的更新")
+            raise Exception(str(tr("errors.update.no_available_update", "没有可用的更新")))
 
         if self.active_download_task_id and self.active_download_version == info.version:
             return {"status": "downloading", "task_id": self.active_download_task_id}
@@ -484,8 +486,8 @@ class UpdateManager:
                 "update",
                 status="success",
                 progress=100,
-                message=f"更新包已就绪 v{info.version}",
-                metrics={"path": info.local_file_path, "version": info.version, "ready_to_install": True, "title": "软件更新"},
+                message=tr("tasks.update.package_ready", "更新包已就绪 v{version}", version=info.version),
+                metrics={"path": info.local_file_path, "version": info.version, "ready_to_install": True, "title": str(tr("tasks.title.update", "软件更新"))},
             )
             return {"status": "ready", "task_id": None}
 
@@ -494,7 +496,7 @@ class UpdateManager:
     def _start_update_download(self, info: UpdateInfo, attempted_source_keys: List[str]) -> Dict:
         """按当前来源启动下载，失败回调会继续尝试同版本候补来源。"""
         if not info.download_url:
-            raise Exception(f"{info.source_name} 没有可用的更新包下载地址")
+            raise Exception(str(tr("errors.update.source_download_url_missing", "{source_name} 没有可用的更新包下载地址", source_name=info.source_name)))
 
         sources = self._sources_for_info(info)
         source_key = self._source_key(info.to_source_dict())
@@ -562,17 +564,29 @@ class UpdateManager:
             "update",
             status="success",
             progress=100,
-            message=f"更新包已就绪 v{info.version if info else 'unknown'}",
+            message=tr("tasks.update.package_ready", "更新包已就绪 v{version}", version=info.version if info else "unknown"),
             metrics={
                 "path": task.dest_path,
                 "version": info.version if info else "unknown",
                 "ready_to_install": True,
-                "title": "软件更新",
+                "title": str(tr("tasks.title.update", "软件更新")),
             },
         )
 
     def _on_download_error(self, task: DownloadTask):
-        logger.error(f"更新包下载失败: task_id={task.task_id}, error={task.error_msg}")
+        logger.error(
+            "更新包下载失败: task_id=%s",
+            task.task_id,
+            extra={
+                "error_type": task.error_type,
+                "error_code": task.error_code or "UPDATE.DOWNLOAD_FAILED",
+                "error_id": task.error_id,
+                "user_message": task.user_message,
+                "message_key": task.message_key,
+                "message_params": dict(task.message_params or {}),
+                "extra_context": {"task_id": task.task_id, "url": task.url, "filename": task.filename},
+            },
+        )
         context = self.download_contexts.pop(task.task_id, {})
         attempted_keys = list(context.get("attempted_source_keys") or task.metadata.get("attempted_source_keys") or [])
         current_key = task.metadata.get("source_key")
@@ -584,11 +598,11 @@ class UpdateManager:
         target_version = current_info.get("version", "") or task.metadata.get("version", "")
         next_source = self._next_fallback_source(attempted_keys, sources, target_version)
         if next_source:
-            failed_source = task.metadata.get("source_name") or "当前来源"
-            next_name = str(next_source.get("source_name") or "候补来源")
+            failed_source = task.metadata.get("source_name") or str(tr("tasks.update.current_source", "当前来源"))
+            next_name = str(next_source.get("source_name") or tr("tasks.update.fallback_source", "候补来源"))
             next_info = self._update_info_from_source(next_source, sources)
             if not next_info:
-                self._emit_final_download_error(task, "候补更新源无效")
+                self._emit_final_download_error(task, tr("errors.update.fallback_source_invalid", "候补更新源无效"))
                 return
             self.current_update_info = next_info
             logger.warning(f"更新源下载失败，尝试候补来源: failed={failed_source}, next={next_name}, version={next_source.get('version')}")
@@ -597,26 +611,40 @@ class UpdateManager:
                 "update",
                 status="running",
                 progress=0,
-                message=f"{failed_source} 下载失败，正在尝试 {next_name}",
-                metrics={"error": task.error_msg, "title": "软件更新", "source_name": next_name, "fallback": True},
+                message=tr("tasks.update.trying_fallback_source", "{failed_source} 下载失败，正在尝试 {next_name}", failed_source=failed_source, next_name=next_name),
+                metrics={"error": task.user_message or str(tr("errors.update.failed", "软件更新失败。请检查网络连接、代理设置和目标目录权限。")), "user_message": task.user_message, "title": str(tr("tasks.title.update", "软件更新")), "source_name": next_name, "fallback": True},
+                error_type=task.error_type,
+                error_code=task.error_code,
+                error_id=task.error_id,
+                user_message=task.user_message,
             )
             try:
                 self._start_update_download(next_info, attempted_keys)
             except Exception as e:
                 logger.error(f"启动候补更新源下载失败: source={next_name}, error={e}", exc_info=True)
-                self._emit_final_download_error(task, f"候补来源启动失败: {e}")
+                self._emit_final_download_error(task, tr("errors.update.fallback_source_start_failed", "候补更新源启动失败。请检查更新地址、网络连接和目标目录权限。"))
             return
 
-        self._emit_final_download_error(task, task.error_msg)
+        self._emit_final_download_error(task, task.user_message or tr("errors.update.failed", "软件更新失败。请检查网络连接、代理设置和目标目录权限。"))
 
-    def _emit_final_download_error(self, task: DownloadTask, message: str):
+    def _emit_final_download_error(self, task: DownloadTask, message: Any):
+        fallback_message = tr("errors.update.download_failed", "下载更新包失败。请检查网络连接、代理设置和磁盘空间，稍后重试。")
+        user_message = task.user_message or str(message or "").strip() or str(fallback_message)
+        message_key = task.message_key or getattr(message, "message_key", "") or fallback_message.message_key
+        message_params = task.message_params or getattr(message, "message_params", {}) or fallback_message.message_params
         EventBus.emit_progress(
             task.task_id,
             "update",
             status="failed",
             progress=0,
-            message=f"更新失败: {message}",
-            metrics={"error": message, "title": "软件更新"},
+            message=user_message,
+            metrics={"error": user_message, "user_message": user_message, "title": str(tr("tasks.title.update", "软件更新"))},
+            message_key=message_key,
+            message_params=message_params,
+            error_type=task.error_type,
+            error_code=task.error_code or "UPDATE.DOWNLOAD_FAILED",
+            error_id=task.error_id,
+            user_message=user_message,
         )
         if self.current_update_info:
             self.current_update_info.local_status = "remote"

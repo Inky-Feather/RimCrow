@@ -20,6 +20,7 @@ from backend.static_page import (
     build_workshop_page_html,
 )
 from backend.i18n.messages import tr
+from backend.utils.error_contract import build_error_payload, build_stack_detail, coerce_error_envelope
 from backend.utils.logger import logger
 from validate_environment import DEV_SERVER_HOST, DEV_SERVER_PORT, DEV_SERVER_URL, is_port_available
 
@@ -85,9 +86,18 @@ class WorkshopPageRenderer:
                 headers={"User-Agent": REMOTE_USER_AGENT},
             )
             response.raise_for_status()
-        except Exception as exc:
-            logger.warning(f"创意工坊代理请求失败：{normalized_url} -> {exc}")
-            return build_workshop_error_html(tr("browser.workshop.error.load_failed", "加载页面失败: {reason}", reason=exc), normalized_url)
+        except Exception:
+            parsed = urlparse(normalized_url)
+            logger.warning(
+                "创意工坊代理请求失败。workshop_id=%s",
+                self.extract_workshop_id(normalized_url),
+                exc_info=True,
+                extra={
+                    "error_code": "STEAM.WORKSHOP_PROXY_FAILED",
+                    "extra_context": {"host": parsed.netloc, "path": parsed.path, "workshop_id": self.extract_workshop_id(normalized_url)},
+                },
+            )
+            return build_workshop_error_html(tr("browser.workshop.error.load_failed", "加载页面失败。请检查网络连接、代理设置或稍后重试。"), normalized_url)
 
         final_url = response.url or normalized_url
         soup = BeautifulSoup(response.text, "html.parser")
@@ -251,6 +261,18 @@ class WorkshopPageRenderer:
     return `${{proxyBaseUrl}}/workshop-view?url=${{encodeURIComponent(url)}}`;
   }};
 
+  const buildBridgeError = (payload, fallback) => {{
+    const message = payload?.user_message || payload?.message || fallback;
+    const error = new Error(message);
+    if (payload && typeof payload === 'object') {{
+      error.error_id = payload.error_id || '';
+      error.message_key = payload.message_key || '';
+      error.message_params = payload.message_params || {{}};
+      error.detail = payload.detail || null;
+    }}
+    return error;
+  }};
+
   const waitForWebviewApi = async () => {{
     if (navigationMode !== 'webview') return null;
     const currentApi = window.pywebview?.api;
@@ -337,7 +359,7 @@ class WorkshopPageRenderer:
     }});
     const payload = await response.json();
     if (!response.ok || payload?.status === 'error') {{
-      throw new Error(payload?.message || messages.request_unfinished.replace('{{status}}', response.status));
+      throw buildBridgeError(payload, messages.request_unfinished.replace('{{status}}', response.status));
     }}
     return payload;
   }};
@@ -346,9 +368,9 @@ class WorkshopPageRenderer:
     try {{
       setStatus(pendingMessage);
       const payload = await callAction(action);
-      setStatus(payload?.message || messages.action_done);
+      setStatus(payload?.user_message || payload?.message || messages.action_done);
     }} catch (error) {{
-      setStatus(error?.message || messages.action_failed, true);
+      setStatus(error?.message || error?.user_message || messages.action_failed, true);
     }}
   }};
 
@@ -628,24 +650,32 @@ class BrowserAppServer:
                 try:
                     result = method(*args, **kwargs)
                 except Exception as exc:
+                    error_id = uuid.uuid4().hex[:10]
+                    user_message = tr("browser.api.call_failed", "后端接口执行失败。可能是运行环境、路径权限或内部状态暂时不可用。")
+                    envelope = coerce_error_envelope(
+                        exc,
+                        code="BROWSER.API.CALL_FAILED",
+                        user_message=user_message,
+                        message=user_message,
+                        context={"api": method_name},
+                        message_key="browser.api.call_failed",
+                    )
+                    envelope.error_id = error_id
+                    envelope.detail = build_stack_detail(exc, context={"api": method_name}, error_id=error_id)
                     logger.error(
                         "浏览器模式 API 调用失败：%s",
                         method_name,
                         exc_info=True,
                         extra={
-                            "error_code": "BROWSER.API.CALL_FAILED",
-                            "extra_context": {"api": method_name, "original_error": str(exc)},
+                            "error_type": envelope.error_type,
+                            "error_code": envelope.error_code or "BROWSER.API.CALL_FAILED",
+                            "error_id": error_id,
+                            "user_message": user_message,
+                            "message_key": "browser.api.call_failed",
+                            "extra_context": {"api": method_name},
                         },
                     )
-                    return self._send_json(
-                        {
-                            "status": "error",
-                            "message": tr("browser.api.call_failed", "后端接口执行失败。可能是运行环境、路径权限或内部状态暂时不可用，详细原因已写入系统日志。"),
-                            "error_code": "BROWSER.API.CALL_FAILED",
-                            "detail": {"original_error": str(exc), "context": {"api": method_name}},
-                        },
-                        status_code=500,
-                    )
+                    return self._send_json(build_error_payload(envelope, status="error"), status_code=500)
 
                 if not isinstance(result, dict) or "status" not in result:
                     result = {"status": "success", "data": result}

@@ -1,6 +1,6 @@
 import { Copy, Download, Link } from 'lucide-vue-next'
 import { useContextMenuStore } from '../components/context-menu/contextMenuStore'
-import { checkResult, toast, toUserMessage } from './common'
+import { checkResult, showUserErrorToast, toast, toUserMessage } from './common'
 import { t } from '../i18n.js'
 
 /**
@@ -240,7 +240,7 @@ const copyViewerImage = async (imagePayload) => {
     toast.success(t('toast.image.copied', '已复制图片'), { timeout: 600 })
   } catch (error) {
     console.warn('复制图片失败:', error)
-    toast.error(toUserMessage(error?.message || error, t('toast.image.copy_failed', '复制图片失败。请检查浏览器剪贴板权限，或改用另存为。')))
+    toast.error(toUserMessage(error, t('toast.image.copy_failed', '复制图片失败。请检查浏览器剪贴板权限，或改用另存为。')))
   }
 }
 
@@ -252,7 +252,7 @@ const copyViewerImageUrl = async (imagePayload) => {
     toast.success(t('toast.image.url_copied', '已复制图片地址'), { timeout: 600 })
   } catch (error) {
     console.warn('复制图片地址失败:', error)
-    toast.error(toUserMessage(error?.message || error, t('toast.image.copy_url_failed', '复制图片地址失败。请检查浏览器剪贴板权限，或手动复制地址。')))
+    toast.error(toUserMessage(error, t('toast.image.copy_url_failed', '复制图片地址失败。请检查浏览器剪贴板权限，或手动复制地址。')))
   }
 }
 
@@ -268,11 +268,11 @@ const saveViewerImageAs = async (imagePayload) => {
       mime_type: blob.type || 'application/octet-stream',
       content_base64: contentBase64,
     })
-    if (res?.status === 'warning' && res?.message === '已取消') return
+    if (res?.status === 'warning' && res?.message_key === 'api.common.cancelled') return
     checkResult(res, t('check.image.save_as', '图片另存为'), true)
   } catch (error) {
     console.warn('图片另存为失败:', error)
-    toast.error(toUserMessage(error?.message || error, t('toast.image.save_as_failed', '图片另存为失败。请检查目标目录权限、磁盘空间或当前运行环境是否支持保存文件。')))
+    showUserErrorToast(error, t('toast.image.save_as_failed', '图片另存为失败。请检查目标目录权限、磁盘空间或当前运行环境是否支持保存文件。'))
   }
 }
 

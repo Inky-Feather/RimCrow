@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { deepClone, toast, checkResult, toUserMessage } from '../../../../shared/lib/common'
+import { deepClone, toast, checkResult, showUserErrorToast } from '../../../../shared/lib/common'
 import { ISSUE_LEVEL, ISSUE_TYPE, getIssueTitle } from '../../../../shared/lib/constants'
 import { useProfileStore } from '../../../profiles/profileStore'
 import { t } from '../../../../shared/i18n.js'
@@ -579,7 +579,7 @@ export const useModIssues = ({
       }
     } catch (e) {
       console.error("批量忽略操作失败:", e);
-      toast.error(toUserMessage(e?.message || e, t('toast.mod_issues.batch_ignore_failed', '批量更新问题忽略状态失败。已还原本地列表状态，请稍后重试。')));
+      showUserErrorToast(e, t('toast.mod_issues.batch_ignore_failed', '批量更新问题忽略状态失败。已还原本地列表状态，请稍后重试。'));
       rollback.forEach((ignoredIssues, id) => {
         const mod = takeModById(id)
         if (mod) mod.ignored_issues = ignoredIssues

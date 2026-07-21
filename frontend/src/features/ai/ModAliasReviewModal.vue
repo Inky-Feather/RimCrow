@@ -142,7 +142,7 @@ import { useAiStore } from './aiStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { useToast } from 'vue-toastification'
-import { normalizeText, toUserMessage } from '../../shared/lib/common'
+import { normalizeText, showUserErrorToast } from '../../shared/lib/common'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { getCurrentLocale, t } from '../../shared/i18n.js'
@@ -280,7 +280,7 @@ const regenerateItem = async (taskId, item) => {
     }
   } catch (error) {
 	    console.warn('Regenerate mod alias failed:', error)
-	    toast.error(toUserMessage(error?.message || error, t('toast.mod_alias_review.regenerate_failed_detail', '重新生成失败。请检查 AI 配置、网络连接和当前模组数据后重试。')))
+	    showUserErrorToast(error, t('toast.mod_alias_review.regenerate_failed_detail', '重新生成失败。请检查 AI 配置、网络连接和当前模组数据后重试。'))
   } finally {
     regeneratingIds.value.delete(item.package_id)
   }

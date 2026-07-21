@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { toast, toUserMessage } from '../../shared/lib/common'
+import { showUserErrorToast, toast, toUserMessage } from '../../shared/lib/common'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { t } from '../../shared/i18n.js'
 
@@ -100,8 +100,8 @@ export const usePromptQueueStore = defineStore('promptQueue', () => {
     } catch (error) {
       item.status = 'failed'
       console.warn('提示队列单项处理失败:', error)
-      item.statusMessage = toUserMessage(error?.message || error, t('dialog.prompt_queue.item_failed', '处理失败。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。'))
-      toast.error(item.statusMessage)
+      item.statusMessage = toUserMessage(error, t('dialog.prompt_queue.item_failed', '处理失败。请检查网络连接、文件权限或稍后重试。'))
+      showUserErrorToast(error, item.statusMessage)
       return false
     }
   }
@@ -126,7 +126,7 @@ export const usePromptQueueStore = defineStore('promptQueue', () => {
       }
     } catch (error) {
       console.warn('提示队列批量处理失败:', error)
-      toast.error(toUserMessage(error?.message || error, t('dialog.prompt_queue.bulk_failed', '{label}失败。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。', { label: targetAction.label })))
+      showUserErrorToast(error, t('dialog.prompt_queue.bulk_failed', '{label}失败。请检查网络连接、文件权限或稍后重试。', { label: targetAction.label }))
     } finally {
       prompt.isBulkSubmitting = false
     }

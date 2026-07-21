@@ -1,4 +1,4 @@
-import { t } from '../../shared/i18n.js'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
 
 const HEARTBEAT_INTERVAL_MS = 5000
 
@@ -35,13 +35,19 @@ const callBridgeEndpoint = async (baseUrl, path, payload = null, options = {}) =
   }
   if (!response.ok) {
     let message = t('bridge.browser.request_failed_with_status', '浏览器桥接请求失败，状态码：{status}。请确认后端服务仍在运行，或重启软件后重试。', { status: response.status })
+    let errorPayload = null
     try {
       const payload = await response.json()
-      if (payload?.message) message = payload.message
+      if (payload && typeof payload === 'object') {
+        errorPayload = payload
+        message = translateMessagePayload(payload, message)
+      }
     } catch {
       // 响应体不是 JSON 时保留状态码提示即可。
     }
-    throw new Error(message)
+    const error = new Error(message)
+    if (errorPayload) Object.assign(error, errorPayload, { message, http_status: response.status })
+    throw error
   }
   return response.json()
 }

@@ -110,7 +110,7 @@
           <DynamicScrollerItem :item="item" :active="active" :data-index="index" :size-dependencies="getRowSizeDependencies(item)" >
             <!-- 行容器：绑定 data-id，增加选中高亮背景，增加 swipe-trigger 类名以支持拖拽滑动多选 -->
             <div class="flex gap-2 group/row rounded-sm border-l-2 transition-colors text-shadow-md wrap-break-word leading-relaxed hover:bg-bg-overlay/5 mb-0.5"
-                :class="[ getBorderClass(item.level), selectedIds.includes(item.id) ? 'bg-accent-primary/10 border-accent-primary' : '' ]"
+                :class="[ getBorderClass(item.level), selectedIds.includes(item.id) ? 'bg-accent-primary/10 border-accent-primary' : '', focusedErrorLogId === item.id ? 'ring-2 ring-accent-primary/70 bg-accent-primary/15' : '' ]"
                 :data-id="item.id">
 
               <!-- 多选框区 (click-trigger 支持单点/Shift多选) -->
@@ -129,52 +129,52 @@
               <!-- 主体内容 -->
               <div class="flex-1 min-w-0 py-0.5 pr-2 select-text">
                 <!-- 诊断标签区 -->
-                <div v-if="item.context && (sourceType === 'game' || appStore.settings.debug_mode || item.error_code)" class="flex flex-wrap gap-1 mb-1 items-center">
+                <div v-if="(item.context || item.error_type || item.error_code) && (sourceType === 'game' || appStore.settings.debug_mode || item.error_type || item.error_code)" class="flex flex-wrap gap-1 mb-1 items-center">
                   <!-- App 模块标签 -->
-                  <span v-if="appStore.settings.debug_mode && item.context.source === 'app' && item.context.module" class="px-1.5 py-0.5 rounded bg-accent-cool/20 text-accent-cool text-xs font-bold border border-accent-cool/30">
-                    {{ item.context.module }} <span v-if="item.context.func" class="opacity-60">:: {{ item.context.func }}</span>
+                  <span v-if="appStore.settings.debug_mode && item.context?.source === 'app' && item.context?.module" class="px-1.5 py-0.5 rounded bg-accent-cool/20 text-accent-cool text-xs font-bold border border-accent-cool/30">
+                    {{ item.context.module }} <span v-if="item.context?.func" class="opacity-60">:: {{ item.context.func }}</span>
                   </span>
                   <!-- App 源文件路径 -->
-                  <span v-if="appStore.settings.debug_mode && item.context.source === 'app' && item.context.path"
+                  <span v-if="appStore.settings.debug_mode && item.context?.source === 'app' && item.context?.path"
                     class="px-1.5 py-0.5 rounded bg-bg-inset/80 text-text-dim text-xs border border-border-base/18 max-w-[18rem] truncate"
                     v-tooltip="item.context.path">
                     {{ item.context.path }}
                   </span>
                   <!-- 游戏 阶段 -->
-                  <span v-if="item.context.phase" class="px-1.5 py-0.5 rounded bg-bg-inset/80 text-text-dim text-xs border border-border-base/18">
+                  <span v-if="item.context?.phase" class="px-1.5 py-0.5 rounded bg-bg-inset/80 text-text-dim text-xs border border-border-base/18">
                     {{ formatLogPhase(item.context.phase) }}
                   </span>
                   <!-- 游戏 错误类型 -->
-                  <span v-if="item.context.inferredType"
+                  <span v-if="shouldShowInferredType(item)"
                     class="px-1.5 py-0.5 rounded bg-accent-danger/20 text-accent-danger text-xs font-bold border border-accent-danger/30"
                     v-tooltip="formatDiagnosisTooltip(item.context)">
                     {{ formatInferredType(item.context) }}
                   </span>
-                  <!-- 错误码 -->
-                  <span v-if="item.error_code"
-                    class="px-1.5 py-0.5 rounded bg-accent-warn/15 text-accent-warn text-xs font-bold border border-accent-warn/30"
-                    v-tooltip="formatErrorCodeTooltip(item)">
-                    {{ item.error_code }}
+                  <!-- 错误类型 -->
+                  <span v-if="formatErrorLabel(item)"
+                    class="px-1.5 py-0.5 rounded bg-accent-danger/20 text-accent-danger text-xs font-bold border border-accent-danger/30"
+                    v-tooltip="formatErrorInfoTooltip(item)">
+                    {{ formatErrorLabel(item) }}
                   </span>
                   <!-- 关联文件 -->
-                  <span v-for="file in (item.context.relatedFiles || []).slice(0,3)"
+                  <span v-for="file in (item.context?.relatedFiles || []).slice(0,3)"
                     :key="file"
                     class="px-1.5 py-0.5 rounded bg-accent-cool/10 text-accent-cool text-xs border border-accent-cool/30 max-w-56 truncate"
                     v-tooltip="file">
                     {{ file }}
                   </span>
-                  <span v-if="item.context.relatedFiles && item.context.relatedFiles.length > 3"
+                  <span v-if="item.context?.relatedFiles && item.context.relatedFiles.length > 3"
                     class="px-1 py-0.5 rounded text-xs text-text-dim">
                     {{ t('dialog.log_panel.more_files', '+{count} 更多文件…', { count: item.context.relatedFiles.length - 3 }) }}
                   </span>
                   <!-- 嫌疑 Mod 点击跳转 -->
-                  <button v-for="modId in (item.context.relatedModIds || [])" :key="modId"
+                  <button v-for="modId in (item.context?.relatedModIds || [])" :key="modId"
                     @click="openMod(modId)"
                     class="px-1.5 py-0.5 rounded bg-accent-primary/20 hover:bg-accent-primary/40 text-accent-primary text-xs cursor-pointer border border-accent-primary/30 transition-colors"
                     v-tooltip="t('tooltip.log_panel.open_mod_details', '点击查看 Mod 详情')">[Mod: {{ modId }}]
                   </button>
                   <!-- 可疑来源 -->
-                  <span v-for="namespace in (item.context.relatedNamespaces || []).slice(0,3)"
+                  <span v-for="namespace in (item.context?.relatedNamespaces || []).slice(0,3)"
                     :key="namespace"
                     class="px-1.5 py-0.5 rounded bg-accent-warning/12 text-accent-warning text-xs border border-accent-warning/25 max-w-56 truncate"
                     v-tooltip="t('tooltip.log_panel.suspect_namespace', '错误堆栈中出现的可疑来源')">
@@ -238,7 +238,7 @@ import { useLogStore } from './logStore'
 import { useProfileStore } from '../profiles/profileStore'
 import { formatFileSize } from '../../shared/lib/format'
 import { Copy } from 'lucide-vue-next'
-import { checkResult } from '../../shared/lib/common'
+import { checkResult, toUserMessage } from '../../shared/lib/common'
 import { t } from '../../shared/i18n.js'
 
 const props = defineProps({
@@ -263,6 +263,7 @@ const hasMore = ref(true)
 const scrollerRef = ref(null)
 
 const autoScroll = ref(true);
+const focusedErrorLogId = ref('')
 
 // 过滤与搜索
 const filters = ref({ INFO: true, WARNING: true, ERROR: true, DEBUG: false })
@@ -313,9 +314,9 @@ const selectedIds = computed({
 
 // 判断一条日志是否需要折叠显示（多行长日志）
 function shouldFoldBlock(block) {
-  const msg = block.message || '';
+  const msg = getDisplayMessage(block);
   const lineCount = msg.split(/\r?\n/).length;
-  const startsWithLoading = msg.startsWith('Loading game from file');
+  const startsWithLoading = String(block.message || '').startsWith('Loading game from file');
   // 规则：
   // 1. 以 "Loading game from file" 开头的日志默认折叠；
   // 2. 总行数超过 3 行的日志默认折叠。
@@ -364,7 +365,7 @@ function normalizeBlock(raw) {
     _expanded: false
   };
 
-  base._parsedMessage = renderColoredLogText(raw.message || '');
+  base._parsedMessage = renderColoredLogText(getDisplayMessage(raw));
 
   base._folded = shouldFoldBlock(raw);
 
@@ -373,6 +374,20 @@ function normalizeBlock(raw) {
   }
 
   return base;
+}
+
+function getDisplayMessage(log = {}) {
+  const message = String(log?.message || '')
+  if (message) return message
+  const hasStructuredError = !!String(log?.user_message || log?.message_key || log?.error_code || '').trim()
+  if (hasStructuredError && props.sourceType === 'app') {
+    return t('dialog.log_panel.error_fallback', '操作已失败。')
+  }
+  return ''
+}
+
+function getUserMessage(log = {}) {
+  return toUserMessage(log, '')
 }
 
 function stringifyDiagnosticValue(value) {
@@ -392,13 +407,49 @@ function formatLogPhase(value) {
   return t('dialog.log_panel.phase.unknown', '阶段未知')
 }
 
-function formatErrorCodeTooltip(log) {
-  const parts = [t('dialog.log_panel.search.error_code', '错误码: {code}', { code: log?.error_code || '' })]
-  const extraContext = stringifyDiagnosticValue(log?.extra_context)
-  if (extraContext) {
-    parts.push(t('dialog.log_panel.search.diagnostics', '诊断信息:\n{diagnostics}', { diagnostics: extraContext }))
+function formatErrorInfoTooltip(log) {
+  const toastMessage = getUserMessage(log)
+  return toastMessage || t('dialog.log_panel.error_fallback', '操作已失败。请稍后重试。')
+}
+
+function formatErrorLabel(log) {
+  const rawCode = String(log?.error_code || '').trim()
+  if (!rawCode || !rawCode.includes('.')) return ''
+  const code = rawCode
+  const segments = code.split('.').filter(Boolean)
+  if (segments.length < 2) return ''
+  const preciseCode = segments.length > 2 ? segments.slice(-2).join('_') : segments[segments.length - 1]
+  switch (preciseCode.toUpperCase()) {
+    case 'AUTH_EXPIRED': return t('dialog.log_panel.error_label.auth_expired', '认证过期')
+    case 'AUTH_FAILED': return t('dialog.log_panel.error_label.auth_failed', '认证失败')
+    case 'ACCESS_DENIED': return t('dialog.log_panel.error_label.access_denied', '访问受限')
+    case 'NOT_FOUND': return t('dialog.log_panel.error_label.not_found', '资源不存在')
+    case 'RATE_LIMIT': return t('dialog.log_panel.error_label.rate_limited', '请求受限')
+    case 'TIMEOUT': return t('dialog.log_panel.error_label.timeout', '请求超时')
+    case 'CONNECTION': return t('dialog.log_panel.error_label.connection_failed', '连接失败')
+    case 'PROXY':
+    case 'PROXY_AUTH': return t('dialog.log_panel.error_label.proxy_failed', '代理异常')
+    case 'PERMISSION': return t('dialog.log_panel.error_label.permission_denied', '权限不足')
+    case 'MODEL_NOT_FOUND': return t('dialog.log_panel.error_label.model_not_found', '模型不存在')
+    case 'PARAM_UNSUPPORTED': return t('dialog.log_panel.error_label.param_unsupported', '参数不支持')
+    case 'RESPONSE_FORMAT': return t('dialog.log_panel.error_label.response_format', '响应不兼容')
+    case 'SERVICE_UNAVAILABLE': return t('dialog.log_panel.error_label.service_unavailable', '服务不可用')
+    case 'REQUEST_INVALID': return t('dialog.log_panel.error_label.request_invalid', '请求无效')
+    default: return preciseCode.replace(/_/g, ' ')
   }
-  return parts.filter(Boolean).join('\n')
+}
+
+function shouldShowInferredType(log = {}) {
+  const context = log?.context || {}
+  const inferredType = String(context.inferredType || '').trim()
+  if (!inferredType) return false
+  const inferredLabel = String(formatInferredType(context) || '').trim()
+  const errorLabel = String(formatErrorLabel(log) || '').trim()
+  if (!errorLabel) return true
+  const normalizedInferredType = inferredType.toLowerCase()
+  const normalizedInferredLabel = inferredLabel.toLowerCase()
+  const normalizedErrorLabel = errorLabel.toLowerCase()
+  return normalizedInferredType !== normalizedErrorLabel && normalizedInferredLabel !== normalizedErrorLabel
 }
 
 function formatDiagnosisTooltip(context = {}) {
@@ -450,7 +501,7 @@ function formatLogSearchDiagnostics(log) {
 const copyLogContent = async (logsArray) => {
   if (!logsArray || logsArray.length === 0) return;
   const textToCopy = logsArray.map(l => {
-    const msg = l.message || '';
+    const msg = getDisplayMessage(l);
     const details = l.details ? `\n\n${l.details}` : '';
     return `${msg}${details}`;
   }).join('\n\n------\n\n');
@@ -463,11 +514,67 @@ const copyLogContent = async (logsArray) => {
   }
 }
 
-// 暴露给父组件(LogViewer)使用的批量复制方法
+const scrollToRenderedLog = async (logId = '') => {
+  await nextTick()
+  const matchedIndex = filteredLogs.value.findIndex(log => log.id === logId)
+  const scroller = scrollerRef.value
+  if (matchedIndex >= 0) {
+    if (typeof scroller?.scrollToItem === 'function') {
+      scroller.scrollToItem(matchedIndex)
+    } else if (typeof scroller?.scrollToPosition === 'function') {
+      scroller.scrollToPosition(Math.max(0, matchedIndex * 28))
+    } else {
+      scroller?.$el?.scrollTo?.({ top: Math.max(0, matchedIndex * 28), behavior: 'auto' })
+    }
+  }
+  await nextTick()
+  await new Promise(resolve => window.requestAnimationFrame(resolve))
+  scrollerRef.value?.$el?.querySelector(`[data-id="${logId}"]`)?.scrollIntoView({ block: 'center' })
+}
+
+// 暴露给父组件(LogViewer)使用的日志操作
+const focusErrorLog = async (errorId = '') => {
+  const targetErrorId = String(errorId || '').trim()
+  if (props.sourceType !== 'app') return false
+  if (liveFileName.value && !isLiveView.value) {
+    await switchFile(liveFileName.value)
+  }
+  if (!targetErrorId) {
+    nextTick(() => scrollerRef.value?.scrollToBottom())
+    return false
+  }
+  const matchedLog = allLoadedLogs.value.find(log => getLogErrorId(log) === targetErrorId)
+  if (!matchedLog) {
+    searchQuery.value = targetErrorId
+    nextTick(() => scrollerRef.value?.scrollToBottom())
+    return false
+  }
+  searchQuery.value = ''
+  if (matchedLog.level && filters.value[matchedLog.level] === false) {
+    filters.value[matchedLog.level] = true
+  }
+  autoScroll.value = false
+  focusedErrorLogId.value = matchedLog.id
+  logStore.replaceSelection({
+    sourceType: props.sourceType,
+    filename: selectedFile.value,
+    selectedLogs: [matchedLog],
+    syncAttachment: true,
+    resetTokenInfoWhenEmpty: true,
+  })
+  emit('selection-change', [matchedLog])
+  await scrollToRenderedLog(matchedLog.id)
+  window.setTimeout(() => {
+    if (focusedErrorLogId.value === matchedLog.id) focusedErrorLogId.value = ''
+  }, 6000)
+  return true
+}
+
 defineExpose({
   clearSelection: () => {
     logStore.clearSelection(props.sourceType)
   },
+  focusErrorLog,
   copySelection: () => {
     const selectedObjects = logStore.getSelectedLogs(props.sourceType)
     copyLogContent(selectedObjects);
@@ -568,6 +675,11 @@ watch(() => profileStore.currentProfileId, async (_newProfileId, oldProfileId) =
   await initPanel()
 })
 // 初始化流程封装
+async function focusPendingErrorLog() {
+  const errorId = logStore.consumePendingFocusErrorId(props.sourceType)
+  if (errorId) await focusErrorLog(errorId)
+}
+
 async function initPanel() {
   loadingFile.value = true;
   cleanupPanel();
@@ -582,6 +694,7 @@ async function initPanel() {
     await switchFile(targetName, { preserveSelection: !!storedFilename && storedFilename === targetName });
   }
   loadingFile.value = false;
+  await focusPendingErrorLog()
 }
 
 function cleanupPanel() {
@@ -618,6 +731,10 @@ function switchToLive() {
 async function switchFile(filename) {
   if (!filename) return;
   return switchFileWithOptions(filename, { preserveSelection: false })
+}
+
+function getLogErrorId(log = {}) {
+  return String(log?.error_id || log?.extra_context?.error_id || log?.extra_context?.context?.error_id || '').trim()
 }
 
 async function switchFileWithOptions(filename, { preserveSelection = false } = {}) {
@@ -779,9 +896,10 @@ const filteredLogs = computed(() => {
       result = result.filter(l => {
         const ctx = l.context || {};
         const diagnostics = formatLogSearchDiagnostics(l);
-        return re.test(l.message || '') ||
+        return re.test(getDisplayMessage(l)) ||
                re.test(l.details || '') ||
                re.test(diagnostics) ||
+               re.test(l.error_id || '') ||
                (ctx.inferredType && (re.test(ctx.inferredType) || re.test(formatInferredType(ctx)))) ||
                (Array.isArray(ctx.relatedModIds) && ctx.relatedModIds.some(id => re.test(id))) ||
                (Array.isArray(ctx.relatedFiles) && ctx.relatedFiles.some(f => re.test(f)));
@@ -791,7 +909,7 @@ const filteredLogs = computed(() => {
       const q = searchQuery.value.toLowerCase()
       result = result.filter(l => {
         const ctx = l.context || {};
-        const msg = (l.message || '').toLowerCase();
+        const msg = getDisplayMessage(l).toLowerCase();
         const det = (l.details || '').toLowerCase();
         const diagnostics = formatLogSearchDiagnostics(l).toLowerCase();
         const inferred = `${ctx.inferredType || ''} ${formatInferredType(ctx)}`.toLowerCase();
@@ -800,6 +918,7 @@ const filteredLogs = computed(() => {
         return msg.includes(q) ||
                det.includes(q) ||
                diagnostics.includes(q) ||
+               String(l.error_id || '').toLowerCase().includes(q) ||
                inferred.includes(q) ||
                mods.some(x => x.includes(q)) ||
                files.some(x => x.includes(q));
@@ -860,6 +979,8 @@ const getRowSizeDependencies = (item) => {
     searchQuery.value,
     item._parsedMessage || '',
     item.details || '',
+    item.user_message || '',
+    item.error_type || '',
     item.error_code || '',
     stringifyDiagnosticValue(item.extra_context),
     context.module || '',

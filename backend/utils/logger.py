@@ -230,16 +230,37 @@ class BaseLogReader:
     
 
 # 定义日志格式
-DEFAULT_EXTRA_CONTEXT_ERROR_CODE = "LOG.EXTRA_CONTEXT"
-
-
 def _resolve_log_error_meta(record):
     error_code = getattr(record, "error_code", "")
-    extra_context = getattr(record, "extra_context", None)
-    # 有诊断上下文时必须有错误码，前端才能把两者作为同一组信息展示。
-    if extra_context and not error_code:
-        error_code = DEFAULT_EXTRA_CONTEXT_ERROR_CODE
-    return error_code, extra_context
+    error_type = getattr(record, "error_type", "")
+    error_id = getattr(record, "error_id", "")
+    user_message = getattr(record, "user_message", "")
+    message_key = getattr(record, "message_key", "")
+    message_params = getattr(record, "message_params", None)
+    extra_context = _sanitize_log_context(getattr(record, "extra_context", None))
+    if error_code and not error_type:
+        error_type = str(error_code).split(".", 1)[0] or ""
+    elif error_type and "." in str(error_type) and (not error_code or error_type == error_code):
+        error_type = str(error_type).split(".", 1)[0] or ""
+    return {
+        "error_code": error_code,
+        "error_type": error_type,
+        "error_id": error_id,
+        "user_message": user_message,
+        "message_key": message_key,
+        "message_params": message_params,
+        "extra_context": extra_context,
+    }
+
+
+def _sanitize_log_context(value):
+    """结构化上下文只保留定位信息；原始异常内容由 details/堆栈承载，避免重复塞给日志 UI。"""
+    if isinstance(value, dict):
+        skipped = {"original_error", "fallback_error", "traceback", "stack"}
+        return {key: _sanitize_log_context(item) for key, item in value.items() if key not in skipped}
+    if isinstance(value, list):
+        return [_sanitize_log_context(item) for item in value]
+    return value
 
 
 class JSONFormatter(logging.Formatter):
@@ -267,11 +288,21 @@ class JSONFormatter(logging.Formatter):
                 "path": record.pathname
             }
         }
-        error_code, extra_context = _resolve_log_error_meta(record)
-        if error_code:
-            log_record["error_code"] = error_code
-        if extra_context:
-            log_record["extra_context"] = extra_context
+        meta = _resolve_log_error_meta(record)
+        if meta["error_code"]:
+            log_record["error_code"] = meta["error_code"]
+        if meta["error_type"]:
+            log_record["error_type"] = meta["error_type"]
+        if meta["error_id"]:
+            log_record["error_id"] = meta["error_id"]
+        if meta["user_message"]:
+            log_record["user_message"] = meta["user_message"]
+        if meta["message_key"]:
+            log_record["message_key"] = meta["message_key"]
+        if meta["message_params"]:
+            log_record["message_params"] = meta["message_params"]
+        if meta["extra_context"]:
+            log_record["extra_context"] = meta["extra_context"]
         return json.dumps(log_record, ensure_ascii=False, default=str)
 
 class WebviewHandler(logging.Handler):
@@ -310,9 +341,9 @@ class WebviewHandler(logging.Handler):
 
     def emit(self, record):
         from backend.utils.event_bus import EventBus
-        # 如果 EventBus 没有窗口引用，直接跳过，防止报错
-        # 这里的 _window 是在 EventBus 中定义的类变量，只有在前端完全就绪时才推送日志
-        if not getattr(EventBus, '_window', None) or not getattr(EventBus, '_frontend_ready', False): return 
+        # 桌面窗口和浏览器 SSE 共用 EventBus；只有前端未就绪或没有任何派发目标时才跳过。
+        has_target = bool(getattr(EventBus, '_window', None) or getattr(EventBus, '_browser_dispatcher', None))
+        if not has_target or not getattr(EventBus, '_frontend_ready', False): return
         try:
             timestamp = datetime.datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             msg = record.getMessage()
@@ -339,11 +370,21 @@ class WebviewHandler(logging.Handler):
                     "func": record.funcName
                 }
             }
-            error_code, extra_context = _resolve_log_error_meta(record)
-            if error_code:
-                log_entry["error_code"] = error_code
-            if extra_context:
-                log_entry["extra_context"] = extra_context
+            meta = _resolve_log_error_meta(record)
+            if meta["error_code"]:
+                log_entry["error_code"] = meta["error_code"]
+            if meta["error_type"]:
+                log_entry["error_type"] = meta["error_type"]
+            if meta["error_id"]:
+                log_entry["error_id"] = meta["error_id"]
+            if meta["user_message"]:
+                log_entry["user_message"] = meta["user_message"]
+            if meta["message_key"]:
+                log_entry["message_key"] = meta["message_key"]
+            if meta["message_params"]:
+                log_entry["message_params"] = meta["message_params"]
+            if meta["extra_context"]:
+                log_entry["extra_context"] = meta["extra_context"]
             # 通过 EventBus 发送给前端
             # 前端监听 'app-log' 事件即可
             EventBus.emit('app-log', log_entry)

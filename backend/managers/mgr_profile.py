@@ -20,6 +20,7 @@ from backend.utils.profile_runtime import (
     resolve_profile_runtime_capabilities,
 )
 from backend.settings import BACKUP_DIR, settings, DATA_DIR
+from backend.i18n.messages import tr
 from backend.utils.logger import logger 
 from backend.utils.tools import delete_fs_path, normalize_path_for_compare, normalize_path_for_storage
 
@@ -751,8 +752,8 @@ class ProfileManager:
                 f"original_user_data_path={original_user_data_path}，user_data_path={clean_data.get('user_data_path', '')}，"
                 f"path_source={user_data_path_source}"
             )
-            return True, "导入成功"
+            return True, tr("messages.profile.import_success", "导入成功")
         except Exception as e:
-            logger.error(f"恢复环境失败：id={profile_data.get('id', '') if isinstance(profile_data, dict) else ''}，source={orphan_folder_path}，错误：{e}")
-            return False, str(e)
+            logger.error("导入环境失败: profile_id=%s error=%s", profile_data.get("id") if isinstance(profile_data, dict) else "", e, exc_info=True)
+            return False, tr("errors.profile.import_failed", "导入环境失败，请检查文件内容、路径权限和当前配置。")
             

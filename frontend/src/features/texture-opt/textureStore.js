@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { toast, checkResult, toUserMessage } from '../../shared/lib/common'
+import { toast, checkResult, showUserErrorToast } from '../../shared/lib/common'
 import { useTaskStore } from '../../app/stores/taskStore'
 import { t, translateMessagePayload } from '../../shared/i18n.js'
 
@@ -534,7 +534,7 @@ export const useTextureStore = defineStore('texture', () => {
           await checkToolStatus()
         }
       } else {
-        toast.error(toUserMessage(translateMessagePayload(res, res?.message), t('errors.texture.prepare_tool_failed', '准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间，详细原因已写入系统日志。')))
+        showUserErrorToast(res, t('errors.texture.prepare_tool_failed', '准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间。'))
       }
     } finally {
       appStore.isLoading = false

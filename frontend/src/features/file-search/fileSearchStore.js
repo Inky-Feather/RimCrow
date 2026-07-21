@@ -1,10 +1,10 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { checkResult, toast, toUserMessage } from '../../shared/lib/common'
+import { checkResult, showUserErrorToast, toast, toUserMessage } from '../../shared/lib/common'
 
 import { useAppStore } from '../../app/stores/appStore'
 import { useTaskStore } from '../../app/stores/taskStore'
-import { t } from '../../shared/i18n.js'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
 
 const DEFAULT_FILE_TYPES = ['.xml']
 const DEFAULT_EXCLUDE_OPTIONS = {
@@ -148,7 +148,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
       const res = await window.pywebview.api.search_files_start(payload)
       if (!checkResult(res, t('check.file_search.start', '启动文件搜索'))) {
         searchState.status = 'failed'
-        searchState.message = res?.message || t('tasks.file_search.start_failed_short', '启动失败')
+        searchState.message = toUserMessage(res, t('tasks.file_search.start_failed_short', '启动失败'))
         return false
       }
 
@@ -176,8 +176,8 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
       return true
     } catch (error) {
       searchState.status = 'failed'
-      searchState.message = toUserMessage(error?.message || error, t('toast.file_search.start_failed', '启动文件搜索失败。请检查当前环境路径是否可访问，或稍后重试。'))
-      toast.error(searchState.message)
+      searchState.message = toUserMessage(error, t('toast.file_search.start_failed', '启动文件搜索失败。请检查当前环境路径是否可访问，或稍后重试。'))
+      showUserErrorToast(error, searchState.message)
       return false
     } finally {
       isLaunching.value = false
@@ -214,7 +214,7 @@ export const useFileSearchStore = defineStore('fileSearch', () => {
     }
 
     searchState.status = String(detail.status || searchState.status || 'running')
-    searchState.message = String(detail.message || searchState.message || '')
+    searchState.message = translateMessagePayload(detail, searchState.message || '')
     searchState.matchedCount = Number(detail.matched_count || results.value.length)
     searchState.done = !!detail.done
   }

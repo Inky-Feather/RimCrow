@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { checkResult, toast, toUserMessage } from '../../../shared/lib/common'
+import { checkResult, showUserErrorToast, toast } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
 import { normalizePackageId } from '../lib/modIdentity'
 import { t } from '../../../shared/i18n.js'
@@ -119,7 +119,7 @@ export const useGroupStore = defineStore('groups', () => {
       }
     } catch (e) {
       console.error("获取分组异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.group.get_failed', '获取分组失败。可能是数据库或当前环境暂时不可用，请稍后重试。')))
+      showUserErrorToast(e, t('toast.group.get_failed', '获取分组失败。可能是数据库或当前环境暂时不可用，请稍后重试。'))
     } finally {
       appStore.isLoading = false
     }
@@ -150,7 +150,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("创建分组异常:", e)
-        toast.error(toUserMessage(e?.message || e, t('toast.group.create_failed', '创建分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。')))
+        showUserErrorToast(e, t('toast.group.create_failed', '创建分组失败，正在还原列表状态。请稍后重试。'))
       // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -173,7 +173,7 @@ export const useGroupStore = defineStore('groups', () => {
         await getGroups()
       } catch (e) {
         console.error("删除分组异常:", e)
-        toast.error(toUserMessage(e?.message || e, t('toast.group.delete_failed', '删除分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。')))
+        showUserErrorToast(e, t('toast.group.delete_failed', '删除分组失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -200,7 +200,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("更新分组异常:", e)
-        toast.error(toUserMessage(e?.message || e, t('toast.group.update_failed', '更新分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。')))
+        showUserErrorToast(e, t('toast.group.update_failed', '更新分组失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -232,7 +232,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("分组添加模组异常:", e)
-        toast.error(toUserMessage(e?.message || e, t('toast.group.add_mods_failed', '添加模组到分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。')))
+        showUserErrorToast(e, t('toast.group.add_mods_failed', '添加模组到分组失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -261,7 +261,7 @@ export const useGroupStore = defineStore('groups', () => {
         await getGroups()
       } catch (e) {
         console.error("分组移除模组异常:", e)
-        toast.error(toUserMessage(e?.message || e, t('toast.group.remove_mods_failed', '从分组移除模组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。')))
+        showUserErrorToast(e, t('toast.group.remove_mods_failed', '从分组移除模组失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -285,7 +285,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("批量展开切换异常:", e)
-        toast.error(toUserMessage(e?.message || e, t('toast.group.expansion_failed', '保存分组展开状态失败，正在还原列表状态。请稍后重试。')))
+        showUserErrorToast(e, t('toast.group.expansion_failed', '保存分组展开状态失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -309,7 +309,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("分组排序异常:", e)
-        toast.error(toUserMessage(e?.message || e, t('toast.group.reorder_failed', '保存分组排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。')))
+        showUserErrorToast(e, t('toast.group.reorder_failed', '保存分组排序失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -338,7 +338,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("分组内排序异常:", e)
-        toast.error(toUserMessage(e?.message || e, t('toast.group.content_reorder_failed', '保存分组内排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。')))
+        showUserErrorToast(e, t('toast.group.content_reorder_failed', '保存分组内排序失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }

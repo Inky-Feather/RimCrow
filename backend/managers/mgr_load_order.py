@@ -24,6 +24,7 @@ from backend.load_order import (
 from backend.load_order.package_tokens import parse_package_token
 from backend.database.models_ext import ModReplacement
 from backend.managers.mgr_profile import ProfileContext
+from backend.i18n.messages import tr
 from backend.utils.logger import logger
 
 _BACKUP_LOCK = threading.RLock()
@@ -677,6 +678,7 @@ class LoadOrderManager:
         except Exception as e:
             logger.error(f"读取排序文件时出错: {e}")
             # 解析失败时返回空结果而不是抛异常，由 API 层决定对前端提示“解析失败”。
+            error_message = tr("errors.load_order.parse_failed", "排序文件解析失败，请检查文件格式是否正确。")
             return {
                 'active_mods': [],
                 'modify_time': modify_time,
@@ -688,7 +690,9 @@ class LoadOrderManager:
                 "source_urls": [],
                 "workshop_ids": [],
                 "warnings": [],
-                "errors": [str(e)],
+                "errors": [str(error_message)],
+                "message_key": error_message.message_key,
+                "message_params": error_message.message_params,
                 'import_check': {"summary": {}, "items": []},
                 'version_token': self._build_version_token(mods_config_file_path, [], modify_time=modify_time),
             }

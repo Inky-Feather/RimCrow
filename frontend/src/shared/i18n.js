@@ -181,8 +181,9 @@ export const getTranslationValidationIssue = (source = '', target = '') => {
 }
 
 export const translateMessagePayload = (payload = {}, fallback = '') => {
-  const key = String(payload?.message_key || '').trim()
-  const params = payload?.message_params && typeof payload.message_params === 'object' ? payload.message_params : {}
-  const defaultText = payload?.user_message || payload?.message || fallback
+  const key = String(payload?.message_key || payload?.msg_key || '').trim()
+  const rawParams = payload?.message_params || payload?.msg_params
+  const params = rawParams && typeof rawParams === 'object' ? rawParams : {}
+  const defaultText = payload?.user_message || payload?.message || payload?.msg || fallback
   return key ? t(key, defaultText, params) : formatFallback(defaultText || fallback, params)
 }

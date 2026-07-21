@@ -2,7 +2,7 @@
 
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
-import { checkResult, normalizeStringList, normalizeText, toast, toUserMessage } from '../../shared/lib/common'
+import { checkResult, normalizeStringList, normalizeText, showUserErrorToast, toast, toUserMessage } from '../../shared/lib/common'
 import { normalizeAssistantSessionResult } from './ai-store/runtime/aiActionRuntime'
 import {
   createAssistantRuntimePrefs, createAssistantSession, createEmptyTraceModalState,
@@ -649,7 +649,7 @@ export const useAiStore = defineStore('ai', () => {
       return null
     } catch (error) {
       console.error('AI 助手会话异常:', error)
-      toast.error(toUserMessage(error?.message || error, t('ai.session.run_failed', 'AI 助手会话异常。可能是软件后端暂时不可用、模型服务无响应或网络请求中断，请稍后重试。')))
+      showUserErrorToast(error, t('ai.session.run_failed', 'AI 助手会话异常。可能是软件后端暂时不可用、模型服务无响应或网络请求中断，请稍后重试。'))
       return null
     } finally {
       isLoading.value = false
@@ -753,7 +753,7 @@ export const useAiStore = defineStore('ai', () => {
       const result = await runAssistantSession(payload)
       if (!result) {
         delete pendingConsumedAttachmentKeysByRequest[requestId]
-        assistantMessage.content = t('ai.session.request_failed_message', 'AI 请求失败。请检查模型服务、API Key、Base URL、代理设置和当前网络状态，详细原因已写入系统日志。')
+        assistantMessage.content = t('ai.session.request_failed_message', 'AI 请求失败。请检查模型服务、API Key、Base URL、代理设置和当前网络状态。')
         assistantMessage.updatedAt = Date.now()
         return { requestId, userMessage, assistantMessage, response: null }
       }
@@ -765,7 +765,7 @@ export const useAiStore = defineStore('ai', () => {
       return { requestId, userMessage, assistantMessage, response: result }
     } catch (error) {
       delete pendingConsumedAttachmentKeysByRequest[requestId]
-      assistantMessage.content = toUserMessage(error?.message || error, t('ai.session.analysis_failed_message', '分析过程中发生错误。可能是模型服务、网络连接或软件内部状态暂时不可用，详细原因已写入系统日志。'))
+      assistantMessage.content = toUserMessage(error, t('ai.session.analysis_failed_message', '分析过程中发生错误。可能是模型服务、网络连接或软件内部状态暂时不可用。'))
       assistantMessage.updatedAt = Date.now()
       return { requestId, userMessage, assistantMessage, response: null, error }
     } finally {

@@ -28,6 +28,7 @@ const createEmptySourceState = () => ({
   tokenInfo: createEmptyTokenInfo(),
   selectionRequestSeq: 0,
   attachmentKey: '',
+  pendingFocusErrorId: '',
 })
 
 const cloneLogSnapshot = (log = {}) => ({
@@ -98,6 +99,21 @@ export const useLogStore = defineStore('log', () => {
     return state.selectedIds
       .map(id => state.selectedLogSnapshotsById[id])
       .filter(Boolean)
+  }
+
+  const setPendingFocusErrorId = (sourceType = 'app', errorId = '') => {
+    /** 记录外部入口希望日志面板定位的错误 ID。 */
+    const state = getSourceState(sourceType)
+    state.pendingFocusErrorId = normalizeText(errorId)
+    return state.pendingFocusErrorId
+  }
+
+  const consumePendingFocusErrorId = (sourceType = 'app') => {
+    /** 读取并清空待定位错误，避免重复打开日志页时反复跳转。 */
+    const state = getSourceState(sourceType)
+    const errorId = normalizeText(state.pendingFocusErrorId)
+    state.pendingFocusErrorId = ''
+    return errorId
   }
 
   const selectedLogsBySource = computed(() => ({
@@ -484,6 +500,7 @@ export const useLogStore = defineStore('log', () => {
     showSidebar, sourceStates, selectedLogsBySource, tokenInfoBySource,
     // 来源与选择读取
     getSourceState, getSourceLabel, getSelectedLogs,
+    setPendingFocusErrorId, consumePendingFocusErrorId,
     // 选择维护
     setSelectedFile, replaceSelection, clearSelection, refreshSelectedSnapshotsFromLoadedLogs,
     // Token 与附件

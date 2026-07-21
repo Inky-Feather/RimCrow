@@ -104,7 +104,7 @@ import CommonInput from '../../../shared/components/input/CommonInput.vue'
 import CommonSecretInput from '../../../shared/components/input/CommonSecretInput.vue'
 import CommonNumber from '../../../shared/components/input/CommonNumber.vue'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
-import { toast, toUserMessage } from '../../../shared/lib/common'
+import { showUserErrorToast, toast, toUserMessage } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useAiStore } from '../../ai/aiStore'
 import { t } from '../../../shared/i18n.js'
@@ -224,8 +224,8 @@ const testModel = async () => {
     toast.warning(t('toast.settings.ai.empty_response', '模型返回了空内容'))
     return
   }
-  testResponse.value = toUserMessage(res?.error, t('toast.settings.ai.test_failed', '模型测试失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用。'))
-  toast.error(testResponse.value)
+  testResponse.value = toUserMessage(res, t('toast.settings.ai.test_failed', '模型测试失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用。'))
+  showUserErrorToast(res, testResponse.value)
 }
 
 // CommonSelect 会先更新 v-model 再触发 change，因此这里显式保存“上一个协议”的草稿。

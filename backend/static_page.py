@@ -446,6 +446,18 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
             statusText.textContent = text;
         }}
 
+        function buildBridgeError(payload, fallback) {{
+            const message = payload?.user_message || payload?.message || fallback;
+            const error = new Error(message);
+            if (payload && typeof payload === 'object') {{
+                error.error_id = payload.error_id || '';
+                error.message_key = payload.message_key || '';
+                error.message_params = payload.message_params || {{}};
+                error.detail = payload.detail || null;
+            }}
+            return error;
+        }}
+
         function formatFileSize(bytes) {{
             const value = Number(bytes || 0);
             if (!value) return '0 B';
@@ -724,7 +736,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
             const api = await waitForApi();
             const res = await api.get_log_files('game', 'runtime');
             if (!res || res.status !== 'success') {{
-                throw new Error(res?.message || I18N.loadFilesFailed);
+                throw buildBridgeError(res, I18N.loadFilesFailed);
             }}
             const rawFiles = Array.isArray(res.data) ? res.data : [];
             const preferredOrder = ['RimCrow_Realtime.log', 'Player.log'];
@@ -751,7 +763,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
             const api = await waitForApi();
             const res = await api.read_log_page('game', state.selectedFile, 1, 500, 'runtime');
             if (!res || res.status !== 'success') {{
-                throw new Error(res?.message || I18N.readLogsFailed);
+                throw buildBridgeError(res, I18N.readLogsFailed);
             }}
             const blocks = Array.isArray(res.data?.blocks) ? res.data.blocks : [];
             const signature = getSignature(blocks);
@@ -1318,6 +1330,18 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
       statusEl.style.color = isError ? 'var(--danger)' : 'var(--muted)';
     }};
 
+    const buildBridgeError = (payload, fallback) => {{
+      const message = payload?.user_message || payload?.message || fallback;
+      const error = new Error(message);
+      if (payload && typeof payload === 'object') {{
+        error.error_id = payload.error_id || '';
+        error.message_key = payload.message_key || '';
+        error.message_params = payload.message_params || {{}};
+        error.detail = payload.detail || null;
+      }}
+      return error;
+    }};
+
     const callApi = async (method, args = []) => {{
       const response = await fetch(`/api/call/${{encodeURIComponent(method)}}`, {{
         method: 'POST',
@@ -1326,7 +1350,7 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
       }});
       const payload = await response.json();
       if (!response.ok || payload?.status === 'error') {{
-        throw new Error(payload?.message || formatMessage(I18N.requestUnfinished, {{ status: response.status }}));
+        throw buildBridgeError(payload, formatMessage(I18N.requestUnfinished, {{ status: response.status }}));
       }}
       return payload;
     }};
@@ -1335,9 +1359,9 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
       try {{
         setStatus(message);
         const payload = await action();
-        setStatus(payload?.message || I18N.actionDone);
+        setStatus(payload?.user_message || payload?.message || I18N.actionDone);
       }} catch (error) {{
-        setStatus(error?.message || I18N.actionFailed, true);
+        setStatus(error?.message || error?.user_message || I18N.actionFailed, true);
       }}
     }};
 

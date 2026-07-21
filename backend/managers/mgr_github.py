@@ -5,6 +5,7 @@ import re
 import shutil
 import tempfile
 import time
+import uuid
 import xml.etree.ElementTree as ET
 import html
 import hashlib
@@ -16,6 +17,7 @@ from urllib.parse import quote, unquote, urlparse
 
 import requests
 from backend.database.models import GithubModRecord, GithubTimeline, db
+from backend.i18n.messages import localized_key, localized_params, tr
 from backend.managers.mgr_download import DownloadManager, DownloadTask
 from backend.managers.mgr_network import build_retry_session, merge_headers
 from backend.settings import GIT_PROVIDER_CATALOG_DIR, HOME_DIR, settings
@@ -150,6 +152,10 @@ class GithubInstallRequest:
     failure_toast: str = ""
     post_install: Callable[[GithubInstallResult], Any] | None = None
     on_install_error: Callable[[Exception, DownloadTask, "GithubResolvedArtifact"], Any] | None = None
+
+
+def _clean_request_text(value: Any) -> Any:
+    return value if localized_key(value) else str(value or "").strip()
 
 
 @dataclass
@@ -715,7 +721,7 @@ class GithubManager:
             return payload
         except (GithubApiError, requests.RequestException) as exc:
             primary_error = exc
-            logger.warning("GitHub 仓库信息 API 请求失败，将回退到网页或缓存：repo=%s/%s error=%s", owner, repo, exc)
+            logger.debug("GitHub 仓库信息 API 预取失败，将回退到网页或缓存：repo=%s/%s error=%s", owner, repo, exc)
 
         web_payload = self._fetch_repo_info_via_web(owner, repo, source_branch=normalized_source_branch)
         if web_payload:
@@ -936,10 +942,10 @@ class GithubManager:
                 cleanup_archive=True,
             ),
             timeline_repo_url=repo_url,
-            download_start_message="开始获取压缩包",
-            install_start_message="压缩包获取成功，正在解压...",
-            success_toast=f"{repo} 部署完成",
-            failure_toast=f"{repo} 部署失败",
+            download_start_message=tr("tasks.github.download_start", "开始获取压缩包"),
+            install_start_message=tr("tasks.github.install_start", "压缩包获取成功，正在解压..."),
+            success_toast=tr("toast.github.deploy_done", "{repo} 部署完成", repo=repo),
+            failure_toast=tr("toast.github.deploy_failed", "{repo} 部署失败", repo=repo),
             post_install=lambda result: self._update_mod_record(repo_url, result.version, f"_GH_{repo}"),
         )
         return self.install_from_github(download_mgr, request)
@@ -981,9 +987,9 @@ class GithubManager:
                 cleanup_archive=True,
             ),
             timeline_repo_url=catalog_url,
-            install_start_message="清单压缩包获取成功，正在解压...",
-            success_toast=f"{name} 部署完成",
-            failure_toast=f"{name} 部署失败",
+            install_start_message=tr("tasks.github.catalog_install_start", "清单压缩包获取成功，正在解压..."),
+            success_toast=tr("toast.github.catalog_deploy_done", "{name} 部署完成", name=name),
+            failure_toast=tr("toast.github.catalog_deploy_failed", "{name} 部署失败", name=name),
             post_install=lambda result: self._update_mod_record(catalog_url, version, f"_GH_{safe_name}"),
         )
         resolved = GithubResolvedArtifact(
@@ -1163,11 +1169,11 @@ class GithubManager:
             expected_hash=str(request.expected_hash or "").strip(),
             hash_algorithm=str(request.hash_algorithm or "md5").strip(),
             timeline_repo_url=str(request.timeline_repo_url or repo_url or "").strip(),
-            download_start_message=str(request.download_start_message or "").strip(),
-            install_start_message=str(request.install_start_message or "").strip(),
-            success_message=str(request.success_message or "").strip(),
-            success_toast=str(request.success_toast or "").strip(),
-            failure_toast=str(request.failure_toast or "").strip(),
+            download_start_message=_clean_request_text(request.download_start_message),
+            install_start_message=_clean_request_text(request.install_start_message),
+            success_message=_clean_request_text(request.success_message),
+            success_toast=_clean_request_text(request.success_toast),
+            failure_toast=_clean_request_text(request.failure_toast),
             post_install=request.post_install,
             on_install_error=request.on_install_error,
         )
@@ -1205,7 +1211,7 @@ class GithubManager:
                 )
                 resolved = self._build_release_asset_from_payload(request, web_release)
                 if resolved:
-                    logger.warning(
+                    logger.debug(
                         "已通过 GitHub 网页资源回退解析 release：repo=%s/%s tag=%s error=%s",
                         request.owner,
                         request.repo,
@@ -1214,7 +1220,7 @@ class GithubManager:
                     )
                     return resolved
             except Exception as web_exc:
-                logger.warning(
+                logger.debug(
                     "GitHub release 网页资源回退失败：repo=%s/%s tag=%s error=%s",
                     request.owner,
                     request.repo,
@@ -1298,7 +1304,8 @@ class GithubManager:
                 source_commit = self.fetch_gitlab_commit(identity, ref=source_ref, missing_ok=True)
                 resolved_version = self._build_source_version(source_ref, self._extract_commit_timestamp(source_commit))
             except Exception as exc:
-                logger.warning("解析 GitLab 源提交失败：repo=%s/%s branch=%s error=%s", request.owner, request.repo, source_ref, exc)
+                # 源提交只用于生成版本标识；源码包下载仍会继续，最终失败由下载任务统一记录。
+                logger.debug("GitLab 源提交预解析失败，继续使用分支名部署：repo=%s/%s branch=%s error=%s", request.owner, request.repo, source_ref, exc)
 
         return GithubResolvedArtifact(
             repo_url=request.repo_url,
@@ -1429,25 +1436,47 @@ class GithubManager:
             if request.success_toast:
                 EventBus.send_toast(request.success_toast, type="success", duration=4000)
         except Exception as exc:
-            logger.error("Git 仓库安装失败：%s", exc, exc_info=True)
+            error_id = getattr(task, "error_id", "") or uuid.uuid4().hex[:10]
+            user_message = getattr(task, "user_message", "") or request.failure_toast or tr("errors.git.install_failed", "Git 仓库安装失败。请检查仓库地址、分支和访问权限。")
+            logger.error(
+                "Git 仓库安装失败：%s",
+                request.repo_url,
+                exc_info=True,
+                extra={
+                    "error_type": getattr(task, "error_type", ""),
+                    "error_code": getattr(task, "error_code", "") or "GIT.INSTALL_FAILED",
+                    "error_id": error_id,
+                    "user_message": user_message,
+                    "message_key": getattr(task, "message_key", ""),
+                    "message_params": dict(getattr(task, "message_params", {}) or {}),
+                    "extra_context": {"repo_url": request.repo_url, "owner": request.owner, "repo": request.repo},
+                },
+            )
             if timeline_repo_url:
-                self.record_timeline(timeline_repo_url, "error", f"部署失败: {exc}")
+                self.record_timeline(timeline_repo_url, "error", f"部署失败: {user_message}")
             if request.failure_toast:
-                EventBus.send_toast(f"{request.failure_toast}: {exc}", type="error", duration=6000)
+                EventBus.send_toast(
+                    {
+                        "message": request.failure_toast,
+                        "user_message": user_message,
+                        "error_type": getattr(task, "error_type", ""),
+                        "error_code": getattr(task, "error_code", "") or "GIT.INSTALL_FAILED",
+                        "error_id": error_id,
+                        "message_key": getattr(task, "message_key", "") or localized_key(request.failure_toast),
+                        "message_params": dict(getattr(task, "message_params", {}) or localized_params(request.failure_toast) or {}),
+                    },
+                    type="error",
+                    duration=6000,
+                )
             if request.on_install_error:
                 request.on_install_error(exc, task, resolved)
 
     def _handle_download_error(self, task: DownloadTask, request: GithubInstallRequest, _resolved: GithubResolvedArtifact) -> None:
         """下载失败时补 GitHub 域内反馈。"""
         timeline_repo_url = request.timeline_repo_url or request.repo_url
+        download_user_message = task.user_message or tr("errors.git.download_failed", "Git 仓库下载失败。请检查仓库地址、分支、网络连接和访问权限。")
         if timeline_repo_url:
-            self.record_timeline(timeline_repo_url, "error", f"下载失败: {task.error_msg}")
-        if request.failure_toast:
-            EventBus.send_toast(
-                f"{request.failure_toast}: {task.error_msg or task.filename}",
-                type="error",
-                duration=6000,
-            )
+            self.record_timeline(timeline_repo_url, "error", f"下载失败: {download_user_message}")
 
     def _execute_install_plan(self, task: DownloadTask, request: GithubInstallRequest, resolved: GithubResolvedArtifact) -> GithubInstallResult:
         """执行通用安装动作。
@@ -1514,7 +1543,7 @@ class GithubManager:
         fallback_filename = str(request.artifact.fallback_filename or "").strip()
         if not fallback_url or not fallback_filename: return None
 
-        logger.warning(
+        logger.debug(
             "GitHub release 解析失败，将回退到直接下载：repo=%s/%s error=%s",
             request.owner,
             request.repo,
@@ -1603,7 +1632,7 @@ class GithubManager:
                 degraded=True,
             )
         except Exception as exc:
-            logger.warning("GitHub 网页回退失败：repo=%s/%s error=%s", owner, repo, exc)
+            logger.debug("GitHub 网页兜底失败：repo=%s/%s error=%s", owner, repo, exc)
             return None
 
     def _fetch_repo_info_from_record_cache(self, repo_url: str, owner: str, repo: str, *, source_branch: str = "") -> dict[str, Any] | None:
@@ -2173,7 +2202,8 @@ class GithubManager:
                 default_branch = str(repo_info.get("default_branch") or "").strip()
                 if default_branch: return default_branch
         except Exception as exc:
-            logger.warning("通过 API 解析默认分支失败：repo=%s/%s error=%s", owner, repo, exc)
+            # 默认分支可从网页、缓存和 main 兜底，预解析失败不应形成用户可见告警。
+            logger.debug("GitHub 默认分支预解析失败，将继续使用降级来源：repo=%s/%s error=%s", owner, repo, exc)
 
         web_info = self._fetch_repo_info_via_web(owner, repo)
         if web_info:
@@ -2197,13 +2227,13 @@ class GithubManager:
             source_commit = self.fetch_commit(owner, repo, ref=normalized_branch, missing_ok=True)
             return self._build_source_version(normalized_branch, self._extract_commit_timestamp(source_commit))
         except Exception as exc:
-            logger.warning("通过 API 解析源提交失败，将回退到网页或缓存：repo=%s/%s branch=%s error=%s", owner, repo, normalized_branch, exc)
+            logger.debug("GitHub 源提交 API 预解析失败，将回退到网页或缓存：repo=%s/%s branch=%s error=%s", owner, repo, normalized_branch, exc)
 
         try:
             source_commit = self.fetch_commit_web(owner, repo, ref=normalized_branch, missing_ok=True)
             if source_commit: return self._build_source_version(normalized_branch, self._extract_commit_timestamp(source_commit))
         except Exception as exc:
-            logger.warning("通过网页解析源提交失败：repo=%s/%s branch=%s error=%s", owner, repo, normalized_branch, exc)
+            logger.debug("GitHub 源提交网页预解析失败，将继续使用缓存或分支名：repo=%s/%s branch=%s error=%s", owner, repo, normalized_branch, exc)
 
         record_info = self._fetch_repo_info_from_record_cache(repo_url or f"{GITHUB_WEB_BASE}/{owner}/{repo}", owner, repo, source_branch=normalized_branch)
         if record_info:

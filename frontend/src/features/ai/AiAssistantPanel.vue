@@ -278,7 +278,7 @@ import CommonNumber from '../../shared/components/input/CommonNumber.vue'
 import AiActionCard from './AiActionCard.vue'
 import { imageViewerOptions } from '../../shared/lib/domEffects'
 import { renderMarkdownContent } from '../../shared/lib/markdown'
-import { toUserMessage } from '../../shared/lib/common'
+import { showUserErrorToast, toUserMessage } from '../../shared/lib/common'
 import { t } from '../../shared/i18n.js'
 import { createActionExecutorRegistry, createActionPresentationRuntime } from './ai-store/runtime/aiActionRuntime.js'
 import {
@@ -766,7 +766,7 @@ const copyMessage = async (msg, isMarkdown = false) => {
     await navigator.clipboard.writeText(finalOutput)
     toast.success(isMarkdown ? t('ai.panel.copy_markdown_success', '已复制 Markdown 格式') : t('ai.panel.copy_plain_success', '已复制纯文本格式'))
   } catch (err) {
-    toast.error(toUserMessage(err?.message || err, t('ai.panel.copy_failed', '复制失败。请检查浏览器剪贴板权限，或手动选中文本复制。')))
+    toast.error(toUserMessage(err, t('ai.panel.copy_failed', '复制失败。请检查浏览器剪贴板权限，或手动选中文本复制。')))
   }
 }
 
@@ -944,7 +944,7 @@ const executeAction = async (action) => {
   try {
     await executor(action.payload || {}, action)
   } catch (error) {
-    toast.error(toUserMessage(error?.message || error, t('ai.panel.action_failed', '操作执行失败。可能是当前数据已变化、目标项目不可用或后端暂时无法处理，请刷新后重试。')))
+    showUserErrorToast(error, t('ai.panel.action_failed', '操作执行失败。可能是当前数据已变化、目标项目不可用或后端暂时无法处理，请刷新后重试。'))
   }
 }
 
@@ -993,7 +993,7 @@ const sendMessage = async () => {
     requestPayload: { ...(props.requestPayload || {}) },
   })
   if (requestMeta?.error) {
-    toast.error(toUserMessage(requestMeta.error?.message || requestMeta.error, t('ai.panel.request_failed', 'AI 请求失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用，详细原因已写入系统日志。')))
+    showUserErrorToast(requestMeta.error, t('ai.panel.request_failed', 'AI 请求失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用。'))
   }
 }
 
@@ -1023,7 +1023,7 @@ const cancelCurrentRequest = async ({ keepBubble = true, silent = false } = {}) 
     if (!silent) toast.info(t('ai.panel.cancel_requested', '已请求中断本次 AI 分析'))
   } catch (error) {
     console.warn('取消 AI 助手会话失败:', error)
-    if (!silent) toast.warning(toUserMessage(error?.message || error, t('ai.panel.cancel_not_confirmed', '已停止等待这次回答，但后端取消请求没有确认完成。请稍后刷新会话状态。')))
+    if (!silent) toast.warning(toUserMessage(error, t('ai.panel.cancel_not_confirmed', '已停止等待这次回答，但后端取消请求没有确认完成。请稍后刷新会话状态。')))
   }
 }
 

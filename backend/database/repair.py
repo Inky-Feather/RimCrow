@@ -9,6 +9,7 @@ from peewee import BigIntegerField, BooleanField, CharField, DatabaseError, Fore
 
 from backend.database.models import UTF8JSONField, all_models, db
 from backend.database.runtime import ensure_minimum_startup_data, init_db, validate_database_file
+from backend.i18n.messages import tr
 from backend.utils.logger import logger
 from backend.utils.tools import current_ms
 
@@ -28,6 +29,10 @@ def _get_repair_paths(db_path):
         'marker_path': db_path + REPAIR_MARKER_SUFFIX,
         'failed_source_path': db_path + REPAIR_FAILED_SOURCE_SUFFIX,
     }
+
+
+def _message_payload(message):
+    return {"message": str(message), "message_key": getattr(message, "message_key", ""), "message_params": getattr(message, "message_params", {})}
 
 
 def _move_file_with_retry(src_path, dst_path, retries=10, delay=0.5):
@@ -330,7 +335,8 @@ def apply_pending_manual_repair(db_path):
     except Exception as e:
         logger.error(f"读取数据库修复标记失败: {e}", exc_info=True)
         _cleanup_repair_artifacts(db_path, keep_failed_source=True)
-        return {"applied": False, "error": str(e)}
+        message = tr("errors.database.repair_marker_load_failed", "读取数据库修复记录失败。请稍后重试或手动修复数据库。")
+        return {"applied": False, "error": str(message), "error_code": "DATABASE.REPAIR_MARKER_LOAD_FAILED", "message_key": message.message_key, "message_params": message.message_params}
 
     repaired_path = str(marker.get('repaired_path') or paths['repaired_path'])
     try:
@@ -341,7 +347,8 @@ def apply_pending_manual_repair(db_path):
     except Exception as e:
         logger.error(f"启动阶段应用修复数据库失败: {e}", exc_info=True)
         _cleanup_repair_artifacts(db_path, keep_failed_source=True)
-        return {"applied": False, "error": str(e)}
+        message = tr("errors.database.repair_apply_failed", "应用修复后的数据库失败。请检查数据库文件权限和磁盘空间。")
+        return {"applied": False, "error": str(message), "error_code": "DATABASE.REPAIR_APPLY_FAILED", "message_key": message.message_key, "message_params": message.message_params}
 
 
 def prepare_database_for_startup(db_path):
@@ -361,9 +368,9 @@ def prepare_database_for_startup(db_path):
     staged_result = apply_pending_manual_repair(db_path)
     if staged_result.get("applied"):
         result["actions_taken"].append("staged_database_repair_applied")
-        result["messages"].append("上次准备好的数据库修复结果已生效。")
+        result["messages"].append(_message_payload(tr("startup.database.staged_repair_applied", "上次准备好的数据库修复结果已生效。")))
     elif staged_result.get("error"):
-        result["messages"].append("检测到未完成的修复结果，但无法使用，已自动跳过。")
+        result["messages"].append(_message_payload(tr("startup.database.staged_repair_skipped", "检测到未完成的修复结果，但无法使用，已自动跳过。")))
 
     if not os.path.exists(db_path): return result
 
@@ -381,7 +388,7 @@ def prepare_database_for_startup(db_path):
         _apply_database_file(db_path, paths['repaired_path'], ".before_auto_repair")
         _cleanup_repair_artifacts(db_path, keep_failed_source=False)
         result["actions_taken"].append("startup_database_auto_repaired")
-        result["messages"].append("检测到数据库异常，软件已自动修复并继续启动。")
+        result["messages"].append(_message_payload(tr("startup.database.auto_repaired", "检测到数据库异常，软件已自动修复并继续启动。")))
         return result
     except Exception as e:
         logger.error(f"启动阶段自动修复失败，将保留问题库供手动修复: {e}", exc_info=True)
@@ -390,13 +397,13 @@ def prepare_database_for_startup(db_path):
             logger.info(f"问题库已保留为手动修复源: {failed_source_path}")
         except Exception as move_error:
             logger.error(f"保留手动修复源失败: {move_error}", exc_info=True)
-            result["messages"].append("数据库异常文件处理失败，建议先备份 data 目录。")
+            result["messages"].append(_message_payload(tr("startup.database.failed_source_stage_failed", "数据库异常文件处理失败，建议先备份 data 目录。")))
         finally:
             _cleanup_repair_artifacts(db_path, keep_failed_source=True)
 
         result["created_clean_database"] = True
         result["actions_taken"].append("startup_database_auto_repair_failed")
-        result["messages"].append("数据库自动修复失败，请尽快手动修复。软件将继续启动，但部分本地数据可能暂时不可用。")
+        result["messages"].append(_message_payload(tr("startup.database.auto_repair_failed", "数据库自动修复失败，请尽快手动修复。软件将继续启动，但部分本地数据可能暂时不可用。")))
         return result
 
 

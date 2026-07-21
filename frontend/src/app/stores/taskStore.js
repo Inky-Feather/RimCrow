@@ -1,16 +1,40 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { toUserMessage } from '../../shared/lib/common'
-import { t, translateMessagePayload } from '../../shared/i18n.js'
+import { t } from '../../shared/i18n.js'
 
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'cancelled'])
 const ACTIVE_STATUSES = new Set(['pending', 'running'])
 const TASK_RETENTION_MS = 3000
 
-const getTaskFailureMessage = (task = {}) => toUserMessage(
-  translateMessagePayload(task, task.message) || task.metrics?.error || task.metrics?.original_error,
-  t('tasks.error.not_completed', '任务未成功完成。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。'),
-)
+const getTaskFailureMessage = (task = {}) => {
+  const metricsError = task?.metrics?.error || task?.metrics?.original_error || ''
+  const messagePayload = (task?.user_message || task?.message_key || !metricsError)
+    ? task
+    : { ...task, message: metricsError }
+  return toUserMessage(
+    messagePayload,
+    t('tasks.error.not_completed', '任务未成功完成。请检查网络连接、文件权限或稍后重试。'),
+  )
+}
+
+const createTaskFailureError = (task = {}) => {
+  const error = new Error(getTaskFailureMessage(task))
+  Object.assign(error, {
+    from_task: true,
+    task_id: task.id || '',
+    task_type: task.type || '',
+    status: task.status || '',
+    user_message: task.user_message || '',
+    message_key: task.message_key || '',
+    message_params: task.message_params || {},
+    error_type: task.error_type || '',
+    error_code: task.error_code || '',
+    error_id: task.error_id || '',
+    metrics: task.metrics || {},
+  })
+  return error
+}
 
 export const useTaskStore = defineStore('tasks', () => {
   const taskMap = ref(new Map())
@@ -40,7 +64,7 @@ export const useTaskStore = defineStore('tasks', () => {
       if (task.status === 'success') {
         entry.resolve(task)
       } else {
-        entry.reject(new Error(getTaskFailureMessage(task)))
+        entry.reject(createTaskFailureError(task))
       }
     }
   }
@@ -58,15 +82,18 @@ export const useTaskStore = defineStore('tasks', () => {
     metrics.task_updated_at = updatedAt
     return {
       ...(existing || {}),
+      ...payload,
       id: payload.id,
       type: String(payload.type || existing?.type || ''),
       status: String(payload.status || existing?.status || 'pending'),
       progress: Number(payload.progress ?? existing?.progress ?? 0),
       message: payload.message ?? existing?.message ?? '',
+      user_message: payload.user_message ?? existing?.user_message ?? '',
       message_key: payload.message_key ?? existing?.message_key ?? '',
       message_params: payload.message_params ?? existing?.message_params ?? {},
-      error_key: payload.error_key ?? existing?.error_key ?? '',
-      error_params: payload.error_params ?? existing?.error_params ?? {},
+      error_type: payload.error_type ?? existing?.error_type ?? '',
+      error_code: payload.error_code ?? existing?.error_code ?? '',
+      error_id: payload.error_id ?? existing?.error_id ?? '',
       metrics,
       joinedAt,
       updatedAt,
@@ -130,7 +157,7 @@ export const useTaskStore = defineStore('tasks', () => {
     const currentTask = getTask(taskId)
     if (currentTask && TERMINAL_STATUSES.has(currentTask.status)) {
       if (currentTask.status === 'success') return Promise.resolve(currentTask)
-      return Promise.reject(new Error(getTaskFailureMessage(currentTask)))
+      return Promise.reject(createTaskFailureError(currentTask))
     }
 
     return new Promise((resolve, reject) => {

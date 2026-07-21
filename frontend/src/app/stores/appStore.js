@@ -2,7 +2,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
-import { checkResult, deepClone, toast, toUserMessage } from '../../shared/lib/common'
+import { checkResult, deepClone, showUserErrorToast, toast, toUserMessage } from '../../shared/lib/common'
 import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPerf'
 import { useModStore } from '../../features/mod/stores/modStore'
 import { useGroupStore } from '../../features/mod/stores/groupStore'
@@ -654,7 +654,7 @@ export const useAppStore = defineStore('app', () => {
       }
     } catch (error) {
       console.warn('切换界面语言失败，保留当前语言:', error)
-      toast.error(error?.message || t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
+      showUserErrorToast(error, t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
     }
   }
   watch(() => settings.value.language, () => {
@@ -866,7 +866,7 @@ export const useAppStore = defineStore('app', () => {
       startupPerfMark('refresh_mod_enrichment_done', { mods: Object.keys(res.data?.mods || {}).length })
       return true
     } catch (e) {
-      if (!silent) toast.error(toUserMessage(e?.message || e, t('messages.app.error.refresh_mod_enrichment_failed', '补充列表标记失败。部分问题提示、替代版本或联机兼容状态可能暂时不显示。')))
+      if (!silent) showUserErrorToast(e, t('messages.app.error.refresh_mod_enrichment_failed', '补充列表标记失败。部分问题提示、替代版本或联机兼容状态可能暂时不显示。'))
       return false
     }
   }
@@ -892,7 +892,7 @@ export const useAppStore = defineStore('app', () => {
       startupPerfMark('refresh_mod_core_data_done', { historyLabel })
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, t('messages.app.error.sync_mod_core_data_failed', '同步模组核心数据失败。可能是数据库、扫描结果或运行环境暂时不可用，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('messages.app.error.sync_mod_core_data_failed', '同步模组核心数据失败。可能是数据库、扫描结果或运行环境暂时不可用。'))
       return false
     }
   }
@@ -923,7 +923,7 @@ export const useAppStore = defineStore('app', () => {
       startupPerfMark('refresh_mods_data_done', { historyLabel })
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, t('messages.app.error.sync_mod_data_failed', '同步模组数据失败。可能是数据库、扫描结果或运行环境暂时不可用，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('messages.app.error.sync_mod_data_failed', '同步模组数据失败。可能是数据库、扫描结果或运行环境暂时不可用。'))
       return false
     }
   }
@@ -1024,7 +1024,7 @@ export const useAppStore = defineStore('app', () => {
         await orderStore.presentRuntimeRefreshDiff(resumeSnapshot)
       } catch (e) {
         console.error("恢复挂起界面失败:", e)
-        toast.error(toUserMessage(e?.message || e, t('messages.app.error.resume_failed', '恢复界面失败。请刷新界面或重启软件后重试，详细原因已写入系统日志。')))
+        showUserErrorToast(e, t('messages.app.error.resume_failed', '恢复界面失败。请刷新界面或重启软件后重试。'))
       } finally {
         isLoading.value = false
         suspendRecoveryPromise = null
@@ -1088,7 +1088,7 @@ export const useAppStore = defineStore('app', () => {
       startupPerfMark('app_initialize_done')
     } catch (e) {
       console.error("初始化失败:", e)
-      toast.error(toUserMessage(e?.message || e, t('messages.app.error.initialize_failed', '初始化失败。可能是配置、数据库或运行环境暂时不可用，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('messages.app.error.initialize_failed', '初始化失败。可能是配置、数据库或运行环境暂时不可用。'))
     } finally {
       isLoading.value = false
     }
@@ -1113,7 +1113,7 @@ export const useAppStore = defineStore('app', () => {
       startupPerfMark('refresh_data_done', { isInit, historyLabel })
       return true
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, t('messages.app.error.refresh_data_failed', '刷新数据失败。可能是扫描器、数据库或当前环境暂时不可用，请稍后重试。')))
+      showUserErrorToast(e, t('messages.app.error.refresh_data_failed', '刷新数据失败。可能是扫描器、数据库或当前环境暂时不可用，请稍后重试。'))
       return false
     } finally {
       isLoading.value = false
@@ -1135,7 +1135,7 @@ export const useAppStore = defineStore('app', () => {
           type: 'scan',
           status: String(detail.status || 'success'),
           progress: Number(detail.progress ?? (detail.status === 'success' ? 100 : 0)),
-          message: detail.message || (detail.status === 'success' ? t('tasks.message.scan_complete', '扫描完成') : ''),
+          message: translateMessagePayload(detail, detail.status === 'success' ? t('tasks.message.scan_complete', '扫描完成') : ''),
           metrics: {
             title: t('tasks.type.scan', '模组扫描'),
             ...(detail.metrics || {}),
@@ -1185,7 +1185,7 @@ export const useAppStore = defineStore('app', () => {
             return
         }
         if (error_count > 0) {
-            toast.warning(t('messages.app.localize.complete_with_errors', '{title}已完成，成功 {success} 项，失败 {failed} 项。失败详情已写入系统日志。', { title: taskTitle, success: success_count, failed: error_count }));
+            toast.warning(t('messages.app.localize.complete_with_errors', '{title}已完成，成功 {success} 项，失败 {failed} 项。', { title: taskTitle, success: success_count, failed: error_count }));
         } else {
             toast.success(t('messages.app.localize.complete_success', '{title}已完成：{count} 个模组', { title: taskTitle, count: success_count }));
         }
@@ -1213,11 +1213,12 @@ export const useAppStore = defineStore('app', () => {
       } else {
         isGameRunning.value = !!detail.running
       }
+      const gameStatusMessage = translateMessagePayload(detail, '')
       if (detail.profile_id && detail.last_played_time) {
         useProfileStore().applyLastPlayedTime(detail.profile_id, detail.last_played_time)
       }
-      if (detail.source === 'external' && detail.message) {
-        toast.info(detail.message, { timeout: 4000 })
+      if (detail.source === 'external' && gameStatusMessage) {
+        toast.info(gameStatusMessage, { timeout: 4000 })
       }
       if (
         detail.failure_reason === 'launch_timeout'
@@ -1226,8 +1227,8 @@ export const useAppStore = defineStore('app', () => {
         void handleSteamLaunchTimeout(detail)
         return
       }
-      if (detail.failure_reason && detail.message) {
-        toast.error(toUserMessage(detail.message, t('messages.app.error.game_status_failed', '游戏启动状态异常。可能是游戏路径、启动参数或运行环境暂时不可用，详细原因已写入系统日志。')))
+      if (detail.failure_reason && gameStatusMessage) {
+        showUserErrorToast(detail, t('messages.app.error.game_status_failed', '游戏启动状态异常。可能是游戏路径、启动参数或运行环境暂时不可用。'))
       }
     })
     window.addEventListener('app-suspending', () => {
@@ -1261,11 +1262,11 @@ export const useAppStore = defineStore('app', () => {
         textureStore.handleDownloadEvent(task)
       }
       if (task.type === 'download' && task.status === 'failed') {
-        const filename = task.metrics?.filename || task.message || t('common.entity.file', '文件')
-        toast.error(t('messages.app.download.failed', '{filename} 下载失败。可能是网络连接、代理设置、下载源不可用或磁盘权限问题，详细原因已写入系统日志。', { filename }))
+        const filename = task.metrics?.filename || t('common.entity.file', '文件')
+        showUserErrorToast(task, t('messages.app.download.failed', '{filename} 下载失败。可能是网络连接、代理设置、下载源不可用或磁盘权限问题。', { filename }))
       }
       if (task.type === 'steamcmd-download' && task.status === 'failed') {
-        toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.steamcmd_download.failed', 'SteamCMD 下载失败。请检查网络连接、代理设置、下载源可用性和目标目录权限，详细原因已写入系统日志。')))
+        showUserErrorToast(task, t('messages.app.steamcmd_download.failed', 'SteamCMD 下载失败。请检查网络连接、代理设置、下载源可用性和目标目录权限。'))
       }
       if (modInventoryTaskTypes.has(task.type) && task.status === 'success') {
         void (async () => {
@@ -1278,13 +1279,13 @@ export const useAppStore = defineStore('app', () => {
         })()
       }
       if (task.type === 'steam-workshop-download' && task.status === 'failed') {
-        toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.steam_workshop_download.failed', 'Steam 下载失败。请确认 Steam 已登录并正常联网，或检查代理设置和工坊项目状态。')))
+        showUserErrorToast(task, t('messages.app.steam_workshop_download.failed', 'Steam 下载失败。请确认 Steam 已登录并正常联网，或检查代理设置和工坊项目状态。'))
       }
       if (task.type === 'steam-subscribe' && task.status === 'failed') {
-        toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.steam_subscribe.failed', 'Steam 订阅失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。')))
+        showUserErrorToast(task, t('messages.app.steam_subscribe.failed', 'Steam 订阅失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。'))
       }
       if (task.type === 'steam-unsubscribe' && task.status === 'failed') {
-        toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.steam_unsubscribe.failed', '取消订阅失败。请确认 Steam 已登录、网络可用，稍后重试。')))
+        showUserErrorToast(task, t('messages.app.steam_unsubscribe.failed', '取消订阅失败。请确认 Steam 已登录、网络可用，稍后重试。'))
       }
       if (task.type === 'update' && task.status === 'success' && task.metrics?.ready_to_install) {
         if (updateState.info) updateState.info.local_status = 'ready'
@@ -1295,7 +1296,10 @@ export const useAppStore = defineStore('app', () => {
       }
       if (task.type === 'update' && task.status === 'failed') {
         if (task.metrics?.has_fallback_source) return
-        toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.update.download_failed', '下载更新包失败。请检查网络连接、代理设置和磁盘空间，稍后重试。')))
+        showUserErrorToast(task, t('messages.app.update.download_failed', '下载更新包失败。请检查网络连接、代理设置和磁盘空间，稍后重试。'))
+      }
+      if (task.type === 'ai-task' && task.status === 'failed') {
+        showUserErrorToast(task, t('messages.app.ai_task.failed', 'AI 任务执行失败。请检查模型配置、网络连接和 API Key。'))
       }
       if (task.type === 'mod-export' && task.status === 'success') {
         if (!task.id || !exportCompletePrompted.has(task.id)) {
@@ -1304,7 +1308,7 @@ export const useAppStore = defineStore('app', () => {
         }
       }
       if (task.type === 'mod-export' && task.status === 'failed') {
-        toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.mod_export.failed', '模组包导出失败。请检查导出目录权限、磁盘空间和待导出模组状态，详细原因已写入系统日志。')))
+        showUserErrorToast(task, t('messages.app.mod_export.failed', '模组包导出失败。请检查导出目录权限、磁盘空间和待导出模组状态。'))
       }
       if (task.type === 'mod-export' && task.status === 'cancelled') {
         toast.warning(t('messages.app.mod_export.cancelled', '模组包导出已取消'))
@@ -1320,7 +1324,7 @@ export const useAppStore = defineStore('app', () => {
         })()
       }
       if (task.type === 'mod-import' && task.status === 'failed') {
-        toast.error(toUserMessage(task.metrics?.error || task.message, t('messages.app.mod_import.failed', '模组包导入失败。请检查文件是否完整、目标目录权限和磁盘空间，详细原因已写入系统日志。')))
+        showUserErrorToast(task, t('messages.app.mod_import.failed', '模组包导入失败。请检查文件是否完整、目标目录权限和磁盘空间。'))
       }
       if (task.type === 'mod-import' && task.status === 'cancelled') {
         toast.warning(t('messages.app.mod_import.cancelled', '模组包导入已取消'))
@@ -1420,7 +1424,7 @@ export const useAppStore = defineStore('app', () => {
     } catch (e) {
       clearTaskCancelPending(task.id)
       console.error('取消任务异常:', e)
-      toast.error(toUserMessage(e?.message || e, t('messages.app.error.cancel_task_failed', '取消任务失败。可能是任务已经结束或后端暂时不可用，请稍后刷新状态。')))
+      showUserErrorToast(e, t('messages.app.error.cancel_task_failed', '取消任务失败。可能是任务已经结束或后端暂时不可用，请稍后刷新状态。'))
       return false
     }
   }
@@ -1478,7 +1482,7 @@ export const useAppStore = defineStore('app', () => {
       if (runtimeState === 'launching') {
         toast.success(t('messages.app.game.launching_profile', '正在启动“{profile}”环境，请等待游戏进程确认。', { profile: targetProfileName }))
       } else {
-        toast.success(gameRes.message)
+        toast.success(toUserMessage(gameRes, t('messages.app.game_launch.launch_success', '游戏启动成功。')))
       }
     }
   }
@@ -1551,7 +1555,7 @@ export const useAppStore = defineStore('app', () => {
       type: 'warning',
       mode: 'actions',
       title: t('messages.app.game_launch.steam_launch_failed.title', 'Steam 启动失败'),
-      message: `${String(gameRes?.message || t('messages.app.game_launch.steam_launch_failed.message', '无法提交 Steam 启动请求。'))}${urlNotice}`,
+      message: `${toUserMessage(gameRes, t('messages.app.game_launch.steam_launch_failed.message', '无法提交 Steam 启动请求。'))}${urlNotice}`,
       actionButtons: [
         {
           label: retryWithUrl
@@ -1569,7 +1573,6 @@ export const useAppStore = defineStore('app', () => {
   const buildGameLaunchWarningConfig = (gameRes) => {
     if (gameRes?.data?.action === 'resolve_steam_launch_failure') return buildSteamLaunchFailureConfig(gameRes)
     const reason = String(gameRes?.data?.reason || '').trim()
-    const fallbackMessage = String(gameRes?.message || '').trim()
     switch (reason) {
       case GAME_LAUNCH_WARNING_REASON.STEAM_PATH_INVALID:
         return {
@@ -1584,7 +1587,7 @@ export const useAppStore = defineStore('app', () => {
           type: 'warning',
           mode: 'actions',
           title: t('messages.app.game_launch.steam_not_ready.title', 'Steam 暂时不可用'),
-          message: t('messages.app.game_launch.steam_not_ready.message', '{message}\n你可以只在本次改为直接启动，也可以检查 Steam 状态，或关闭这个开关并保存。', { message: fallbackMessage || t('messages.app.game_launch.steam_not_ready.fallback', 'Steam 未能进入可用状态。') }),
+          message: t('messages.app.game_launch.steam_not_ready.message', '{message}\n你可以只在本次改为直接启动，也可以检查 Steam 状态，或关闭这个开关并保存。', { message: toUserMessage(gameRes, t('messages.app.game_launch.steam_not_ready.fallback', 'Steam 未能进入可用状态。')) }),
           actionButtons: steamLaunchFallbackButtons(),
         }
       case GAME_LAUNCH_WARNING_REASON.STEAM_RUNNING_WORKSHOP_CONFLICT:
@@ -1604,7 +1607,7 @@ export const useAppStore = defineStore('app', () => {
             type: 'warning',
             mode: 'confirm',
             title: t('messages.app.game_launch.confirm.title', '启动前确认'),
-            message: fallbackMessage || t('messages.app.game_launch.confirm.message', '当前环境需要先确认后再继续启动。'),
+            message: toUserMessage(gameRes, t('messages.app.game_launch.confirm.message', '当前环境需要先确认后再继续启动。')),
             confirmText: t('common.action.continue', '继续'),
             cancelText: t('common.action.cancel', '取消'),
             action: 'continue',
@@ -1620,7 +1623,7 @@ export const useAppStore = defineStore('app', () => {
     const hint = statusRes?.data?.user_hint || {}
     await confirmStore.alert(
       hint.title || t('messages.app.game_launch.steam_status.title', 'Steam 状态'),
-      hint.message || statusRes.message || t('messages.app.game_launch.steam_status.complete', '已完成 Steam 状态检查。'),
+      hint.message || toUserMessage(statusRes, t('messages.app.game_launch.steam_status.complete', '已完成 Steam 状态检查。')),
       { type: statusRes?.data?.ready ? 'success' : 'warning' }
     )
     return null
@@ -1645,7 +1648,7 @@ export const useAppStore = defineStore('app', () => {
     if (gameRes?.data?.action === 'launch_prepare_failed') {
       await confirmStore.alert(
         t('messages.app.game_launch.link_sync_failed.title', '模组链接同步失败'),
-        gameRes.message || t('messages.app.game_launch.link_sync_failed.message', '未能完成模组链接同步，本次未启动游戏。'),
+        toUserMessage(gameRes, t('messages.app.game_launch.link_sync_failed.message', '未能完成模组链接同步，本次未启动游戏。')),
         { type: 'error' },
       )
       return null
@@ -1694,7 +1697,7 @@ export const useAppStore = defineStore('app', () => {
     if (!profileId) return
     const result = await resolveGameLaunchWarning({
       status: 'warning',
-      message: String(detail?.message || t('messages.app.game_launch.timeout_message', '未在限定时间内检测到游戏进程。')),
+      message: toUserMessage(detail, t('messages.app.game_launch.timeout_message', '未在限定时间内检测到游戏进程。')),
       data: {
         action: 'resolve_steam_launch_failure',
         profile_id: profileId,
@@ -1768,13 +1771,25 @@ export const useAppStore = defineStore('app', () => {
   // 后端弹窗
   const _backendPopup = (event) => {
     const confirmStore = useConfirmStore()
-    const { mode, title, message, type, duration } = event.detail
-    const displayMessage = translateMessagePayload(event.detail, message)
+    const { mode, title, type, duration } = event.detail
+    const popupFallback = type === 'error'
+      ? t('messages.app.backend_popup.failed', '操作未完成。请稍后重试。')
+      : type === 'warning'
+        ? t('messages.app.backend_popup.warning', '操作需要确认。')
+        : t('messages.app.backend_popup.info', '操作已完成。')
+    const popupMessage = toUserMessage(event.detail, popupFallback)
     console.debug('后端弹窗:', event.detail)
     // 模式1: 轻提示 (Toast)
     if (mode === 'toast') {
       const toastType = type || 'info' // success, error, warning, info
-      toast[toastType](displayMessage, {
+      if (type === 'error' || event.detail?.error_id) {
+        showUserErrorToast({ ...event.detail, user_message: popupMessage }, popupMessage, {
+          variant: toastType,
+          timeout: duration || 3000,
+        })
+        return
+      }
+      toast[toastType](popupMessage, {
         timeout: duration || 3000
       })
     }
@@ -1782,7 +1797,7 @@ export const useAppStore = defineStore('app', () => {
     else {
       confirmStore.open({
         title: title || t('messages.app.backend_popup.title', '系统提示'),
-        message: displayMessage,
+        message: popupMessage,
         type: type || 'info', // info, success, warning, error
         mode: 'alert', // 强制设为 alert 模式，因为后端无法直接await前端的选择结果(除非用更复杂的Promise桥接)
       })

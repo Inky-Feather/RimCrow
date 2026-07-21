@@ -313,8 +313,7 @@ class TextureTask:
     updated_at: int = field(default_factory=current_ms)
     summary: dict[str, Any] = field(default_factory=dict)
     error: str = ""
-    error_key: str = ""
-    error_params: dict[str, Any] = field(default_factory=dict)
+    user_message: str = ""
     _cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def __post_init__(self) -> None:
@@ -353,8 +352,7 @@ class TextureTask:
             "metrics": dict(self.metrics),
             "summary": dict(self.summary),
             "error": self.error,
-            "error_key": self.error_key,
-            "error_params": dict(self.error_params),
+            "user_message": self.user_message,
             "mod_paths": list(self.mod_paths),
             "mod_targets": [dict(item) for item in self.mod_targets],
             "created_at": self.created_at,
@@ -1122,11 +1120,13 @@ class TextureOptimizationManager:
                 )
             except Exception as exc:
                 logger.error("后台贴图分析任务执行失败: %s", exc, exc_info=True)
+                failed_message = tr("tasks.texture.scan_failed", "贴图扫描任务失败。请检查 Mod 路径、贴图文件和工具配置后重试。")
                 self._emit_analysis_progress(
                     task_id,
                     status="failed",
                     progress=0,
-                    message=tr("tasks.texture.scan_failed", "贴图扫描任务失败: {reason}", {"reason": str(exc)}),
+                    message=tr("tasks.texture.scan_failed_title", "贴图扫描失败"),
+                    user_message=failed_message,
                     processed_mods=0,
                     total_mods=len(normalized_targets),
                     summary=self._create_empty_stat(include_mod_count=True, mod_count=len(normalized_targets)),
@@ -1194,10 +1194,14 @@ class TextureOptimizationManager:
                 "message_params": localized_params(message),
             }
         except TextureOptError as exc:
+            logger.warning("贴图工具不可用: %s", exc)
+            message = tr("api.texture.tool_unavailable", "贴图工具暂不可用。请检查工具配置、下载状态或文件权限。")
             return {
                 "available": False,
                 "resolved_path": "",
-                "message": str(exc),
+                "message": str(message),
+                "message_key": localized_key(message),
+                "message_params": localized_params(message),
             }
 
     def prepare_tool_download(self, download_mgr, options: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1239,10 +1243,10 @@ class TextureOptimizationManager:
                     extract_dir=str(texture_tools_path),
                     cleanup_archive=True,
                 ),
-                download_start_message="开始下载 todds 工具包",
-                install_start_message="todds 工具包获取成功，正在解压...",
-                success_toast=f"贴图工具下载完成: {texture_tools_path}",
-                failure_toast="贴图工具下载失败",
+                download_start_message=tr("tasks.texture.tool_download_start", "开始下载 todds 工具包"),
+                install_start_message=tr("tasks.texture.tool_install_start", "todds 工具包获取成功，正在解压..."),
+                success_toast=tr("toast.texture.tool_download_done", "贴图工具下载完成: {path}", path=str(texture_tools_path)),
+                failure_toast=tr("toast.texture.tool_download_failed", "贴图工具下载失败"),
             ),
         )
         return {"already_ready": False}
@@ -1356,7 +1360,8 @@ class TextureOptimizationManager:
             self._set_task_state(task, status="cancelled", message=tr("tasks.texture.cancelled", "贴图优化任务已取消"), error="")
         except Exception as exc:
             logger.error("贴图优化任务失败", exc_info=True)
-            self._set_task_state(task, status="failed", message=tr("tasks.texture.failed", "贴图优化失败"), error=str(exc))
+            failed_message = tr("tasks.texture.failed", "贴图优化失败。请检查工具配置、贴图文件和输出目录权限后重试。")
+            self._set_task_state(task, status="failed", message=tr("tasks.texture.failed_title", "贴图优化失败"), error=failed_message)
 
     def _optimize(self, task: TextureTask) -> dict[str, Any]:
         options = self._build_options(task.options)
@@ -1391,7 +1396,9 @@ class TextureOptimizationManager:
             return message.startswith("todds 执行失败") or message.startswith("todds 执行超时")
 
         def remember_failed_entry(entry: dict[str, Any], exc: Exception) -> None:
-            error_text = str(exc or "未知错误")
+            logger.warning("贴图条目处理失败：rel_path=%s error=%s", entry.get("rel_path"), exc)
+            error_message = tr("tasks.texture.item_failed", "贴图处理失败。请检查贴图文件、工具配置和输出目录权限。")
+            error_text = str(error_message)
             entry["last_error"] = error_text
             if len(failed_items) < 20:
                 failed_items.append(
@@ -3432,8 +3439,7 @@ class TextureOptimizationManager:
             task.summary = summary
         if error is not None:
             task.error = str(error or "")
-            task.error_key = localized_key(error)
-            task.error_params = localized_params(error)
+            task.user_message = str(error or "")
         final_status = status or task.status
         self._emit_progress(
             task,
@@ -3441,18 +3447,20 @@ class TextureOptimizationManager:
             task.progress if progress is None else progress,
             task.message if message is None else message,
             task.metrics if metrics is None else metrics,
+            user_message=task.user_message if error is not None else None,
         )
         if final_status in {"success", "failed", "cancelled"} and not getattr(task, "_cleanup_scheduled", False):
             setattr(task, "_cleanup_scheduled", True)
             self._schedule_task_cleanup(task.id)
 
-    def _emit_progress(self, task: TextureTask, status: str, progress: int, message: Any, metrics: dict[str, Any] | None = None) -> None:
+    def _emit_progress(self, task: TextureTask, status: str, progress: int, message: Any, metrics: dict[str, Any] | None = None, user_message: Any | None = None) -> None:
         updated_at = current_ms()
         key = localized_key(message)
         params = localized_params(message)
         task.status = status
         task.progress = progress
         task.message = str(message or "")
+        task.user_message = str(user_message if user_message is not None else message or "")
         task.message_key = key
         task.message_params = params
         task.metrics = metrics or {}
@@ -3471,6 +3479,7 @@ class TextureOptimizationManager:
             metrics=task.metrics,
             message_key=key,
             message_params=params,
+            user_message=task.user_message,
         )
 
     def _emit_analysis_progress(
@@ -3480,6 +3489,7 @@ class TextureOptimizationManager:
         status: str,
         progress: int,
         message: Any,
+        user_message: Any | None = None,
         processed_mods: int,
         total_mods: int,
         summary: dict[str, Any],
@@ -3511,6 +3521,7 @@ class TextureOptimizationManager:
             metrics=metrics,
             message_key=localized_key(message),
             message_params=localized_params(message),
+            user_message=user_message,
         )
 
     def _schedule_task_cleanup(self, task_id: str, delay_seconds: float = TEXTURE_TASK_RETENTION_SECONDS) -> None:

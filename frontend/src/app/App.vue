@@ -454,6 +454,11 @@ const runBaseScan = async (forced = false) => {
   await runBaseAction(action, () => appStore.requestModScan({ forcedUpdate: forced, forceCoreRefresh: true }), 'scan')
 }
 
+const handleOpenSystemLogTarget = (event) => {
+  window.__RIMCROW_PENDING_LOG_TARGET__ = { ...(event?.detail || {}), sourceType: 'app', live: true }
+  appStore.uiState.showLogDrawer = true
+}
+
 const closeThemeEditor = () => {
   appStore.themeEditor.isOpen = false
   appStore.themeEditor.theme = null
@@ -575,6 +580,7 @@ onMounted(() => {
   console.info("应用已启动，正在初始化存储……")
   startupPerfMark('app_mounted')
   stopKeybindingRuntime = startKeybindingRuntime({ commandStore })
+  window.addEventListener('rimcrow-open-system-log-target', handleOpenSystemLogTarget)
   // 确保数据初始化
   appStore.initialize()
   // 监听后端传递过来的升级上下文
@@ -613,6 +619,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('rimcrow-open-system-log-target', handleOpenSystemLogTarget)
   if (stopKeybindingRuntime) stopKeybindingRuntime()
   orderStore.saveInactiveOrder();  // 退出前先保存停用列表顺序
   if (resizeObserver) resizeObserver.disconnect()

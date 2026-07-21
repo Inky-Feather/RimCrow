@@ -150,7 +150,7 @@
       "fetch_models_action": "KI-Modelle abrufen",
       "save_action": "AI-Konfiguration speichern",
       "test_exception": "Die KI-Testanforderung ist unerwartet fehlgeschlagen. Der App-Dienst ist möglicherweise nicht verfügbar, das Netzwerk ist möglicherweise ausgefallen oder der Modelldienst antwortet möglicherweise nicht. Versuchen Sie es später noch einmal.",
-      "test_failed": "AI-Testanforderung fehlgeschlagen. Überprüfen Sie den Modellnamen, die Basis-URL, den API-Schlüssel, die Proxy-Einstellungen und den Dienststatus. Einzelheiten finden Sie im Systemprotokoll.",
+      "test_failed": "AI-Testanfrage fehlgeschlagen. Prüfen Sie Modellname, Base URL, API Key, Proxy-Einstellungen und Dienststatus.",
       "test_reply_action": "Testen Sie die KI-Antwort",
       "ui_not_ready": "Die Initialisierung der Benutzeroberfläche ist noch nicht abgeschlossen"
     },
@@ -404,7 +404,7 @@
       "reasoning_tip_unsupported": "Das aktuelle Modell unterstützt den Argumentationsmodus nicht.",
       "reasoning_tip_unsupported_fallback": "Es wird als normale Antwort gesendet.",
       "remove_attachment_tip": "Senden Sie diesen Anhang in diesem Zug nicht",
-      "request_failed": "AI-Anfrage ist fehlgeschlagen. Überprüfen Sie die Modellkonfiguration, die Netzwerkverbindung, die Proxy-Einstellungen und den API-Schlüssel. Einzelheiten finden Sie im Systemprotokoll.",
+      "request_failed": "AI-Anfrage fehlgeschlagen. Prüfen Sie Modellkonfiguration, Netzwerkverbindung, Proxy-Einstellungen und API Key.",
       "request_total_tokens": "Insgesamt werden in dieser Runde {count}-Tokens angefordert",
       "role_user": "You",
       "session_token_tip": "Gesamte Token-Nutzung in der aktuellen Sitzung. Wenn der Wert zu hoch wird, ist es wahrscheinlicher, dass die KI frühere Inhalte übersieht.",
@@ -459,7 +459,7 @@
       "xhigh": "Sehr hoch"
     },
     "session": {
-      "analysis_failed_message": "Bei der Analyse ist ein Fehler aufgetreten. Der Modelldienst, die Netzwerkverbindung oder der interne App-Status sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll.",
+      "analysis_failed_message": "Bei der Analyse ist ein Fehler aufgetreten. Modelldienst, Netzwerkverbindung oder App-Status sind möglicherweise vorübergehend nicht verfügbar.",
       "cancel_action": "AI-Antwort abbrechen",
       "cancelled_message": "Diese Analyse wurde unterbrochen.",
       "default_global_scan_question": "Beginnen Sie mit der Fehlerbehebung anhand dieses globalen Scanergebnisses und geben Sie die wahrscheinlichste Ursache, Beweise und Lösungsvorschläge an.",
@@ -468,7 +468,7 @@
       "fetch_trace_action": "AI-Anforderungsverfolgung abrufen",
       "new_session": "Neue Sitzung",
       "no_tool_args": "Keine Parameter",
-      "request_failed_message": "AI-Anfrage ist fehlgeschlagen. Überprüfen Sie den Modelldienst, den API-Schlüssel, die Basis-URL, die Proxy-Einstellungen und den aktuellen Netzwerkstatus. Einzelheiten finden Sie im Systemprotokoll.",
+      "request_failed_message": "AI-Anfrage fehlgeschlagen. Prüfen Sie Modelldienst, API Key, Base URL, Proxy-Einstellungen und aktuelle Netzwerkverbindung.",
       "run_failed": "Die Sitzung des KI-Assistenten ist fehlgeschlagen. Der App-Dienst ist möglicherweise nicht verfügbar, der Modelldienst antwortet möglicherweise nicht oder die Netzwerkanfrage wurde möglicherweise unterbrochen. Versuchen Sie es später noch einmal.",
       "send_action": "Senden Sie AI-Chat"
     },
@@ -527,24 +527,24 @@
   "api": {
     "ai": {
       "app_log_requires_debug": "Die Analyse des Anwendungsprotokolls ist nur im Debug-Modus verfügbar.",
-      "assistant_estimate_failed": "Die Schätzung der KI-Anfrage ist fehlgeschlagen. Der Protokollinhalt, die Anhänge oder die Modelleinstellungen können derzeit möglicherweise nicht verarbeitet werden. Einzelheiten finden Sie im Systemprotokoll.",
-      "assistant_session_failed": "Die KI-Assistentensitzung wurde nicht abgeschlossen. Überprüfen Sie die Modelleinstellungen, die Netzwerkverbindung, die Proxy-Einstellungen und den API-Schlüssel. Einzelheiten finden Sie im Systemprotokoll.",
+      "assistant_estimate_failed": "AI-Anfrage konnte nicht geschätzt werden. Log-Inhalt, Anhänge oder Modellkonfiguration können derzeit möglicherweise nicht verarbeitet werden.",
+      "assistant_session_failed": "Die AI-Assistentensitzung wurde nicht abgeschlossen. Prüfen Sie Modellkonfiguration, Netzwerkverbindung, Proxy-Einstellungen und API Key.",
       "cancel_failed": "Abbrechen fehlgeschlagen. Die Anfrage wurde möglicherweise bereits abgeschlossen oder existiert nicht mehr.",
       "config_saved": "AI-Konfiguration gespeichert",
       "default_task_title": "KI-Aufgabe",
-      "definition_assistant_save_failed": "Der KI-Assistent konnte nicht gespeichert werden. Überprüfen Sie, ob die Einstellungen für Tools, Eingabeaufforderung und Ausgabeformat vollständig sind. Einzelheiten finden Sie im Systemprotokoll.",
-      "definition_prompt_delete_failed": "Die AI-Eingabeaufforderung konnte nicht gelöscht werden. Stellen Sie sicher, dass die Eingabeaufforderung noch vorhanden ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "definition_prompt_save_failed": "Die AI-Eingabeaufforderung konnte nicht gespeichert werden. Überprüfen Sie, ob das Inhaltsformat gültig ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "definition_task_save_failed": "Die KI-Aufgabe konnte nicht gespeichert werden. Überprüfen Sie, ob die Einstellungen für Aufgabeneingabe, Eingabeaufforderung und Ausgabeformat vollständig sind. Einzelheiten finden Sie im Systemprotokoll.",
-      "invalid_analysis_request": "Ungültige Analyseanforderung: Protokollzeilennummern oder Dateiname fehlen.",
+      "definition_assistant_save_failed": "AI-Assistent konnte nicht gespeichert werden. Prüfen Sie, ob Tools, Prompt und Ausgabeformat vollständig konfiguriert sind.",
+      "definition_prompt_delete_failed": "AI-Prompt konnte nicht gelöscht werden. Prüfen Sie, ob der Prompt noch vorhanden ist.",
+      "definition_prompt_save_failed": "AI-Prompt konnte nicht gespeichert werden. Prüfen Sie das Inhaltsformat.",
+      "definition_task_save_failed": "AI-Aufgabe konnte nicht gespeichert werden. Prüfen Sie, ob Aufgabeneingabe, Prompt und Ausgabeformat vollständig konfiguriert sind.",
+      "invalid_analysis_request": "Derzeit ist kein analysierbarer Log-Inhalt vorhanden. Wählen Sie Log-Zeilen neu aus und versuchen Sie es erneut.",
       "mod_alias_missing_input": "Die Mod-Alias-Aufgabe enthält keine gültigen Mod-Eingaben",
-      "selected_log_unavailable": "Der ausgewählte Protokollinhalt konnte nicht gelesen werden. Möglicherweise wurde die Datei bereinigt.",
+      "selected_log_unavailable": "Der ausgewählte Log-Inhalt ist nicht mehr verfügbar. Er wurde möglicherweise aktualisiert oder bereinigt. Aktualisieren Sie die Log-Seite und wählen Sie erneut aus.",
+      "session_failed": "AI-Sitzung fehlgeschlagen. Prüfen Sie Modelldienst, Netzwerkverbindung und Konfiguration und versuchen Sie es erneut.",
       "task_empty_result": "Die AI-Aufgabe hat keinen gültigen Inhalt zurückgegeben",
-      "task_failed": "KI-Aufgabe fehlgeschlagen. Überprüfen Sie die Modelleinstellungen, die Netzwerkverbindung und den API-Schlüssel. Einzelheiten finden Sie im Systemprotokoll.",
       "task_failed_title": "KI-Aufgabe fehlgeschlagen",
       "task_invalid_result": "Die AI-Aufgabe hat ein ungültiges Format zurückgegeben",
       "task_started": "Die KI-Aufgabe wurde im Hintergrund gestartet",
-      "trace_load_failed": "Das Lesen der AI-Anfrage-Trace-Datensätze ist fehlgeschlagen. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll."
+      "trace_load_failed": "AI-Anfrageverlauf konnte nicht gelesen werden. Versuchen Sie es später erneut."
     },
     "backup": {
       "rename_duplicate_name": "Es existiert bereits ein Backup mit diesem Namen. Wählen Sie einen anderen Namen.",
@@ -572,10 +572,10 @@
     },
     "data_bundle": {
       "export_done": "Export abgeschlossen",
-      "export_failed": "Datenpaket konnte nicht exportiert werden. Überprüfen Sie die Berechtigungen des Zielordners, den Speicherplatz und die ausgewählten Datenmodule. Weitere Informationen finden Sie im Systemprotokoll.",
+      "export_failed": "Datenpaket konnte nicht exportiert werden. Prüfen Sie Zielordnerrechte, Speicherplatz und Status der ausgewählten Datenmodule.",
       "import_done": "Import abgeschlossen",
       "import_done_with_warnings": "Import abgeschlossen mit {count}-Warnungen",
-      "import_failed": "Datenpaket konnte nicht importiert werden. Stellen Sie sicher, dass die Datei vollständig ist, das richtige Format verwendet und die Berechtigungen für den Zielordner gültig sind. Weitere Informationen finden Sie im Systemprotokoll.",
+      "import_failed": "Datenpaket konnte nicht importiert werden. Prüfen Sie, ob die Datei vollständig und korrekt formatiert ist, sowie die Rechte des Zielordners.",
       "inspect_failed": "Die Zusammenfassung des Datenpakets konnte nicht gelesen werden. Stellen Sie sicher, dass die Datei vorhanden ist, das richtige Format verwendet und nicht von einem anderen Programm verwendet wird.",
       "modules": {
         "ai_definitions": {
@@ -612,20 +612,20 @@
           "label": "Regelcenter-Voreinstellung"
         }
       },
-      "schema_failed": "Datenpaketeinstellungen konnten nicht gelesen werden. Überprüfen Sie, ob auf den App-Datenordner zugegriffen werden kann. Weitere Informationen finden Sie im Systemprotokoll."
+      "schema_failed": "Datenpaket-Konfiguration konnte nicht gelesen werden. Prüfen Sie, ob der App-Datenordner erreichbar ist."
     },
     "database": {
       "background_busy": "Eine Datenbankaktualisierung im Hintergrund läuft noch. Versuchen Sie es später noch einmal.",
       "cleanup_done": "Datenbankbereinigung abgeschlossen",
-      "cleanup_failed": "Die Datenbankbereinigung ist fehlgeschlagen. Schließen Sie Programme, die möglicherweise Datendateien verwenden, und versuchen Sie es erneut. Weitere Informationen finden Sie im Systemprotokoll.",
+      "cleanup_failed": "Datenbankbereinigung fehlgeschlagen. Schließen Sie Programme, die Datendateien verwenden, und versuchen Sie es erneut.",
       "maintenance_busy": "Ein Datenbankvorgang läuft bereits. Versuchen Sie es später noch einmal.",
       "recreated_missing": "Es wurde keine lokale Datenbank gefunden, daher wurde eine neue erstellt.",
       "repair_done_restart": "Reparatur abgeschlossen. Starten Sie die App neu, um sie anzuwenden.",
-      "repair_failed": "Die Datenbankreparatur ist fehlgeschlagen. Überprüfen Sie die Datenbankdateiberechtigungen und den Speicherplatz. Weitere Informationen finden Sie im Systemprotokoll.",
+      "repair_failed": "Datenbankreparatur fehlgeschlagen. Prüfen Sie Dateirechte der Datenbank und Speicherplatz.",
       "repair_failed_retry": "Die Reparatur ist fehlgeschlagen. Versuchen Sie es später noch einmal.",
       "reset_close_busy": "Zurücksetzen fehlgeschlagen. Schließen Sie zugehörige Vorgänge und versuchen Sie es erneut.",
       "reset_done": "Zurücksetzen der Datenbank abgeschlossen.",
-      "reset_failed": "Das Zurücksetzen der Datenbank ist fehlgeschlagen. Schließen Sie Vorgänge, die möglicherweise Datendateien verwenden, und versuchen Sie es erneut. Weitere Informationen finden Sie im Systemprotokoll.",
+      "reset_failed": "Datenbank konnte nicht zurückgesetzt werden. Beenden Sie Vorgänge, die Datendateien verwenden, und versuchen Sie es erneut.",
       "reset_recreate_failed": "Zurücksetzen fehlgeschlagen. Die Datenbank konnte nicht neu erstellt werden.",
       "restarting": "Die App wird jetzt neu gestartet.",
       "scan_busy": "Derzeit wird eine Scanaufgabe ausgeführt. Versuchen Sie es später noch einmal.",
@@ -642,8 +642,13 @@
       "task_added": "Download-Aufgabe hinzugefügt"
     },
     "errors": {
-      "internal_api_failed": "Der Vorgang konnte nicht abgeschlossen werden, da eine interne App API fehlgeschlagen ist. Einzelheiten finden Sie im Systemprotokoll. Versuchen Sie es später erneut oder starten Sie die App neu.",
-      "operation_unfinished": "Der Vorgang konnte nicht abgeschlossen werden. Netzwerk, Pfadberechtigungen, Einstellungen oder die Laufzeitumgebung sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll."
+      "ai": {
+        "test_chat": {
+          "failed": "AI-Testanfrage fehlgeschlagen"
+        }
+      },
+      "internal_api_failed": "Der Vorgang wurde nicht abgeschlossen. Ein interner App-Aufruf ist fehlgeschlagen. Versuchen Sie es später erneut oder starten Sie die App neu.",
+      "operation_unfinished": "Der Vorgang wurde nicht abgeschlossen. Netzwerkverbindung, Pfadrechte, Konfiguration oder Laufzeitumgebung sind möglicherweise vorübergehend nicht verfügbar."
     },
     "export": {
       "done": "Export abgeschlossen"
@@ -652,7 +657,6 @@
       "community_rules_done": "Community-Regeldatenbank aktualisiert.",
       "community_rules_failed": "Die Community-Regeldatenbank konnte nicht aktualisiert werden.",
       "community_rules_started": "Die Aktualisierung der Community-Regeldatenbank wurde gestartet",
-      "download_failed_hint": "{message} Überprüfen Sie die Netzwerkverbindung, Proxy-Einstellungen und Zielordnerberechtigungen.",
       "instead_db_done": "Ersatz-Mod-Datenbank aktualisiert.",
       "instead_db_failed": "Die Aktualisierung der Ersatz-Mod-Datenbank ist fehlgeschlagen.",
       "instead_db_started": "Aktualisierung der Ersatz-Mod-Datenbank gestartet",
@@ -665,7 +669,7 @@
       "multiplayer_compatibility_started": "Aktualisierung der Multiplayer-Kompatibilitätstabelle gestartet",
       "path_or_url_missing": "Update-URL oder Zielpfad ist nicht konfiguriert",
       "reload_failed_after_success": "{message} Cache-Neuladen fehlgeschlagen. Später manuell aktualisieren.",
-      "update_start_failed": "Die externe Datenaktualisierung konnte nicht gestartet werden. Überprüfen Sie die Update-URL, die Netzwerkverbindung, die Proxy-Einstellungen und die Schreibberechtigungen für den Zielordner. Einzelheiten finden Sie im Systemprotokoll.",
+      "update_start_failed": "Aktualisierung externer Daten konnte nicht gestartet werden. Prüfen Sie Update-Adresse, Netzwerkverbindung, Proxy-Einstellungen und Schreibrechte des Zielordners.",
       "workshop_db_done": "Community Workshop-Datenbank aktualisiert.",
       "workshop_db_failed": "Die Community-Workshop-Datenbank konnte nicht aktualisiert werden.",
       "workshop_db_started": "Aktualisierung der Community-Workshop-Datenbank gestartet"
@@ -681,10 +685,10 @@
     },
     "file_search": {
       "manager_not_initialized": "Der Dateisuchmanager ist nicht initialisiert",
-      "ripgrep_download_failed": "Der Download des Dateisuchtools konnte nicht gestartet werden. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen und die Schreibberechtigungen für den Tool-Ordner. Einzelheiten finden Sie im Systemprotokoll.",
+      "ripgrep_download_failed": "Download des Dateisuchtools konnte nicht gestartet werden. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen und Schreibrechte des Tool-Ordners.",
       "ripgrep_download_started": "Ripgrep-Download-Aufgabe gestartet",
       "search_started": "Suchaufgabe gestartet",
-      "start_failed": "Dateisuche konnte nicht gestartet werden. Überprüfen Sie die Suchpfade, den Ripgrep-Status und die Dateizugriffsberechtigungen. Einzelheiten finden Sie im Systemprotokoll.",
+      "start_failed": "Dateisuche konnte nicht gestartet werden. Prüfen Sie Suchpfad, ripgrep-Status und Dateizugriff.",
       "tool_ready": "Werkzeug ist bereits fertig"
     },
     "game": {
@@ -696,7 +700,7 @@
       "launch_prepare_active_failed": "Die Synchronisierung der Startüberprüfung ist für die aktuelle Umgebung fehlgeschlagen.",
       "launch_prepare_cache_sync_done": "Die Synchronisierung der Startprüfung wurde mit dem aktuellen Cache-Status abgeschlossen.",
       "launch_prepare_cache_sync_failed": "Die Synchronisierung der Startüberprüfung ist bei Verwendung des aktuellen Cache-Status fehlgeschlagen.",
-      "launch_prepare_failed": "Die Startvorbereitung ist fehlgeschlagen",
+      "launch_prepare_failed": "Startvorbereitung fehlgeschlagen. Prüfen Sie die Pfade des aktuellen Profils, Dateirechte und Mod-Verknüpfungen.",
       "launch_prepare_missing_context": "Der Zielumgebungskontext konnte nicht erstellt werden. Überprüfen Sie, ob die Umgebung vorhanden ist.",
       "launch_prepare_missing_scan_paths": "In der Zielumgebung stehen keine Mod-Pfade für die Startup-Check-Synchronisierung zur Verfügung.",
       "launch_prepare_no_context_builder": "Der Umgebungskontext-Builder ist nicht verfügbar, daher wurde die Synchronisierung der Startprüfung übersprungen.",
@@ -716,22 +720,22 @@
       "url_required": "URL ist erforderlich"
     },
     "guide": {
-      "mark_done_failed": "Der Leitfadenstatus konnte nicht gespeichert werden. Prüfen Sie, ob die Konfigurationsdatei beschreibbar ist; Weitere Informationen finden Sie im Systemprotokoll.",
-      "reset_failed": "Der Führungsstatus konnte nicht zurückgesetzt werden. Prüfen Sie, ob die Konfigurationsdatei beschreibbar ist; Weitere Informationen finden Sie im Systemprotokoll."
+      "mark_done_failed": "Einführungsstatus konnte nicht gespeichert werden. Prüfen Sie, ob die Konfigurationsdatei beschreibbar ist.",
+      "reset_failed": "Einführungsstatus konnte nicht zurückgesetzt werden. Prüfen Sie, ob die Konfigurationsdatei beschreibbar ist."
     },
     "i18n": {
       "language_options_failed": "Die Sprachoptionen der Benutzeroberfläche konnten nicht gelesen werden. Überprüfen Sie das Sprachdateiformat.",
       "user_locale_create_failed": "Das Sprachpaket konnte nicht erstellt werden. Überprüfen Sie, ob das Verzeichnis data/locales beschreibbar ist.",
       "user_locale_create_invalid": "Das Sprachpaket konnte nicht erstellt werden. Überprüfen Sie, ob der Sprachcode gültig ist.",
       "user_locale_created": "Erstelltes Sprachpaket: {label}",
-      "user_locale_message_delete_failed": "Der Benutzergebietsschematext konnte nicht zurückgesetzt werden. Überprüfen Sie, ob das Verzeichnis data/locales beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
+      "user_locale_message_delete_failed": "Benutzerdefinierte Sprachtexte konnten nicht zurückgesetzt werden. Prüfen Sie, ob der Ordner data/locales beschreibbar ist.",
       "user_locale_message_delete_invalid": "Der Benutzergebietsschematext konnte nicht zurückgesetzt werden. Überprüfen Sie, ob der Textschlüssel gültig ist.",
       "user_locale_message_deleted": "Übersetzung zurücksetzen: {key}",
       "user_locale_message_invalid": "Der Benutzergebietsschematext konnte nicht gespeichert werden. Überprüfen Sie, ob der Textschlüssel gültig ist.",
-      "user_locale_message_save_failed": "Der Benutzergebietsschematext konnte nicht gespeichert werden. Überprüfen Sie, ob das Verzeichnis data/locales beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
+      "user_locale_message_save_failed": "Benutzerdefinierte Sprachtexte konnten nicht gespeichert werden. Prüfen Sie, ob der Ordner data/locales beschreibbar ist.",
       "user_locale_message_saved": "Gespeicherte Übersetzung: {key}",
       "user_locale_messages_invalid": "Fehler beim Stapelspeichern des Benutzergebietsschematexts. Überprüfen Sie, ob die Textschlüssel und Übersetzungen gültig sind.",
-      "user_locale_messages_save_failed": "Fehler beim Stapelspeichern des Benutzergebietsschematexts. Überprüfen Sie, ob das Verzeichnis data/locales beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
+      "user_locale_messages_save_failed": "Benutzerdefinierte Sprachtexte konnten nicht gesammelt gespeichert werden. Prüfen Sie, ob der Ordner data/locales beschreibbar ist.",
       "user_locale_messages_saved": "Gespeicherte {count}-Übersetzung(en)",
       "workfile_export_failed": "Die Übersetzungsdatei konnte nicht exportiert werden. Überprüfen Sie die Berechtigungen des Zielordners und versuchen Sie es erneut.",
       "workfile_exported": "Übersetzungsdatei exportiert",
@@ -747,7 +751,7 @@
       "disk_changed": "Die Ladereihenfolge auf der Festplatte wurde extern geändert. Lösen Sie zunächst den Konflikt.",
       "game_config_missing": "Der Spielkonfigurationspfad ist nicht angegeben",
       "manager_not_initialized": "Der Ladereihenfolge-Manager ist nicht initialisiert",
-      "saved_with_backup_error": "Die Ladereihenfolge wurde gespeichert, aber die automatische Sicherung wurde nicht abgeschlossen. Details wurden ins Systemprotokoll geschrieben."
+      "saved_with_backup_error": "Sortierdatei wurde gespeichert, aber die automatische Sicherung wurde nicht abgeschlossen."
     },
     "log": {
       "file_not_found": "Protokolldatei nicht gefunden",
@@ -760,9 +764,9 @@
       "reader_not_initialized": "Der Protokollleser ist nicht initialisiert"
     },
     "mod_package": {
-      "export_failed": "Mod-Paket konnte nicht exportiert werden. Überprüfen Sie die Berechtigungen des Zielordners, den Speicherplatz und die Dateien für die ausgewählten Mods. Weitere Informationen finden Sie im Systemprotokoll.",
+      "export_failed": "Mod-Paket konnte nicht exportiert werden. Prüfen Sie Zielordnerrechte, Speicherplatz und Zustand der zu exportierenden Mod-Dateien.",
       "export_started": "Exportaufgabe gestartet",
-      "import_failed": "Mod-Paket konnte nicht importiert werden. Stellen Sie sicher, dass die Datei vollständig ist, der Zielordner beschreibbar ist und ausreichend Speicherplatz vorhanden ist. Weitere Informationen finden Sie im Systemprotokoll.",
+      "import_failed": "Mod-Paket konnte nicht importiert werden. Prüfen Sie, ob die Datei vollständig ist, der Zielordner beschreibbar ist und genug Speicherplatz vorhanden ist.",
       "import_started": "Importaufgabe gestartet",
       "prepare_import_failed": "Das Mod-Paket konnte vor dem Import nicht überprüft werden. Stellen Sie sicher, dass die Datei vollständig ist, das richtige Format verwendet und nicht von einem anderen Programm verwendet wird.",
       "profile_summary_failed": "Profilexportstatistiken konnten nicht gelesen werden. Stellen Sie sicher, dass das Profil noch vorhanden ist und auf seine Pfade zugegriffen werden kann.",
@@ -776,40 +780,40 @@
       "sync_done": "Konfigurationsüberschreibung abgeschlossen"
     },
     "mods": {
-      "about_cleanup_failed": "Bereinigung verbliebener About-Dateien fehlgeschlagen: {reason}",
+      "about_cleanup_failed": "Reste von About-Dateien konnten nicht bereinigt werden. Prüfen Sie, ob die Dateien erreichbar oder gerade in Verwendung sind.",
       "about_file_missing": "About.xml oder About.xml.disabled wurde nicht gefunden. Der Deaktivierungsstatus kann nicht geändert werden.",
-      "about_file_operation_failed": "Dateivorgang fehlgeschlagen: {reason}",
+      "about_file_operation_failed": "Dateivorgang fehlgeschlagen. Prüfen Sie Dateirechte, Nutzung durch andere Programme und Zielpfad.",
       "activate_done": "{count} Mods aktiviert",
       "activate_done_with_failed": "{success_count} Mods aktiviert, {failed_count} fehlgeschlagen",
       "activate_failed": "Mod konnte nicht aktiviert werden: {reason}",
       "color_updated": "Farbe aktualisiert",
-      "conflict_item_failed": "Dieser Artikel konnte nicht verarbeitet werden. Einzelheiten finden Sie im Systemprotokoll.",
+      "conflict_item_failed": "Beim Verarbeiten dieses Eintrags ist ein Fehler aufgetreten",
       "conflict_missing_target_hash": "Fehlender target_path_hash, daher kann dieses Duplikat nicht gelöscht werden",
       "conflict_no_deletable_record": "Es wurde kein löschbarer Mod-Datensatz gefunden",
       "conflict_no_operation": "Es kann keine Operation angewendet werden",
       "conflict_resolve_partial_failed": "Einige Vorgänge sind fehlgeschlagen: {count} Elemente wurden nicht verarbeitet und der Rest wurde angewendet.",
       "conflict_resolved": "Konfliktbearbeitung abgeschlossen",
       "conflict_unsupported_action": "Nicht unterstützter Aktionstyp: {action}",
-      "database_cleanup_failed_with_reason": "Bereinigung der Datenbankeinträge fehlgeschlagen: {reason}",
+      "database_cleanup_failed": "Datenbankeinträge konnten nicht bereinigt werden. Versuchen Sie es später erneut.",
       "deactivate_done": "{count} Mods deaktiviert",
       "deactivate_done_with_failed": "{success_count} Mods deaktiviert, {failed_count} fehlgeschlagen",
       "deactivate_failed": "Mod konnte nicht deaktiviert werden: {reason}",
       "disabled_state_changed": "Status aktualisiert",
       "disabled_state_synced": "Status synchronisiert",
-      "force_delete_file_failed": "Datei konnte nicht dauerhaft gelöscht werden ({filename}): {reason}",
+      "force_delete_file_failed": "Datei konnte nicht endgültig gelöscht werden ({filename}). Prüfen Sie, ob sie verwendet wird oder Rechte fehlen.",
       "interlock_healed": "Verriegelung repariert",
       "no_active_profile": "Kein aktives Profil, daher können Mods nicht gescannt werden",
       "no_scan_paths": "Es sind keine gültigen Scanpfade konfiguriert",
       "no_valid_records": "Keine gültigen Mod-Einträge gefunden",
       "record_not_found": "Mod-Eintrag nicht gefunden",
       "scan_busy": "Ein Scan läuft bereits",
-      "scan_failed": "Mod-Scan fehlgeschlagen. Überprüfen Sie, ob Spiel-, Workshop- und lokale Mod-Pfade vorhanden und zugänglich sind; Weitere Informationen finden Sie im Systemprotokoll.",
+      "scan_failed": "Mods konnten nicht gescannt werden. Prüfen Sie, ob Spiel-, Workshop- und lokale Mod-Pfade vorhanden und erreichbar sind.",
       "scan_started": "Hintergrundscan gestartet",
       "scanner_not_ready": "Der Scanner ist nicht initialisiert",
       "tags_added": "Schlagworte hinzugefügt",
       "tags_removed": "Tags entfernt",
       "time_updated": "Letzte Operationszeit aktualisiert",
-      "trash_file_failed": "Datei konnte nicht in den Papierkorb verschoben werden ({filename}): {reason}",
+      "trash_file_failed": "Datei konnte nicht in den Papierkorb verschoben werden ({filename}). Prüfen Sie, ob sie verwendet wird oder Rechte fehlen.",
       "type_updated": "Typ aktualisiert",
       "user_data_applied": "{count}-Elemente erfolgreich angewendet",
       "user_data_updated": "Benutzerdaten aktualisiert"
@@ -868,6 +872,7 @@
       "type_or_path_missing": "Pfadtyp oder Pfad ist nicht angegeben",
       "user_data_config_missing": "Im Benutzerdatenpfad {path} fehlt der Ordner Config. Die App erstellt ihn nach dem Speichern oder Aktivieren der Umgebung.",
       "user_data_empty": "Benutzerdatenpfad erforderlich",
+      "user_data_invalid": "Der Benutzerdatenpfad ist ungültig. Prüfen Sie, ob der Pfad korrekt ist.",
       "user_data_mods_config_missing": "Im Benutzerdatenpfad {path} fehlt Config/ModsConfig.xml. Der Pfad ist weiter nutzbar; das Spiel erstellt die Datei beim ersten Schreiben der Konfiguration.",
       "user_data_will_be_created": "Der Benutzerdatenordner {path} existiert nicht, aber der uebergeordnete Ordner ist beschreibbar. Die App erstellt ihn nach dem Speichern oder Aktivieren der Umgebung.",
       "valid": "Pfad ist gueltig: {path}",
@@ -880,15 +885,15 @@
       "auto_detect_partial": "Es wurden nur einige Pfade erkannt. Legen Sie die restlichen Pfade manuell fest."
     },
     "profile": {
-      "activate_failed_fallback": "Wechsel zum Profil {profile_id} fehlgeschlagen; auf Standard zurückgesetzt: {reason}",
-      "activate_failed_fallback_failed": "Der Wechsel zum Profil {profile_id} ist fehlgeschlagen, und das Zurücksetzen auf die Standardeinstellungen ist ebenfalls fehlgeschlagen: {reason}; Fallback-Fehler: {fallback_error}",
+      "activate_failed_fallback": "Wechsel zu Profil {profile_id} fehlgeschlagen. Es wurde auf default zurückgesetzt.",
+      "activate_failed_fallback_failed": "Wechsel zu Profil {profile_id} fehlgeschlagen, und auch der Rückfall auf default ist fehlgeschlagen. Prüfen Sie Profilpfade und Rechte der Konfigurationsdatei.",
       "activated": "Auf Profil umgestellt: {profile_id}",
       "context_missing": "Umgebungskonfigurationskontext fehlt",
       "context_not_initialized": "Die aktuelle Umgebung ist nicht initialisiert",
       "context_not_specified": "Umgebung ist nicht angegeben",
-      "create_failed": "Das Profil konnte nicht erstellt werden. Überprüfen Sie den Profilnamen, die Pfadeinstellungen und die Dateiberechtigungen. Einzelheiten finden Sie im Systemprotokoll.",
+      "create_failed": "Profil konnte nicht erstellt werden. Prüfen Sie Profilnamen, Pfadkonfiguration und Dateirechte.",
       "created": "Profil erstellt",
-      "delete_failed": "Das Profil konnte nicht gelöscht werden. Stellen Sie sicher, dass keine laufenden Aufgaben vorhanden sind. Einzelheiten finden Sie im Systemprotokoll.",
+      "delete_failed": "Profil konnte nicht gelöscht werden. Prüfen Sie, ob für dieses Profil keine Aufgabe läuft.",
       "deleted": "Profil gelöscht",
       "id_missing": "Profil-ID ist nicht angegeben",
       "launch_mode": {
@@ -906,7 +911,7 @@
       "steam_shortcut_registered": "Steam-Verknüpfungskonfiguration geschrieben",
       "steam_shortcut_same_install": "Diese Umgebung verwendet die gleiche ausführbare Spieldatei wie die Standardumgebung, sodass keine Steam-Nicht-Steam-Verknüpfungsregistrierung erforderlich ist",
       "steam_shortcut_unsupported_platform": "Diese Plattform unterstützt das automatische Schreiben von Steam-Nicht-Steam-Verknüpfungen nicht. Verwenden Sie eine normale Desktop-Verknüpfung oder fügen Sie sie manuell in Steam hinzu.",
-      "update_failed": "Das Profil konnte nicht aktualisiert werden. Überprüfen Sie die Pfadeinstellungen und Dateiberechtigungen. Einzelheiten finden Sie im Systemprotokoll.",
+      "update_failed": "Profil konnte nicht aktualisiert werden. Prüfen Sie Pfadkonfiguration und Dateirechte.",
       "updated": "Einstellungen aktualisiert"
     },
     "recommendation": {
@@ -923,10 +928,10 @@
     },
     "settings": {
       "save_done": "Einstellungen gespeichert",
-      "save_failed": "Einstellungen konnten nicht gespeichert werden. Überprüfen Sie die Einstellungen, Pfadberechtigungen und ob die Konfigurationsdatei beschreibbar ist; Weitere Informationen finden Sie im Systemprotokoll.",
-      "secret_clear_failed": "Das gespeicherte Geheimnis konnte nicht gelöscht werden. Stellen Sie sicher, dass auf diesem Computer sicherer Speicher verfügbar ist, und versuchen Sie es erneut. Weitere Informationen finden Sie im Systemprotokoll.",
+      "save_failed": "Einstellungen konnten nicht gespeichert werden. Prüfen Sie Konfigurationsinhalt, Pfadrechte und ob die Konfigurationsdatei beschreibbar ist.",
+      "secret_clear_failed": "Gespeicherter Schlüssel konnte nicht gelöscht werden. Prüfen Sie, ob der lokale sichere Speicher verfügbar ist, und versuchen Sie es erneut.",
       "secret_cleared": "Geheimnis geklärt",
-      "secret_reveal_failed": "Das gespeicherte Geheimnis konnte nicht gelesen werden. Stellen Sie sicher, dass auf diesem Computer sicherer Speicher verfügbar ist, und versuchen Sie es erneut. Weitere Informationen finden Sie im Systemprotokoll.",
+      "secret_reveal_failed": "Gespeicherter Schlüssel konnte nicht gelesen werden. Prüfen Sie, ob der lokale sichere Speicher verfügbar ist, und versuchen Sie es erneut.",
       "update_failed": "Die Einstellungen konnten nicht aktualisiert werden"
     },
     "sort": {
@@ -953,7 +958,7 @@
         "waiting_ready_message": "Steam ist gestartet und wartet darauf, verfügbar zu werden. Wenn es zu lange dauert, prüfen Sie, ob Steam bei der Anmeldung oder Initialisierung hängen bleibt.",
         "waiting_ready_title": "Warten auf Steam"
       },
-      "status_probe_failed": "Fehler beim Überprüfen des Steam-Status: {reason}",
+      "status_probe_failed": "Steam-Status konnte nicht geprüft werden. Prüfen Sie Steam-Client, Anmeldestatus und Pfadkonfiguration.",
       "subscribe_submitted": "Abonnementantrag an Steam gesendet.",
       "unsubscribe_submitted": "Abmeldeantrag an Steam gesendet",
       "workshop_details_loaded": "Workshop-Details geladen",
@@ -995,18 +1000,19 @@
       },
       "todds_found": "Todds ausführbare Datei gefunden",
       "tool_download_started": "Die Aufgabe zum Herunterladen des Tools wurde gestartet",
-      "tool_ready": "Werkzeug ist fertig"
+      "tool_ready": "Werkzeug ist fertig",
+      "tool_unavailable": "Texturtool ist derzeit nicht verfügbar. Prüfen Sie Tool-Konfiguration, Downloadstatus oder Dateirechte."
     },
     "theme": {
-      "delete_failed": "Das Benutzerdesign konnte nicht gelöscht werden. Überprüfen Sie, ob die Theme-Datei verwendet wird oder aufgrund von Berechtigungen nicht gelöscht werden kann. Weitere Informationen finden Sie im Systemprotokoll.",
+      "delete_failed": "Benutzerthema konnte nicht gelöscht werden. Prüfen Sie, ob die Themendatei verwendet wird oder Löschrechte fehlen.",
       "deleted": "Thema gelöscht",
-      "load_failed": "Benutzerthemen konnten nicht gelesen werden. Überprüfen Sie, ob auf die Designdatei zugegriffen werden kann. Weitere Informationen finden Sie im Systemprotokoll.",
+      "load_failed": "Benutzerthema konnte nicht geladen werden. Prüfen Sie, ob die Themendatei erreichbar ist.",
       "not_found": "Thema nicht gefunden",
-      "save_failed": "Das Benutzerthema konnte nicht gespeichert werden. Überprüfen Sie den Theme-Inhalt und die Dateischreibberechtigungen. Weitere Informationen finden Sie im Systemprotokoll.",
+      "save_failed": "Benutzerthema konnte nicht gespeichert werden. Prüfen Sie Themeninhalt und Schreibrechte.",
       "saved": "Thema gespeichert"
     },
     "translation": {
-      "document_failed": "Die Übersetzung ist fehlgeschlagen. Überprüfen Sie die Übersetzungsdiensteinstellungen, die Netzwerkverbindung und die Zielsprache. Einzelheiten finden Sie im Systemprotokoll.",
+      "document_failed": "Übersetzung fehlgeschlagen. Prüfen Sie Übersetzungsdienst, Netzwerkverbindung und Zielsprache.",
       "document_invalid": "Ungültige Übersetzungsanfrage. Überprüfen Sie den zu übersetzenden Text, die Zielsprache und die Einstellungen des Übersetzungsdienstes.",
       "empty_result": "Der Übersetzer hat keine gültige Übersetzung zurückgegeben",
       "target_language_required": "Zielsprache ist erforderlich"
@@ -1052,14 +1058,14 @@
       "developer_metadata_invalid": "Ungültige Workshop-Entwicklermetadatenparameter. Überprüfen Sie die Metadaten, die Element-ID Workshop und den Schlüssel Steam Web API und versuchen Sie es dann erneut.",
       "id_missing": "Es wurde kein gültiges Workshop ID angegeben",
       "id_unrecognized": "Der Workshop ID für die aktuelle Seite konnte nicht identifiziert werden",
-      "install_source_map_failed": "Installationsquellen konnten nicht gelesen werden. Prüfen Sie, ob die externe Workshop-Datenbank vollständig ist. Einzelheiten finden Sie im Systemprotokoll.",
+      "install_source_map_failed": "Installationsquellen konnten nicht gelesen werden. Prüfen Sie, ob die externe Workshop-Datenbank vollständig ist.",
       "invalid_id": "Workshop ID ist erforderlich oder hat ein ungültiges Format",
       "invalid_package_id": "Ungültige Paket-ID",
       "invalid_workshop_id": "Ungültiges Workshop ID",
       "no_replacement_suggestion": "Mod {package_id} hat keinen Ersatzvorschlag",
       "no_translatable_detail": "Für diesen Workshop-Artikel ist weder ein Titel noch eine Beschreibung zur Übersetzung verfügbar",
-      "package_detail_map_failed": "Fehler beim Lesen der Workshop-Zuordnungsdetails. Prüfen Sie, ob die externe Workshop-Datenbank vollständig ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "publish_failed": "Die Workshop-Datei konnte nicht veröffentlicht werden. Überprüfen Sie den Steam-Anmeldestatus, die Netzwerkverbindung, die Dateiberechtigungen und das Workshop-Formular. Einzelheiten finden Sie im Systemprotokoll.",
+      "package_detail_map_failed": "Workshop-Zuordnungsdetails konnten nicht gelesen werden. Prüfen Sie, ob die externe Workshop-Datenbank vollständig ist.",
+      "publish_failed": "Workshop-Datei konnte nicht veröffentlicht werden. Prüfen Sie Steam-Anmeldung, Netzwerkverbindung, Dateirechte und Workshop-Formular.",
       "publish_invalid": "Ungültige Workshop-Dateiveröffentlichungsparameter. Überprüfen Sie das Workshop-Formular, die Dateipfade und den Steam Web-API-Schlüssel und versuchen Sie es dann erneut.",
       "same_author_failed": "Es konnten keine Werke desselben Autors abgerufen werden. Überprüfen Sie die Netzwerkverbindung oder den Status der externen Workshop-Datenbank und versuchen Sie es erneut.",
       "same_author_invalid": "Ungültige Anfrage für Autorenwerke. Überprüfen Sie die Autoreninformationen, Filter oder den Steam Web API-Schlüssel und versuchen Sie es erneut.",
@@ -1069,11 +1075,11 @@
       "steam_detail_unavailable": "Dieses Mod-Detail konnte nicht von Steam erhalten werden",
       "subscribe_check_failed": "Die Abonnementberechtigung konnte nicht überprüft werden. Stellen Sie sicher, dass Steam angemeldet ist, das Netzwerk verfügbar ist und auf das Element Workshop weiterhin zugegriffen werden kann.",
       "subscribe_check_invalid": "Ungültige Anfrage zur Überprüfung der Abonnementberechtigung. Überprüfen Sie den Anmeldestatus von Workshop ID, Steam oder den Schlüssel Steam Web API und versuchen Sie es erneut.",
-      "translation_clear_failed": "Der Workshop-Übersetzungscache konnte nicht geleert werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
+      "translation_clear_failed": "Workshop-Übersetzungscache konnte nicht bereinigt werden. Versuchen Sie es später erneut.",
       "translation_clear_invalid": "Ungültige Parameter für die Bereinigung des Übersetzungscache Workshop. Überprüfen Sie Workshop ID und die Zielsprache und versuchen Sie es dann erneut.",
-      "translation_failed": "Workshop-Detailübersetzung fehlgeschlagen. Überprüfen Sie die Übersetzungsdiensteinstellungen, AI-Einstellungen oder Netzwerkverbindung. Einzelheiten finden Sie im Systemprotokoll.",
+      "translation_failed": "Workshop-Details konnten nicht übersetzt werden. Prüfen Sie Übersetzungsdienst, AI-Konfiguration oder Netzwerkverbindung.",
       "translation_invalid": "Ungültige Workshop-Detailübersetzungsparameter. Stellen Sie sicher, dass der Inhalt dieses Elements übersetzbar ist, und überprüfen Sie die Einstellungen für die Zielsprache und den Übersetzungsdienst.",
-      "update_file_failed": "Die Workshop-Datei konnte nicht aktualisiert werden. Überprüfen Sie den Steam-Anmeldestatus, die Netzwerkverbindung, die Dateiberechtigungen und das Workshop-Formular. Einzelheiten finden Sie im Systemprotokoll.",
+      "update_file_failed": "Workshop-Datei konnte nicht aktualisiert werden. Prüfen Sie Steam-Anmeldung, Netzwerkverbindung, Dateirechte und Workshop-Formular.",
       "update_file_invalid": "Ungültige Parameter für die Aktualisierung der Workshop-Datei. Überprüfen Sie das Workshop-Formular, die Dateipfade und den Steam Web-API-Schlüssel und versuchen Sie es dann erneut.",
       "update_key_value_tags_failed": "Fehler beim Aktualisieren der Workshop-Schlüsselwert-Tags. Stellen Sie sicher, dass das aktuelle Konto dieses Element verwalten kann, und überprüfen Sie die Netzwerkverbindung.",
       "update_key_value_tags_invalid": "Ungültige Workshop-Schlüsselwert-Tag-Parameter. Überprüfen Sie die Tags, die Workshop-Artikel-ID und den Steam Web-API-Schlüssel und versuchen Sie es dann erneut.",
@@ -1102,6 +1108,7 @@
       "transfer_action_move": "Mods verschieben",
       "transfer_done": "{count}-Mods erfolgreich übertragen.",
       "transfer_failed_suffix": "{count} ist fehlgeschlagen.",
+      "transfer_item_failed": "Verarbeitung fehlgeschlagen. Prüfen Sie Quellordner, Zielordner und Dateirechte.",
       "transfer_preparing": "Vorbereitung auf {action}...",
       "transfer_running": "{action}: {name}",
       "transfer_source_missing": "Die angegebenen Quelldateien wurden nicht gefunden"
@@ -1126,7 +1133,7 @@
   },
   "browser": {
     "api": {
-      "call_failed": "App API-Aufruf fehlgeschlagen. Die Laufzeitumgebung, Pfadberechtigungen oder der interne Status sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll.",
+      "call_failed": "Backend-Aufruf fehlgeschlagen. Laufzeitumgebung, Pfadrechte oder interner Status sind möglicherweise vorübergehend nicht verfügbar.",
       "method_missing": "Die angeforderte App API existiert nicht. Aktualisieren Sie die Seite oder starten Sie die App neu und versuchen Sie es erneut."
     },
     "session": {
@@ -1139,7 +1146,7 @@
     },
     "workshop": {
       "error": {
-        "load_failed": "Seite konnte nicht geladen werden: {reason}",
+        "load_failed": "Seite konnte nicht geladen werden. Prüfen Sie Netzwerkverbindung und Proxy-Einstellungen oder versuchen Sie es später erneut.",
         "missing_url": "Es wurde keine Ziel-URL der Workshop-Seite angegeben",
         "unsupported_url": "Hier können nur Steam Workshop-Seiten als Proxy verwendet werden"
       },
@@ -1176,6 +1183,9 @@
     },
     "file_search": {
       "start": "Dateisuche starten"
+    },
+    "github": {
+      "subscribe_install_source": "Git-Quelle abonnieren"
     },
     "group": {
       "add_mods": "Mods zur Gruppe hinzufügen",
@@ -1359,9 +1369,6 @@
       "workshop_details_by_package": "Rufen Sie Workshop-Details nach Paket-ID ab",
       "workshop_relation": "Holen Sie sich {label}",
       "workshop_search": "Workshop-Suche"
-    },
-    "github": {
-      "subscribe_install_source": "[UNTRANSLATED] 订阅 Git 来源"
     }
   },
   "command": {
@@ -2070,6 +2077,23 @@
     "log_panel": {
       "collapse_details": "Details ausblenden",
       "empty_filtered": "Keine Protokolle entsprechen den aktuellen Filtern.",
+      "error_fallback": "Der Vorgang ist fehlgeschlagen. Versuchen Sie es später erneut.",
+      "error_label": {
+        "access_denied": "Zugriff eingeschränkt",
+        "auth_expired": "Anmeldung abgelaufen",
+        "auth_failed": "Anmeldung fehlgeschlagen",
+        "connection_failed": "Verbindung fehlgeschlagen",
+        "model_not_found": "Modell nicht gefunden",
+        "not_found": "Ressource nicht gefunden",
+        "param_unsupported": "Parameter nicht unterstützt",
+        "permission_denied": "Nicht genug Berechtigungen",
+        "proxy_failed": "Proxy-Fehler",
+        "rate_limited": "Anfrage begrenzt",
+        "request_invalid": "Ungültige Anfrage",
+        "response_format": "Antwort nicht kompatibel",
+        "service_unavailable": "Dienst nicht verfügbar",
+        "timeout": "Anfrage abgelaufen"
+      },
       "expand_details": "Details erweitern",
       "expand_full_log": "Vollständiges Protokoll erweitern",
       "live_mode": "Live-Modus",
@@ -2552,8 +2576,8 @@
       }
     },
     "prompt_queue": {
-      "bulk_failed": "{label} ist fehlgeschlagen. Überprüfen Sie die Netzwerkverbindung und die Dateiberechtigungen oder versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "item_failed": "Die Verarbeitung ist fehlgeschlagen. Überprüfen Sie die Netzwerkverbindung und die Dateiberechtigungen oder versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
+      "bulk_failed": "{label} fehlgeschlagen. Prüfen Sie Netzwerkverbindung und Dateirechte oder versuchen Sie es später erneut.",
+      "item_failed": "Verarbeitung fehlgeschlagen. Prüfen Sie Netzwerkverbindung und Dateirechte oder versuchen Sie es später erneut.",
       "submitted": "Eingereicht",
       "system_title": "Systemhinweis"
     },
@@ -2979,36 +3003,77 @@
   },
   "errors": {
     "ai": {
+      "access_denied": "Der AI-Dienst hat den Zugriff verweigert. Prüfen Sie Kontorechte, Modellzugriff, Kontingent und regionale Einschränkungen.",
       "api_key_required": "Das aktuelle Protokoll erfordert einen API-Schlüssel.",
+      "assistant_failed": "AI-Assistentenanfrage fehlgeschlagen",
+      "auth_expired": "AI-Anmeldetoken oder API Key ist abgelaufen. Geben Sie den Schlüssel neu ein, aktualisieren Sie das Token oder melden Sie sich beim Dienst neu an.",
+      "auth_failed": "Der API Key ist ungültig oder wird vom Dienst nicht akzeptiert. Prüfen Sie Schlüssel, Base URL und Modellkonfiguration.",
       "config_incomplete": "Die KI-Konfiguration ist unvollständig. Bitte überprüfen Sie die Einstellungen.",
       "config_save_failed": "Die AI-Konfiguration konnte nicht gespeichert werden. Überprüfen Sie den Konfigurationsinhalt, den geheimen Speicherstatus und die Schreibberechtigungen für die Konfigurationsdatei.",
       "disabled": "KI ist nicht aktiviert. Aktivieren Sie AI in den Einstellungen und schließen Sie zunächst die Modellkonfiguration ab.",
       "model_capability_load_failed": "Die Funktionen des KI-Modells konnten nicht geladen werden. Sie können das Modell weiterhin manuell konfigurieren, aber der Argumentationsmodus und die API-Kompatibilität erfordern möglicherweise eine manuelle Bestätigung.",
+      "model_not_found": "Modell oder Schnittstellenpfad wurde nicht gefunden. Prüfen Sie Modellname, Base URL und Schnittstellenadresse.",
       "models_load_failed": "Die AI-Modellliste konnte nicht geladen werden. Stellen Sie sicher, dass der Modelldienst ausgeführt wird, die Basis-URL erreichbar ist, der API-Schlüssel gültig ist und die Proxy-Einstellungen korrekt sind.",
-      "providers_load_failed": "AI-Protokollliste konnte nicht geladen werden. Lokale Konfigurations- oder AI-Definitionsdateien sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll."
+      "param_unsupported": "Das aktuelle Modell akzeptiert einige erweiterte Parameter nicht. Leeren Sie erweiterte Parameter wie temperature oder wechseln Sie in den automatischen Kompatibilitätsmodus.",
+      "providers_load_failed": "AI-Protokollliste konnte nicht geladen werden. Lokale Konfiguration oder AI-Definitionsdateien sind möglicherweise vorübergehend nicht verfügbar.",
+      "rate_limited": "Zu viele AI-Anfragen oder unzureichendes Kontingent. Versuchen Sie es später erneut oder prüfen Sie Kontingent und Limits.",
+      "request_failed": "AI-Anfrage wurde nicht abgeschlossen. Prüfen Sie Modellkonfiguration, Netzwerkverbindung und Dienststatus und versuchen Sie es erneut.",
+      "request_invalid": "AI-Anfrageparameter sind ungültig. Prüfen Sie Modellname, Base URL, Schnittstellenmodus und erweiterte Parameter.",
+      "response_format": "Der AI-Dienst hat ein inkompatibles Format zurückgegeben. Prüfen Sie, ob Base URL, Schnittstellenmodus und Modellprotokoll zusammenpassen.",
+      "routing_failed": "Die aktuelle Proxy-Schnittstelle kann dieses Modell nicht richtig weiterleiten. Prüfen Sie Modellname und Modellzuordnung im Proxy-Dienst oder wechseln Sie den Schnittstellenmodus.",
+      "service_unavailable": "Der AI-Dienst ist vorübergehend nicht verfügbar. Versuchen Sie es später erneut oder prüfen Sie den Modelldienststatus."
     },
     "backup": {
-      "list_failed": "Sicherungsdateien konnten nicht abgerufen werden. Überprüfen Sie, ob auf den Backup-Ordner zugegriffen werden kann. Einzelheiten finden Sie im Systemprotokoll.",
-      "pick_save_dir_failed": "Der Speicherordner konnte nicht ausgewählt werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
+      "list_failed": "Backup-Dateien konnten nicht geladen werden. Prüfen Sie, ob der Backup-Ordner erreichbar ist.",
+      "pick_save_dir_failed": "Speicherordner konnte nicht ausgewählt werden. Versuchen Sie es später erneut.",
       "rename_failed": "Das Backup konnte nicht umbenannt werden. Überprüfen Sie den Sicherungsnamen, den Dateinutzungsstatus und die Ordnerberechtigungen.",
-      "save_as_failed": "Das Backup konnte nicht als Kopie gespeichert werden. Überprüfen Sie die Berechtigungen des Zielordners und den Speicherplatz. Einzelheiten finden Sie im Systemprotokoll."
+      "save_as_failed": "Backup konnte nicht unter neuem Namen gespeichert werden. Prüfen Sie Zielordnerrechte und Speicherplatz."
     },
     "clipboard": {
       "text_unsupported": "Diese Umgebung unterstützt das Kopieren von Text in die Zwischenablage nicht."
     },
+    "common": {
+      "unknown_operation_unfinished": "Der Vorgang wurde nicht abgeschlossen. Prüfen Sie Netzwerkverbindung, Konfiguration und Pfadrechte oder versuchen Sie es später erneut."
+    },
+    "database": {
+      "file_missing": "Die Datenbankdatei fehlt. Starten Sie die App neu oder setzen Sie die Datenbank zurück.",
+      "integrity_failed": "Datenbankprüfung fehlgeschlagen. Versuchen Sie, die Datenbank zu reparieren oder zurückzusetzen.",
+      "repair_apply_failed": "Reparierte Datenbank konnte nicht angewendet werden. Prüfen Sie Dateirechte der Datenbank und Speicherplatz.",
+      "repair_marker_load_failed": "Datenbank-Reparaturprotokoll konnte nicht gelesen werden. Versuchen Sie es später erneut oder reparieren Sie die Datenbank manuell.",
+      "schema_incomplete": "Die Datenbankstruktur ist unvollständig. Versuchen Sie, die Datenbank zu reparieren oder zurückzusetzen.",
+      "validation_failed": "Datenbankdatei konnte nicht geprüft werden. Prüfen Sie, ob die Datei beschädigt ist oder Rechte fehlen."
+    },
     "dialog": {
-      "file_save_failed": "Die Speicherdatei konnte nicht ausgewählt werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "file_select_failed": "Die Datei konnte nicht ausgewählt werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "folder_select_failed": "Der Ordner konnte nicht ausgewählt werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll."
+      "file_save_failed": "Speicherdatei konnte nicht ausgewählt werden. Versuchen Sie es später erneut.",
+      "file_select_failed": "Datei konnte nicht ausgewählt werden. Versuchen Sie es später erneut.",
+      "folder_select_failed": "Ordner konnte nicht ausgewählt werden. Versuchen Sie es später erneut."
+    },
+    "download": {
+      "failed": "Download fehlgeschlagen. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen, Verfügbarkeit der Downloadquelle und Zielordnerrechte."
     },
     "fallback": {
-      "operation_unfinished": "Der Vorgang wurde nicht abgeschlossen. Netzwerk, Pfadberechtigungen, Konfiguration oder Laufzeitumgebung sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll.",
-      "operation_warning": "Der Vorgang wurde abgeschlossen, aber einige Punkte erfordern Aufmerksamkeit. Einzelheiten finden Sie im Systemprotokoll.",
-      "work_failed": "{workname} wurde nicht abgeschlossen. Netzwerk, Pfadberechtigungen, Konfiguration oder Laufzeitumgebung sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll."
+      "operation_unfinished": "Der Vorgang wurde nicht abgeschlossen. Netzwerkverbindung, Pfadrechte, Konfiguration oder Laufzeitumgebung sind möglicherweise vorübergehend nicht verfügbar.",
+      "operation_warning": "Der Vorgang wurde abgeschlossen, aber einige Punkte müssen geprüft werden.",
+      "work_failed": "{workname} wurde nicht abgeschlossen. Netzwerkverbindung, Pfadrechte, Konfiguration oder Laufzeitumgebung sind möglicherweise vorübergehend nicht verfügbar."
+    },
+    "files": {
+      "delete_failed": "Löschen fehlgeschlagen ({filename}): Prüfen Sie, ob die Datei verwendet wird oder Rechte fehlen.",
+      "localize_failed": "Lokalisierung fehlgeschlagen. Prüfen Sie Quellordner, Zielordner und Dateirechte.",
+      "mod_process_failed": "Mod {label} konnte nicht verarbeitet werden: Prüfen Sie, ob Dateien verwendet werden oder Rechte fehlen."
     },
     "game": {
-      "launch_failed": "Das Spiel konnte nicht gestartet werden. Überprüfen Sie den Spielpfad, die Startargumente und den aktuellen Linkstatus der Umgebung. Einzelheiten finden Sie im Systemprotokoll.",
+      "launch_failed": "Spiel konnte nicht gestartet werden. Prüfen Sie Spielpfad, Startparameter und Verknüpfungen des aktuellen Profils.",
       "launch_warning_resolve_failed": "Die Startbestätigung konnte nicht verarbeitet werden. Versuchen Sie es erneut oder aktualisieren Sie zunächst den aktuellen Umgebungsstatus."
+    },
+    "git": {
+      "access_denied": "Kein Zugriff auf die Repository-Ressource. Prüfen Sie Anmeldestatus, Kontorechte oder Sichtbarkeit des Repositorys.",
+      "auth_failed": "Repository-Dienst konnte nicht authentifiziert werden. Prüfen Sie Anmeldestatus, Zugriffstoken oder Repository-Rechte.",
+      "download_failed": "Git-Repository konnte nicht heruntergeladen werden. Prüfen Sie Repository-Adresse, Branch, Netzwerkverbindung und Zugriffsrechte.",
+      "install_failed": "Git-Repository konnte nicht installiert werden. Prüfen Sie Repository-Adresse, Branch und Zugriffsrechte.",
+      "not_found": "Repository-Ressource, Branch oder Downloadadresse wurde nicht gefunden. Prüfen Sie Link, Branch und Zugriffsrechte.",
+      "rate_limited": "Zu viele Git-Ressourcenanfragen. Versuchen Sie es später erneut oder prüfen Sie Zugriffslimits.",
+      "request_failed": "Git-Ressourcenanfrage fehlgeschlagen. Prüfen Sie Repository-Adresse, Netzwerkverbindung und Zugriffsrechte.",
+      "service_unavailable": "Repository-Dienst ist vorübergehend nicht verfügbar. Versuchen Sie es später erneut oder prüfen Sie den Zielseitenstatus."
     },
     "group": {
       "create_failed": "Die Gruppe konnte nicht erstellt werden. Überprüfen Sie, ob der Gruppenname gültig ist, und versuchen Sie es später erneut."
@@ -3030,27 +3095,32 @@
     },
     "load_order": {
       "export_failed": "Die Ladereihenfolge konnte nicht exportiert werden. Überprüfen Sie die Berechtigungen des Zielordners, den Speicherplatz und den aktuellen Status der aktiven Liste.",
-      "export_pick_path_failed": "Der Exportpfad konnte nicht ausgewählt werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "inactive_save_failed": "Die Reihenfolge der inaktiven Listen konnte nicht gespeichert werden. Überprüfen Sie, ob die Umgebungskonfigurationsdatei beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "read_failed": "Die Ladereihenfolge konnte nicht gelesen werden. Stellen Sie sicher, dass die Spielkonfigurationsdatei vorhanden und zugänglich ist. Einzelheiten finden Sie im Systemprotokoll.",
+      "export_pick_path_failed": "Exportpfad konnte nicht ausgewählt werden. Versuchen Sie es später erneut.",
+      "inactive_save_failed": "Reihenfolge der deaktivierten Liste konnte nicht gespeichert werden. Prüfen Sie, ob die Profilkonfigurationsdatei beschreibbar ist.",
+      "parse_failed": "Sortierdatei konnte nicht gelesen werden. Prüfen Sie, ob das Dateiformat korrekt ist.",
+      "read_failed": "Ladereihenfolge konnte nicht gelesen werden. Prüfen Sie, ob die Spielkonfigurationsdatei vorhanden und erreichbar ist.",
       "save_failed": "Die Ladereihenfolge konnte nicht gespeichert werden. Stellen Sie sicher, dass das Spiel die Konfigurationsdatei nicht verwendet, und überprüfen Sie die Schreibberechtigungen für den Ordner.",
       "share_export_failed": "Der Freigabecode konnte nicht generiert werden. Überprüfen Sie, ob die aktuell aktive Liste gültig ist, oder versuchen Sie es später erneut.",
       "share_import_failed": "Der Freigabecode konnte nicht analysiert werden. Stellen Sie sicher, dass der Freigabecode vollständig und korrekt formatiert ist."
     },
     "log": {
-      "files_load_failed": "Die Liste der Protokolldateien konnte nicht geladen werden. Stellen Sie sicher, dass auf den Protokollordner zugegriffen werden kann. Einzelheiten finden Sie im Systemprotokoll.",
+      "files_load_failed": "Log-Dateiliste konnte nicht geladen werden. Prüfen Sie, ob der Log-Ordner erreichbar ist.",
       "page_read_failed": "Protokolle konnten nicht gelesen werden. Die Datei wurde möglicherweise bereinigt, verschoben oder ist nicht verfügbar. Aktualisieren Sie die Protokollliste und versuchen Sie es erneut."
     },
     "maintenance": {
       "external_data_check_failed": "Die Überprüfung externer Bibliotheksaktualisierungen ist fehlgeschlagen. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen und den Status der externen Datenquelle.",
       "managed_mod_check_failed": "Die Überprüfung der Manager-Mod-Updates ist fehlgeschlagen. Überprüfen Sie die Netzwerkverbindung, den Git/Steam-Dienststatus und die Berechtigungen für lokale Ordner.",
       "steamcmd_mod_check_failed": "Fehler beim Überprüfen der SteamCMD-Mod-Updates. Überprüfen Sie die Netzwerkverbindung, den SteamCMD-Status und den Manager-Mod-Ordner.",
-      "tools_check_failed": "Die Werkzeugumgebung konnte nicht überprüft werden. Überprüfen Sie die Berechtigungen des Werkzeugordners und die Netzwerkverbindung. Einzelheiten finden Sie im Systemprotokoll."
+      "tools_check_failed": "Tool-Umgebung konnte nicht geprüft werden. Prüfen Sie Tool-Ordnerrechte und Netzwerkverbindung."
+    },
+    "mod_package": {
+      "export_failed": "Mod-Paketexport fehlgeschlagen. Prüfen Sie Zielordnerrechte, Speicherplatz und Zustand der zu exportierenden Mod-Dateien.",
+      "import_failed": "Mod-Paketimport fehlgeschlagen. Prüfen Sie, ob die Datei vollständig ist, der Zielordner beschreibbar ist und genug Speicherplatz vorhanden ist."
     },
     "mod_residue": {
-      "overview_failed": "Die Liste der deinstallierten Rückstände konnte nicht gelesen werden. Überprüfen Sie die aktuellen Umgebungspfade und Dateiberechtigungen. Einzelheiten finden Sie im Systemprotokoll.",
-      "whitelist_add_failed": "Das Hinzufügen zur Whitelist ist fehlgeschlagen. Überprüfen Sie die Berechtigungen der Konfigurationsdatei und versuchen Sie es erneut. Einzelheiten finden Sie im Systemprotokoll.",
-      "whitelist_remove_failed": "Das Entfernen aus der Whitelist ist fehlgeschlagen. Überprüfen Sie die Berechtigungen der Konfigurationsdatei und versuchen Sie es erneut. Einzelheiten finden Sie im Systemprotokoll."
+      "overview_failed": "Liste der Deinstallationsreste konnte nicht gelesen werden. Prüfen Sie Pfade des aktuellen Profils und Dateirechte.",
+      "whitelist_add_failed": "Zur Whitelist hinzufügen fehlgeschlagen. Prüfen Sie die Rechte der Konfigurationsdatei und versuchen Sie es erneut.",
+      "whitelist_remove_failed": "Aus Whitelist entfernen fehlgeschlagen. Prüfen Sie die Rechte der Konfigurationsdatei und versuchen Sie es erneut."
     },
     "mod_settings": {
       "overview_failed": "Die Übersicht über die Mod-Einstellungen konnte nicht gelesen werden. Stellen Sie sicher, dass auf den Benutzerdatenordner des Spiels zugegriffen werden kann, und überprüfen Sie die aktuellen Umgebungspfadeinstellungen.",
@@ -3059,21 +3129,33 @@
     },
     "mods": {
       "color_update_failed": "Die Mod-Farbe konnte nicht festgelegt werden. Der vorherige Zustand wurde beibehalten. Bitte versuchen Sie es später noch einmal.",
-      "conflict_resolve_failed": "Scankonflikte konnten nicht verarbeitet werden. Aktualisieren Sie die Mod-Liste und versuchen Sie es erneut. Einzelheiten finden Sie im Systemprotokoll.",
+      "conflict_resolve_failed": "Scan-Konflikte konnten nicht verarbeitet werden. Aktualisieren Sie die Mod-Liste und versuchen Sie es erneut.",
       "conflict_resolve_failed_with_reason": "Scan-Konflikte konnten nicht verarbeitet werden: {reason}. Überprüfen Sie, ob die zugehörigen Mod-Dateien noch vorhanden sind, oder aktualisieren Sie sie und versuchen Sie es später erneut.",
-      "delete_failed": "Der Mod konnte nicht gelöscht werden. Prüfen Sie, ob Dateien verwendet werden und ob Pfadberechtigungen gültig sind. Einzelheiten finden Sie im Systemprotokoll.",
-      "enable_disable_failed": "Mods konnten nicht im Stapel aktiviert oder deaktiviert werden. Der aktuelle Listenstand wurde nach Möglichkeit beibehalten. Aktualisieren Sie die Datei und versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "interlock_heal_failed": "Die Mod-Verriegelung konnte nicht repariert werden. Aktualisieren Sie die Liste und versuchen Sie es erneut. Einzelheiten finden Sie im Systemprotokoll.",
+      "delete_failed": "Mod konnte nicht gelöscht werden. Prüfen Sie, ob Dateien verwendet werden und die Pfadrechte stimmen.",
+      "enable_disable_failed": "Mods konnten nicht gesammelt aktiviert oder deaktiviert werden. Der aktuelle Listenstatus wurde soweit möglich beibehalten. Aktualisieren Sie später und versuchen Sie es erneut.",
+      "interlock_heal_failed": "Mod-Verknüpfung konnte nicht repariert werden. Aktualisieren Sie die Liste und versuchen Sie es erneut.",
       "interlock_link_failed": "Die Mod-Verriegelung konnte nicht erstellt werden. Stellen Sie sicher, dass die ausgewählten Mods noch in der aktuellen Liste sind, und versuchen Sie es später erneut.",
-      "interlock_missing_load_failed": "Fehlende Interlock-Elemente konnten nicht geladen werden. Aktualisieren Sie die Liste und versuchen Sie es erneut. Einzelheiten finden Sie im Systemprotokoll.",
+      "interlock_missing_load_failed": "Fehlende Verknüpfungseinträge konnten nicht gelesen werden. Aktualisieren Sie die Liste und versuchen Sie es erneut.",
       "interlock_unlink_failed": "Die Mod-Verriegelung konnte nicht entfernt werden. Stellen Sie sicher, dass die ausgewählten Mods noch in der aktuellen Liste sind, und versuchen Sie es später erneut.",
-      "issue_ignore_update_failed": "Der Status des ignorierten Problems konnte nicht aktualisiert werden. Aktualisieren Sie die Liste und versuchen Sie es später erneut. Einzelheiten finden Sie im Systemprotokoll.",
+      "issue_ignore_update_failed": "Ignorierstatus des Problems konnte nicht aktualisiert werden. Aktualisieren Sie die Liste später und versuchen Sie es erneut.",
       "tags_add_failed": "Mod-Tags konnten nicht hinzugefügt werden. Der vorherige Zustand wurde beibehalten. Bitte versuchen Sie es später noch einmal.",
       "tags_remove_failed": "Mod-Tags konnten nicht entfernt werden. Der vorherige Zustand wurde beibehalten. Bitte versuchen Sie es später noch einmal.",
-      "time_update_failed": "Beim letzten Vorgang konnte der Mod nicht aktualisiert werden. Überprüfen Sie den Datenbankstatus und versuchen Sie es erneut. Einzelheiten finden Sie im Systemprotokoll.",
+      "time_update_failed": "Letzte Mod-Aktionszeit konnte nicht aktualisiert werden. Prüfen Sie den Datenbankstatus und versuchen Sie es erneut.",
       "type_update_failed": "Der Mod-Typ konnte nicht festgelegt werden. Der vorherige Zustand wurde beibehalten. Bitte versuchen Sie es später noch einmal.",
-      "user_data_batch_update_failed": "Mod-Benutzerdaten konnten nicht im Batch aktualisiert werden. Aktualisieren Sie die Liste und versuchen Sie es später erneut. Einzelheiten finden Sie im Systemprotokoll.",
-      "user_data_update_failed": "Mod-Benutzerdaten konnten nicht aktualisiert werden. Aktualisieren Sie die Liste und versuchen Sie es später erneut. Einzelheiten finden Sie im Systemprotokoll."
+      "user_data_batch_update_failed": "Mod-Benutzerdaten konnten nicht gesammelt aktualisiert werden. Aktualisieren Sie die Liste später und versuchen Sie es erneut.",
+      "user_data_update_failed": "Mod-Benutzerdaten konnten nicht aktualisiert werden. Aktualisieren Sie die Liste später und versuchen Sie es erneut."
+    },
+    "network": {
+      "access_denied": "Der Zieldienst hat die Anfrage abgelehnt. Prüfen Sie Anmeldestatus, Zugriffsrechte oder Anfragekonfiguration.",
+      "auth_failed": "Authentifizierung beim Zieldienst fehlgeschlagen. Prüfen Sie Anmeldestatus, Zugriffstoken oder Anfragekonfiguration.",
+      "connection_failed": "Verbindung zum Zieldienst fehlgeschlagen. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen oder Dienststatus.",
+      "not_found": "Zielressource wurde nicht gefunden oder die Adresse ist ungültig. Prüfen Sie Link und Parameter oder versuchen Sie es später erneut.",
+      "proxy_auth": "Der Proxy-Server erfordert Anmeldung. Prüfen Sie Proxy-Benutzername und Passwort oder deaktivieren Sie einen nicht verfügbaren Proxy.",
+      "proxy_failed": "Proxy-Verbindung fehlgeschlagen. Prüfen Sie Proxy-Adresse, Port, Benutzername und Passwort oder deaktivieren Sie den Proxy vorübergehend.",
+      "rate_limited": "Zu viele Anfragen oder Dienstlimit erreicht. Versuchen Sie es später erneut.",
+      "request_invalid": "Ungültige Anfrageparameter. Prüfen Sie Eingaben oder Konfiguration und versuchen Sie es erneut.",
+      "service_unavailable": "Der Zieldienst ist vorübergehend nicht verfügbar. Versuchen Sie es später erneut oder prüfen Sie den Dienststatus.",
+      "timeout": "Netzwerkanfrage abgelaufen. Prüfen Sie Netzwerkverbindung und Proxy-Einstellungen oder versuchen Sie es später erneut."
     },
     "path": {
       "batch_check_failed": "Pfade konnten nicht im Batch überprüft werden. Stellen Sie sicher, dass Pfade vorhanden sind und die Berechtigungen den Zugriff zulassen, und versuchen Sie es später erneut.",
@@ -3085,39 +3167,43 @@
       "read_text_failed": "Die Textdatei konnte nicht gelesen werden. Stellen Sie sicher, dass die Datei vorhanden ist, ihre Codierung lesbar ist und die Größenbeschränkung nicht überschreitet."
     },
     "profile": {
+      "import_failed": "Profil konnte nicht importiert werden. Prüfen Sie Dateiinhalt, Pfadrechte und aktuelle Konfiguration.",
       "shortcut_create_failed": "Die Umgebungsverknüpfung konnte nicht erstellt werden. Überprüfen Sie die Berechtigungen für Desktop-Ordner und die Einstellungen für den Umgebungspfad."
     },
     "recommendation": {
       "export_failed": "Der Empfehlungsexport ist fehlgeschlagen. Überprüfen Sie die Berechtigungen des Zielordners, den Speicherplatz und den Status der ausgewählten Mod-Daten."
     },
     "rule": {
-      "dynamic_delete_failed": "Die dynamische Regel konnte nicht gelöscht werden. Überprüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "dynamic_save_failed": "Die dynamische Regel konnte nicht gespeichert werden. Überprüfen Sie den Regelinhalt und die Regeldateiberechtigungen. Einzelheiten finden Sie im Systemprotokoll.",
-      "dynamic_toggle_failed": "Die dynamische Regel konnte nicht umgeschaltet werden. Überprüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "global_enable_failed": "Der Regelwechsel konnte nicht gespeichert werden. Überprüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "import_failed": "Regelpaket konnte nicht importiert werden. Stellen Sie sicher, dass die Datei vollständig und korrekt formatiert ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "language_pack_owner_failed": "Die Regeln für den Eigentümer des Sprachpakets konnten nicht gespeichert werden. Überprüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "mod_toggle_failed": "Der Status der Mod-Regel konnte nicht umgeschaltet werden. Überprüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "source_priority_failed": "Die Priorität der Regelquelle konnte nicht gespeichert werden. Überprüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "user_mod_delete_failed": "Die Benutzerregel konnte nicht gelöscht werden. Überprüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "user_mod_position_failed": "Die Festpositionsregel konnte nicht gespeichert werden. Überprüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist. Einzelheiten finden Sie im Systemprotokoll.",
-      "user_mod_save_failed": "Die Benutzerregel konnte nicht gespeichert werden. Überprüfen Sie den Regelinhalt und die Regeldateiberechtigungen. Einzelheiten finden Sie im Systemprotokoll."
+      "dynamic_delete_failed": "Dynamische Regel konnte nicht gelöscht werden. Prüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist.",
+      "dynamic_save_failed": "Dynamische Regel konnte nicht gespeichert werden. Prüfen Sie Regelinhalt und Rechte der Regeldatei.",
+      "dynamic_toggle_failed": "Dynamische Regel konnte nicht umgeschaltet werden. Prüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist.",
+      "global_enable_failed": "Regelschalter konnte nicht gespeichert werden. Prüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist.",
+      "import_failed": "Regelpaket konnte nicht importiert werden. Prüfen Sie, ob die Datei vollständig und korrekt formatiert ist.",
+      "language_pack_owner_failed": "Sprachpaket-Zuordnungsregel konnte nicht gespeichert werden. Prüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist.",
+      "mod_toggle_failed": "Mod-Regelstatus konnte nicht umgeschaltet werden. Prüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist.",
+      "source_priority_failed": "Priorität der Regelquellen konnte nicht gespeichert werden. Prüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist.",
+      "user_mod_delete_failed": "Benutzerregel konnte nicht gelöscht werden. Prüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist.",
+      "user_mod_position_failed": "Regel für feste Position konnte nicht gespeichert werden. Prüfen Sie, ob die Regelkonfigurationsdatei beschreibbar ist.",
+      "user_mod_save_failed": "Benutzerregel konnte nicht gespeichert werden. Prüfen Sie Regelinhalt und Rechte der Regeldatei."
     },
     "rules": {
       "add_user_rule_failed": "Die Benutzerregel konnte nicht hinzugefügt werden. Der Regelinhalt ist möglicherweise ungültig oder die lokale Regeldatei ist möglicherweise vorübergehend nicht beschreibbar. Die Regeln wurden neu geladen.",
-      "fetch_failed_retry": "Regeln konnten nicht abgerufen werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "update_community_failed": "Die Community-Regeldatenbank konnte nicht aktualisiert werden. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen und die lokalen Dateiberechtigungen. Einzelheiten finden Sie im Systemprotokoll."
+      "fetch_failed_retry": "Regeln konnten nicht geladen werden. Versuchen Sie es später erneut.",
+      "update_community_failed": "Community-Regeldatenbank konnte nicht aktualisiert werden. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen und lokale Schreibrechte."
     },
     "secret": {
       "reveal_failed_preserve": "Das gespeicherte Geheimnis konnte nicht gelesen werden. Der gespeicherte Wert bleibt beim Speichern erhalten."
     },
     "sort": {
-      "auto_sort_failed": "Die automatische Sortierung ist fehlgeschlagen. Überprüfen Sie die Regelkonfiguration und den aktuellen Status der aktiven Liste. Einzelheiten finden Sie im Systemprotokoll.",
-      "smart_insert_failed": "Smart Insert ist fehlgeschlagen. Überprüfen Sie die Ziel-Mod-IDs, die aktuelle aktive Liste und die Regelkonfiguration. Einzelheiten finden Sie im Systemprotokoll."
+      "auto_sort_failed": "Automatische Sortierung fehlgeschlagen. Prüfen Sie Regelkonfiguration und Status der aktuellen aktiven Liste.",
+      "smart_insert_failed": "Intelligentes Einfügen fehlgeschlagen. Prüfen Sie Ziel-Mod-ID, aktuelle aktive Liste und Regelkonfiguration."
     },
     "steam": {
-      "client_status_failed": "Der Steam-Status konnte nicht abgerufen werden. Stellen Sie sicher, dass der Steam-Client normal starten kann. Einzelheiten finden Sie im Systemprotokoll.",
-      "process_status_failed": "Der Prozessstatus Steam konnte nicht abgerufen werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
+      "client_status_failed": "Steam-Status konnte nicht abgerufen werden. Prüfen Sie, ob der Steam-Client normal gestartet werden kann.",
+      "launch_client_failed": "Steam-Client konnte nicht gestartet werden. Prüfen Sie Steam-Installationspfad und aktuelle Rechte.",
+      "launch_url_failed": "Spiel konnte nicht über Steam URL gestartet werden. Prüfen Sie Steam-Client und Systemzuordnung für das Protokoll.",
+      "launch_url_not_accepted": "Das System hat die Steam URL-Startanfrage nicht angenommen",
+      "process_status_failed": "Steam-Prozessstatus konnte nicht abgerufen werden. Versuchen Sie es später erneut.",
       "shortcut_finalize_failed": "Die Steam-Verknüpfung konnte nicht bestätigt werden. Stellen Sie sicher, dass Steam ausgeführt und angemeldet ist, und versuchen Sie es später erneut.",
       "shortcut_register_failed": "Das Schreiben der Steam-Verknüpfungskonfiguration ist fehlgeschlagen. Stellen Sie sicher, dass Steam geschlossen ist oder die Konfigurationsdatei nicht verwendet wird, und überprüfen Sie die Dateiberechtigungen.",
       "subscribe_api_not_ready": "Die Abonnementanfrage wurde nicht gesendet. Stellen Sie sicher, dass Steam ausgeführt und angemeldet ist, und versuchen Sie es dann erneut.",
@@ -3130,29 +3216,45 @@
       "workshop_status_failed": "Der Installationsstatus von Steam Workshop konnte nicht überprüft werden. Stellen Sie sicher, dass Steam ausgeführt und angemeldet ist, und versuchen Sie es später erneut."
     },
     "steamcmd": {
+      "acf_read_failed": "SteamCMD-Workshop-Datensätze konnten nicht gelesen werden. Prüfen Sie Dateirechte oder versuchen Sie es später erneut.",
       "download_start_failed": "Der SteamCMD-Download konnte nicht gestartet werden. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen, den SteamCMD-Status und die Berechtigungen für den Zielordner.",
-      "not_ready": "SteamCMD ist nicht bereit. Schließen Sie die Installation oder Reparatur in der Tool-Umgebungsprüfung ab und versuchen Sie dann erneut, den Download durchzuführen."
+      "execution_failed": "SteamCMD-Ausführung fehlgeschlagen. Prüfen Sie Steam-Installation, Netzwerkverbindung und Downloadumgebung.",
+      "execution_failed_with_target": "SteamCMD-Ausführung fehlgeschlagen. Prüfen Sie Steam-Installation, Netzwerkverbindung und Rechte des Downloadordners.",
+      "not_ready": "SteamCMD ist nicht bereit. Schließen Sie die Installation oder Reparatur in der Tool-Umgebungsprüfung ab und versuchen Sie dann erneut, den Download durchzuführen.",
+      "ssl_init_failed": "Initialisierung wegen Netzwerk- oder Proxy-Konfiguration fehlgeschlagen. Prüfen Sie die SteamCMD-Downloadumgebung.",
+      "timeout": "SteamCMD-Ausführung ist abgelaufen. Versuchen Sie es später erneut."
+    },
+    "system": {
+      "invalid_input": "Ungültige Anfrageparameter. Prüfen Sie Konfiguration, Eingaben oder Schnittstellenkompatibilität.",
+      "permission_denied": "Nicht genug Rechte für Datei oder Ordner. Schließen Sie belegende Programme oder prüfen Sie die Rechte des Zielpfads."
     },
     "task": {
       "texture_cancel_failed": "Die Texturaufgabe konnte nicht abgebrochen werden. Möglicherweise ist die Aufgabe bereits abgeschlossen. Status später aktualisieren."
     },
     "texture": {
-      "analysis_start_failed": "Die Texturanalyse konnte nicht gestartet werden. Überprüfen Sie die ausgewählten Mod-Pfade, den Tool-Status und die Dateiberechtigungen. Einzelheiten finden Sie im Systemprotokoll.",
-      "exclusions_load_failed": "Texturausschlussregeln konnten nicht gelesen werden. Prüfen Sie, ob auf die Konfigurationsdatei zugegriffen werden kann. Einzelheiten finden Sie im Systemprotokoll.",
-      "file_exclusion_save_failed": "Die Dateitextur-Ausschlussregel konnte nicht gespeichert werden. Überprüfen Sie die Berechtigungen der Konfigurationsdatei. Einzelheiten finden Sie im Systemprotokoll.",
-      "history_load_failed": "Der Verlauf der Texturaufgabe konnte nicht gelesen werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "mod_exclusion_save_failed": "Die Mod-Textur-Ausschlussregel konnte nicht gespeichert werden. Überprüfen Sie die Berechtigungen der Konfigurationsdatei. Einzelheiten finden Sie im Systemprotokoll.",
+      "analysis_start_failed": "Texturanalyse konnte nicht gestartet werden. Prüfen Sie ausgewählte Mod-Pfade, Tool-Status und Dateirechte.",
+      "exclusions_load_failed": "Textur-Ausschlussregeln konnten nicht gelesen werden. Prüfen Sie, ob die Konfigurationsdatei erreichbar ist.",
+      "file_exclusion_save_failed": "Textur-Ausschlussregeln für Dateien konnten nicht gespeichert werden. Prüfen Sie die Rechte der Konfigurationsdatei.",
+      "history_load_failed": "Textur-Aufgabenverlauf konnte nicht gelesen werden. Versuchen Sie es später erneut.",
+      "mod_exclusion_save_failed": "Textur-Ausschlussregeln für Mods konnten nicht gespeichert werden. Prüfen Sie die Rechte der Konfigurationsdatei.",
       "no_analysis_targets": "Keine Mods zur Analyse ausgewählt",
       "no_residue_targets": "Es wurden keine deinstallierten Rest-Mod-Ordner gefunden, die {format} enthalten",
       "no_valid_mod_paths": "Für die ausgewählten Mods wurden keine gültigen physischen Pfade gefunden",
-      "prepare_tool_failed": "Das Texturwerkzeug konnte nicht vorbereitet werden. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen, die Tool-Verzeichnisberechtigungen und den Speicherplatz. Einzelheiten finden Sie im Systemprotokoll.",
-      "status_failed": "Der Status des Texturwerkzeugs konnte nicht gelesen werden. Überprüfen Sie den Werkzeugpfad und die Laufzeitumgebung. Einzelheiten finden Sie im Systemprotokoll.",
-      "task_start_failed": "Die Texturaufgabe konnte nicht gestartet werden. Überprüfen Sie ausgewählte Mod-Pfade, Tool-Status, Speicherplatz und Dateiberechtigungen. Einzelheiten finden Sie im Systemprotokoll.",
-      "tool_download_failed": "Der Download des Textur-Tools konnte nicht gestartet werden. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen und die Schreibberechtigungen für das Toolverzeichnis. Einzelheiten finden Sie im Systemprotokoll."
+      "prepare_tool_failed": "Texturtool konnte nicht vorbereitet werden. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen, Tool-Ordnerrechte und Speicherplatz.",
+      "status_failed": "Status des Texturtools konnte nicht gelesen werden. Prüfen Sie Tool-Pfad und Laufzeitumgebung.",
+      "task_start_failed": "Texturaufgabe konnte nicht gestartet werden. Prüfen Sie ausgewählte Mod-Pfade, Tool-Status, Speicherplatz und Dateirechte.",
+      "tool_download_failed": "Download des Texturtools konnte nicht gestartet werden. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen und Schreibrechte des Tool-Ordners."
     },
     "update": {
-      "action_failed": "Die Aktualisierungsaktion konnte nicht ausgeführt werden. Überprüfen Sie die Netzwerkverbindung, den Speicherplatz und die Berechtigungen für den Installationsordner. Einzelheiten finden Sie im Systemprotokoll.",
-      "check_failed": "Die Suche nach Updates ist fehlgeschlagen. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen und den Status der Update-Quelle und versuchen Sie es später erneut."
+      "action_failed": "Update-Aktion fehlgeschlagen. Prüfen Sie Netzwerkverbindung, Speicherplatz und Rechte des Installationsordners.",
+      "check_failed": "Die Suche nach Updates ist fehlgeschlagen. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen und den Status der Update-Quelle und versuchen Sie es später erneut.",
+      "download_failed": "Updatepaket konnte nicht heruntergeladen werden. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen und Speicherplatz und versuchen Sie es später erneut.",
+      "failed": "Softwareupdate fehlgeschlagen. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen und Zielordnerrechte.",
+      "fallback_source_invalid": "Ersatz-Updatequelle ist ungültig",
+      "fallback_source_start_failed": "Ersatz-Updatequelle konnte nicht gestartet werden. Prüfen Sie Update-Adresse, Netzwerkverbindung und Zielordnerrechte.",
+      "no_available_update": "Kein Update verfügbar",
+      "source_check_failed": "Updatequelle konnte nicht geprüft werden. Prüfen Sie Netzwerkverbindung und Proxy-Einstellungen oder versuchen Sie es später erneut.",
+      "source_download_url_missing": "Für {source_name} ist keine Downloadadresse für ein Updatepaket verfügbar"
     },
     "uri": {
       "open_failed": "Der aktuelle Link konnte nicht über das System geöffnet werden. Stellen Sie sicher, dass die Systemprotokollzuordnung funktioniert, oder versuchen Sie es später erneut."
@@ -4006,8 +4108,14 @@
         "sync_mod_core_data": "Kern-Mod-Daten synchronisieren",
         "sync_mod_data": "Mod-Daten synchronisieren"
       },
+      "ai_task": {
+        "failed": "AI-Aufgabe fehlgeschlagen. Prüfen Sie Modellkonfiguration, Netzwerkverbindung und API Key."
+      },
       "backend_popup": {
-        "title": "Systemmeldung"
+        "failed": "Der Vorgang wurde nicht abgeschlossen. Versuchen Sie es später erneut.",
+        "info": "Der Vorgang wurde abgeschlossen.",
+        "title": "Systemmeldung",
+        "warning": "Der Vorgang muss bestätigt werden."
       },
       "database": {
         "cleanup_done": "Ungültige Daten bereinigt. Aktualisierung der Liste.",
@@ -4015,17 +4123,17 @@
       },
       "download": {
         "complete": "Download abgeschlossen: {filename}",
-        "failed": "{filename}-Download fehlgeschlagen. Überprüfen Sie Ihre Netzwerkverbindung, Proxy-Einstellungen, Download-Quelle oder Festplattenberechtigungen. Einzelheiten finden Sie im Systemprotokoll."
+        "failed": "{filename} konnte nicht heruntergeladen werden. Ursache können Netzwerkverbindung, Proxy-Einstellungen, eine nicht verfügbare Downloadquelle oder fehlende Datenträgerrechte sein."
       },
       "error": {
         "cancel_task_failed": "Die Aufgabe konnte nicht abgebrochen werden. Möglicherweise ist die Aufgabe bereits abgeschlossen oder der App-Dienst ist möglicherweise nicht verfügbar. Aktualisieren Sie den Status und versuchen Sie es erneut.",
-        "game_status_failed": "Der Spielstartstatus ist abnormal. Der Spielpfad, die Startargumente oder die Laufzeitumgebung sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll.",
-        "initialize_failed": "Die Initialisierung ist fehlgeschlagen. Konfiguration, Datenbank oder Laufzeitumgebung sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll.",
+        "game_status_failed": "Spielstartstatus ist ungewöhnlich. Spielpfad, Startparameter oder Laufzeitumgebung sind möglicherweise vorübergehend nicht verfügbar.",
+        "initialize_failed": "Initialisierung fehlgeschlagen. Konfiguration, Datenbank oder Laufzeitumgebung sind möglicherweise vorübergehend nicht verfügbar.",
         "refresh_data_failed": "Daten konnten nicht aktualisiert werden. Der Scanner, die Datenbank oder das aktuelle Profil sind möglicherweise nicht verfügbar. Versuchen Sie es später noch einmal.",
         "refresh_mod_enrichment_failed": "Die Aktualisierung der Listenmarkierungen ist fehlgeschlagen. Einige Problemhinweise, Ersetzungen oder der Online-Kompatibilitätsstatus werden derzeit möglicherweise nicht angezeigt.",
-        "resume_failed": "Die Schnittstelle konnte nicht wiederhergestellt werden. Aktualisieren Sie die Benutzeroberfläche oder starten Sie die App neu und versuchen Sie es dann erneut. Einzelheiten finden Sie im Systemprotokoll.",
-        "sync_mod_core_data_failed": "Die Kern-Mod-Daten konnten nicht synchronisiert werden. Datenbank, Scanergebnisse oder Laufzeitumgebung sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll.",
-        "sync_mod_data_failed": "Mod-Daten konnten nicht synchronisiert werden. Datenbank, Scanergebnisse oder Laufzeitumgebung sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll."
+        "resume_failed": "Oberfläche konnte nicht wiederhergestellt werden. Aktualisieren Sie die Oberfläche oder starten Sie die App neu.",
+        "sync_mod_core_data_failed": "Mod-Kerndaten konnten nicht synchronisiert werden. Datenbank, Scanergebnisse oder Laufzeitumgebung sind möglicherweise vorübergehend nicht verfügbar.",
+        "sync_mod_data_failed": "Mod-Daten konnten nicht synchronisiert werden. Datenbank, Scanergebnisse oder Laufzeitumgebung sind möglicherweise vorübergehend nicht verfügbar."
       },
       "game": {
         "launching_profile": "Starten der Umgebung „{profile}“. Warten auf die Bestätigung des Spielvorgangs."
@@ -4043,6 +4151,7 @@
           "message": "Diese Umgebung muss bestätigt werden, bevor der Start fortgesetzt werden kann.",
           "title": "Vor dem Start bestätigen"
         },
+        "launch_success": "Spiel wurde gestartet.",
         "link_sync_failed": {
           "message": "Die Mod-Link-Synchronisierung konnte nicht abgeschlossen werden. Das Spiel wurde diesmal nicht gestartet.",
           "title": "Mod-Link-Synchronisierung fehlgeschlagen"
@@ -4088,17 +4197,17 @@
         "cancelled": "{title} abgebrochen",
         "complete_log": "{title} abgeschlossen. {success} war erfolgreich, {failed} ist fehlgeschlagen.",
         "complete_success": "{title} abgeschlossen: {count}-Mods",
-        "complete_with_errors": "{title} abgeschlossen. {success} war erfolgreich, {failed} ist fehlgeschlagen. Siehe Systemprotokoll für fehlerhafte Elemente."
+        "complete_with_errors": "{title} abgeschlossen: {success} erfolgreich, {failed} fehlgeschlagen."
       },
       "mod_export": {
         "cancelled": "Mod-Paket-Export abgebrochen",
-        "failed": "Der Export des Mod-Pakets ist fehlgeschlagen. Überprüfen Sie die Exportordnerberechtigungen, den Speicherplatz und den ausgewählten Mod-Status. Einzelheiten finden Sie im Systemprotokoll.",
+        "failed": "Mod-Paketexport fehlgeschlagen. Prüfen Sie Exportordnerrechte, Speicherplatz und Zustand der zu exportierenden Mods.",
         "title": "Mod-Paket-Export"
       },
       "mod_import": {
         "cancelled": "Import des Mod-Pakets abgebrochen",
         "complete": "Der Import des Mod-Pakets ist abgeschlossen",
-        "failed": "Der Import des Mod-Pakets ist fehlgeschlagen. Überprüfen Sie, ob die Datei vollständig ist, sowie die Berechtigungen für den Zielordner und den Speicherplatz. Einzelheiten finden Sie im Systemprotokoll."
+        "failed": "Mod-Paketimport fehlgeschlagen. Prüfen Sie, ob die Datei vollständig ist, sowie Zielordnerrechte und Speicherplatz."
       },
       "mod_residue": {
         "check_incomplete": "Die Überprüfung der Deinstallationsreste wurde nicht abgeschlossen. Sie können die Rückstandsbereinigung später manuell öffnen."
@@ -4122,7 +4231,7 @@
         "failed": "Steam-Download fehlgeschlagen. Stellen Sie sicher, dass Steam angemeldet und online ist, oder überprüfen Sie die Proxy-Einstellungen und den Status des Workshop-Elements."
       },
       "steamcmd_download": {
-        "failed": "SteamCMD-Download fehlgeschlagen. Überprüfen Sie die Netzwerkverbindung, Proxy-Einstellungen, Quellverfügbarkeit und Zielordnerberechtigungen. Einzelheiten finden Sie im Systemprotokoll."
+        "failed": "SteamCMD-Download fehlgeschlagen. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen, Verfügbarkeit der Downloadquelle und Zielordnerrechte."
       },
       "suspend": {
         "cleared_scan_tasks": "Die vor der Unterbrechung verbliebenen Scan-Aufgaben wurden gelöscht. Bei Bedarf erneut aktualisieren."
@@ -4142,6 +4251,9 @@
         "save_unavailable": "Das Speichern von Benutzergebietsschemadateien ist in der aktuellen Laufzeit nicht verfügbar.",
         "saved": "Übersetzung gespeichert und neu geladen."
       }
+    },
+    "profile": {
+      "import_success": "Import erfolgreich"
     }
   },
   "secret": {
@@ -4160,6 +4272,13 @@
       "staged_database_repair_applied": "Die bereitgestellte Reparaturkopie der Datenbank wurde angewendet",
       "startup_database_auto_repair_failed": "Die automatische Reparatur der Datenbank wurde beim Start nicht abgeschlossen",
       "startup_database_auto_repaired": "Die Datenbank wurde beim Start automatisch repariert"
+    },
+    "database": {
+      "auto_repair_failed": "Automatische Datenbankreparatur fehlgeschlagen. Reparieren Sie die Datenbank möglichst bald manuell. Die App startet weiter, aber einige lokale Daten sind möglicherweise vorübergehend nicht verfügbar.",
+      "auto_repaired": "Datenbankproblem erkannt. Die App hat es automatisch repariert und startet weiter.",
+      "failed_source_stage_failed": "Die fehlerhafte Datenbankdatei konnte nicht verarbeitet werden. Sichern Sie zuerst den Ordner data.",
+      "staged_repair_applied": "Die zuvor vorbereitete Datenbankreparatur wurde angewendet.",
+      "staged_repair_skipped": "Eine unvollständige Reparatur wurde gefunden, konnte aber nicht verwendet werden und wurde übersprungen."
     },
     "message": {
       "database_load_failed": "Die Datenbank konnte nicht geladen werden. Einige Funktionen sind möglicherweise nicht verfügbar.",
@@ -4198,18 +4317,24 @@
   "tasks": {
     "ai": {
       "cancelled": "AI-Aufgabe abgebrochen",
+      "chunk_failed": "AI-Blockverarbeitung fehlgeschlagen. Versuchen Sie es später erneut.",
       "fallback_title": "AI-Aufgabe",
       "finished": "Reasoning beendet. Erfolgreich: {success}, fehlgeschlagen: {failed}",
       "reasoning_progress": "Reasoning... [Runde {attempt}] Erfolgreich: {success}/{total}",
       "truncated_suffix": "...(gekürzt)"
     },
+    "download": {
+      "running": "Download läuft..."
+    },
     "error": {
-      "not_completed": "Die Aufgabe wurde nicht erfolgreich abgeschlossen. Überprüfen Sie Ihre Netzwerkverbindung und Dateiberechtigungen oder versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
+      "not_completed": "Die Aufgabe wurde nicht erfolgreich abgeschlossen. Prüfen Sie Netzwerkverbindung und Dateirechte oder versuchen Sie es später erneut.",
       "timeout": "Zeitüberschreitung bei der Aufgabe"
     },
     "file_delete": {
+      "complete": "Löschen abgeschlossen: {success_count} erfolgreich, {error_count} fehlgeschlagen",
       "completed": "Löschen abgeschlossen: {success_count} erfolgreich, {failed_count} fehlgeschlagen",
       "database_cleanup_failed": "Bereinigung der Datenbankeinträge fehlgeschlagen",
+      "deleting": "Wird gelöscht: {filename}",
       "deleting_path": "Wird gelöscht: {filename}",
       "prepare_mods": "{count} Mods werden zum Löschen vorbereitet...",
       "title": "Mod-Dateien löschen"
@@ -4218,7 +4343,7 @@
       "building_roots": "Vorbereiten von {stage} {processed}/{total}: {name}",
       "cancelled": "Suchaufgabe abgebrochen",
       "cancelled_in_stage": "Suchaufgabe wurde während {stage} abgebrochen",
-      "failed_with_reason": "Suche fehlgeschlagen: {reason}",
+      "failed": "Suche fehlgeschlagen. Prüfen Sie Suchpfad, ripgrep-Status und Dateizugriff.",
       "finished": "Suche mit {count}-Treffer abgeschlossen",
       "no_active_profile": "Kein aktives Profil. Die Suche kann nicht ausgeführt werden.",
       "no_task_id": "Keine Aufgaben-ID zurückgegeben",
@@ -4241,6 +4366,11 @@
         "mod_dir": "Mod-Ordner"
       }
     },
+    "github": {
+      "catalog_install_start": "Katalogarchiv erhalten, wird entpackt...",
+      "download_start": "Archiv wird abgerufen",
+      "install_start": "Archiv erhalten, wird entpackt..."
+    },
     "message": {
       "cancelling_request": "Ich versuche, die Aufgabe zu stoppen ...",
       "processing": "Verarbeitung...",
@@ -4250,8 +4380,27 @@
       "texture_task": "Texturaufgabe"
     },
     "mod_package": {
+      "export": {
+        "cancelled": "Mod-Paketexport wurde abgebrochen",
+        "complete": "Mod-Paketexport abgeschlossen",
+        "manifest": "Manifest wird geschrieben...",
+        "mod_progress": "Mod wird gepackt ({current}/{total}): {name}",
+        "organizing": "Exportinhalt wird vorbereitet...",
+        "prepare": "Mod-Paketexport wird vorbereitet...",
+        "profile_data": "Profildaten werden hinzugefügt...",
+        "unknown_mod": "Unbekannter Mod"
+      },
       "export_preparing": "Export des Mod-Pakets wird vorbereitet...",
       "export_title": "Mod-Paket exportieren",
+      "import": {
+        "cancelled": "Mod-Paketimport wurde abgebrochen",
+        "complete": "Mod-Paketimport abgeschlossen",
+        "mod_progress": "Mod wird importiert ({current}/{total}): {name}",
+        "prepare": "Mod-Paketimport wird vorbereitet...",
+        "profile_progress": "Profildaten werden angewendet ({current}/{total}): {name}",
+        "unknown_mod": "Unbekannter Mod",
+        "unnamed_profile": "Unbenanntes Profil"
+      },
       "import_preparing": "Mod-Paket-Import wird vorbereitet...",
       "import_title": "Mod-Paket importieren"
     },
@@ -4266,9 +4415,8 @@
     "scan": {
       "already_running": "Ein Scan läuft bereits",
       "analyzing_mod": "Analysiert: {name}",
-      "cancelled": "Der Scan wurde vom Benutzer abgebrochen",
       "cancelled_no_changes": "Der Scan wurde vom Benutzer abgebrochen. Es wurden keine Datenbankänderungen vorgenommen.",
-      "failed_with_reason": "Scan fehlgeschlagen: {reason}",
+      "failed": "Scan fehlgeschlagen. Prüfen Sie Suchpfad, Datenbankstatus und Dateirechte und versuchen Sie es erneut.",
       "finished": "Scan abgeschlossen",
       "indexing_files": "Dateien indizieren...",
       "no_valid_paths": "Keine gültigen Pfade",
@@ -4276,10 +4424,26 @@
       "preparing": "Scan wird vorbereitet...",
       "processing_conflicts_runtime": "Konflikte und Laufzeitverknüpfungen werden verarbeitet...",
       "reading_game_info": "Informationen zum Basisspiel werden gelesen...",
+      "start_failed": "Scan konnte nicht gestartet werden. Prüfen Sie Suchpfad, Datenbankstatus und Dateirechte und versuchen Sie es erneut.",
       "title": "Mod-Scan"
     },
     "status": {
       "execution_failed": "Die Aufgabenausführung ist fehlgeschlagen"
+    },
+    "steamcmd": {
+      "download": {
+        "cancelled": "SteamCMD-Download wurde abgebrochen",
+        "complete": "Alle Downloads abgeschlossen ({total})",
+        "failed_items": "Fehlgeschlagene Einträge: {items}",
+        "failed_progress": "SteamCMD-Download fehlgeschlagen ({current}/{total})",
+        "pending_items": "Nicht abgeschlossene Einträge: {items}"
+      },
+      "execution_complete": "Ausführung abgeschlossen",
+      "init": {
+        "cancelled": "SteamCMD-Initialisierung wurde abgebrochen",
+        "complete": "SteamCMD-Initialisierung abgeschlossen",
+        "prepare": "SteamCMD-Initialisierung wird vorbereitet..."
+      }
     },
     "texture": {
       "analysis_completed_elapsed": "Statistik abgeschlossen in {elapsed}",
@@ -4294,18 +4458,31 @@
       "encode_completed": "{output_label}-Generierung abgeschlossen{details}",
       "encode_record_batch": "Aufzeichnen generierter Dateien: Batch {batch_index}/{batch_total} ({scale_label})",
       "encode_start": "Beginn der {output_label}-Generierung",
-      "failed": "Die Texturoptimierung ist fehlgeschlagen",
+      "failed": "Texturoptimierung fehlgeschlagen. Prüfen Sie Tool-Konfiguration, Texturdateien und Rechte des Ausgabeordners.",
+      "failed_title": "Texturoptimierung fehlgeschlagen",
+      "item_failed": "Texturverarbeitung fehlgeschlagen. Prüfen Sie Texturdateien, Tool-Konfiguration und Rechte des Ausgabeordners.",
       "prepare_generate_mod": "Generierung wird vorbereitet: {mod_name}",
       "prepare_task": "Aufgabe wird vorbereitet...",
       "queue_running": "Texturwarteschlange wird ausgeführt...",
       "retry_recoverable": "Wiederholen wiederherstellbarer fehlgeschlagener Elemente",
       "retry_start": "Hauptchargen abgeschlossen; Wiederholen wiederherstellbarer fehlgeschlagener Elemente",
       "scan_cancelled": "Textur-Scan-Aufgabe abgebrochen",
-      "scan_failed": "Textur-Scan-Aufgabe fehlgeschlagen: {reason}",
+      "scan_failed": "Textur-Scan fehlgeschlagen. Prüfen Sie Mod-Pfade, Texturdateien und Tool-Konfiguration.",
+      "scan_failed_title": "Textur-Scan fehlgeschlagen",
       "scanned_mod": "Gescannt {mod_name}",
       "summarize_encode_result": "Zusammenfassendes Generierungsergebnis",
+      "tool_download_start": "todds-Toolpaket wird heruntergeladen",
+      "tool_install_start": "todds-Toolpaket erhalten, wird entpackt...",
       "update_encode_state": "Generierungsstatus wird aktualisiert",
       "write_result": "Ergebnis der Schreibaufgabe"
+    },
+    "title": {
+      "file_delete": "Dateien löschen",
+      "mod_package_export": "Mod-Paket exportieren",
+      "mod_package_import": "Mod-Paket importieren",
+      "steam": "Steam-Aufgabe",
+      "steamcmd_init": "SteamCMD-Initialisierung",
+      "update": "Softwareupdate"
     },
     "type": {
       "ai_task": "Aufgabe zur KI-Generierung",
@@ -4327,6 +4504,12 @@
       "texture_opt_analyze": "Texturanalyse",
       "update": "Software-Update",
       "update_short": "Aktualisieren"
+    },
+    "update": {
+      "current_source": "Aktuelle Quelle",
+      "fallback_source": "Ersatzquelle",
+      "package_ready": "Updatepaket bereit v{version}",
+      "trying_fallback_source": "Download von {failed_source} fehlgeschlagen, {next_name} wird versucht"
     }
   },
   "text_search": {
@@ -4361,6 +4544,7 @@
   "toast": {
     "api": {
       "error": "{workname} fehlgeschlagen:\n{message}",
+      "open_corresponding_log": "Zugehöriges Systemlog anzeigen",
       "success": "{workname} abgeschlossen",
       "warning": "{workname} braucht Aufmerksamkeit:\n{message}"
     },
@@ -4410,17 +4594,24 @@
       "no_file_type": "Wählen Sie mindestens einen Dateityp aus",
       "start_failed": "Dateisuche konnte nicht gestartet werden. Überprüfen Sie, ob auf den aktuellen Umgebungspfad zugegriffen werden kann, oder versuchen Sie es später erneut."
     },
+    "github": {
+      "catalog_deploy_done": "{name} bereitgestellt",
+      "catalog_deploy_failed": "{name} konnte nicht bereitgestellt werden",
+      "deploy_done": "{repo} bereitgestellt",
+      "deploy_failed": "{repo} konnte nicht bereitgestellt werden",
+      "install_source_submitted": "{count} Git-Quellabonnements wurden übermittelt, Download startet."
+    },
     "group": {
-      "add_mods_failed": "Mods konnten der Gruppe nicht hinzugefügt werden. Der Listenstatus wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "content_reorder_failed": "Die Reihenfolge der Gruppeninhalte konnte nicht gespeichert werden. Der Listenstatus wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "create_failed": "Die Gruppe konnte nicht erstellt werden. Der Listenstatus wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "delete_failed": "Die Gruppe konnte nicht gelöscht werden. Der Listenstatus wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
+      "add_mods_failed": "Mods konnten nicht zur Gruppe hinzugefügt werden. Listenstatus wird wiederhergestellt. Versuchen Sie es später erneut.",
+      "content_reorder_failed": "Sortierung in der Gruppe konnte nicht gespeichert werden. Listenstatus wird wiederhergestellt. Versuchen Sie es später erneut.",
+      "create_failed": "Gruppe konnte nicht erstellt werden. Listenstatus wird wiederhergestellt. Versuchen Sie es später erneut.",
+      "delete_failed": "Gruppe konnte nicht gelöscht werden. Listenstatus wird wiederhergestellt. Versuchen Sie es später erneut.",
       "expansion_failed": "Der Gruppenerweiterungsstatus konnte nicht gespeichert werden. Der Listenstatus wurde wiederhergestellt. Versuchen Sie es später noch einmal.",
       "get_failed": "Die Gruppen konnten nicht geladen werden. Die Datenbank oder die aktuelle Umgebung ist möglicherweise nicht verfügbar. Versuchen Sie es später noch einmal.",
-      "remove_mods_failed": "Mods konnten nicht aus der Gruppe entfernt werden. Der Listenstatus wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
+      "remove_mods_failed": "Mods konnten nicht aus der Gruppe entfernt werden. Listenstatus wird wiederhergestellt. Versuchen Sie es später erneut.",
       "rename_duplicate": "Der Gruppenname existiert bereits. Suffix {index} hinzugefügt",
-      "reorder_failed": "Gruppenreihenfolge konnte nicht gespeichert werden. Der Listenstatus wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
-      "update_failed": "Die Gruppe konnte nicht aktualisiert werden. Der Listenstatus wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll."
+      "reorder_failed": "Gruppensortierung konnte nicht gespeichert werden. Listenstatus wird wiederhergestellt. Versuchen Sie es später erneut.",
+      "update_failed": "Gruppe konnte nicht aktualisiert werden. Listenstatus wird wiederhergestellt. Versuchen Sie es später erneut."
     },
     "group_list": {
       "drop": {
@@ -4442,7 +4633,7 @@
       "backup_saved_as": "Backup gespeichert als:\n{path}",
       "disk_changed_handle_conflict": "Die Reihenfolge beim Laden der Festplatte wurde geändert. Lösen Sie zunächst den Konflikt.",
       "empty_share_code": "Es wurde kein gültiger Freigabecode zurückgegeben",
-      "export_failed": "Die Mod-Reihenfolge konnte nicht exportiert werden. Überprüfen Sie die Berechtigungen des Zielordners, den Speicherplatz und die aktuell aktive Liste. Einzelheiten finden Sie im Systemprotokoll.",
+      "export_failed": "Mod-Reihenfolge konnte nicht exportiert werden. Prüfen Sie Zielordnerrechte, Speicherplatz und Status der aktuell aktiven Liste.",
       "exported": "Mod-Reihenfolge exportiert",
       "import_items_removed": "{count} importierte Elemente entfernt",
       "imported_with_warnings": "Importiert mit {count}-Warnungen",
@@ -4454,7 +4645,7 @@
       "runtime_refreshed_unsaved": "Nachdem das Spiel beendet wurde, wurde die Reihenfolge beim Laden der Festplatte aktualisiert und nicht gespeicherte Änderungen wurden in die Vergleichsansicht verschoben.",
       "save_skipped_disk_changed": "Die Reihenfolge beim Laden der Festplatte wurde extern geändert. Speichern wurde übersprungen.",
       "share_code_empty": "Der Freigabecode darf nicht leer sein",
-      "share_code_failed": "Der Freigabecode konnte nicht generiert werden. Überprüfen Sie, ob die aktuell aktive Liste gültig ist, oder versuchen Sie es später erneut. Einzelheiten finden Sie im Systemprotokoll.",
+      "share_code_failed": "Freigabecode konnte nicht erstellt werden. Prüfen Sie, ob die aktuelle aktive Liste gültig ist, oder versuchen Sie es später erneut.",
       "share_code_imported": "Freigabecode importiert"
     },
     "log_panel": {
@@ -4466,7 +4657,7 @@
       "read_failed": "Das Protokoll konnte nicht gelesen werden. Stellen Sie sicher, dass die Datei noch vorhanden ist und nicht von einem anderen Programm gesperrt ist."
     },
     "log_viewer": {
-      "global_scan_failed": "Der globale Protokollscan ist fehlgeschlagen. Die Protokolldatei ist möglicherweise nicht lesbar, zu groß oder die Generierung des KI-Diagnosekontexts ist möglicherweise fehlgeschlagen. Einzelheiten finden Sie im Systemprotokoll.",
+      "global_scan_failed": "Globaler Log-Scan fehlgeschlagen. Log-Dateien sind möglicherweise nicht lesbar, der Inhalt ist zu groß oder der AI-Diagnosekontext konnte nicht erstellt werden.",
       "no_log_file_selected": "Keine Protokolldatei ausgewählt.",
       "scan_complete_notice": "Komprimierung abgeschlossen: {tocCount}-Fehlerzusammenfassungen zu {repeatCount}-Fehlern werden beibehalten; Die aktuelle Nutzung liegt bei {tokenText}.",
       "scanning_all_logs": "Das vollständige Protokoll wird gescannt. Bitte warten Sie.",
@@ -4475,7 +4666,7 @@
     "maintenance": {
       "external_data_failed_summary": "Die Prüfung der externen Bibliothek wurde nicht abgeschlossen: {summary}{remain} ist fehlgeschlagen. Versuchen Sie es später erneut oder überprüfen Sie Ihre Netzwerkumgebung.",
       "external_data_up_to_date": "Prüfung der externen Bibliothek abgeschlossen. Alles ist auf dem neuesten Stand.",
-      "external_data_update_failed": "Externe Bibliotheken konnten nicht aktualisiert werden. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen und die Schreibberechtigungen für lokale Dateien. Einzelheiten finden Sie im Systemprotokoll.",
+      "external_data_update_failed": "Externe Bibliothek konnte nicht aktualisiert werden. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen und lokale Schreibrechte.",
       "git_catalog_refreshed": "Git-Empfehlungen aktualisiert.",
       "git_deploy_started": "Die Aufgabe zur Git-Repository-Bereitstellung wurde gestartet. Beobachten Sie die Statusleiste.",
       "managed_mods_up_to_date": "Manager-Mod-Check abgeschlossen. Alles ist auf dem neuesten Stand.",
@@ -4486,7 +4677,7 @@
     },
     "mod": {
       "auto_sort_done": "Automatische Sortierung abgeschlossen",
-      "auto_sort_failed": "Die automatische Sortierung ist fehlgeschlagen. Regeldaten, die Behandlung fehlender Elemente oder der Sortierer sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll.",
+      "auto_sort_failed": "Automatische Sortierung fehlgeschlagen. Regeldaten, Verarbeitung fehlender Einträge oder Backend-Sortierer sind möglicherweise vorübergehend nicht verfügbar.",
       "auto_sort_rule_warning_intro": "Überprüfe, ob die folgenden Mod-Regeln korrekt sind:",
       "auto_sort_rule_warning_item": "{mod} hat möglicherweise ein Problem mit seiner {type}-Regel: ({target})",
       "batch_add_tags_failed": "Das Batch-Hinzufügen von Tags ist fehlgeschlagen. Der lokale Zustand wurde wiederhergestellt. Versuchen Sie es später noch einmal.",
@@ -4495,11 +4686,11 @@
       "batch_remove_tags_failed": "Batch-Entfernung der Tags ist fehlgeschlagen. Der lokale Zustand wurde wiederhergestellt. Versuchen Sie es später noch einmal.",
       "batch_set_color_failed": "Die Batch-Einstellung der Farbe ist fehlgeschlagen. Der lokale Zustand wurde wiederhergestellt. Versuchen Sie es später noch einmal.",
       "batch_set_type_failed": "Batch-Festlegen des Typs fehlgeschlagen. Der lokale Zustand wurde wiederhergestellt. Versuchen Sie es später noch einmal.",
-      "batch_update_data_failed": "Die Batch-Aktualisierung der Mod-Daten ist fehlgeschlagen. Der lokale Zustand wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
+      "batch_update_data_failed": "Mod-Daten konnten nicht gesammelt aktualisiert werden. Lokaler Status wurde wiederhergestellt. Versuchen Sie es später erneut.",
       "failed_suffix": ", {count} fehlgeschlagen",
       "interlock_all_selected_locked": "Die ausgewählten Mods sind bereits verriegelt",
       "interlock_no_selected_locked": "Die ausgewählten Mods haben keine Verriegelung zum Aufheben",
-      "link_failed": "Mods konnten nicht verknüpft werden. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll.",
+      "link_failed": "Mod-Verknüpfung konnte nicht gesetzt werden. Versuchen Sie es später erneut.",
       "localize_no_workshop_items": "Keine ausgewählten Mods stammen von Workshop",
       "reset_active_list_done": "Aktive Liste wurde zurückgesetzt",
       "reset_active_list_no_base": "Keine offiziellen Mods oder erforderlichen Einträge für das Zurücksetzen gefunden. Prüfe das Spielverzeichnis des aktuellen Profils und die Mod-Scan-Ergebnisse.",
@@ -4509,13 +4700,13 @@
       "scan_done": "Scan abgeschlossen. Gescannte {total}-Mods: {added} hinzugefügt, {updated} aktualisiert, {removed} entfernt, {skipped} bekannt.{extra}",
       "scan_done_with_restore_warning": "Scan abgeschlossen. Gescannte {total}-Mods: {added} hinzugefügt, {updated} aktualisiert, {removed} entfernt, {skipped} bekannt.\n{extra}",
       "scan_external_enabled_count": "{count} extern wieder aktiviert",
-      "scan_failed": "Der Scan ist fehlgeschlagen. Pfadberechtigung, Dateisperre oder Scannerstatus sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll.",
-      "scan_request_failed": "Die Scananforderung ist fehlgeschlagen. Der App-Dienst ist möglicherweise nicht verfügbar oder die aktuellen Umgebungspfade sind möglicherweise ungültig. Einzelheiten finden Sie im Systemprotokoll.",
-      "scan_start_failed": "Scan konnte nicht gestartet werden. Der aktuelle Umgebungspfad ist möglicherweise ungültig, der Scanner wurde möglicherweise nicht initialisiert oder Hintergrundaufgaben sind möglicherweise nicht verfügbar. Einzelheiten finden Sie im Systemprotokoll.",
+      "scan_failed": "Scan fehlgeschlagen. Ursache können Pfadrechte, belegte Dateien oder ein vorübergehend nicht verfügbarer Scannerstatus sein.",
+      "scan_request_failed": "Scan-Anfrage fehlgeschlagen. Das App-Backend ist möglicherweise vorübergehend nicht verfügbar oder die Pfadkonfiguration des aktuellen Profils ist fehlerhaft.",
+      "scan_start_failed": "Scan konnte nicht gestartet werden. Der aktuelle Profilpfad ist möglicherweise ungültig, der Scanner nicht initialisiert oder die Hintergrundaufgabe vorübergehend nicht verfügbar.",
       "scan_strict_restore_failed_count": "{count}-Wiederherstellung ist fehlgeschlagen",
       "scan_strict_restored_count": "{count} erneut deaktiviert",
-      "update_time_failed": "Mod-Betriebszeit konnte nicht aktualisiert werden. Mod-Daten werden neu synchronisiert. Einzelheiten finden Sie im Systemprotokoll.",
-      "update_user_data_failed": "Mod-Benutzerdaten konnten nicht aktualisiert werden. Der lokale Zustand wurde wiederhergestellt. Versuchen Sie es später noch einmal. Einzelheiten finden Sie im Systemprotokoll."
+      "update_time_failed": "Mod-Aktionszeit konnte nicht aktualisiert werden. Mod-Daten werden erneut synchronisiert.",
+      "update_user_data_failed": "Mod-Benutzerdaten konnten nicht aktualisiert werden. Lokaler Status wurde wiederhergestellt. Versuchen Sie es später erneut."
     },
     "mod_alias_review": {
       "no_valid_result": "Für diese Aufgabe liegen noch keine gültigen Ergebnisse zum Anwenden vor",
@@ -4606,7 +4797,7 @@
         "test_failed": "Modelltest fehlgeschlagen. Überprüfen Sie die Modellkonfiguration, die Netzwerkverbindung, die Proxy-Einstellungen und ob der API-Schlüssel verwendbar ist.",
         "test_success": "Modelltest erfolgreich"
       },
-      "apply_failed": "Die Einstellungen konnten nicht angewendet werden. Möglicherweise ist die Konfiguration ungültig, auf einen Pfad kann nicht zugegriffen werden oder die Konfigurationsdatei ist möglicherweise nicht beschreibbar. Einzelheiten finden Sie im Systemprotokoll.",
+      "apply_failed": "Einstellungen konnten nicht angewendet werden. Konfiguration ist möglicherweise ungültig, Pfade sind nicht erreichbar oder die Konfigurationsdatei ist nicht beschreibbar.",
       "data_export": {
         "no_module_selected": "Wählen Sie mindestens ein Datenmodul zum Exportieren aus",
         "no_profile_selected": "Profildaten sind ausgewählt. Wählen Sie mindestens ein Profil aus."
@@ -4664,6 +4855,8 @@
       "url_sources_opened": "Externe {count}-Quellen geöffnet. Ein dedizierter Download-Flow kann später hinzugefügt werden."
     },
     "texture": {
+      "tool_download_done": "Texturtool heruntergeladen: {path}",
+      "tool_download_failed": "Texturtool-Download fehlgeschlagen",
       "tool_download_started_watch_status": "Todds-Download gestartet. Beobachten Sie die Statusleiste.",
       "tool_ready_no_download": "Todds ist bereit; Kein Download erforderlich"
     },
@@ -4676,7 +4869,7 @@
       "install_cancelled": "Update-Installation abgebrochen.",
       "partial_no_update": "Einige Update-Quellen sind nicht verfügbar. Aus den verfügbaren Quellen wurde keine neue Version gefunden.",
       "recommend_scan": "Führen Sie einen vollständigen Scan durch, um die Kernfunktionen der neuen Version zu übernehmen.",
-      "start_failed": "Das Update konnte nicht gestartet werden. Überprüfen Sie Ihre Netzwerkverbindung, Proxy-Einstellungen und Installationsverzeichnisberechtigungen. Einzelheiten finden Sie im Systemprotokoll.",
+      "start_failed": "Update konnte nicht gestartet werden. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen und Rechte des Installationsordners.",
       "up_to_date": "Sie sind bereits auf der neuesten Version."
     },
     "workspace": {
@@ -4685,7 +4878,7 @@
       "collection_invalid_id": "Die Sammlungs-ID oder der Link ist ungültig. Geben Sie eine numerische ID ein oder fügen Sie einen Steam-Sammlungslink mit der ID=xxx ein.",
       "collection_load_failed": "Die Sammlung konnte nicht geladen werden. Netzwerk, Steam-Dienst oder lokaler Cache sind möglicherweise nicht verfügbar. Versuchen Sie es später noch einmal.",
       "collection_parsing": "Sammlungsdaten analysieren und verbinden.",
-      "collection_remove_failed": "Sammlung konnte nicht entfernt werden. Der App-Dienst ist möglicherweise nicht verfügbar oder es konnten keine lokalen Datensätze geschrieben werden. Einzelheiten finden Sie im Systemprotokoll.",
+      "collection_remove_failed": "Sammlung konnte nicht entfernt werden. Das Backend ist möglicherweise vorübergehend nicht verfügbar oder lokale Einträge können nicht geschrieben werden.",
       "collection_removed": "Sammlung aus den Aufzeichnungen entfernt",
       "collection_search_need_key": "Für die Sammlungssuche ist ein Steam Web API-Schlüssel erforderlich",
       "enable_workshop_enhanced_first": "Aktivieren Sie die erweiterten Workshop-Informationen und geben Sie zuerst den Steam Web API-Schlüssel in den Einstellungen ein",
@@ -4697,9 +4890,6 @@
       "workshop_retranslated": "Beschreibung neu übersetzt",
       "workshop_translated": "Beschreibung übersetzt",
       "workshop_translation_cleared": "Übersetzung gelöscht"
-    },
-    "github": {
-      "install_source_submitted": "[UNTRANSLATED] 已提交 {count} 个 Git 来源订阅，正在开始下载。"
     }
   },
   "tooltip": {
@@ -5472,7 +5662,7 @@
       },
       "shadow_paths": "Inaktive Mods mit derselben Paket-ID",
       "sign_color": "Farbmarker*",
-      "tags": "Schlagworte*",
+      "tags": "Tags",
       "time": {
         "file_create": "Datei erstellt:",
         "file_modify": "Datei geändert:",
@@ -6060,8 +6250,8 @@
         "title": "Funktionseinstellungen",
         "translation": "Übersetzung",
         "translation_desc": "Legen Sie Standardübersetzungseinstellungen und ein separates Verhalten für die Workshop-Beschreibungsübersetzung fest.",
-        "wide_language_pack_detection": "[UNTRANSLATED] 宽泛识别语言包",
-        "wide_language_pack_detection_desc": "[UNTRANSLATED] 开启后，带翻译文件和补丁、但没有程序集、贴图、音频或普通定义的 Mod，也会按语言包参与归属判断。",
+        "wide_language_pack_detection": "Sprachpakete weiter erkennen",
+        "wide_language_pack_detection_desc": "Wenn aktiviert, werden auch Mods mit Übersetzungsdateien und Patches, aber ohne Assemblies, Texturen, Audio oder normale Definitionen, als mögliche Sprachpakete berücksichtigt.",
         "workshop_description_translation": "Workshop Beschreibungsübersetzung",
         "workshop_description_translation_desc": "Legen Sie die Sprache, den Anbieter und die automatische Übersetzungsstrategie für Workshop-Detailbeschreibungen fest.",
         "workshop_description_translation_only_desc": "Betrifft nur die Übersetzung von Titeln und Beschreibungen auf Workshop-Detailseiten."
@@ -6257,7 +6447,7 @@
         "use_workshop_mods": "Benutze Workshop-Mods",
         "use_workshop_mods_desc": "Verbinde Workshop-Mods mit dem lokalen Mods-Verzeichnis des aktuellen Profils. Bei nicht verfügbaren Verzeichnissen werden Sie gewarnt, der Schalter kann jedoch weiterhin manuell aktiviert werden.",
         "user_data_path": "Benutzerdatenverzeichnis",
-        "user_data_path_desc": "Benutzerdatenverzeichnis mit Spieleinstellungen, Spielständen und Protokollen. Der Standort ist je nach System unterschiedlich. Sie können eine automatische Erkennung oder eine manuelle Auswahl durchführen.\nUnter Windows lautet der Standarddatenpfad normalerweise:\nC:/Benutzer/BENUTZERNAME/AppData/LocalLow/Ludeon Studios/RimWorld von Ludeon Studios",
+        "user_data_path_desc": "Benutzerdatenverzeichnis mit Spieleinstellungen, Spielständen und Protokollen. Der Speicherort unterscheidet sich je nach System. Sie können ihn automatisch suchen lassen oder manuell auswählen.\nUnter Windows lautet der Standarddatenpfad normalerweise:\nC:/Users/{用户名}/AppData/LocalLow/Ludeon Studios/RimWorld by Ludeon Studios",
         "workshop_mods_path": "Workshop-Verzeichnis",
         "workshop_mods_path_desc": "Verzeichnis mit von Steam Workshop heruntergeladenen Mods. Diese Einstellung wird von allen Profilen gemeinsam genutzt."
       },
@@ -6965,7 +7155,7 @@
           "update_redownload": "Mod aktualisieren [erneut herunterladen]{count}",
           "update_resubscribe": "Mod aktualisieren [erneut abonnieren]{count}",
           "update_steam_redownload": {
-            "label": "Aktualisierte Mods erneut herunterladen{count}",
+            "label": "Mod aktualisieren [erneut herunterladen]{count}",
             "tooltip": "Fordern Sie Steam direkt auf, diese aktualisierbaren Workshop-Objekte erneut herunterzuladen oder zu überprüfen."
           },
           "view_timeline": "Änderungen anzeigen"

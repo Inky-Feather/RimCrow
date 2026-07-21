@@ -1,4 +1,4 @@
-import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
+import { toast, checkResult, showUserErrorToast } from '../../../shared/lib/common'
 import { useProfileStore } from '../../../features/profiles/profileStore'
 import { t } from '../../../shared/i18n.js'
 
@@ -186,7 +186,7 @@ export const useSettingsActions = ({
       return false
     } catch (e) {
       console.error("保存单项设置异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.settings.save_failed', '保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。')))
+      showUserErrorToast(e, t('toast.settings.save_failed', '保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。'))
       return false
     } finally {
       isLoading.value = false
@@ -267,7 +267,7 @@ export const useSettingsActions = ({
       }
     } catch (e) {
       console.error("应用设置异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.settings.apply_failed', '应用设置失败。可能是配置校验未通过、路径无法访问或配置文件无法写入，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.settings.apply_failed', '应用设置失败。可能是配置校验未通过、路径无法访问或配置文件无法写入。'))
     } finally {
       isLoading.value = false
     }

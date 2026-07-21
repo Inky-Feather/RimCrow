@@ -1,4 +1,4 @@
-import { toast, checkResult, toUserMessage } from '../../../shared/lib/common'
+import { toast, checkResult, showUserErrorToast } from '../../../shared/lib/common'
 import { useWorkspaceStore } from '../../../features/workspace/workspaceStore'
 import { usePromptQueueStore } from '../../../features/ai/promptQueueStore'
 import { getCurrentLocale, t } from '../../../shared/i18n.js'
@@ -489,7 +489,7 @@ export const useMaintenanceActions = ({
       }
       return false
     } catch (error) {
-      if (!silent) toast.error(toUserMessage(error?.message || error, t('toast.maintenance.external_data_update_failed', '更新外部库失败。请检查网络连接、代理设置和本地文件写入权限，详细原因已写入系统日志。')))
+      if (!silent && !error?.from_task) showUserErrorToast(error, t('toast.maintenance.external_data_update_failed', '更新外部库失败。请检查网络连接、代理设置和本地文件写入权限。'))
       return false
     }
   }

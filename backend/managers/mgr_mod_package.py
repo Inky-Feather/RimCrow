@@ -11,6 +11,7 @@ from backend._version import __version__
 from backend.database.dao import ModDAO, _ProfilePathScope
 from backend.database.models import ModInterlock
 from backend.load_order.language_pack_ownership import is_usable_language_pack_ownership, resolve_language_pack_ownership_for_mods
+from backend.i18n.messages import tr
 from backend.load_order.package_tokens import build_steam_package_token, parse_package_token, select_mod_instance
 from backend.managers.mgr_rules import resolve_mod_rules
 from backend.utils.bundle_io import (
@@ -152,7 +153,7 @@ class ModPackageManager:
         EventBus.resume()
         with self._export_cancel_lock:
             self._export_cancel_events[task_id] = cancel_event
-        self._emit_export_progress(task_id, "pending", 0, "准备导出模组包...", phase="prepare")
+        self._emit_export_progress(task_id, "pending", 0, tr("tasks.mod_package.export.prepare", "准备导出模组包..."), phase="prepare")
         worker = threading.Thread(
             target=self._run_export_task,
             args=(task_id, str(target_path or "").strip(), payload, cancel_event),
@@ -176,7 +177,7 @@ class ModPackageManager:
     def _run_export_task(self, task_id: str, target_path: str, payload: dict[str, Any], cancel_event: threading.Event) -> None:
         try:
             self._check_export_cancelled(cancel_event)
-            self._emit_export_progress(task_id, "running", 4, "正在整理导出内容...", phase="prepare")
+            self._emit_export_progress(task_id, "running", 4, tr("tasks.mod_package.export.organizing", "正在整理导出内容..."), phase="prepare")
             export_plan = self.preview_export(payload)
             self._check_export_cancelled(cancel_event)
             result = self._write_export_bundle(target_path, payload, export_plan, cancel_event=cancel_event, task_id=task_id)
@@ -184,9 +185,9 @@ class ModPackageManager:
                 task_id,
                 "success",
                 100,
-                "模组包导出完成",
+                tr("tasks.mod_package.export.complete", "模组包导出完成"),
                 metrics={
-                    "title": "导出模组包",
+                    "title": str(tr("tasks.title.mod_package_export", "导出模组包")),
                     "target_path": target_path,
                     "mod_count": len(result.get("mods") or []),
                     "warning_count": len(result.get("warnings") or []),
@@ -196,16 +197,17 @@ class ModPackageManager:
             )
         except InterruptedError:
             self._cleanup_partial_export(target_path)
-            self._emit_export_progress(task_id, "cancelled", 0, "模组包导出已取消", phase="cancelled")
+            self._emit_export_progress(task_id, "cancelled", 0, tr("tasks.mod_package.export.cancelled", "模组包导出已取消"), phase="cancelled")
         except Exception as e:
             logger.error("MOD 包导出任务失败：%s", e, exc_info=True)
             self._cleanup_partial_export(target_path)
+            failed_message = tr("errors.mod_package.export_failed", "模组包导出失败。请检查目标目录权限、磁盘空间和待导出模组文件状态。")
             self._emit_export_progress(
                 task_id,
                 "failed",
                 0,
-                f"模组包导出失败: {e}",
-                metrics={"title": "导出模组包", "error": str(e), "phase": "failed"},
+                failed_message,
+                metrics={"title": str(tr("tasks.title.mod_package_export", "导出模组包")), "error": str(failed_message), "phase": "failed"},
                 phase="failed",
             )
         finally:
@@ -298,7 +300,7 @@ class ModPackageManager:
         EventBus.resume()
         with self._import_cancel_lock:
             self._import_cancel_events[task_id] = cancel_event
-        self._emit_import_progress(task_id, "pending", 0, "准备导入模组包...", phase="prepare")
+        self._emit_import_progress(task_id, "pending", 0, tr("tasks.mod_package.import.prepare", "准备导入模组包..."), phase="prepare")
         worker = threading.Thread(
             target=self._run_import_task,
             args=(task_id, str(bundle_path or "").strip(), payload, cancel_event),
@@ -374,8 +376,14 @@ class ModPackageManager:
                         task_id,
                         "running",
                         self._compute_import_progress(completed_steps, total_steps),
-                        f'正在应用环境数据 ({current}/{total}): {str((profile_entry or {}).get("name") or (profile_entry or {}).get("archive_key") or "未命名环境")}',
-                        metrics={"title": "导入模组包", "phase": "profiles", "current": current, "total": total},
+                        tr(
+                            "tasks.mod_package.import.profile_progress",
+                            "正在应用环境数据 ({current}/{total}): {name}",
+                            current=current,
+                            total=total,
+                            name=str((profile_entry or {}).get("name") or (profile_entry or {}).get("archive_key") or tr("tasks.mod_package.import.unnamed_profile", "未命名环境")),
+                        ),
+                        metrics={"title": str(tr("tasks.title.mod_package_import", "导入模组包")), "phase": "profiles", "current": current, "total": total},
                         phase="profiles",
                     ),
                     cancel_check=lambda: self._check_import_cancelled(cancel_event),
@@ -395,8 +403,14 @@ class ModPackageManager:
                         task_id,
                         "running",
                         self._compute_import_progress(completed_steps + current - 1, total_steps),
-                        f'正在导入模组 ({current}/{total}): {str((item or {}).get("name") or (item or {}).get("folder_name") or "未知模组")}',
-                        metrics={"title": "导入模组包", "phase": "mods", "current": current, "total": total},
+                        tr(
+                            "tasks.mod_package.import.mod_progress",
+                            "正在导入模组 ({current}/{total}): {name}",
+                            current=current,
+                            total=total,
+                            name=str((item or {}).get("name") or (item or {}).get("folder_name") or tr("tasks.mod_package.import.unknown_mod", "未知模组")),
+                        ),
+                        metrics={"title": str(tr("tasks.title.mod_package_import", "导入模组包")), "phase": "mods", "current": current, "total": total},
                         phase="mods",
                     ),
                 )
@@ -431,9 +445,9 @@ class ModPackageManager:
                 task_id,
                 "success",
                 100,
-                "模组包导入完成",
+                tr("tasks.mod_package.import.complete", "模组包导入完成"),
                 metrics={
-                    "title": "导入模组包",
+                    "title": str(tr("tasks.title.mod_package_import", "导入模组包")),
                     "phase": "done",
                     "warnings": list(result.get("warnings") or []),
                     "post_actions": dict(result.get("post_actions") or {}),
@@ -443,15 +457,16 @@ class ModPackageManager:
                 phase="done",
             )
         except InterruptedError:
-            self._emit_import_progress(task_id, "cancelled", 0, "模组包导入已取消", phase="cancelled")
+            self._emit_import_progress(task_id, "cancelled", 0, tr("tasks.mod_package.import.cancelled", "模组包导入已取消"), phase="cancelled")
         except Exception as e:
             logger.error("MOD 包导入任务失败：%s", e, exc_info=True)
+            failed_message = tr("errors.mod_package.import_failed", "模组包导入失败。请确认文件完整、目标目录可写且磁盘空间充足。")
             self._emit_import_progress(
                 task_id,
                 "failed",
                 0,
-                f"模组包导入失败: {e}",
-                metrics={"title": "导入模组包", "error": str(e), "phase": "failed"},
+                failed_message,
+                metrics={"title": str(tr("tasks.title.mod_package_import", "导入模组包")), "error": str(failed_message), "phase": "failed"},
                 phase="failed",
             )
         finally:
@@ -832,9 +847,15 @@ class ModPackageManager:
                     task_id,
                     "running",
                     self._compute_export_progress(completed_steps, total_steps),
-                    f'正在打包模组 ({index}/{len(export_mods)}): {mod_entry.get("name") or mod_entry.get("folder_name") or mod_entry.get("package_id") or "未知模组"}',
+                    tr(
+                        "tasks.mod_package.export.mod_progress",
+                        "正在打包模组 ({current}/{total}): {name}",
+                        current=index,
+                        total=len(export_mods),
+                        name=str(mod_entry.get("name") or mod_entry.get("folder_name") or mod_entry.get("package_id") or tr("tasks.mod_package.export.unknown_mod", "未知模组")),
+                    ),
                     metrics={
-                        "title": "导出模组包",
+                        "title": str(tr("tasks.title.mod_package_export", "导出模组包")),
                         "phase": "mods",
                         "current": index,
                         "total": len(export_mods),
@@ -856,8 +877,8 @@ class ModPackageManager:
                     task_id,
                     "running",
                     self._compute_export_progress(completed_steps, total_steps),
-                    "正在附带环境数据...",
-                    metrics={"title": "导出模组包", "phase": "profile", "target_path": target_path},
+                    tr("tasks.mod_package.export.profile_data", "正在附带环境数据..."),
+                    metrics={"title": str(tr("tasks.title.mod_package_export", "导出模组包")), "phase": "profile", "target_path": target_path},
                     phase="profile",
                 )
                 profile_entries = self._write_profile_to_bundle(
@@ -872,8 +893,8 @@ class ModPackageManager:
                 task_id,
                 "running",
                 self._compute_export_progress(completed_steps, total_steps),
-                "正在写入清单...",
-                metrics={"title": "导出模组包", "phase": "manifest", "target_path": target_path},
+                tr("tasks.mod_package.export.manifest", "正在写入清单..."),
+                metrics={"title": str(tr("tasks.title.mod_package_export", "导出模组包")), "phase": "manifest", "target_path": target_path},
                 phase="manifest",
             )
             manifest = {
@@ -1127,7 +1148,7 @@ class ModPackageManager:
         if not task_id:
             return
         payload_metrics = {
-            "title": "导出模组包",
+            "title": str(tr("tasks.title.mod_package_export", "导出模组包")),
             "phase": phase,
             **dict(metrics or {}),
         }
@@ -1146,7 +1167,7 @@ class ModPackageManager:
         if not task_id:
             return
         payload_metrics = {
-            "title": "导入模组包",
+            "title": str(tr("tasks.title.mod_package_import", "导入模组包")),
             "phase": phase,
             **dict(metrics or {}),
         }

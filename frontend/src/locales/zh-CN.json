@@ -150,7 +150,7 @@
       "fetch_models_action": "获取AI模型",
       "save_action": "保存AI配置",
       "test_exception": "AI 测试请求异常。可能是软件后端暂时不可用、网络连接失败或模型服务无响应，请稍后重试。",
-      "test_failed": "AI 测试请求失败。请检查模型名称、Base URL、API Key、代理设置和服务状态，详细原因已写入系统日志。",
+      "test_failed": "AI 测试请求失败。请检查模型名称、Base URL、API Key、代理设置和服务状态。",
       "test_reply_action": "测试 AI 回复",
       "ui_not_ready": "界面尚未完成初始化"
     },
@@ -404,7 +404,7 @@
       "reasoning_tip_unsupported": "当前模型不支持思考模式。",
       "reasoning_tip_unsupported_fallback": "发送时会按普通回答处理。",
       "remove_attachment_tip": "本轮不发送这条附件",
-      "request_failed": "AI 请求失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用，详细原因已写入系统日志。",
+      "request_failed": "AI 请求失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用。",
       "request_total_tokens": "本轮总请求 {count} token",
       "role_user": "你",
       "session_token_tip": "当前会话累计消耗的 token。数值过高时，AI 更容易忽略前面的内容。",
@@ -459,7 +459,7 @@
       "xhigh": "极高"
     },
     "session": {
-      "analysis_failed_message": "分析过程中发生错误。可能是模型服务、网络连接或软件内部状态暂时不可用，详细原因已写入系统日志。",
+      "analysis_failed_message": "分析过程中发生错误。可能是模型服务、网络连接或软件内部状态暂时不可用。",
       "cancel_action": "取消 AI 回答",
       "cancelled_message": "本次分析已中断。",
       "default_global_scan_question": "请基于本次全局扫描结果直接开始排错，给出最可能的问题根因、证据和修复建议。",
@@ -468,7 +468,7 @@
       "fetch_trace_action": "获取AI请求链记录",
       "new_session": "新会话",
       "no_tool_args": "无参数",
-      "request_failed_message": "AI 请求失败。请检查模型服务、API Key、Base URL、代理设置和当前网络状态，详细原因已写入系统日志。",
+      "request_failed_message": "AI 请求失败。请检查模型服务、API Key、Base URL、代理设置和当前网络状态。",
       "run_failed": "AI 助手会话异常。可能是软件后端暂时不可用、模型服务无响应或网络请求中断，请稍后重试。",
       "send_action": "发送 AI 对话"
     },
@@ -527,24 +527,24 @@
   "api": {
     "ai": {
       "app_log_requires_debug": "软件日志分析仅在 Debug 模式下可用。",
-      "assistant_estimate_failed": "AI 请求预估失败。可能是日志内容、附件或模型配置暂时无法处理，详细原因已写入系统日志。",
-      "assistant_session_failed": "AI 助手会话没有完成。请检查模型配置、网络连接、代理设置和 API Key 是否可用，详细原因已写入系统日志。",
+      "assistant_estimate_failed": "AI 请求预估失败。可能是日志内容、附件或模型配置暂时无法处理。",
+      "assistant_session_failed": "AI 助手会话没有完成。请检查模型配置、网络连接、代理设置和 API Key 是否可用。",
       "cancel_failed": "取消失败，可能请求已完成或不存在",
       "config_saved": "AI 配置已保存",
       "default_task_title": "AI 任务",
-      "definition_assistant_save_failed": "保存 AI 助手失败。请检查工具、提示词和输出格式配置是否完整，详细原因已写入系统日志。",
-      "definition_prompt_delete_failed": "删除 AI 提示词失败。请确认该提示词仍存在，详细原因已写入系统日志。",
-      "definition_prompt_save_failed": "保存 AI 提示词失败。请检查内容格式是否正确，详细原因已写入系统日志。",
-      "definition_task_save_failed": "保存 AI 任务失败。请检查任务输入、提示词和输出格式配置是否完整，详细原因已写入系统日志。",
-      "invalid_analysis_request": "无效的分析请求：缺失日志行号或文件名。",
+      "definition_assistant_save_failed": "保存 AI 助手失败。请检查工具、提示词和输出格式配置是否完整。",
+      "definition_prompt_delete_failed": "删除 AI 提示词失败。请确认该提示词仍存在。",
+      "definition_prompt_save_failed": "保存 AI 提示词失败。请检查内容格式是否正确。",
+      "definition_task_save_failed": "保存 AI 任务失败。请检查任务输入、提示词和输出格式配置是否完整。",
+      "invalid_analysis_request": "当前没有可分析的日志内容。请重新选择日志行后再试。",
       "mod_alias_missing_input": "模组别名任务缺少有效的模组输入",
-      "selected_log_unavailable": "无法读取指定的日志内容，文件可能已被清理。",
+      "selected_log_unavailable": "所选日志内容已经不可用，可能已被刷新或清理。请刷新日志页面后重新选择。",
+      "session_failed": "AI 会话执行失败。请检查模型服务、网络连接和配置后重试。",
       "task_empty_result": "AI 任务没有返回有效内容",
-      "task_failed": "AI 任务执行失败。请检查模型配置、网络连接和 API Key，详细原因已写入系统日志。",
       "task_failed_title": "AI 任务执行失败",
       "task_invalid_result": "AI 任务返回格式无效",
       "task_started": "AI 任务已在后台启动",
-      "trace_load_failed": "读取 AI 请求链记录失败。请稍后重试，详细原因已写入系统日志。"
+      "trace_load_failed": "读取 AI 请求链记录失败。请稍后重试。"
     },
     "backup": {
       "rename_duplicate_name": "已有同名备份，请换一个名称",
@@ -572,10 +572,10 @@
     },
     "data_bundle": {
       "export_done": "导出成功",
-      "export_failed": "导出数据包失败。请检查目标目录权限、磁盘空间和所选数据模块状态，详细原因已写入系统日志。",
+      "export_failed": "导出数据包失败。请检查目标目录权限、磁盘空间和所选数据模块状态。",
       "import_done": "导入成功",
       "import_done_with_warnings": "导入完成，附带 {count} 条提示",
-      "import_failed": "导入数据包失败。请确认文件完整、格式正确，并检查目标目录权限，详细原因已写入系统日志。",
+      "import_failed": "导入数据包失败。请确认文件完整、格式正确，并检查目标目录权限。",
       "inspect_failed": "读取数据包摘要失败。请确认文件存在、格式正确且未被其它程序占用。",
       "modules": {
         "ai_definitions": {
@@ -612,20 +612,20 @@
           "label": "规则中心预设"
         }
       },
-      "schema_failed": "读取数据包配置失败。请检查软件数据目录是否可访问，详细原因已写入系统日志。"
+      "schema_failed": "读取数据包配置失败。请检查软件数据目录是否可访问。"
     },
     "database": {
       "background_busy": "当前仍有后台数据库刷新任务在运行，请稍后再试。",
       "cleanup_done": "数据库清理完成",
-      "cleanup_failed": "数据库清理失败。请关闭正在占用数据文件的程序后重试，详细原因已写入系统日志。",
+      "cleanup_failed": "数据库清理失败。请关闭正在占用数据文件的程序后重试。",
       "maintenance_busy": "当前正在处理数据库操作，请稍后再试。",
       "recreated_missing": "未找到本地数据库，已为你重新创建。",
       "repair_done_restart": "修复已完成，重启软件后生效。",
-      "repair_failed": "修复数据库失败。请检查数据库文件权限和磁盘空间，详细原因已写入系统日志。",
+      "repair_failed": "修复数据库失败。请检查数据库文件权限和磁盘空间。",
       "repair_failed_retry": "修复失败，请稍后重试。",
       "reset_close_busy": "重置失败，请关闭相关操作后重试。",
       "reset_done": "数据库已重置。",
-      "reset_failed": "重置数据库失败。请关闭正在占用数据文件的操作后重试，详细原因已写入系统日志。",
+      "reset_failed": "重置数据库失败。请关闭正在占用数据文件的操作后重试。",
       "reset_recreate_failed": "重置失败，数据库无法重新创建。",
       "restarting": "软件即将重启。",
       "scan_busy": "当前有扫描任务正在运行，请稍后再试。",
@@ -642,8 +642,13 @@
       "task_added": "下载任务已添加"
     },
     "errors": {
-      "internal_api_failed": "操作未完成。软件内部接口执行异常，详细原因已写入系统日志，请稍后重试或重启软件。",
-      "operation_unfinished": "操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。"
+      "ai": {
+        "test_chat": {
+          "failed": "AI 测试请求失败"
+        }
+      },
+      "internal_api_failed": "操作未完成。软件内部接口执行异常，请稍后重试或重启软件。",
+      "operation_unfinished": "操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用。"
     },
     "export": {
       "done": "导出成功"
@@ -652,7 +657,6 @@
       "community_rules_done": "社区规则库更新完毕！",
       "community_rules_failed": "社区规则库更新失败！",
       "community_rules_started": "社区规则库开始更新",
-      "download_failed_hint": "{message} 请检查网络连接、代理设置和目标目录权限。",
       "instead_db_done": "替代 Mod 数据库更新完毕！",
       "instead_db_failed": "替代 Mod 数据库更新失败！",
       "instead_db_started": "替代 Mod 数据库开始更新",
@@ -665,7 +669,7 @@
       "multiplayer_compatibility_started": "Multiplayer 兼容表开始更新",
       "path_or_url_missing": "更新地址或目标路径未配置",
       "reload_failed_after_success": "{message} 但重载失败，请稍后手动刷新。",
-      "update_start_failed": "启动外部数据更新失败。请检查更新地址、网络连接、代理设置和目标目录写入权限，详细原因已写入系统日志。",
+      "update_start_failed": "启动外部数据更新失败。请检查更新地址、网络连接、代理设置和目标目录写入权限。",
       "workshop_db_done": "社区工坊数据库更新完毕！",
       "workshop_db_failed": "社区工坊数据库更新失败！",
       "workshop_db_started": "社区工坊数据库开始更新"
@@ -681,10 +685,10 @@
     },
     "file_search": {
       "manager_not_initialized": "文件搜索管理器未初始化",
-      "ripgrep_download_failed": "启动文件搜索工具下载失败。请检查网络连接、代理设置和工具目录写入权限，详细原因已写入系统日志。",
+      "ripgrep_download_failed": "启动文件搜索工具下载失败。请检查网络连接、代理设置和工具目录写入权限。",
       "ripgrep_download_started": "已启动 ripgrep 下载任务",
       "search_started": "搜索任务已启动",
-      "start_failed": "启动文件搜索失败。请检查搜索路径、ripgrep 工具状态和文件访问权限，详细原因已写入系统日志。",
+      "start_failed": "启动文件搜索失败。请检查搜索路径、ripgrep 工具状态和文件访问权限。",
       "tool_ready": "工具已经就绪"
     },
     "game": {
@@ -696,7 +700,7 @@
       "launch_prepare_active_failed": "当前活动环境启动前检查同步失败。",
       "launch_prepare_cache_sync_done": "已按当前缓存状态完成启动前检查同步。",
       "launch_prepare_cache_sync_failed": "按当前缓存执行启动前检查同步失败。",
-      "launch_prepare_failed": "启动前准备失败",
+      "launch_prepare_failed": "启动前准备失败。请检查当前环境路径、文件权限和模组链接状态。",
       "launch_prepare_missing_context": "无法构建目标环境上下文，请检查环境是否存在。",
       "launch_prepare_missing_scan_paths": "目标环境没有可用于启动前检查同步的模组路径。",
       "launch_prepare_no_context_builder": "缺少环境上下文构建器，已跳过启动前检查同步。",
@@ -716,22 +720,22 @@
       "url_required": "URL 不能为空"
     },
     "guide": {
-      "mark_done_failed": "保存引导状态失败。请检查配置文件是否可写，详细原因已写入系统日志。",
-      "reset_failed": "重置引导状态失败。请检查配置文件是否可写，详细原因已写入系统日志。"
+      "mark_done_failed": "保存引导状态失败。请检查配置文件是否可写。",
+      "reset_failed": "重置引导状态失败。请检查配置文件是否可写。"
     },
     "i18n": {
       "language_options_failed": "读取界面语言选项失败。请检查语言文件格式。",
       "user_locale_create_failed": "创建语言包失败。请检查 data/locales 目录是否可写。",
       "user_locale_create_invalid": "创建语言包失败。请确认语言代码有效。",
       "user_locale_created": "已创建语言包：{label}",
-      "user_locale_message_delete_failed": "重置用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
+      "user_locale_message_delete_failed": "重置用户语言文本失败。请检查 data/locales 目录是否可写。",
       "user_locale_message_delete_invalid": "重置用户语言文本失败。请确认文本 key 有效。",
       "user_locale_message_deleted": "已重置翻译：{key}",
       "user_locale_message_invalid": "保存用户语言文本失败。请确认文本 key 有效。",
-      "user_locale_message_save_failed": "保存用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
+      "user_locale_message_save_failed": "保存用户语言文本失败。请检查 data/locales 目录是否可写。",
       "user_locale_message_saved": "已保存翻译：{key}",
       "user_locale_messages_invalid": "批量保存用户语言文本失败。请确认文本 key 和译文有效。",
-      "user_locale_messages_save_failed": "批量保存用户语言文本失败。请检查 data/locales 目录是否可写，详细原因已写入系统日志。",
+      "user_locale_messages_save_failed": "批量保存用户语言文本失败。请检查 data/locales 目录是否可写。",
       "user_locale_messages_saved": "已保存 {count} 条翻译",
       "workfile_export_failed": "导出翻译文件失败。请检查目标目录权限后重试。",
       "workfile_exported": "翻译文件已导出",
@@ -747,7 +751,7 @@
       "disk_changed": "磁盘加载顺序已被外部修改，请先处理冲突。",
       "game_config_missing": "未指定游戏配置路径",
       "manager_not_initialized": "加载顺序管理器未初始化",
-      "saved_with_backup_error": "排序文件已保存，但自动备份未完成。详细原因已写入系统日志。"
+      "saved_with_backup_error": "排序文件已保存，但自动备份未完成。"
     },
     "log": {
       "file_not_found": "找不到日志文件",
@@ -760,9 +764,9 @@
       "reader_not_initialized": "日志读取器未初始化"
     },
     "mod_package": {
-      "export_failed": "导出模组包失败。请检查目标目录权限、磁盘空间和待导出模组文件状态，详细原因已写入系统日志。",
+      "export_failed": "导出模组包失败。请检查目标目录权限、磁盘空间和待导出模组文件状态。",
       "export_started": "导出任务已启动",
-      "import_failed": "导入模组包失败。请确认文件完整、目标目录可写且磁盘空间充足，详细原因已写入系统日志。",
+      "import_failed": "导入模组包失败。请确认文件完整、目标目录可写且磁盘空间充足。",
       "import_started": "导入任务已启动",
       "prepare_import_failed": "预检模组包失败。请确认文件完整、格式正确且未被其它程序占用。",
       "profile_summary_failed": "读取环境导出统计失败。请确认环境仍存在且路径可访问。",
@@ -776,40 +780,40 @@
       "sync_done": "已完成配置覆盖"
     },
     "mods": {
-      "about_cleanup_failed": "清理 About 文件残留失败：{reason}",
+      "about_cleanup_failed": "清理 About 文件残留失败。请检查相关文件是否可访问或已被占用。",
       "about_file_missing": "未找到 About.xml 或 About.xml.disabled，无法切换禁用状态",
-      "about_file_operation_failed": "文件操作失败：{reason}",
+      "about_file_operation_failed": "文件操作失败。请检查文件权限、占用状态和目标路径。",
       "activate_done": "Mod 已启用 {count} 项",
       "activate_done_with_failed": "Mod 已启用 {success_count} 项，失败 {failed_count} 项",
       "activate_failed": "Mod 启用失败：{reason}",
       "color_updated": "颜色已设置",
-      "conflict_item_failed": "处理该项时出错，详细原因已写入系统日志",
+      "conflict_item_failed": "处理该项时出错",
       "conflict_missing_target_hash": "缺少 target_path_hash，无法删除该副本",
       "conflict_no_deletable_record": "未找到可删除的模组记录",
       "conflict_no_operation": "没有可执行的操作",
       "conflict_resolve_partial_failed": "部分操作失败：{count} 项未处理成功，其余操作已应用。",
       "conflict_resolved": "冲突处理完成",
       "conflict_unsupported_action": "不支持的操作类型：{action}",
-      "database_cleanup_failed_with_reason": "数据库记录清理失败：{reason}",
+      "database_cleanup_failed": "数据库记录清理失败。请稍后重试。",
       "deactivate_done": "Mod 已禁用 {count} 项",
       "deactivate_done_with_failed": "Mod 已禁用 {success_count} 项，失败 {failed_count} 项",
       "deactivate_failed": "Mod 禁用失败：{reason}",
       "disabled_state_changed": "状态已更新",
       "disabled_state_synced": "状态已同步",
-      "force_delete_file_failed": "物理文件彻底删除失败（{filename}）：{reason}",
+      "force_delete_file_failed": "物理文件彻底删除失败（{filename}）。请检查文件是否被占用或权限不足。",
       "interlock_healed": "联锁修复完成",
       "no_active_profile": "当前环境未激活，无法扫描 Mods",
       "no_scan_paths": "没有配置有效的扫描路径",
       "no_valid_records": "未找到有效的模组记录",
       "record_not_found": "未找到 Mod 记录",
       "scan_busy": "扫描已在进行中",
-      "scan_failed": "扫描模组失败。请检查游戏、工坊和本地 Mod 路径是否存在且可访问，详细原因已写入系统日志。",
+      "scan_failed": "扫描模组失败。请检查游戏、工坊和本地 Mod 路径是否存在且可访问。",
       "scan_started": "后台扫描已启动",
       "scanner_not_ready": "扫描器未初始化",
       "tags_added": "标签已添加",
       "tags_removed": "标签已移除",
       "time_updated": "最后操作时间已更新",
-      "trash_file_failed": "物理文件移入回收站失败（{filename}）：{reason}",
+      "trash_file_failed": "物理文件移入回收站失败（{filename}）。请检查文件是否被占用或权限不足。",
       "type_updated": "类型已设置",
       "user_data_applied": "已成功应用 {count} 项数据",
       "user_data_updated": "用户数据已更新"
@@ -868,6 +872,7 @@
       "type_or_path_missing": "未指定路径类型或路径",
       "user_data_config_missing": "用户数据路径 {path} 下无 Config 目录；程序会在保存或激活环境时自动生成。",
       "user_data_empty": "用户数据路径不能为空",
+      "user_data_invalid": "用户数据路径无效，请检查路径是否正确。",
       "user_data_mods_config_missing": "用户数据路径 {path} 下未检测到 Config/ModsConfig.xml；路径仍可使用，游戏首次写入配置后会自动生成。",
       "user_data_will_be_created": "用户数据目录 {path} 当前不存在，但父目录可写；保存或激活环境时会自动创建目录结构。",
       "valid": "路径有效：{path}",
@@ -880,15 +885,15 @@
       "auto_detect_partial": "仅检测到部分路径，请手动设置！"
     },
     "profile": {
-      "activate_failed_fallback": "切换到环境 {profile_id} 失败，已回退 default：{reason}",
-      "activate_failed_fallback_failed": "切换到环境 {profile_id} 失败，且回退 default 也失败：{reason}；fallback 错误：{fallback_error}",
+      "activate_failed_fallback": "切换到环境 {profile_id} 失败，已回退 default。",
+      "activate_failed_fallback_failed": "切换到环境 {profile_id} 失败，且回退 default 也失败。请检查环境路径和配置文件权限。",
       "activated": "已切换到环境: {profile_id}",
       "context_missing": "环境配置上下文缺失",
       "context_not_initialized": "当前环境未初始化",
       "context_not_specified": "未指定环境",
-      "create_failed": "创建环境失败。请检查环境名称、路径配置和文件权限，详细原因已写入系统日志。",
+      "create_failed": "创建环境失败。请检查环境名称、路径配置和文件权限。",
       "created": "环境创建成功",
-      "delete_failed": "删除环境失败。请确认该环境没有正在运行的任务，详细原因已写入系统日志。",
+      "delete_failed": "删除环境失败。请确认该环境没有正在运行的任务。",
       "deleted": "环境已删除",
       "id_missing": "未指定 Profile ID",
       "launch_mode": {
@@ -906,7 +911,7 @@
       "steam_shortcut_registered": "已写入 Steam 快捷方式配置",
       "steam_shortcut_same_install": "当前环境与默认环境使用同一游戏本体，无需注册 Steam 非 Steam 快捷方式",
       "steam_shortcut_unsupported_platform": "当前平台暂不支持自动写入 Steam 非 Steam 快捷方式，请改用普通桌面快捷方式或手动在 Steam 中添加。",
-      "update_failed": "更新环境失败。请检查路径配置和文件权限，详细原因已写入系统日志。",
+      "update_failed": "更新环境失败。请检查路径配置和文件权限。",
       "updated": "配置已更新"
     },
     "recommendation": {
@@ -923,10 +928,10 @@
     },
     "settings": {
       "save_done": "配置保存成功",
-      "save_failed": "保存设置失败。请检查配置内容、路径权限和配置文件是否可写，详细原因已写入系统日志。",
-      "secret_clear_failed": "无法删除已保存密钥。请确认本机安全存储可用后重试，详细原因已写入系统日志。",
+      "save_failed": "保存设置失败。请检查配置内容、路径权限和配置文件是否可写。",
+      "secret_clear_failed": "无法删除已保存密钥。请确认本机安全存储可用后重试。",
       "secret_cleared": "密钥已清除",
-      "secret_reveal_failed": "无法读取已保存密钥。请确认本机安全存储可用后重试，详细原因已写入系统日志。",
+      "secret_reveal_failed": "无法读取已保存密钥。请确认本机安全存储可用后重试。",
       "update_failed": "更新配置失败"
     },
     "sort": {
@@ -953,7 +958,7 @@
         "waiting_ready_message": "Steam 已启动，正在等待客户端进入可用状态。若长时间无响应，请确认 Steam 是否卡在登录或初始化界面。",
         "waiting_ready_title": "等待 Steam 就绪"
       },
-      "status_probe_failed": "检测 Steam 状态失败：{reason}",
+      "status_probe_failed": "检测 Steam 状态失败。请检查 Steam 客户端、登录状态和路径配置。",
       "subscribe_submitted": "已向 Steam 提交订阅请求。",
       "unsubscribe_submitted": "已向 Steam 提交取消订阅",
       "workshop_details_loaded": "已获取工坊详情",
@@ -995,18 +1000,19 @@
       },
       "todds_found": "已找到 todds 可执行文件",
       "tool_download_started": "已启动工具下载任务",
-      "tool_ready": "工具已经就绪"
+      "tool_ready": "工具已经就绪",
+      "tool_unavailable": "贴图工具暂不可用。请检查工具配置、下载状态或文件权限。"
     },
     "theme": {
-      "delete_failed": "删除用户主题失败。请检查主题文件是否被占用或无权限删除，详细原因已写入系统日志。",
+      "delete_failed": "删除用户主题失败。请检查主题文件是否被占用或无权限删除。",
       "deleted": "主题已删除",
-      "load_failed": "读取用户主题失败。请检查主题文件是否可访问，详细原因已写入系统日志。",
+      "load_failed": "读取用户主题失败。请检查主题文件是否可访问。",
       "not_found": "主题不存在",
-      "save_failed": "保存用户主题失败。请检查主题内容和文件写入权限，详细原因已写入系统日志。",
+      "save_failed": "保存用户主题失败。请检查主题内容和文件写入权限。",
       "saved": "主题已保存"
     },
     "translation": {
-      "document_failed": "翻译失败。请检查翻译服务配置、网络连接和目标语言设置，详细原因已写入系统日志。",
+      "document_failed": "翻译失败。请检查翻译服务配置、网络连接和目标语言设置。",
       "document_invalid": "翻译请求内容无效。请检查要翻译的文本、目标语言和翻译服务配置。",
       "empty_result": "翻译器未返回有效译文",
       "target_language_required": "目标语言不能为空"
@@ -1052,14 +1058,14 @@
       "developer_metadata_invalid": "设置工坊开发者元数据参数无效。请检查元数据内容、工坊项目 ID 和 Steam Web API Key 后重试。",
       "id_missing": "未提供有效的 Workshop ID",
       "id_unrecognized": "无法识别当前页面的 Workshop ID",
-      "install_source_map_failed": "读取安装来源失败。请检查外置工坊数据库是否完整，详细原因已写入系统日志。",
+      "install_source_map_failed": "读取安装来源失败。请检查外置工坊数据库是否完整。",
       "invalid_id": "工坊 ID 不能为空或格式不正确",
       "invalid_package_id": "无效的 PackageID",
       "invalid_workshop_id": "无效的工坊 ID",
       "no_replacement_suggestion": "Mod {package_id} 没有替换建议",
       "no_translatable_detail": "当前工坊项目没有可翻译的标题或说明",
-      "package_detail_map_failed": "读取工坊映射详情失败。请检查外置工坊数据库是否完整，详细原因已写入系统日志。",
-      "publish_failed": "发布工坊文件失败。请检查 Steam 登录状态、网络连接、文件权限和工坊表单内容，详细原因已写入系统日志。",
+      "package_detail_map_failed": "读取工坊映射详情失败。请检查外置工坊数据库是否完整。",
+      "publish_failed": "发布工坊文件失败。请检查 Steam 登录状态、网络连接、文件权限和工坊表单内容。",
       "publish_invalid": "发布工坊文件参数无效。请检查工坊表单内容、文件路径和 Steam Web API Key 后重试。",
       "same_author_failed": "获取作者作品失败。请检查网络连接或外置工坊数据库状态后重试。",
       "same_author_invalid": "作者作品请求无效。请检查作者信息、筛选条件或 Steam Web API Key 后重试。",
@@ -1069,11 +1075,11 @@
       "steam_detail_unavailable": "无法从 Steam 获取该模组详情",
       "subscribe_check_failed": "检查订阅权限失败。请确认 Steam 已登录、网络可用，且工坊项目仍可访问。",
       "subscribe_check_invalid": "订阅权限检查请求无效。请检查工坊 ID、Steam 登录状态或 Steam Web API Key 后重试。",
-      "translation_clear_failed": "清理工坊翻译缓存失败。请稍后重试，详细原因已写入系统日志。",
+      "translation_clear_failed": "清理工坊翻译缓存失败。请稍后重试。",
       "translation_clear_invalid": "清理工坊翻译缓存参数无效。请检查工坊 ID 和目标语言后重试。",
-      "translation_failed": "工坊详情翻译失败。请检查翻译服务配置、AI 配置或网络连接，详细原因已写入系统日志。",
+      "translation_failed": "工坊详情翻译失败。请检查翻译服务配置、AI 配置或网络连接。",
       "translation_invalid": "工坊详情翻译参数无效。请确认当前项目有可翻译内容，并检查目标语言和翻译服务配置。",
-      "update_file_failed": "更新工坊文件失败。请检查 Steam 登录状态、网络连接、文件权限和工坊表单内容，详细原因已写入系统日志。",
+      "update_file_failed": "更新工坊文件失败。请检查 Steam 登录状态、网络连接、文件权限和工坊表单内容。",
       "update_file_invalid": "更新工坊文件参数无效。请检查工坊表单内容、文件路径和 Steam Web API Key 后重试。",
       "update_key_value_tags_failed": "更新工坊键值标签失败。请确认当前账号有权限操作该项目，并检查网络连接。",
       "update_key_value_tags_invalid": "更新工坊键值标签参数无效。请检查标签内容、工坊项目 ID 和 Steam Web API Key 后重试。",
@@ -1102,6 +1108,7 @@
       "transfer_action_move": "移动模组",
       "transfer_done": "成功转移 {count} 个模组。",
       "transfer_failed_suffix": " {count} 个失败。",
+      "transfer_item_failed": "处理失败，请检查源目录、目标目录和文件权限。",
       "transfer_preparing": "准备{action}...",
       "transfer_running": "正在{action}: {name}",
       "transfer_source_missing": "未找到指定的源文件"
@@ -1126,7 +1133,7 @@
   },
   "browser": {
     "api": {
-      "call_failed": "后端接口执行失败。可能是运行环境、路径权限或内部状态暂时不可用，详细原因已写入系统日志。",
+      "call_failed": "后端接口执行失败。可能是运行环境、路径权限或内部状态暂时不可用。",
       "method_missing": "请求的后端接口不存在，请刷新页面或重启软件后重试。"
     },
     "session": {
@@ -1139,7 +1146,7 @@
     },
     "workshop": {
       "error": {
-        "load_failed": "加载页面失败: {reason}",
+        "load_failed": "加载页面失败。请检查网络连接、代理设置或稍后重试。",
         "missing_url": "未提供目标工坊页面地址",
         "unsupported_url": "当前仅代理 Steam 创意工坊相关页面"
       },
@@ -2070,6 +2077,23 @@
     "log_panel": {
       "collapse_details": "收起详情",
       "empty_filtered": "暂无与当前筛选条件匹配的日志。",
+      "error_fallback": "操作已失败。请稍后重试。",
+      "error_label": {
+        "access_denied": "访问受限",
+        "auth_expired": "认证过期",
+        "auth_failed": "认证失败",
+        "connection_failed": "连接失败",
+        "model_not_found": "模型不存在",
+        "not_found": "资源不存在",
+        "param_unsupported": "参数不支持",
+        "permission_denied": "权限不足",
+        "proxy_failed": "代理异常",
+        "rate_limited": "请求受限",
+        "request_invalid": "请求无效",
+        "response_format": "响应不兼容",
+        "service_unavailable": "服务不可用",
+        "timeout": "请求超时"
+      },
       "expand_details": "展开详情",
       "expand_full_log": "展开完整日志",
       "live_mode": "实时模式",
@@ -2552,8 +2576,8 @@
       }
     },
     "prompt_queue": {
-      "bulk_failed": "{label}失败。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。",
-      "item_failed": "处理失败。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。",
+      "bulk_failed": "{label}失败。请检查网络连接、文件权限或稍后重试。",
+      "item_failed": "处理失败。请检查网络连接、文件权限或稍后重试。",
       "submitted": "已提交处理",
       "system_title": "系统提示"
     },
@@ -2979,36 +3003,77 @@
   },
   "errors": {
     "ai": {
+      "access_denied": "AI 服务拒绝访问。请检查账号权限、模型权限、额度和地区限制。",
       "api_key_required": "当前协议要求填写 API Key。",
+      "assistant_failed": "AI 助手请求失败",
+      "auth_expired": "AI 登录令牌或 API Key 已过期。请重新填写密钥、刷新令牌或重新登录对应服务。",
+      "auth_failed": "API Key 无效或未被服务接受。请重新检查密钥、Base URL 和模型配置。",
       "config_incomplete": "AI 配置不完整，请检查配置",
       "config_save_failed": "保存 AI 配置失败。请检查配置内容、密钥存储状态和配置文件写入权限。",
       "disabled": "AI 功能未启用。请先在设置中开启 AI 功能，并完成模型配置。",
       "model_capability_load_failed": "获取 AI 模型能力失败。当前模型仍可手动配置，但推理模式和接口兼容性可能需要自行确认。",
+      "model_not_found": "模型或接口路径不存在。请检查模型名称、Base URL 和接口地址。",
       "models_load_failed": "获取 AI 模型列表失败。请确认模型服务已启动、Base URL 可访问、API Key 有效，并检查代理设置。",
-      "providers_load_failed": "获取 AI 协议列表失败。可能是本地配置或 AI 定义文件暂时不可用，详细原因已写入系统日志。"
+      "param_unsupported": "当前模型不接受某些高级参数。请清空 temperature 等高级参数，或切换为自动兼容模式。",
+      "providers_load_failed": "获取 AI 协议列表失败。可能是本地配置或 AI 定义文件暂时不可用。",
+      "rate_limited": "AI 请求过多或额度不足。请稍后重试，或检查账号额度与限速设置。",
+      "request_failed": "AI 请求没有完成。请检查模型配置、网络连接和服务状态后重试。",
+      "request_invalid": "AI 请求参数无效。请检查模型名称、Base URL、接口模式和高级参数。",
+      "response_format": "AI 服务返回格式不兼容。请确认 Base URL、接口模式和模型协议是否匹配。",
+      "routing_failed": "当前代理接口无法正确路由这个模型。请检查模型名称、代理服务的模型映射，或切换接口模式后重试。",
+      "service_unavailable": "AI 服务暂时不可用。请稍后重试，或检查模型服务状态。"
     },
     "backup": {
-      "list_failed": "获取备份文件失败。请检查备份目录是否可访问，详细原因已写入系统日志。",
-      "pick_save_dir_failed": "选择保存目录失败。请稍后重试，详细原因已写入系统日志。",
+      "list_failed": "获取备份文件失败。请检查备份目录是否可访问。",
+      "pick_save_dir_failed": "选择保存目录失败。请稍后重试。",
       "rename_failed": "重命名备份失败。请检查备份名称、文件占用状态和目录权限。",
-      "save_as_failed": "另存备份失败。请检查目标目录权限和磁盘空间，详细原因已写入系统日志。"
+      "save_as_failed": "另存备份失败。请检查目标目录权限和磁盘空间。"
     },
     "clipboard": {
       "text_unsupported": "当前环境不支持复制文本到剪贴板"
     },
+    "common": {
+      "unknown_operation_unfinished": "操作未完成。请检查网络连接、配置、路径权限或稍后重试。"
+    },
+    "database": {
+      "file_missing": "数据库文件不存在，请尝试重启软件或重置数据库。",
+      "integrity_failed": "数据库完整性检查失败，请尝试修复或重置数据库。",
+      "repair_apply_failed": "应用修复后的数据库失败。请检查数据库文件权限和磁盘空间。",
+      "repair_marker_load_failed": "读取数据库修复记录失败。请稍后重试或手动修复数据库。",
+      "schema_incomplete": "数据库结构不完整，请尝试修复或重置数据库。",
+      "validation_failed": "数据库文件校验失败，请检查文件是否损坏或权限是否不足。"
+    },
     "dialog": {
-      "file_save_failed": "选择保存文件失败。请稍后重试，详细原因已写入系统日志。",
-      "file_select_failed": "选择文件失败。请稍后重试，详细原因已写入系统日志。",
-      "folder_select_failed": "选择文件夹失败。请稍后重试，详细原因已写入系统日志。"
+      "file_save_failed": "选择保存文件失败。请稍后重试。",
+      "file_select_failed": "选择文件失败。请稍后重试。",
+      "folder_select_failed": "选择文件夹失败。请稍后重试。"
+    },
+    "download": {
+      "failed": "下载失败。请检查网络连接、代理设置、下载源可用性和目标目录权限。"
     },
     "fallback": {
-      "operation_unfinished": "操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。",
-      "operation_warning": "操作已完成，但有部分情况需要确认。详细原因已写入系统日志。",
-      "work_failed": "{workname}未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。"
+      "operation_unfinished": "操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用。",
+      "operation_warning": "操作已完成，但有部分情况需要确认。",
+      "work_failed": "{workname}未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用。"
+    },
+    "files": {
+      "delete_failed": "删除失败 ({filename}): 请检查文件是否被占用或权限是否不足。",
+      "localize_failed": "本地化失败，请检查源目录、目标目录和文件权限。",
+      "mod_process_failed": "模组 {label} 处理失败: 请检查文件是否被占用或权限是否不足。"
     },
     "game": {
-      "launch_failed": "启动游戏失败。请检查游戏路径、启动参数和当前环境链接状态，详细原因已写入系统日志。",
+      "launch_failed": "启动游戏失败。请检查游戏路径、启动参数和当前环境链接状态。",
       "launch_warning_resolve_failed": "处理启动确认失败。请重新尝试启动，或刷新当前环境状态后再试。"
+    },
+    "git": {
+      "access_denied": "仓库资源没有访问权限。请检查登录状态、账号权限或仓库可见性。",
+      "auth_failed": "仓库服务认证失败。请检查登录状态、访问令牌或仓库访问权限。",
+      "download_failed": "Git 仓库下载失败。请检查仓库地址、分支、网络连接和访问权限。",
+      "install_failed": "Git 仓库安装失败。请检查仓库地址、分支和访问权限。",
+      "not_found": "仓库资源不存在、分支不存在或下载地址已失效。请检查链接、分支和访问权限。",
+      "rate_limited": "Git 资源请求过多。请稍后重试，或检查访问频率限制。",
+      "request_failed": "Git 资源请求失败。请检查仓库地址、网络连接和访问权限。",
+      "service_unavailable": "仓库服务暂时不可用。请稍后重试，或检查目标站点状态。"
     },
     "group": {
       "create_failed": "创建分组失败。请检查分组名称是否有效，稍后重试。"
@@ -3030,27 +3095,32 @@
     },
     "load_order": {
       "export_failed": "导出加载顺序失败。请检查目标目录权限、磁盘空间和当前启用列表状态。",
-      "export_pick_path_failed": "选择导出路径失败。请稍后重试，详细原因已写入系统日志。",
-      "inactive_save_failed": "保存停用列表顺序失败。请检查环境配置文件是否可写，详细原因已写入系统日志。",
-      "read_failed": "读取加载顺序失败。请确认游戏配置文件存在且可访问，详细原因已写入系统日志。",
+      "export_pick_path_failed": "选择导出路径失败。请稍后重试。",
+      "inactive_save_failed": "保存停用列表顺序失败。请检查环境配置文件是否可写。",
+      "parse_failed": "排序文件解析失败，请检查文件格式是否正确。",
+      "read_failed": "读取加载顺序失败。请确认游戏配置文件存在且可访问。",
       "save_failed": "保存加载顺序失败。请确认游戏未占用配置文件，并检查目录写入权限。",
       "share_export_failed": "生成分享码失败。请检查当前启用列表是否有效，或稍后重试。",
       "share_import_failed": "解析分享码失败。请确认分享码完整且格式正确。"
     },
     "log": {
-      "files_load_failed": "获取日志文件列表失败。请确认日志目录可访问，详细原因已写入系统日志。",
+      "files_load_failed": "获取日志文件列表失败。请确认日志目录可访问。",
       "page_read_failed": "读取日志失败。文件可能已被清理、移动或暂时无法访问，请刷新日志列表后重试。"
     },
     "maintenance": {
       "external_data_check_failed": "检查外部库更新失败。请检查网络连接、代理设置和外部数据源状态。",
       "managed_mod_check_failed": "检查管理器模组更新失败。请检查网络连接、Git/Steam 服务状态和本地目录权限。",
       "steamcmd_mod_check_failed": "检查 SteamCMD 模组更新失败。请检查网络连接、SteamCMD 状态和管理器模组目录。",
-      "tools_check_failed": "检查工具环境失败。请检查工具目录权限和网络连接，详细原因已写入系统日志。"
+      "tools_check_failed": "检查工具环境失败。请检查工具目录权限和网络连接。"
+    },
+    "mod_package": {
+      "export_failed": "模组包导出失败。请检查目标目录权限、磁盘空间和待导出模组文件状态。",
+      "import_failed": "模组包导入失败。请确认文件完整、目标目录可写且磁盘空间充足。"
     },
     "mod_residue": {
-      "overview_failed": "读取卸载残留列表失败。请检查当前环境路径和文件权限，详细原因已写入系统日志。",
-      "whitelist_add_failed": "加入白名单失败。请检查配置文件权限后重试，详细原因已写入系统日志。",
-      "whitelist_remove_failed": "移出白名单失败。请检查配置文件权限后重试，详细原因已写入系统日志。"
+      "overview_failed": "读取卸载残留列表失败。请检查当前环境路径和文件权限。",
+      "whitelist_add_failed": "加入白名单失败。请检查配置文件权限后重试。",
+      "whitelist_remove_failed": "移出白名单失败。请检查配置文件权限后重试。"
     },
     "mod_settings": {
       "overview_failed": "读取模组设置总览失败。请确认游戏用户数据目录可访问，并检查当前环境路径配置。",
@@ -3059,21 +3129,33 @@
     },
     "mods": {
       "color_update_failed": "设置 Mod 颜色失败。已保留原状态，请稍后重试。",
-      "conflict_resolve_failed": "扫描冲突处理失败。请刷新模组列表后重试，详细原因已写入系统日志。",
+      "conflict_resolve_failed": "扫描冲突处理失败。请刷新模组列表后重试。",
       "conflict_resolve_failed_with_reason": "扫描冲突处理失败：{reason}。请检查相关 Mod 文件是否仍存在，或稍后刷新后重试。",
-      "delete_failed": "删除 Mod 失败。请检查文件是否被占用、路径权限是否正常，详细原因已写入系统日志。",
-      "enable_disable_failed": "批量启停 Mod 失败。已尽量保留当前列表状态，请稍后刷新后重试，详细原因已写入系统日志。",
-      "interlock_heal_failed": "修复 Mod 联锁失败。请刷新列表后重试，详细原因已写入系统日志。",
+      "delete_failed": "删除 Mod 失败。请检查文件是否被占用、路径权限是否正常。",
+      "enable_disable_failed": "批量启停 Mod 失败。已尽量保留当前列表状态，请稍后刷新后重试。",
+      "interlock_heal_failed": "修复 Mod 联锁失败。请刷新列表后重试。",
       "interlock_link_failed": "创建 Mod 联锁失败。请确认所选 Mod 仍在当前列表中，稍后重试。",
-      "interlock_missing_load_failed": "读取联锁缺失项失败。请刷新列表后重试，详细原因已写入系统日志。",
+      "interlock_missing_load_failed": "读取联锁缺失项失败。请刷新列表后重试。",
       "interlock_unlink_failed": "解除 Mod 联锁失败。请确认所选 Mod 仍在当前列表中，稍后重试。",
-      "issue_ignore_update_failed": "更新问题忽略状态失败。请稍后刷新列表后重试，详细原因已写入系统日志。",
+      "issue_ignore_update_failed": "更新问题忽略状态失败。请稍后刷新列表后重试。",
       "tags_add_failed": "添加 Mod 标签失败。已保留原状态，请稍后重试。",
       "tags_remove_failed": "移除 Mod 标签失败。已保留原状态，请稍后重试。",
-      "time_update_failed": "更新 Mod 最后操作时间失败。请检查数据库状态后重试，详细原因已写入系统日志。",
+      "time_update_failed": "更新 Mod 最后操作时间失败。请检查数据库状态后重试。",
       "type_update_failed": "设置 Mod 类型失败。已保留原状态，请稍后重试。",
-      "user_data_batch_update_failed": "批量更新 Mod 用户数据失败。请稍后刷新列表后重试，详细原因已写入系统日志。",
-      "user_data_update_failed": "更新 Mod 用户数据失败。请稍后刷新列表后重试，详细原因已写入系统日志。"
+      "user_data_batch_update_failed": "批量更新 Mod 用户数据失败。请稍后刷新列表后重试。",
+      "user_data_update_failed": "更新 Mod 用户数据失败。请稍后刷新列表后重试。"
+    },
+    "network": {
+      "access_denied": "目标服务拒绝了请求。请检查登录状态、访问权限或请求配置。",
+      "auth_failed": "目标服务认证失败。请检查登录状态、访问令牌或请求配置。",
+      "connection_failed": "无法连接到目标服务。请检查网络连接、代理设置或服务状态。",
+      "not_found": "目标资源不存在或地址已失效。请检查链接、参数或稍后重试。",
+      "proxy_auth": "代理服务器需要认证。请检查代理账号、密码或关闭不可用的代理。",
+      "proxy_failed": "代理连接失败。请检查代理地址、端口、账号密码，或临时关闭代理后重试。",
+      "rate_limited": "请求过于频繁或服务限流。请稍后重试。",
+      "request_invalid": "请求参数无效。请检查输入内容或配置后重试。",
+      "service_unavailable": "目标服务暂时不可用。请稍后重试，或检查服务状态。",
+      "timeout": "网络请求超时。请检查网络连接、代理设置或稍后重试。"
     },
     "path": {
       "batch_check_failed": "批量检查路径失败。请确认路径存在、权限可访问，并稍后重试。",
@@ -3085,39 +3167,43 @@
       "read_text_failed": "读取文本文件失败。请确认文件存在、编码可读取且未超过大小限制。"
     },
     "profile": {
+      "import_failed": "导入环境失败，请检查文件内容、路径权限和当前配置。",
       "shortcut_create_failed": "创建环境快捷方式失败。请检查桌面目录权限和环境路径配置。"
     },
     "recommendation": {
       "export_failed": "推荐导出失败。请检查目标目录权限、磁盘空间和所选模组数据状态。"
     },
     "rule": {
-      "dynamic_delete_failed": "删除动态规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
-      "dynamic_save_failed": "保存动态规则失败。请检查规则内容和规则文件权限，详细原因已写入系统日志。",
-      "dynamic_toggle_failed": "切换动态规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
-      "global_enable_failed": "保存规则开关失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
-      "import_failed": "导入规则包失败。请确认文件完整、格式正确，详细原因已写入系统日志。",
-      "language_pack_owner_failed": "保存语言包归属规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
-      "mod_toggle_failed": "切换 Mod 规则状态失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
-      "source_priority_failed": "保存规则来源优先级失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
-      "user_mod_delete_failed": "删除用户规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
-      "user_mod_position_failed": "保存固定位置规则失败。请检查规则配置文件是否可写，详细原因已写入系统日志。",
-      "user_mod_save_failed": "保存用户规则失败。请检查规则内容和规则文件权限，详细原因已写入系统日志。"
+      "dynamic_delete_failed": "删除动态规则失败。请检查规则配置文件是否可写。",
+      "dynamic_save_failed": "保存动态规则失败。请检查规则内容和规则文件权限。",
+      "dynamic_toggle_failed": "切换动态规则失败。请检查规则配置文件是否可写。",
+      "global_enable_failed": "保存规则开关失败。请检查规则配置文件是否可写。",
+      "import_failed": "导入规则包失败。请确认文件完整、格式正确。",
+      "language_pack_owner_failed": "保存语言包归属规则失败。请检查规则配置文件是否可写。",
+      "mod_toggle_failed": "切换 Mod 规则状态失败。请检查规则配置文件是否可写。",
+      "source_priority_failed": "保存规则来源优先级失败。请检查规则配置文件是否可写。",
+      "user_mod_delete_failed": "删除用户规则失败。请检查规则配置文件是否可写。",
+      "user_mod_position_failed": "保存固定位置规则失败。请检查规则配置文件是否可写。",
+      "user_mod_save_failed": "保存用户规则失败。请检查规则内容和规则文件权限。"
     },
     "rules": {
       "add_user_rule_failed": "添加用户规则失败。可能是规则内容无效或本地规则文件暂时无法写入，已尝试重新加载规则。",
-      "fetch_failed_retry": "获取规则失败。请稍后重试，详细原因已写入系统日志。",
-      "update_community_failed": "更新社区规则库失败。请检查网络连接、代理设置和本地文件写入权限，详细原因已写入系统日志。"
+      "fetch_failed_retry": "获取规则失败。请稍后重试。",
+      "update_community_failed": "更新社区规则库失败。请检查网络连接、代理设置和本地文件写入权限。"
     },
     "secret": {
       "reveal_failed_preserve": "无法读取已保存密钥，保存时会保留原值"
     },
     "sort": {
-      "auto_sort_failed": "自动排序失败。请检查规则配置和当前激活列表状态，详细原因已写入系统日志。",
-      "smart_insert_failed": "智能插入失败。请检查目标 Mod ID、当前激活列表和规则配置，详细原因已写入系统日志。"
+      "auto_sort_failed": "自动排序失败。请检查规则配置和当前激活列表状态。",
+      "smart_insert_failed": "智能插入失败。请检查目标 Mod ID、当前激活列表和规则配置。"
     },
     "steam": {
-      "client_status_failed": "获取 Steam 状态失败。请确认 Steam 客户端可正常启动，详细原因已写入系统日志。",
-      "process_status_failed": "获取 Steam 进程状态失败。请稍后重试，详细原因已写入系统日志。",
+      "client_status_failed": "获取 Steam 状态失败。请确认 Steam 客户端可正常启动。",
+      "launch_client_failed": "无法启动 Steam 客户端，请检查 Steam 安装路径和当前权限。",
+      "launch_url_failed": "无法通过 Steam URL 启动游戏，请检查 Steam 客户端和系统协议关联。",
+      "launch_url_not_accepted": "系统未接受 Steam URL 启动请求",
+      "process_status_failed": "获取 Steam 进程状态失败。请稍后重试。",
       "shortcut_finalize_failed": "确认 Steam 快捷方式失败。请确认 Steam 已启动并完成登录，稍后重试。",
       "shortcut_register_failed": "写入 Steam 快捷方式配置失败。请确认 Steam 已关闭或配置文件未被占用，并检查文件权限。",
       "subscribe_api_not_ready": "订阅请求未发送。请确认 Steam 已启动并完成登录后重试。",
@@ -3130,29 +3216,45 @@
       "workshop_status_failed": "检查 Steam 工坊安装状态失败。请确认 Steam 已启动并完成登录，稍后重试。"
     },
     "steamcmd": {
+      "acf_read_failed": "读取 SteamCMD 工坊记录失败。请检查文件权限或稍后重试。",
       "download_start_failed": "启动 SteamCMD 下载失败。请检查网络连接、代理设置、SteamCMD 状态和目标目录权限。",
-      "not_ready": "SteamCMD 尚未就绪。请先在工具环境检查中完成安装或修复，然后重试下载。"
+      "execution_failed": "SteamCMD 执行失败，请检查 Steam 安装、网络连接和下载环境。",
+      "execution_failed_with_target": "SteamCMD 执行失败，请检查 Steam 安装、网络连接和下载目录权限。",
+      "not_ready": "SteamCMD 尚未就绪。请先在工具环境检查中完成安装或修复，然后重试下载。",
+      "ssl_init_failed": "网络或代理配置导致初始化失败，请检查 SteamCMD 下载环境。",
+      "timeout": "SteamCMD 执行超时，请稍后重试。"
+    },
+    "system": {
+      "invalid_input": "请求参数无效。请检查配置、输入内容或接口兼容性。",
+      "permission_denied": "文件或目录权限不足。请关闭占用程序，或检查目标路径权限后重试。"
     },
     "task": {
       "texture_cancel_failed": "取消贴图任务失败。任务可能已经结束，请稍后刷新状态。"
     },
     "texture": {
-      "analysis_start_failed": "启动贴图分析失败。请检查所选模组路径、工具状态和文件权限，详细原因已写入系统日志。",
-      "exclusions_load_failed": "读取贴图排除规则失败。请检查配置文件是否可访问，详细原因已写入系统日志。",
-      "file_exclusion_save_failed": "保存文件贴图排除规则失败。请检查配置文件权限，详细原因已写入系统日志。",
-      "history_load_failed": "读取贴图任务历史失败。请稍后重试，详细原因已写入系统日志。",
-      "mod_exclusion_save_failed": "保存模组贴图排除规则失败。请检查配置文件权限，详细原因已写入系统日志。",
+      "analysis_start_failed": "启动贴图分析失败。请检查所选模组路径、工具状态和文件权限。",
+      "exclusions_load_failed": "读取贴图排除规则失败。请检查配置文件是否可访问。",
+      "file_exclusion_save_failed": "保存文件贴图排除规则失败。请检查配置文件权限。",
+      "history_load_failed": "读取贴图任务历史失败。请稍后重试。",
+      "mod_exclusion_save_failed": "保存模组贴图排除规则失败。请检查配置文件权限。",
       "no_analysis_targets": "未指定要分析的模组",
       "no_residue_targets": "未找到包含 {format} 的卸载残留模组目录",
       "no_valid_mod_paths": "未能找到指定模组的有效物理路径",
-      "prepare_tool_failed": "准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间，详细原因已写入系统日志。",
-      "status_failed": "读取贴图工具状态失败。请检查工具路径和运行环境，详细原因已写入系统日志。",
-      "task_start_failed": "启动贴图任务失败。请检查所选模组路径、工具状态、磁盘空间和文件权限，详细原因已写入系统日志。",
-      "tool_download_failed": "启动贴图工具下载失败。请检查网络连接、代理设置和工具目录写入权限，详细原因已写入系统日志。"
+      "prepare_tool_failed": "准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间。",
+      "status_failed": "读取贴图工具状态失败。请检查工具路径和运行环境。",
+      "task_start_failed": "启动贴图任务失败。请检查所选模组路径、工具状态、磁盘空间和文件权限。",
+      "tool_download_failed": "启动贴图工具下载失败。请检查网络连接、代理设置和工具目录写入权限。"
     },
     "update": {
-      "action_failed": "执行更新动作失败。请检查网络连接、磁盘空间和安装目录权限，详细原因已写入系统日志。",
-      "check_failed": "检查更新失败。请检查网络连接、代理设置和更新源状态，稍后重试。"
+      "action_failed": "执行更新动作失败。请检查网络连接、磁盘空间和安装目录权限。",
+      "check_failed": "检查更新失败。请检查网络连接、代理设置和更新源状态，稍后重试。",
+      "download_failed": "下载更新包失败。请检查网络连接、代理设置和磁盘空间，稍后重试。",
+      "failed": "软件更新失败。请检查网络连接、代理设置和目标目录权限。",
+      "fallback_source_invalid": "候补更新源无效",
+      "fallback_source_start_failed": "候补更新源启动失败。请检查更新地址、网络连接和目标目录权限。",
+      "no_available_update": "没有可用的更新",
+      "source_check_failed": "检查更新源失败。请检查网络连接、代理设置或稍后重试。",
+      "source_download_url_missing": "{source_name} 没有可用的更新包下载地址"
     },
     "uri": {
       "open_failed": "无法通过系统打开当前链接。请确认系统协议关联正常或稍后重试。"
@@ -4006,8 +4108,14 @@
         "sync_mod_core_data": "同步模组核心数据",
         "sync_mod_data": "同步模组数据"
       },
+      "ai_task": {
+        "failed": "AI 任务执行失败。请检查模型配置、网络连接和 API Key。"
+      },
       "backend_popup": {
-        "title": "系统提示"
+        "failed": "操作未完成。请稍后重试。",
+        "info": "操作已完成。",
+        "title": "系统提示",
+        "warning": "操作需要确认。"
       },
       "database": {
         "cleanup_done": "无效数据清理完成，正在刷新列表。",
@@ -4015,17 +4123,17 @@
       },
       "download": {
         "complete": "下载已完成：{filename}",
-        "failed": "{filename} 下载失败。可能是网络连接、代理设置、下载源不可用或磁盘权限问题，详细原因已写入系统日志。"
+        "failed": "{filename} 下载失败。可能是网络连接、代理设置、下载源不可用或磁盘权限问题。"
       },
       "error": {
         "cancel_task_failed": "取消任务失败。可能是任务已经结束或后端暂时不可用，请稍后刷新状态。",
-        "game_status_failed": "游戏启动状态异常。可能是游戏路径、启动参数或运行环境暂时不可用，详细原因已写入系统日志。",
-        "initialize_failed": "初始化失败。可能是配置、数据库或运行环境暂时不可用，详细原因已写入系统日志。",
+        "game_status_failed": "游戏启动状态异常。可能是游戏路径、启动参数或运行环境暂时不可用。",
+        "initialize_failed": "初始化失败。可能是配置、数据库或运行环境暂时不可用。",
         "refresh_data_failed": "刷新数据失败。可能是扫描器、数据库或当前环境暂时不可用，请稍后重试。",
         "refresh_mod_enrichment_failed": "补充列表标记失败。部分问题提示、替代版本或联机兼容状态可能暂时不显示。",
-        "resume_failed": "恢复界面失败。请刷新界面或重启软件后重试，详细原因已写入系统日志。",
-        "sync_mod_core_data_failed": "同步模组核心数据失败。可能是数据库、扫描结果或运行环境暂时不可用，详细原因已写入系统日志。",
-        "sync_mod_data_failed": "同步模组数据失败。可能是数据库、扫描结果或运行环境暂时不可用，详细原因已写入系统日志。"
+        "resume_failed": "恢复界面失败。请刷新界面或重启软件后重试。",
+        "sync_mod_core_data_failed": "同步模组核心数据失败。可能是数据库、扫描结果或运行环境暂时不可用。",
+        "sync_mod_data_failed": "同步模组数据失败。可能是数据库、扫描结果或运行环境暂时不可用。"
       },
       "game": {
         "launching_profile": "正在启动“{profile}”环境，请等待游戏进程确认。"
@@ -4043,6 +4151,7 @@
           "message": "当前环境需要先确认后再继续启动。",
           "title": "启动前确认"
         },
+        "launch_success": "游戏启动成功。",
         "link_sync_failed": {
           "message": "未能完成模组链接同步，本次未启动游戏。",
           "title": "模组链接同步失败"
@@ -4088,17 +4197,17 @@
         "cancelled": "{title}已取消",
         "complete_log": "{title}完成。成功 {success} 项，失败 {failed} 项。",
         "complete_success": "{title}已完成：{count} 个模组",
-        "complete_with_errors": "{title}已完成，成功 {success} 项，失败 {failed} 项。失败详情已写入系统日志。"
+        "complete_with_errors": "{title}已完成，成功 {success} 项，失败 {failed} 项。"
       },
       "mod_export": {
         "cancelled": "模组包导出已取消",
-        "failed": "模组包导出失败。请检查导出目录权限、磁盘空间和待导出模组状态，详细原因已写入系统日志。",
+        "failed": "模组包导出失败。请检查导出目录权限、磁盘空间和待导出模组状态。",
         "title": "模组包导出"
       },
       "mod_import": {
         "cancelled": "模组包导入已取消",
         "complete": "模组包导入完成",
-        "failed": "模组包导入失败。请检查文件是否完整、目标目录权限和磁盘空间，详细原因已写入系统日志。"
+        "failed": "模组包导入失败。请检查文件是否完整、目标目录权限和磁盘空间。"
       },
       "mod_residue": {
         "check_incomplete": "卸载残留检查未完成，可稍后手动打开残留清理。"
@@ -4122,7 +4231,7 @@
         "failed": "Steam 下载失败。请确认 Steam 已登录并正常联网，或检查代理设置和工坊项目状态。"
       },
       "steamcmd_download": {
-        "failed": "SteamCMD 下载失败。请检查网络连接、代理设置、下载源可用性和目标目录权限，详细原因已写入系统日志。"
+        "failed": "SteamCMD 下载失败。请检查网络连接、代理设置、下载源可用性和目标目录权限。"
       },
       "suspend": {
         "cleared_scan_tasks": "已清理挂起前遗留的扫描任务，请按需重新刷新。"
@@ -4142,6 +4251,9 @@
         "save_unavailable": "当前运行环境不支持保存用户语言文件。",
         "saved": "翻译已保存并重新加载。"
       }
+    },
+    "profile": {
+      "import_success": "导入成功"
     }
   },
   "secret": {
@@ -4160,6 +4272,13 @@
       "staged_database_repair_applied": "已应用待切换数据库修复库",
       "startup_database_auto_repair_failed": "启动时数据库自动修复未完成",
       "startup_database_auto_repaired": "启动时已自动修复数据库"
+    },
+    "database": {
+      "auto_repair_failed": "数据库自动修复失败，请尽快手动修复。软件将继续启动，但部分本地数据可能暂时不可用。",
+      "auto_repaired": "检测到数据库异常，软件已自动修复并继续启动。",
+      "failed_source_stage_failed": "数据库异常文件处理失败，建议先备份 data 目录。",
+      "staged_repair_applied": "上次准备好的数据库修复结果已生效。",
+      "staged_repair_skipped": "检测到未完成的修复结果，但无法使用，已自动跳过。"
     },
     "message": {
       "database_load_failed": "数据库加载失败，部分功能可能暂时不可用。",
@@ -4198,18 +4317,24 @@
   "tasks": {
     "ai": {
       "cancelled": "AI 任务已取消",
+      "chunk_failed": "AI 分块处理失败。请稍后重试。",
       "fallback_title": "AI 任务",
       "finished": "推理结束！成功: {success}, 失败: {failed}",
       "reasoning_progress": "正在推理... [第{attempt}轮] 成功: {success}/{total}",
       "truncated_suffix": "...(截断)"
     },
+    "download": {
+      "running": "下载中..."
+    },
     "error": {
-      "not_completed": "任务未成功完成。请检查网络连接、文件权限或稍后重试，详细原因已写入系统日志。",
+      "not_completed": "任务未成功完成。请检查网络连接、文件权限或稍后重试。",
       "timeout": "任务超时"
     },
     "file_delete": {
+      "complete": "删除完成：成功 {success_count} 个，失败 {error_count} 个",
       "completed": "删除完成：成功 {success_count} 个，失败 {failed_count} 个",
       "database_cleanup_failed": "数据库记录清理失败",
+      "deleting": "正在删除: {filename}",
       "deleting_path": "正在删除：{filename}",
       "prepare_mods": "准备删除 {count} 个模组...",
       "title": "删除模组文件"
@@ -4218,7 +4343,7 @@
       "building_roots": "正在整理{stage} {processed}/{total}: {name}",
       "cancelled": "搜索任务已取消",
       "cancelled_in_stage": "搜索任务已在{stage}阶段取消",
-      "failed_with_reason": "搜索失败: {reason}",
+      "failed": "搜索失败。请检查搜索路径、ripgrep 工具状态和文件访问权限。",
       "finished": "搜索完成，共命中 {count} 条结果",
       "no_active_profile": "当前环境未激活，无法执行搜索",
       "no_task_id": "后端未返回任务 ID",
@@ -4241,6 +4366,11 @@
         "mod_dir": "模组目录"
       }
     },
+    "github": {
+      "catalog_install_start": "清单压缩包获取成功，正在解压...",
+      "download_start": "开始获取压缩包",
+      "install_start": "压缩包获取成功，正在解压..."
+    },
     "message": {
       "cancelling_request": "正在尝试中止任务...",
       "processing": "处理中...",
@@ -4250,8 +4380,27 @@
       "texture_task": "贴图任务"
     },
     "mod_package": {
+      "export": {
+        "cancelled": "模组包导出已取消",
+        "complete": "模组包导出完成",
+        "manifest": "正在写入清单...",
+        "mod_progress": "正在打包模组 ({current}/{total}): {name}",
+        "organizing": "正在整理导出内容...",
+        "prepare": "准备导出模组包...",
+        "profile_data": "正在附带环境数据...",
+        "unknown_mod": "未知模组"
+      },
       "export_preparing": "准备导出模组包...",
       "export_title": "导出模组包",
+      "import": {
+        "cancelled": "模组包导入已取消",
+        "complete": "模组包导入完成",
+        "mod_progress": "正在导入模组 ({current}/{total}): {name}",
+        "prepare": "准备导入模组包...",
+        "profile_progress": "正在应用环境数据 ({current}/{total}): {name}",
+        "unknown_mod": "未知模组",
+        "unnamed_profile": "未命名环境"
+      },
       "import_preparing": "准备导入模组包...",
       "import_title": "导入模组包"
     },
@@ -4266,9 +4415,8 @@
     "scan": {
       "already_running": "扫描已在进行中",
       "analyzing_mod": "分析中: {name}",
-      "cancelled": "扫描已由用户中止",
       "cancelled_no_changes": "扫描已由用户中止，未对数据库进行任何修改。",
-      "failed_with_reason": "扫描失败: {reason}",
+      "failed": "扫描失败。请检查搜索路径、数据库状态和文件权限后重试。",
       "finished": "扫描完成",
       "indexing_files": "正在索引文件...",
       "no_valid_paths": "没有有效路径",
@@ -4276,10 +4424,26 @@
       "preparing": "正在准备扫描...",
       "processing_conflicts_runtime": "正在处理冲突与运行态收敛...",
       "reading_game_info": "正在读取游戏基础信息...",
+      "start_failed": "启动扫描失败。请检查搜索路径、数据库状态和文件权限后重试。",
       "title": "模组扫描"
     },
     "status": {
       "execution_failed": "任务执行失败"
+    },
+    "steamcmd": {
+      "download": {
+        "cancelled": "SteamCMD 下载已取消",
+        "complete": "全部下载完成 ({total})",
+        "failed_items": "失败项: {items}",
+        "failed_progress": "SteamCMD 下载失败 ({current}/{total})",
+        "pending_items": "未完成项: {items}"
+      },
+      "execution_complete": "执行完成",
+      "init": {
+        "cancelled": "SteamCMD 初始化已取消",
+        "complete": "SteamCMD 初始化完成",
+        "prepare": "准备初始化 SteamCMD..."
+      }
     },
     "texture": {
       "analysis_completed_elapsed": "统计完成，用时 {elapsed}",
@@ -4294,18 +4458,31 @@
       "encode_completed": "{output_label} 生成完成{details}",
       "encode_record_batch": "登记生成结果: 第 {batch_index}/{batch_total} 批 ({scale_label})",
       "encode_start": "开始生成 {output_label}",
-      "failed": "贴图优化失败",
+      "failed": "贴图优化失败。请检查工具配置、贴图文件和输出目录权限后重试。",
+      "failed_title": "贴图优化失败",
+      "item_failed": "贴图处理失败。请检查贴图文件、工具配置和输出目录权限。",
       "prepare_generate_mod": "准备生成: {mod_name}",
       "prepare_task": "准备任务...",
       "queue_running": "正在执行贴图队列...",
       "retry_recoverable": "统一重试可恢复失败项",
       "retry_start": "主批次完成，开始统一重试可恢复失败项",
       "scan_cancelled": "贴图扫描任务已取消",
-      "scan_failed": "贴图扫描任务失败: {reason}",
+      "scan_failed": "贴图扫描任务失败。请检查 Mod 路径、贴图文件和工具配置后重试。",
+      "scan_failed_title": "贴图扫描失败",
       "scanned_mod": "已扫描 {mod_name}",
       "summarize_encode_result": "统计生成结果",
+      "tool_download_start": "开始下载 todds 工具包",
+      "tool_install_start": "todds 工具包获取成功，正在解压...",
       "update_encode_state": "更新生成状态",
       "write_result": "写入任务结果"
+    },
+    "title": {
+      "file_delete": "删除文件",
+      "mod_package_export": "导出模组包",
+      "mod_package_import": "导入模组包",
+      "steam": "Steam 任务",
+      "steamcmd_init": "SteamCMD 初始化",
+      "update": "软件更新"
     },
     "type": {
       "ai_task": "AI 生成任务",
@@ -4327,6 +4504,12 @@
       "texture_opt_analyze": "贴图分析",
       "update": "软件更新",
       "update_short": "更新"
+    },
+    "update": {
+      "current_source": "当前来源",
+      "fallback_source": "候补来源",
+      "package_ready": "更新包已就绪 v{version}",
+      "trying_fallback_source": "{failed_source} 下载失败，正在尝试 {next_name}"
     }
   },
   "text_search": {
@@ -4361,6 +4544,7 @@
   "toast": {
     "api": {
       "error": "{workname}失败：\n{message}",
+      "open_corresponding_log": "查看对应系统日志",
       "success": "{workname}已完成",
       "warning": "{workname}需要确认：\n{message}"
     },
@@ -4411,19 +4595,23 @@
       "start_failed": "启动文件搜索失败。请检查当前环境路径是否可访问，或稍后重试。"
     },
     "github": {
+      "catalog_deploy_done": "{name} 部署完成",
+      "catalog_deploy_failed": "{name} 部署失败",
+      "deploy_done": "{repo} 部署完成",
+      "deploy_failed": "{repo} 部署失败",
       "install_source_submitted": "已提交 {count} 个 Git 来源订阅，正在开始下载。"
     },
     "group": {
-      "add_mods_failed": "添加模组到分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
-      "content_reorder_failed": "保存分组内排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
-      "create_failed": "创建分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
-      "delete_failed": "删除分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
+      "add_mods_failed": "添加模组到分组失败，正在还原列表状态。请稍后重试。",
+      "content_reorder_failed": "保存分组内排序失败，正在还原列表状态。请稍后重试。",
+      "create_failed": "创建分组失败，正在还原列表状态。请稍后重试。",
+      "delete_failed": "删除分组失败，正在还原列表状态。请稍后重试。",
       "expansion_failed": "保存分组展开状态失败，正在还原列表状态。请稍后重试。",
       "get_failed": "获取分组失败。可能是数据库或当前环境暂时不可用，请稍后重试。",
-      "remove_mods_failed": "从分组移除模组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
+      "remove_mods_failed": "从分组移除模组失败，正在还原列表状态。请稍后重试。",
       "rename_duplicate": "分组名称已存在，已添加序号 {index}",
-      "reorder_failed": "保存分组排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。",
-      "update_failed": "更新分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。"
+      "reorder_failed": "保存分组排序失败，正在还原列表状态。请稍后重试。",
+      "update_failed": "更新分组失败，正在还原列表状态。请稍后重试。"
     },
     "group_list": {
       "drop": {
@@ -4445,7 +4633,7 @@
       "backup_saved_as": "备份已另存为: \n{path}",
       "disk_changed_handle_conflict": "检测到磁盘序列已变化，请先处理冲突。",
       "empty_share_code": "后端没有返回有效的分享码",
-      "export_failed": "导出 Mod 序列失败。请检查目标目录权限、磁盘空间和当前启用列表状态，详细原因已写入系统日志。",
+      "export_failed": "导出 Mod 序列失败。请检查目标目录权限、磁盘空间和当前启用列表状态。",
       "exported": "Mod序列已导出",
       "import_items_removed": "已移除 {count} 个导入项",
       "imported_with_warnings": "导入完成，但有 {count} 条提示",
@@ -4457,7 +4645,7 @@
       "runtime_refreshed_unsaved": "游戏退出后磁盘序列已刷新，未保存改动已转入差异对比。",
       "save_skipped_disk_changed": "磁盘加载顺序已被外部修改，未执行保存。",
       "share_code_empty": "分享码不能为空",
-      "share_code_failed": "生成分享码失败。请检查当前启用列表是否有效，或稍后重试。详细原因已写入系统日志。",
+      "share_code_failed": "生成分享码失败。请检查当前启用列表是否有效，或稍后重试。",
       "share_code_imported": "分享码已导入"
     },
     "log_panel": {
@@ -4469,7 +4657,7 @@
       "read_failed": "读取日志失败。请确认日志文件仍存在且没有被其它程序占用。"
     },
     "log_viewer": {
-      "global_scan_failed": "全局日志扫描失败。可能是日志文件暂时不可读、内容过大或 AI 诊断上下文生成失败，详细原因已写入系统日志。",
+      "global_scan_failed": "全局日志扫描失败。可能是日志文件暂时不可读、内容过大或 AI 诊断上下文生成失败。",
       "no_log_file_selected": "未选中任何日志文件。",
       "scan_complete_notice": "压缩完成：保留 {tocCount} 条错误摘要，共覆盖 {repeatCount} 次错误，当前占用约 {tokenText}。",
       "scanning_all_logs": "正在扫描全部日志，请稍候。",
@@ -4478,7 +4666,7 @@
     "maintenance": {
       "external_data_failed_summary": "外部库检查未完成：{summary}{remain} 检查失败，请稍后重试或检查网络环境。",
       "external_data_up_to_date": "外部库检查完成，当前均已是最新。",
-      "external_data_update_failed": "更新外部库失败。请检查网络连接、代理设置和本地文件写入权限，详细原因已写入系统日志。",
+      "external_data_update_failed": "更新外部库失败。请检查网络连接、代理设置和本地文件写入权限。",
       "git_catalog_refreshed": "Git 推荐清单已刷新。",
       "git_deploy_started": "Git 仓库部署任务已启动，请留意底部状态栏。",
       "managed_mods_up_to_date": "管理器模组检查完成，当前均已是最新。",
@@ -4489,7 +4677,7 @@
     },
     "mod": {
       "auto_sort_done": "自动排序已完成",
-      "auto_sort_failed": "自动排序失败。可能是规则数据、缺失项处理或后端排序器暂时不可用，详细原因已写入系统日志。",
+      "auto_sort_failed": "自动排序失败。可能是规则数据、缺失项处理或后端排序器暂时不可用。",
       "auto_sort_rule_warning_intro": "请检查以下Mod规则是否正确：\n",
       "auto_sort_rule_warning_item": "{mod} 的 {type} 规则 可能存在问题：（{target}）\n",
       "batch_add_tags_failed": "批量添加标签失败，已还原本地状态。请稍后重试。",
@@ -4498,11 +4686,11 @@
       "batch_remove_tags_failed": "批量移除标签失败，已还原本地状态。请稍后重试。",
       "batch_set_color_failed": "批量设置颜色失败，已还原本地状态。请稍后重试。",
       "batch_set_type_failed": "批量设置类型失败，已还原本地状态。请稍后重试。",
-      "batch_update_data_failed": "批量更新 Mod 数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。",
+      "batch_update_data_failed": "批量更新 Mod 数据失败，已还原本地状态。请稍后重试。",
       "failed_suffix": "，{count} 个失败",
       "interlock_all_selected_locked": "选中的 Mod 已经处于联锁中",
       "interlock_no_selected_locked": "选中的 Mod 没有可解除的联锁",
-      "link_failed": "设置 Mod 联锁失败。请稍后重试，详细原因已写入系统日志。",
+      "link_failed": "设置 Mod 联锁失败。请稍后重试。",
       "localize_no_workshop_items": "选中的模组中没有来自工坊的项",
       "reset_active_list_done": "启用列表已重置",
       "reset_active_list_no_base": "未找到可用于重置的官方模组或必要项，请先确认当前环境的游戏目录和模组扫描结果。",
@@ -4512,13 +4700,13 @@
       "scan_done": "扫描已完成，共扫描 {total} 个模组，新增 {added} 个，更新 {updated} 个，删除 {removed} 个，已知 {skipped} 个。{extra}",
       "scan_done_with_restore_warning": "扫描已完成，共扫描 {total} 个模组，新增 {added} 个，更新 {updated} 个，删除 {removed} 个，已知 {skipped} 个。\n{extra}",
       "scan_external_enabled_count": "外部解除禁用 {count} 个",
-      "scan_failed": "扫描异常。可能是路径权限、文件占用或扫描器内部状态暂时不可用，详细原因已写入系统日志。",
-      "scan_request_failed": "扫描请求异常。可能是软件后端暂时不可用或当前环境路径配置异常，详细原因已写入系统日志。",
-      "scan_start_failed": "扫描启动失败。可能是当前环境路径无效、扫描器未初始化或后台任务暂时不可用，详细原因已写入系统日志。",
+      "scan_failed": "扫描异常。可能是路径权限、文件占用或扫描器内部状态暂时不可用。",
+      "scan_request_failed": "扫描请求异常。可能是软件后端暂时不可用或当前环境路径配置异常。",
+      "scan_start_failed": "扫描启动失败。可能是当前环境路径无效、扫描器未初始化或后台任务暂时不可用。",
       "scan_strict_restore_failed_count": "恢复失败 {count} 个",
       "scan_strict_restored_count": "已重新禁用 {count} 个",
-      "update_time_failed": "更新 Mod 操作时间失败。正在重新同步模组数据，详细原因已写入系统日志。",
-      "update_user_data_failed": "更新 Mod 用户数据失败，已还原本地状态。请稍后重试，详细原因已写入系统日志。"
+      "update_time_failed": "更新 Mod 操作时间失败。正在重新同步模组数据。",
+      "update_user_data_failed": "更新 Mod 用户数据失败，已还原本地状态。请稍后重试。"
     },
     "mod_alias_review": {
       "no_valid_result": "当前任务还没有可应用的有效结果",
@@ -4609,7 +4797,7 @@
         "test_failed": "模型测试失败。请检查模型配置、网络连接、代理设置和 API Key 是否可用。",
         "test_success": "模型测试成功"
       },
-      "apply_failed": "应用设置失败。可能是配置校验未通过、路径无法访问或配置文件无法写入，详细原因已写入系统日志。",
+      "apply_failed": "应用设置失败。可能是配置校验未通过、路径无法访问或配置文件无法写入。",
       "data_export": {
         "no_module_selected": "请至少勾选一个要导出的数据模块",
         "no_profile_selected": "已勾选环境数据，请至少选择一个环境"
@@ -4667,6 +4855,8 @@
       "url_sources_opened": "已打开 {count} 个外部来源，后续可接入专门下载流程。"
     },
     "texture": {
+      "tool_download_done": "贴图工具下载完成: {path}",
+      "tool_download_failed": "贴图工具下载失败",
       "tool_download_started_watch_status": "已启动 todds 下载任务，请留意底部状态栏。",
       "tool_ready_no_download": "todds 已就绪，无需下载"
     },
@@ -4679,7 +4869,7 @@
       "install_cancelled": "已取消安装更新。",
       "partial_no_update": "部分更新源暂时不可用，当前可用来源未发现新版本。",
       "recommend_scan": "建议执行一次全量扫描，以应用新版本的核心引擎特性！",
-      "start_failed": "启动更新失败。请检查网络连接、代理设置和安装目录权限，详细原因已写入系统日志。",
+      "start_failed": "启动更新失败。请检查网络连接、代理设置和安装目录权限。",
       "up_to_date": "当前已是最新版本"
     },
     "workspace": {
@@ -4688,7 +4878,7 @@
       "collection_invalid_id": "合集 ID 或链接无效，请输入纯数字 ID，或粘贴包含 id=xxx 的 Steam 合集链接。",
       "collection_load_failed": "加载合集失败。可能是网络连接、Steam 服务或本地缓存暂时不可用，请稍后重试。",
       "collection_parsing": "正在解析并接入合集数据。",
-      "collection_remove_failed": "移除合集失败。可能是后端服务暂时不可用或本地记录无法写入，详细原因已写入系统日志。",
+      "collection_remove_failed": "移除合集失败。可能是后端服务暂时不可用或本地记录无法写入。",
       "collection_removed": "已从记录中移除该合集",
       "collection_search_need_key": "合集搜索需要填写 Steam Web API Key",
       "enable_workshop_enhanced_first": "请先在设置中启用工坊增强信息并填写 Steam Web API Key",
@@ -5472,7 +5662,7 @@
       },
       "shadow_paths": "已禁用的包名重复Mod",
       "sign_color": "颜色标记*",
-      "tags": "标签*",
+      "tags": "标签",
       "time": {
         "file_create": "文件创建时间：",
         "file_modify": "文件修改时间：",
@@ -6965,7 +7155,7 @@
           "update_redownload": "更新模组[再次下载]{count}",
           "update_resubscribe": "更新模组[再次订阅]{count}",
           "update_steam_redownload": {
-            "label": "重新下载更新模组{count}",
+            "label": "更新模组[重新下载]{count}",
             "tooltip": "直接请求 Steam 重新下载或校验这些可更新的工坊项。"
           },
           "view_timeline": "查看变动"

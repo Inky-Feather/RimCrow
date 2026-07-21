@@ -1021,7 +1021,7 @@ const applyPendingActions = async () => {
     pendingActions.value = {}
     await modStore.retryAutoSortAfterRuleChange()
   } catch (error) {
-    feedback.value = error?.message || t('dialog.sort_conflict.apply_failed', '保存规则失败，请重试。')
+    feedback.value = toUserMessage(error, t('dialog.sort_conflict.apply_failed', '保存规则失败，请重试。'))
   } finally {
     processing.value = false
   }

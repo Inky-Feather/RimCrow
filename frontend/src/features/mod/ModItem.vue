@@ -585,7 +585,7 @@ const copyTextToClipboard = async (text, label) => {
     toast.success(t('toast.copy.success', '已复制{label}', { label }), { timeout: 600 })
   } catch (error) {
     console.warn(`Copy ${label} failed:`, error)
-    toast.error(toUserMessage(error?.message || error, t('toast.copy.failed_with_label', '复制{label}失败。请检查剪贴板权限，或手动选中文本复制。', { label })))
+    toast.error(toUserMessage(error, t('toast.copy.failed_with_label', '复制{label}失败。请检查剪贴板权限，或手动选中文本复制。', { label })))
   }
 }
 const copySelectedModInfo = async (fieldKey, label, selectedIds = []) => {

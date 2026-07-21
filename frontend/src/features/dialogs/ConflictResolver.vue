@@ -261,7 +261,7 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { buildModExternalMenuItem, buildModInfoCopyMenuItem, normalizeModMenuSource } from '../mod/lib/modContextMenuItems'
-import { toUserMessage } from '../../shared/lib/common'
+import { showUserErrorToast, toUserMessage } from '../../shared/lib/common'
 import { getStoreTypeLabel } from '../../shared/lib/constants'
 import { getCurrentLocale, t } from '../../shared/i18n.js'
 
@@ -783,17 +783,17 @@ const submit = async () => {
     }
 
     const failedPaths = Array.isArray(res?.data?.failed_paths) ? res.data.failed_paths : []
-    const userMessage = toUserMessage(res?.message, t('toast.conflict.resolve_failed', '冲突处理失败。可能是目标文件已被占用、路径权限不足或列表状态已变化，请重新扫描后再试。'))
+    const userMessage = toUserMessage(res, t('toast.conflict.resolve_failed', '冲突处理失败。可能是目标文件已被占用、路径权限不足或列表状态已变化，请重新扫描后再试。'))
     submitFeedback.value = {
       kind: 'error',
       message: userMessage,
       details: failedPaths.slice(0, 3),
     }
-    toast.error(userMessage)
+    showUserErrorToast(res, userMessage)
   } catch (error) {
-    const message = toUserMessage(error?.message || error, t('toast.conflict.resolve_exception', '冲突处理请求失败。请确认后端服务仍在运行，并重新扫描后再试。'))
+    const message = toUserMessage(error, t('toast.conflict.resolve_exception', '冲突处理请求失败。请确认后端服务仍在运行，并重新扫描后再试。'))
     submitFeedback.value = { kind: 'error', message, details: [] }
-    toast.error(message)
+    showUserErrorToast(error, message)
   } finally {
     processing.value = false
   }

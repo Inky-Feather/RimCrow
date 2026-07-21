@@ -116,7 +116,7 @@
 import { ref, watch, h, computed } from 'vue'
 import { FolderTree, AppWindow, Globe, Cpu, Terminal, Component, Settings, Keyboard, Info } from 'lucide-vue-next'
 import { shakeComponent } from '../../shared/lib/domEffects'
-import { deepClone, toast } from '../../shared/lib/common'
+import { deepClone, showUserErrorToast, toast } from '../../shared/lib/common'
 import { createDefaultKeybindingConfig } from '../../shared/commands/keybindingConflicts'
 
 // 导入 Common UI
@@ -393,11 +393,12 @@ const validateWorkshopModsEnable = async () => {
     return false
   }
   const workshopCheck = await checkPath('workshop_mods_path', workshopPath)
+  const workshopCheckMessage = translateMessagePayload(workshopCheck, t('toast.settings.panel.workshop_path_incomplete', '创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。'))
   if (workshopCheck?.pass && workshopCheck?.type === 'warn') {
-    toast.warning(workshopCheck.msg || t('toast.settings.panel.workshop_path_incomplete', '创意工坊目录当前还不完整，保存后可能需要等 Steam 下载完成。'))
+    toast.warning(workshopCheckMessage)
   }
   if (!workshopCheck?.pass) {
-    toast.warning(t('toast.settings.panel.workshop_path_problem', '创意工坊目录可能无法使用：{message}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。', { message: workshopCheck?.msg || t('toast.settings.panel.select_workshop_path', '请重新选择创意工坊目录') }))
+    toast.warning(t('toast.settings.panel.workshop_path_problem', '创意工坊目录可能无法使用：{message}\n此开关会按你的选择保留，加载失败时请回到这里修正路径。', { message: workshopCheckMessage || t('toast.settings.panel.select_workshop_path', '请重新选择创意工坊目录') }))
     return false
   }
   return true
@@ -574,7 +575,7 @@ const showSecretStorageWarning = (target) => {
 
 // 语言选择立即预览；取消设置时会恢复打开面板前的语言。
 const previewLocale = (language) => setLocale(language).catch(error => {
-  toast.error(error?.message || t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
+  showUserErrorToast(error?.response || error, t('errors.i18n.user_locale_load_failed', '读取用户语言文件失败。请检查 data/locales 下的语言文件格式。'))
 })
 
 // 数据同步：打开时立即生成表单副本；路径检测只在后台补充 check_info，不阻塞设置页渲染。

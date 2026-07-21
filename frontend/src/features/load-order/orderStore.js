@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { toast, checkResult, toUserMessage } from '../../shared/lib/common'
+import { toast, checkResult, showUserErrorToast } from '../../shared/lib/common'
 import { useModStore } from '../mod/stores/modStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
@@ -450,7 +450,7 @@ export const useOrderStore = defineStore('order', () => {
       }
     } catch (e) {
       console.error("导出Mod序列异常:", e)
-      toast.error(toUserMessage(e?.message || e, t('toast.load_order.export_failed', '导出 Mod 序列失败。请检查目标目录权限、磁盘空间和当前启用列表状态，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.load_order.export_failed', '导出 Mod 序列失败。请检查目标目录权限、磁盘空间和当前启用列表状态。'))
     }
     return false
   }
@@ -553,7 +553,7 @@ export const useOrderStore = defineStore('order', () => {
       return shareCode
     } catch (e) {
       console.error('生成分享码异常:', e)
-      toast.error(toUserMessage(e?.message || e, t('toast.load_order.share_code_failed', '生成分享码失败。请检查当前启用列表是否有效，或稍后重试。详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.load_order.share_code_failed', '生成分享码失败。请检查当前启用列表是否有效，或稍后重试。'))
     }
     return ''
   }

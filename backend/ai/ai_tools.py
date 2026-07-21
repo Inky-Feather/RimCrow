@@ -425,12 +425,12 @@ class AIToolExecutor:
         try:
             args = json.loads(arguments_str) if arguments_str else {}
         except json.JSONDecodeError:
-            payload = {"error": "参数解析失败(Invalid JSON)"}
+            payload = {"error": "工具参数格式不正确，请重新组织输入后重试。"}
             return self._build_execution_result(name=name, payload=payload)
 
         spec = self.registry.get(name)
         if spec is None:
-            payload = {"error": f"系统未注册此工具: {name}"}
+            payload = {"error": "系统工具不可用，请稍后重试。"}
             return self._build_execution_result(name=name, payload=payload)
 
         try:
@@ -439,9 +439,9 @@ class AIToolExecutor:
             logger.warning(
                 "[AI诊断] 工具参数校验失败。tool=%s",
                 name,
-                extra={"error_code": "AI.TOOL.ARGS_INVALID", "extra_context": {"tool": name, "original_error": str(e)}},
+                extra={"error_code": "AI.TOOL.ARGS_INVALID", "extra_context": {"tool": name}},
             )
-            payload = {"error": f"工具参数不合法: {e.errors(include_url=False)}"}
+            payload = {"error": "工具参数不符合要求，请重新组织输入后重试。"}
             return self._build_execution_result(name=name, payload=payload)
 
         try:
@@ -452,10 +452,10 @@ class AIToolExecutor:
             logger.error(
                 "AI 工具执行异常。tool=%s",
                 name,
-                extra={"error_code": "AI.TOOL.EXECUTION_FAILED", "extra_context": {"tool": name, "original_error": str(e)}},
+                extra={"error_code": "AI.TOOL.EXECUTION_FAILED", "extra_context": {"tool": name}},
                 exc_info=True,
             )
-            payload = {"error": f"工具执行内部异常: {str(e)}"}
+            payload = {"error": "工具执行失败，请稍后重试。"}
             return self._build_execution_result(name=name, payload=payload)
 
     def execute(self, name: str, arguments_str: str) -> str:

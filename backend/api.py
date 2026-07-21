@@ -51,7 +51,7 @@ from backend.utils.tools import current_ms, generate_path_hash
 from backend.utils.constants import RIMWORLD_DLC_OPTIONS, RIMWORLD_STEAM_APP_ID_STR, get_steam_elanguage_options
 from backend.i18n.language_registry import get_language_options, normalize_language_code
 from backend.i18n.messages import DEFAULT_LOCALE, create_user_locale, delete_user_locale_message, list_user_locale_options, load_user_locale, localized_key, localized_params, save_user_locale_message, save_user_locale_messages, tr
-from backend.utils.error_contract import ErrorEnvelope, build_error_payload, build_stack_detail, coerce_error_envelope
+from backend.utils.error_contract import ErrorEnvelope, build_error_payload, build_stack_detail, classify_exception, coerce_error_envelope
 from backend.utils.logger import logger, app_log_reader
 from backend.utils.shortcuts import get_desktop_directory
 from backend.managers.mgr_network import network_mgr
@@ -85,18 +85,6 @@ def _default_user_error_message(message: Any = "") -> str:
     if text and not _looks_like_technical_error(text):
         return text
     return tr("api.errors.operation_unfinished", "操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用。")
-
-
-def _build_error_detail(detail: Any = None, context: dict[str, Any] | None = None) -> dict[str, Any]:
-    """兼容旧调用点的错误详情构造；异常只保留堆栈和必要上下文。"""
-    if isinstance(detail, BaseException):
-        return build_stack_detail(detail, context=context)
-    payload: dict[str, Any] = {}
-    if isinstance(detail, dict):
-        payload.update(detail)
-    if context:
-        payload["context"] = context
-    return payload
 
 
 def _new_error_id() -> str:
@@ -256,9 +244,9 @@ def log_api_call(func):
             duration = (time.time() - start_time) * 1000
             # 只有慢请求或显式 Debug 才记录 INFO，否则记录 DEBUG 避免刷屏
             if duration > 500: 
-                logger.warning(f"API 调用耗时较长: name={func_name}, duration_ms={duration:.2f}")
+                logger.warning(f"API 调用耗时较长: name={func_name}, duration_ms={duration:.2f}", stacklevel=2)
             else:
-                logger.debug(f"API 调用完成: name={func_name}, args={safe_args}, duration_ms={duration:.2f}")
+                logger.debug(f"API 调用完成: name={func_name}, args={safe_args}, duration_ms={duration:.2f}", stacklevel=2)
             return result
         except Exception as e:
             duration = (time.time() - start_time) * 1000
@@ -269,7 +257,7 @@ def log_api_call(func):
                 exc_info=True,
                 extra={
                     "error_code": "API.CALL.UNHANDLED_EXCEPTION",
-                    "extra_context": {"api": func_name, "duration_ms": round(duration, 2), "original_error": str(e)},
+                    "extra_context": {"api": func_name, "duration_ms": round(duration, 2)},
                 },
             )
             # 这里的异常通常需要返回给前端一个标准格式
@@ -321,32 +309,53 @@ class ApiResponse:
         return str(source or "").strip()
 
     @classmethod
+    def _resolve_public_error_text(cls, message: Any, user_message: Any = "") -> str:
+        text = cls._resolve_message_text(message, user_message)
+        if text and not _looks_like_technical_error(text):
+            return text
+        fallback_source = message if not isinstance(message, dict) else message.get("message") or message.get("user_message") or ""
+        return _default_user_error_message(fallback_source)
+
+    @classmethod
     def _build_error_envelope(cls, message: Any, data=None, *, status: str, code: str, detail=None, user_message=None, context=None, message_key: str = "", message_params: dict[str, Any] | None = None) -> ErrorEnvelope:
         display_source = user_message or message
-        _, key, params = cls._message_meta(display_source, message_key=message_key, message_params=message_params)
+        _, declared_key, declared_params = cls._message_meta(display_source, message_key=message_key, message_params=message_params)
+        key = declared_key
+        params = declared_params
+        has_declared_message_meta = bool(declared_key or declared_params)
         if not key:
             key = _api_message_key_from_code("errors" if status == "error" else "warnings", code)
+        log_message = cls._resolve_message_text(message)
+        if not log_message or _looks_like_technical_error(log_message):
+            log_message = _default_user_error_message(message)
+        public_message = cls._resolve_public_error_text(message, user_message)
         primary_source = detail if isinstance(detail, BaseException) else message
+        has_exception_detail = isinstance(detail, BaseException)
+        explicit_user_message = cls._resolve_message_text(user_message) if user_message else ""
         envelope = coerce_error_envelope(
             primary_source,
             code=code,
-            user_message=cls._resolve_message_text(message, user_message) or _default_user_error_message(message if not isinstance(message, dict) else message.get("message") or message.get("user_message") or ""),
-            message=cls._resolve_message_text(message, user_message),
+            user_message=explicit_user_message,
+            message=log_message,
             context=context,
             detail=detail if not isinstance(detail, BaseException) else None,
-            message_key=key,
-            message_params=params,
+            message_key=key if has_declared_message_meta else "",
+            message_params=params if has_declared_message_meta else None,
             status=status,
             data=cls.serialize_data(data),
         )
-        envelope.error_code = str(code or envelope.error_code or "").strip() or envelope.error_code
+        operation_code = str(code or "").strip()
+        classified = has_exception_detail and envelope.error_code not in {"", "SYSTEM.UNKNOWN", "APP.UNKNOWN"}
+        if not classified:
+            envelope.error_code = str(operation_code or envelope.error_code or "").strip() or envelope.error_code
+            envelope.error_type = str(envelope.error_code or "APP").split(".", 1)[0] or "APP"
+            envelope.message_key = key
+            envelope.message_params = params
         envelope.error_id = _new_error_id()
         if isinstance(detail, BaseException):
             envelope.detail = build_stack_detail(detail, context=context, error_id=envelope.error_id)
-        elif context:
-            envelope.detail.setdefault("context", context)
-        envelope.message_key = key
-        envelope.message_params = params
+        envelope.user_message = envelope.user_message or public_message
+        envelope.message = envelope.message or log_message or envelope.message_key or envelope.error_code
         envelope.message = envelope.message or envelope.user_message or envelope.message_key or envelope.error_code
         return envelope
 
@@ -361,13 +370,21 @@ class ApiResponse:
     def error(cls, message, data=None, *, code="APP.UNKNOWN_ERROR", detail=None, user_message=None, context=None, message_key: str = "", message_params: dict[str, Any] | None = None):
         has_exc = sys.exc_info()[0] is not None
         envelope = cls._build_error_envelope(message, data, status="error", code=code, detail=detail, user_message=user_message, context=context, message_key=message_key, message_params=message_params)
-        log_context = envelope.detail or None
+        log_context = {"context": context} if context else None
         logger.error(
             "API 返回错误：%s",
-            str(message or envelope.message),
+            str(envelope.message),
             exc_info=has_exc,
             stacklevel=2,
-            extra={"error_code": envelope.error_code, "extra_context": log_context},
+            extra={
+                "error_type": envelope.error_type,
+                "error_code": envelope.error_code,
+                "error_id": envelope.error_id,
+                "message_key": envelope.message_key,
+                "message_params": envelope.message_params,
+                "user_message": envelope.user_message,
+                "extra_context": log_context,
+            },
         )
         return build_error_payload(envelope, status="error")
     
@@ -375,11 +392,20 @@ class ApiResponse:
     def warning(cls, message, data=None, *, code="APP.WARNING", detail=None, user_message=None, context=None, message_key: str = "", message_params: dict[str, Any] | None = None):
         fallback_message = user_message or message or tr("api.warnings.partial_success", "操作已完成，但有部分情况需要确认。")
         envelope = cls._build_error_envelope(fallback_message, data, status="warning", code=code, detail=detail, user_message=user_message, context=context, message_key=message_key, message_params=message_params)
+        log_context = {"context": context} if context else None
         logger.warning(
             "API 返回警告：%s",
-            str(message or envelope.message),
+            str(envelope.message),
             stacklevel=2,
-            extra={"error_code": envelope.error_code, "extra_context": envelope.detail or None},
+            extra={
+                "error_type": envelope.error_type,
+                "error_code": envelope.error_code,
+                "error_id": envelope.error_id,
+                "message_key": envelope.message_key,
+                "message_params": envelope.message_params,
+                "user_message": envelope.user_message,
+                "extra_context": log_context,
+            },
         )
         return build_error_payload(envelope, status="warning")
 
@@ -2906,7 +2932,7 @@ class API:
                         exc_info=True,
                         extra={
                             "error_code": "MODS.CONFLICT_RESOLVE_ITEM_FAILED",
-                            "extra_context": {"action": action, "path": path, "original_error": str(op_error)},
+                            "extra_context": {"action": action, "path": path},
                         },
                     )
                     msg = tr("api.mods.conflict_item_failed", "处理该项时出错")
@@ -2939,7 +2965,6 @@ class API:
                     "扫描冲突处理失败",
                     payload,
                     code="MODS.CONFLICT_RESOLVE_FAILED",
-                    detail={"failed_items": error_items},
                     user_message=tr(
                         "errors.mods.conflict_resolve_failed_with_reason",
                         "扫描冲突处理失败：{reason}。请检查相关 Mod 文件是否仍存在，或稍后刷新后重试。",
@@ -3013,7 +3038,7 @@ class API:
                 else:
                     failed_items.append(item)
             if not success_items and failed_items:
-                reason = failed_items[0].get('message')
+                reason = _default_user_error_message(failed_items[0].get('message'))
                 failed_message = tr("api.mods.deactivate_failed", "Mod 禁用失败：{reason}", reason=reason) if disabled else tr("api.mods.activate_failed", "Mod 启用失败：{reason}", reason=reason)
                 return ApiResponse.error(failed_message, {
                     "success_count": 0,
@@ -3955,7 +3980,7 @@ class API:
             return self._build_launch_prepare_failure(profile_id, str(e))
         except Exception as e:
             logger.error("启动游戏失败: %s", e, exc_info=True)
-            failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_exception", f"启动游戏时出错: {e}")
+            failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_exception", str(tr("errors.game.launch_failed", "启动游戏失败。请检查游戏路径、启动参数和当前环境链接状态。")))
             return ApiResponse.error(
                 "启动游戏失败",
                 data={"runtime_session": failed_session, "failure_reason": "launch_exception"},
@@ -4122,11 +4147,12 @@ class API:
 
     def _build_launch_prepare_failure(self, profile_id: str, message: str):
         """链接同步失败时终止启动，并让前端显示明确提示。"""
-        detail = str(message or tr("api.game.launch_prepare_failed", "启动前准备失败"))
-        logger.error("启动前链接同步失败: profile_id=%s, detail=%s", profile_id, detail)
-        failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_prepare_failed", detail)
+        raw_detail = str(message or "")
+        public_message = tr("api.game.launch_prepare_failed", "启动前准备失败。请检查当前环境路径、文件权限和模组链接状态。")
+        logger.error("启动前链接同步失败: profile_id=%s detail=%s", profile_id, raw_detail)
+        failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_prepare_failed", str(public_message))
         return ApiResponse.warning(
-            detail,
+            public_message,
             data={
                 "action": "launch_prepare_failed",
                 "profile_id": profile_id,
@@ -4303,14 +4329,15 @@ class API:
             return False, timeout_status, tr("api.steam.ready_timeout", "Steam 已尝试自动启动，但未能在限定时间内进入已登录可用状态。")
         except Exception as e:
             logger.error("确认 Steam 可用状态失败: %s", e, exc_info=True)
+            failed_message = tr("api.steam.status_probe_failed", "检测 Steam 状态失败。请检查 Steam 客户端、登录状态和路径配置。")
             failed_status = {
                 "running": False,
                 "logged_in": False,
                 "ready": False,
                 "reason": "steam_status_probe_failed",
-                "detail": str(e),
+                "detail": str(failed_message),
             }
-            return False, self._attach_steam_user_hint(failed_status), tr("api.steam.status_probe_failed", "检测 Steam 状态失败：{reason}", reason=str(e))
+            return False, self._attach_steam_user_hint(failed_status), failed_message
 
     @staticmethod
     def _describe_steam_status(steam_status: dict | None, waiting: bool = False) -> dict:
@@ -4436,7 +4463,7 @@ class API:
             return self._build_launch_prepare_failure(profile_id, str(e))
         except Exception as e:
             logger.error("处理启动确认失败: %s", e, exc_info=True)
-            failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_warning_resolve_failed", f"处理启动确认失败: {e}")
+            failed_session = self._get_runtime_session_manager().mark_launch_failed("launch_warning_resolve_failed", str(tr("errors.game.launch_warning_resolve_failed", "处理启动确认失败。请重新尝试启动，或刷新当前环境状态后再试。")))
             return ApiResponse.error(
                 "处理启动确认失败",
                 data={"runtime_session": failed_session, "failure_reason": "launch_warning_resolve_failed"},
@@ -5114,7 +5141,9 @@ class API:
                     shutil.copytree(src_path, dst_path)
                 success_count += 1
             except Exception as e:
-                errors.append(f"{mod['name']}: {str(e)}")
+                logger.error("转移模组文件失败: name=%s path=%s error=%s", mod.get("name"), src_path, e, exc_info=True)
+                item_message = tr("api.workspace.transfer_item_failed", "处理失败，请检查源目录、目标目录和文件权限。")
+                errors.append(f"{mod['name']}: {item_message}")
         
         # 物理操作完成后，同步更新数据库记录，避免前端全量扫描
         with db.atomic():
@@ -5539,7 +5568,6 @@ class API:
                 return ApiResponse.error(
                     "读取日志分页失败",
                     code="LOG.PAGE_READ_FAILED",
-                    detail={"original_error": result["error"]},
                     context={"log_type": log_type, "filename": filename},
                     user_message=_default_user_error_message(result["error"]),
                 )
@@ -6211,7 +6239,6 @@ class API:
             return ApiResponse.error(
                 "AI 配置校验未通过",
                 code="AI.CONFIG.INVALID",
-                detail={"original_error": message},
                 user_message=_default_user_error_message(message),
             )
 
@@ -6277,7 +6304,7 @@ class API:
                 "AI 测试请求失败",
                 code="AI.TEST_CHAT.FAILED",
                 detail=e,
-                user_message=_default_user_error_message(str(e)),
+                context={"module": "ai", "action": "test_chat"},
             )
 
     @log_api_call
@@ -6395,7 +6422,6 @@ class API:
         task_id = str(uuid.uuid4())
         task_definition = (self.ai_mgr.tasks or {}).get(task_key) if hasattr(self.ai_mgr, "tasks") else {}
         task_title = str((task_definition or {}).get("name") or tr("api.ai.default_task_title", "AI 任务")).strip() or str(tr("api.ai.default_task_title", "AI 任务"))
-        failed_message = tr("api.ai.task_failed", "AI 任务执行失败。请检查模型配置、网络连接和 API Key。")
 
         def background_worker():
             loop = asyncio.new_event_loop()
@@ -6410,11 +6436,15 @@ class API:
                     'data': results
                 })
             except Exception as e:
+                error_id = _new_error_id()
+                classified = classify_exception(e, module="ai", action=task_key, context={"task_id": task_id, "task_key": task_key})
+                failed_title = tr("api.ai.task_failed_title", "AI 任务执行失败")
+                user_message = classified.user_message or failed_title
                 logger.error(
                     "后台 AI 任务执行失败。task_id=%s task=%s",
                     task_id,
                     task_key,
-                    extra={"error_code": "AI.TASK.BACKGROUND_FAILED", "extra_context": {"task_id": task_id, "task_key": task_key, "original_error": str(e)}},
+                    extra={"error_code": classified.error_code or "AI.TASK.BACKGROUND_FAILED", "extra_context": {"task_id": task_id, "task_key": task_key, "error_id": error_id}},
                     exc_info=True,
                 )
                 EventBus.emit_progress(
@@ -6422,22 +6452,30 @@ class API:
                     "ai-task",
                     status="failed",
                     progress=0,
-                    message=failed_message,
+                    message=failed_title,
+                    user_message=user_message,
+                    message_key="api.ai.task_failed_title",
+                    message_params={},
                     metrics={
                         "task_id": task_id,
                         "task_key": task_key,
                         "title": task_title,
-                        "error": str(tr("api.ai.task_failed_title", "AI 任务执行失败")),
-                        "original_error": str(e),
                     },
+                    error_type=classified.error_type,
+                    error_code=classified.error_code or "AI.TASK.BACKGROUND_FAILED",
+                    error_id=error_id,
                 )
                 EventBus.emit("ai-task-complete", {
                     'task_id': task_id,
-                    'status': 'error', 
-                    'message': str(failed_message),
-                    'message_key': localized_key(failed_message),
-                    'message_params': localized_params(failed_message),
-                    'detail': {"original_error": str(e)}
+                    'status': 'error',
+                    'message': failed_title,
+                    'user_message': user_message,
+                    'message_key': 'api.ai.task_failed_title',
+                    'message_params': {},
+                    'error_type': classified.error_type,
+                    'error_code': classified.error_code or "AI.TASK.BACKGROUND_FAILED",
+                    'error_id': error_id,
+                    'detail': build_stack_detail(e, context={"task_id": task_id, "task_key": task_key}, error_id=error_id),
                 })
             finally:
                 try:
@@ -6454,7 +6492,7 @@ class API:
                 except Exception as cleanup_error:
                     logger.warning(
                         "后台 AI 任务清理未完成任务失败。",
-                        extra={"error_code": "AI.TASK.CLEANUP_PENDING_FAILED", "extra_context": {"task_id": task_id, "original_error": str(cleanup_error)}},
+                        extra={"error_code": "AI.TASK.CLEANUP_PENDING_FAILED", "extra_context": {"task_id": task_id}},
                         exc_info=True,
                     )
                 try:
@@ -6462,7 +6500,7 @@ class API:
                 except Exception as cleanup_error:
                     logger.warning(
                         "后台 AI 任务清理异步生成器失败。",
-                        extra={"error_code": "AI.TASK.CLEANUP_ASYNCGEN_FAILED", "extra_context": {"task_id": task_id, "original_error": str(cleanup_error)}},
+                        extra={"error_code": "AI.TASK.CLEANUP_ASYNCGEN_FAILED", "extra_context": {"task_id": task_id}},
                         exc_info=True,
                     )
                 try:
@@ -6470,7 +6508,7 @@ class API:
                 except Exception as cleanup_error:
                     logger.warning(
                         "后台 AI 任务关闭默认执行器失败。",
-                        extra={"error_code": "AI.TASK.CLEANUP_EXECUTOR_FAILED", "extra_context": {"task_id": task_id, "original_error": str(cleanup_error)}},
+                        extra={"error_code": "AI.TASK.CLEANUP_EXECUTOR_FAILED", "extra_context": {"task_id": task_id}},
                         exc_info=True,
                     )
                 try:
@@ -6509,9 +6547,18 @@ class API:
         filename = payload.get("filename", "")
         source_type = payload.get("log_source_type", "game")
         if not raw_lines or not filename:
-            return ApiResponse.error(tr("api.ai.invalid_analysis_request", "无效的分析请求：缺失日志行号或文件名。"))
+            return ApiResponse.warning(
+                "日志诊断预检未执行：缺少日志行号或文件名",
+                code="LOG.SELECTION_INVALID",
+                user_message=tr("api.ai.invalid_analysis_request", "当前没有可分析的日志内容。请重新选择日志行后再试。"),
+            )
         reader = self.game_log_mgr if source_type == 'game' else app_log_reader
-        if not reader: return ApiResponse.error(tr("api.log.reader_not_initialized", "日志读取器未初始化"))
+        if not reader:
+            return ApiResponse.error(
+                "日志诊断预检失败：日志读取器不可用",
+                code="LOG.READER_UNAVAILABLE",
+                user_message=tr("api.log.reader_not_initialized", "日志读取器暂时不可用。请刷新日志页面或重启软件后重试。"),
+            )
         
         if source_type == 'game':
             filepath = self.game_log_mgr.resolve_log_file_path(filename) if self.game_log_mgr else ""
@@ -6519,7 +6566,11 @@ class API:
             filepath = os.path.join(DATA_DIR, 'logs', filename)
         full_logs = reader.get_raw_logs_by_lines(filepath, raw_lines)
         if not full_logs:
-            return ApiResponse.error(tr("api.ai.selected_log_unavailable", "无法读取指定的日志内容，文件可能已被清理。"))
+            return ApiResponse.warning(
+                "日志诊断预检未执行：所选日志内容不可用",
+                code="LOG.SELECTION_UNAVAILABLE",
+                user_message=tr("api.ai.selected_log_unavailable", "所选日志内容已经不可用，可能已被刷新或清理。请刷新日志页面后重新选择。"),
+            )
         token_limit = settings.config.ai.resolved_max_input_tokens()
         from backend.managers.mgr_game_logs import LogCondenser
         condensed_data = LogCondenser.condense_for_ai( full_logs, token_limit=token_limit, stack_preview_lines=2 )
@@ -6567,11 +6618,6 @@ class API:
             )
             return ApiResponse.success(result)
         except Exception as e:
-            logger.error(
-                "AI 助手会话接口异常。",
-                extra={"error_code": "AI.ASSISTANT_SESSION.FAILED", "extra_context": {"original_error": str(e)}},
-                exc_info=True,
-            )
             return ApiResponse.error(
                 "AI 助手会话异常",
                 code="AI.ASSISTANT_SESSION.FAILED",
@@ -6602,7 +6648,7 @@ class API:
         except Exception as e:
             logger.error(
                 "AI 助手请求预估异常。",
-                extra={"error_code": "AI.ASSISTANT_ESTIMATE.FAILED", "extra_context": {"original_error": str(e)}},
+                extra={"error_code": "AI.ASSISTANT_ESTIMATE.FAILED", "extra_context": {}},
                 exc_info=True,
             )
             return ApiResponse.error(
@@ -6644,7 +6690,7 @@ class API:
             logger.error(
                 "[AI全局扫描] 读取完整日志块失败。filename=%s",
                 filename,
-                extra={"error_code": "AI.GLOBAL_SCAN.LOG_READ_FAILED", "extra_context": {"filename": filename, "source_type": source_type, "original_error": str(e)}},
+                extra={"error_code": "AI.GLOBAL_SCAN.LOG_READ_FAILED", "extra_context": {"filename": filename, "source_type": source_type}},
                 exc_info=True,
             )
             return ApiResponse.error(
@@ -6798,22 +6844,20 @@ class API:
         except Exception as e:
             fallback_profile_id = ""
             fallback_context = None
-            fallback_error = None
+            fallback_failed = False
             try:
                 self._bootstrap_context('default', allow_fallback=False)
                 fallback_profile_id = str(getattr(getattr(self, 'active_context', None), 'profile_id', '') or '').strip()
                 fallback_context = self.active_context.__dict__ if self.active_context else None
-            except Exception as fallback_exc:
-                fallback_error = str(fallback_exc)
+            except Exception:
+                fallback_failed = True
 
-            message = tr("api.profile.activate_failed_fallback", "切换到环境 {profile_id} 失败，已回退 default：{reason}", profile_id=pid, reason=e)
-            if fallback_error:
+            message = tr("api.profile.activate_failed_fallback", "切换到环境 {profile_id} 失败，已回退 default。", profile_id=pid)
+            if fallback_failed:
                 message = tr(
                     "api.profile.activate_failed_fallback_failed",
-                    "切换到环境 {profile_id} 失败，且回退 default 也失败：{reason}；fallback 错误：{fallback_error}",
+                    "切换到环境 {profile_id} 失败，且回退 default 也失败。请检查环境路径和配置文件权限。",
                     profile_id=pid,
-                    reason=e,
-                    fallback_error=fallback_error,
                 )
             return ApiResponse.error(
                 message,
@@ -6824,12 +6868,12 @@ class API:
                     "context": fallback_context,
                     "settings": self._settings_payload(),
                 },
-                code="PROFILE.ACTIVATE_FALLBACK_FAILED" if fallback_error else "PROFILE.ACTIVATE_FAILED",
+                code="PROFILE.ACTIVATE_FALLBACK_FAILED" if fallback_failed else "PROFILE.ACTIVATE_FAILED",
                 detail=e,
                 context={
                     "requested_profile_id": str(pid or "").strip(),
                     "fallback_profile_id": fallback_profile_id,
-                    "fallback_error": fallback_error,
+                    "fallback_failed": fallback_failed,
                 },
             )
     
@@ -6965,7 +7009,7 @@ class API:
                     logger.error(
                         "外部数据下载完成，但重载缓存失败。type=%s",
                         data_type,
-                        extra={"error_code": "EXTERNAL_DATA.RELOAD_FAILED", "extra_context": {"data_type": data_type, "original_error": str(reload_error)}},
+                        extra={"error_code": "EXTERNAL_DATA.RELOAD_FAILED", "extra_context": {"data_type": data_type}},
                         exc_info=True,
                     )
                     EventBus.send_toast(
@@ -6974,36 +7018,20 @@ class API:
                     )
 
             def on_db_error(task):
-                original_error = str(getattr(task, "error_msg", "") or "")
-                logger.error(
-                    "外部数据下载失败。type=%s url=%s target=%s",
-                    data_type,
-                    url,
-                    full_path,
-                    extra={"error_code": "EXTERNAL_DATA.DOWNLOAD_FAILED", "extra_context": {"data_type": data_type, "url": url, "target": full_path, "original_error": original_error}},
-                    exc_info=True,
-                )
-                EventBus.send_toast(
-                    tr("api.external_data.download_failed_hint", "{message} 请检查网络连接、代理设置和目标目录权限。", message=spec["error_message"]),
-                    type="error",
-                )
+                pass
 
             task_id = self.download_mgr.add_task(
                 url=url,
                 dest_dir=file_folder,
                 filename=file_name,
                 on_complete=on_db_ready,
-                on_error=on_db_error
+                on_error=on_db_error,
+                title=spec["start_message"],
+                metadata={"external_data_type": data_type},
             )
 
             return ApiResponse.success(data={"task_id": task_id}, message=spec["start_message"])
         except Exception as e:
-            logger.error(
-                "启动外部数据更新失败。type=%s",
-                data_type,
-                extra={"error_code": "EXTERNAL_DATA.UPDATE_START_FAILED", "extra_context": {"data_type": data_type, "original_error": str(e)}},
-                exc_info=True,
-            )
             return ApiResponse.error(
                 "启动外部数据更新失败",
                 code="EXTERNAL_DATA.UPDATE_START_FAILED",
@@ -8402,7 +8430,13 @@ class API:
     def github_fetch_info(self, url: str, source_branch: str = ""):
         """解析并获取远程 Git 仓库信息"""
         res = self.github_mgr.fetch_repo_info(url, source_branch=source_branch)
-        if "error" in res: return ApiResponse.error(res["error"])
+        if "error" in res:
+            return ApiResponse.error(
+                "获取 Git 仓库信息失败",
+                code="GITHUB.INFO_FETCH_FAILED",
+                data=res,
+                user_message=_default_user_error_message(res["error"]),
+            )
         return ApiResponse.success(res)
 
     @log_api_call
@@ -8556,6 +8590,18 @@ class API:
             if not records: return
             
             updated_records = {}
+            failures: list[dict[str, Any]] = []
+            failure_codes: dict[str, int] = {}
+            def record_failure(repo_url: str, error_code: str, diagnostic: Any):
+                resolved_code = str(error_code or "GIT.REQUEST_FAILED").strip() or "GIT.REQUEST_FAILED"
+                failure_codes[resolved_code] = failure_codes.get(resolved_code, 0) + 1
+                if len(failures) < 8:
+                    failures.append({
+                        "repo_url": str(repo_url or ""),
+                        "error_code": resolved_code,
+                        "diagnostic": str(redact_sensitive_data(str(diagnostic or "")))[:300],
+                    })
+
             # 使用线程池并发请求远端 API，避免串行卡顿
             # 假设有 5 个订阅，5 个线程同时发请求，耗时取决于最慢的一个 (通常 < 500ms)
             def fetch_single(record):
@@ -8570,15 +8616,41 @@ class API:
                 return repo_url, info
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=5) as executor:
-                # 提交所有任务
-                futures = [executor.submit(fetch_single, r) for r in records]
-                for future in futures:
+                # 提交所有任务，并保留 record 映射，失败汇总时能准确指出哪个仓库出问题。
+                future_to_record = {executor.submit(fetch_single, r): r for r in records}
+                for future, record in future_to_record.items():
                     try:
                         repo_url, info = future.result()
                         if info and "error" not in info:
                             updated_records[repo_url] = info
+                        elif isinstance(info, dict) and info.get("error"):
+                            record_failure(
+                                repo_url,
+                                info.get("error_code") or info.get("code") or "GIT.REQUEST_FAILED",
+                                info.get("error"),
+                            )
                     except Exception as e:
-                        logger.error(f"后台刷新 Git 仓库失败: {e}", exc_info=True)
+                        repo_url = str(record.get("repo_url") or "")
+                        classified = classify_exception(e, module="git", action="refresh_subscriptions", context={"repo_url": repo_url})
+                        record_failure(repo_url, classified.error_code or "GIT.REQUEST_FAILED", e)
+
+            if failures:
+                primary_error_code = max(failure_codes.items(), key=lambda item: item[1])[0]
+                logger.warning(
+                    "后台订阅远端信息刷新%s: failed=%s total=%s primary_error=%s",
+                    "失败" if not updated_records else "部分失败",
+                    sum(failure_codes.values()),
+                    len(records),
+                    primary_error_code,
+                    extra={
+                        "error_type": primary_error_code.split(".", 1)[0],
+                        "error_code": primary_error_code,
+                        "extra_context": {
+                            "failure_codes": failure_codes,
+                            "samples": failures,
+                        },
+                    },
+                )
 
             # 如果没有成功获取到任何数据，直接结束
             if not updated_records: return

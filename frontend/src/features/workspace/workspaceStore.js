@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { checkResult, toast, toUserMessage } from '../../shared/lib/common'
+import { checkResult, showUserErrorToast, toast, toUserMessage } from '../../shared/lib/common'
 import { buildWorkshopSteamUri, buildWorkshopWebUrl, dispatchSteamUri } from '../../shared/lib/steamUri'
 import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPerf'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
@@ -1623,12 +1623,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         if (checkResult(res, t('check.workspace.workshop_relation', '获取{label}', { label: job.label }), false, { silent: true })) {
           applyWorkshopRelatedItems(job.key, res.data || {})
         } else {
-          workshopSearch.relatedErrors[job.key] = toUserMessage(res?.message, t('toast.workspace.workshop_relation_failed', '{label}加载失败。请检查网络连接、Steam 服务状态或稍后重试。', { label: job.label }))
+          workshopSearch.relatedErrors[job.key] = toUserMessage(res, t('toast.workspace.workshop_relation_failed', '{label}加载失败。请检查网络连接、Steam 服务状态或稍后重试。', { label: job.label }))
         }
       } catch (error) {
         if (workshopSearch.selectedId === workshopId) {
           console.warn(`获取${job.label}失败:`, error)
-          workshopSearch.relatedErrors[job.key] = toUserMessage(error?.message || error, t('toast.workspace.workshop_relation_failed', '{label}加载失败。请检查网络连接、Steam 服务状态或稍后重试。', { label: job.label }))
+          workshopSearch.relatedErrors[job.key] = toUserMessage(error, t('toast.workspace.workshop_relation_failed', '{label}加载失败。请检查网络连接、Steam 服务状态或稍后重试。', { label: job.label }))
         }
       } finally {
         if (workshopSearch.selectedId === workshopId) {
@@ -2247,10 +2247,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         github.catalogLoaded = true
         return true
       }
-      github.catalogError = toUserMessage(res?.message, t('toast.workspace.github_catalog_failed', '获取推荐列表失败。请检查网络连接、代理设置和推荐源地址。'))
+      github.catalogError = toUserMessage(res, t('toast.workspace.github_catalog_failed', '获取推荐列表失败。请检查网络连接、代理设置和推荐源地址。'))
     } catch (error) {
       console.warn('获取 Git 推荐列表失败:', error)
-      github.catalogError = toUserMessage(error?.message || error, t('toast.workspace.github_catalog_failed', '获取推荐列表失败。请检查网络连接、代理设置和推荐源地址。'))
+      github.catalogError = toUserMessage(error, t('toast.workspace.github_catalog_failed', '获取推荐列表失败。请检查网络连接、代理设置和推荐源地址。'))
       throw error
     } finally {
       github.isCatalogLoading = false
@@ -2323,7 +2323,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         toast.success(t('toast.workspace.collection_removed', '已从记录中移除该合集'))
       }
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, t('toast.workspace.collection_remove_failed', '移除合集失败。可能是后端服务暂时不可用或本地记录无法写入，详细原因已写入系统日志。')))
+      showUserErrorToast(e, t('toast.workspace.collection_remove_failed', '移除合集失败。可能是后端服务暂时不可用或本地记录无法写入。'))
     }
   }
 
@@ -2352,7 +2352,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
     } catch (e) {
       collections.isChildrenLoading = false
-      toast.error(toUserMessage(e?.message || e, t('toast.workspace.collection_load_failed', '加载合集失败。可能是网络连接、Steam 服务或本地缓存暂时不可用，请稍后重试。')))
+      showUserErrorToast(e, t('toast.workspace.collection_load_failed', '加载合集失败。可能是网络连接、Steam 服务或本地缓存暂时不可用，请稍后重试。'))
     }
     // 如果没有缓存，loading 继续保持 true，等待 EventBus 触发
   }
