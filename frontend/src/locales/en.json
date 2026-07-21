@@ -4320,7 +4320,8 @@
       "chunk_failed": "AI chunk processing failed. Try again later.",
       "fallback_title": "AI task",
       "finished": "Reasoning finished. Success: {success}, failed: {failed}",
-      "reasoning_progress": "Reasoning... [round {attempt}] Success: {success}/{total}",
+      "reasoning_progress": "Reasoning... [batch {chunk}/{chunks}] Success: {success}/{total}",
+      "reasoning_progress_retry": "Reasoning... [round {attempt} batch {chunk}/{chunks}] Success: {success}/{total}",
       "truncated_suffix": "...(truncated)"
     },
     "download": {

@@ -4320,7 +4320,8 @@
       "chunk_failed": "AI 分塊處理失敗。請稍後重試。",
       "fallback_title": "AI 任務",
       "finished": "推理結束！成功: {success}, 失敗: {failed}",
-      "reasoning_progress": "正在推理... [第{attempt}輪] 成功: {success}/{total}",
+      "reasoning_progress": "正在推理... [{chunk}/{chunks}批] 成功: {success}/{total}",
+      "reasoning_progress_retry": "正在推理... [第{attempt}輪 {chunk}/{chunks}批] 成功: {success}/{total}",
       "truncated_suffix": "...(截斷)"
     },
     "download": {

@@ -12,7 +12,7 @@ import asyncio
 import re
 import threading
 import time
-from typing import Any, Dict, List, Protocol, cast
+from typing import Any, Callable, Dict, List, Protocol, cast
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -43,6 +43,13 @@ from backend.ai.assistant_runtime import (
 )
 
 
+MOD_ALIAS_AUTO_CONTEXT_WINDOW_TOKENS = 100000
+MOD_ALIAS_AUTO_CHUNK_ITEM_BUDGET_TOKENS = 6000
+MOD_ALIAS_CONTEXT_OUTPUT_TOKENS_MAX = 8000
+MOD_ALIAS_OUTPUT_TOKENS_PER_ITEM_MIN = 100
+MOD_ALIAS_OUTPUT_TOKENS_PER_ITEM_MAX = 500
+
+
 class _SupportsModelDump(Protocol):
     def model_dump(self) -> Any: ...
 
@@ -66,6 +73,9 @@ class AIManager:
         self._cancel_lock = threading.Lock()
         # AI 异步任务与诊断任务共享同一套“取消令牌”模型，保证前端全局任务栏可以统一打断。
         self._cancelled_task_ids: set[str] = set()
+        self._request_limit_lock = threading.Lock()
+        self._request_limit = 0
+        self._request_semaphore = threading.BoundedSemaphore(1)
         
         # Prompt / Assistant / Task 的用户定义统一保存在独立 AI 定义文件中；
         # 全局 settings.ai 只保留连接与运行参数，不再保存这些静态定义覆写。
@@ -438,18 +448,25 @@ class AIManager:
             256,
             self._coerce_int(resolved_output_value or 4096, 4096),
         )
-        resolve_input_tokens = getattr(cfg, "resolved_max_input_tokens", None)
-        if callable(resolve_input_tokens):
-            request_input_budget = self._coerce_int(resolve_input_tokens(), 0)
+        output_token_budget = min(output_token_budget, MOD_ALIAS_CONTEXT_OUTPUT_TOKENS_MAX)
+        explicit_input_budget = self._coerce_int(getattr(cfg, "max_input_tokens", 0) or 0, 0)
+        context_window_tokens = self._coerce_int(getattr(cfg, "context_window_tokens", 0) or 0, 0)
+        has_explicit_budget = explicit_input_budget > 0 or context_window_tokens > 0
+        if explicit_input_budget > 0:
+            request_input_budget = explicit_input_budget
         else:
-            explicit_input_budget = self._coerce_int(getattr(cfg, "max_input_tokens", 0) or 0, 0)
-            context_window_tokens = self._coerce_int(getattr(cfg, "context_window_tokens", 0) or 0, 0)
-            if explicit_input_budget > 0:
-                request_input_budget = explicit_input_budget
-            elif context_window_tokens > 0:
-                request_input_budget = max(1000, context_window_tokens - output_token_budget - 512)
-            else:
-                request_input_budget = max(2000, min(12000, output_token_budget * 2))
+            if context_window_tokens <= 0:
+                resolve_context_tokens = getattr(cfg, "resolved_context_window_tokens", None)
+                resolved_context_tokens = (
+                    self._coerce_int(resolve_context_tokens(), 0)
+                    if callable(resolve_context_tokens)
+                    else 0
+                )
+                context_window_tokens = min(
+                    resolved_context_tokens or MOD_ALIAS_AUTO_CONTEXT_WINDOW_TOKENS,
+                    MOD_ALIAS_AUTO_CONTEXT_WINDOW_TOKENS,
+                )
+            request_input_budget = max(1000, context_window_tokens - output_token_budget - 512)
 
         try:
             probe_variables = dict(runtime_variables or {})
@@ -461,8 +478,58 @@ class AIManager:
             base_prompt_tokens = 0
 
         chunk_item_budget = max(500, int(request_input_budget) - int(base_prompt_tokens or 0) - 256)
-        max_item_tokens = max(300, chunk_item_budget - 200)
+        if not has_explicit_budget:
+            chunk_item_budget = min(chunk_item_budget, MOD_ALIAS_AUTO_CHUNK_ITEM_BUDGET_TOKENS)
+        max_item_tokens = max(300, chunk_item_budget // 20)
         return chunk_item_budget, max_item_tokens
+
+    def _get_task_request_semaphore(self, max_concurrency: int) -> threading.BoundedSemaphore:
+        """返回 AI 批量任务共享请求闸门，避免多个后台任务把并发数叠加。"""
+        limit = max(1, int(max_concurrency or 1))
+        with self._request_limit_lock:
+            if self._request_limit != limit:
+                self._request_limit = limit
+                self._request_semaphore = threading.BoundedSemaphore(limit)
+            return self._request_semaphore
+
+    def build_token_limited_chunks(
+        self,
+        items: list[Any],
+        *,
+        model_name: str = "",
+        chunk_token_budget: int,
+        item_to_token_text: Callable[[Any], str] | None = None,
+        reserve_item_tokens: Callable[[Any, int], int] | None = None,
+        fit_item_to_budget: Callable[[Any], Any] | None = None,
+    ) -> list[list[Any]]:
+        """按估算 token 分块，供批量 AI 生成任务复用。"""
+        budget = max(1, int(chunk_token_budget or 1))
+        model = str(model_name or getattr(settings.config.ai, "model", "") or "")
+        to_text = item_to_token_text or (lambda item: json.dumps(item, ensure_ascii=False))
+        chunks: list[list[Any]] = []
+        current_chunk: list[Any] = []
+        current_tokens = 0
+        for raw_item in items:
+            item = fit_item_to_budget(raw_item) if fit_item_to_budget else raw_item
+            item_tokens = self._estimate_text_tokens(to_text(item), model)
+            item_total = item_tokens + (int(reserve_item_tokens(item, item_tokens)) if reserve_item_tokens else 0)
+            if current_chunk and current_tokens + item_total > budget:
+                chunks.append(current_chunk)
+                current_chunk = [item]
+                current_tokens = item_total
+            else:
+                current_chunk.append(item)
+                current_tokens += item_total
+        if current_chunk:
+            chunks.append(current_chunk)
+        return chunks
+
+    async def _acquire_task_request_slot(self, request_semaphore: threading.BoundedSemaphore, task_id: str) -> None:
+        while True:
+            self._raise_if_task_cancelled(task_id)
+            if request_semaphore.acquire(blocking=False):
+                return
+            await asyncio.sleep(0.05)
 
     def execute_structured_task(
         self,
@@ -480,17 +547,23 @@ class AIManager:
         runtime_variables = dict(context["runtime_variables"] or {})
         llm_kwargs = dict(context["llm_kwargs"] or {})
 
-        messages = self._build_prompt_messages(prompt_config, runtime_variables)
-        response = self.llm.completion(messages=messages, llm_kwargs=llm_kwargs)
-        choices = getattr(response, "choices", None) or []
-        if not choices:
-            raise ValueError(tr("api.ai.task_empty_result", "AI 任务没有返回有效内容"))
-        message_obj = choices[0].message  # type: ignore
-        result_text = self._message_text(getattr(message_obj, "content", ""))
-        parsed_json = self._parse_structured_output(task_key, result_text)
-        if parsed_json is None:
-            raise ValueError(tr("api.ai.task_invalid_result", "AI 任务返回格式无效"))
-        return parsed_json
+        cfg = self._get_ai_config()
+        request_semaphore = self._get_task_request_semaphore(max(1, int(getattr(cfg, "max_concurrency", 3) or 1)))
+        request_semaphore.acquire()
+        try:
+            messages = self._build_prompt_messages(prompt_config, runtime_variables)
+            response = self.llm.completion(messages=messages, llm_kwargs=llm_kwargs)
+            choices = getattr(response, "choices", None) or []
+            if not choices:
+                raise ValueError(tr("api.ai.task_empty_result", "AI 任务没有返回有效内容"))
+            message_obj = choices[0].message  # type: ignore
+            result_text = self._message_text(getattr(message_obj, "content", ""))
+            parsed_json = self._parse_structured_output(task_key, result_text)
+            if parsed_json is None:
+                raise ValueError(tr("api.ai.task_invalid_result", "AI 任务返回格式无效"))
+            return parsed_json
+        finally:
+            request_semaphore.release()
 
     # =========================================================================
     #  核心：异步任务执行引擎
@@ -505,10 +578,15 @@ class AIManager:
         runtime_variables: dict[str, Any],
         llm_kwargs: dict,
         semaphore: asyncio.Semaphore,
+        request_semaphore: threading.BoundedSemaphore,
+        task_id: str,
     ) -> dict[str, Any]:
         """处理单个模组别名生成分块，负责并发限流、请求重试和结果解析。"""
         async with semaphore:
+            slot_acquired = False
             try:
+                await self._acquire_task_request_slot(request_semaphore, task_id)
+                slot_acquired = True
                 chunk_variables = dict(runtime_variables or {})
                 chunk_variables["mod_alias_input_json"] = json.dumps(chunk_data, ensure_ascii=False)
                 messages = self._build_prompt_messages(prompt_config, chunk_variables)
@@ -529,6 +607,8 @@ class AIManager:
                     expected_ids=expected_ids,
                 )
                 return {"chunk_id": chunk_id, "status": "success", "data": normalized_data, "raw": result_text}
+            except AITaskRequestCancelled:
+                raise
             except Exception as exc:
                 logger.error(
                     "AI 分块请求多次重试后仍失败。chunk_id=%s task=%s item_count=%s",
@@ -551,6 +631,9 @@ class AIManager:
                     "error": tr("tasks.ai.chunk_failed", "AI 分块处理失败。请稍后重试。"),
                     "data": None,
                 }
+            finally:
+                if slot_acquired:
+                    request_semaphore.release()
 
     async def execute_task_async(self, task_key: str, payload: Dict[str, Any], task_id: str) -> dict[str, Any]:
         """统一异步任务调度中心。"""
@@ -573,9 +656,9 @@ class AIManager:
         raw_cfg = settings.config.ai
         cfg = AIConfig(**raw_cfg) if isinstance(raw_cfg, dict) else raw_cfg
         model_name = str(llm_kwargs.get("model", settings.config.ai.model) or settings.config.ai.model)
-        max_concurrency = getattr(cfg, "max_concurrency", 3)
+        max_concurrency = max(1, int(getattr(cfg, "max_concurrency", 3) or 1))
+        request_semaphore = self._get_task_request_semaphore(max_concurrency)
         max_attempts = 3
-        runtime_variables["mod_alias_input_json"] = json.dumps(items, ensure_ascii=False)
 
         task_meta = {
             "task_id": str(task_id or "").strip(),
@@ -596,6 +679,10 @@ class AIManager:
         def estimate_item_tokens(item: Dict[str, Any]) -> int:
             """按当前模型口径估算单条输入会占用多少 token。"""
             return self._estimate_text_tokens(json.dumps(item, ensure_ascii=False), model_name)
+
+        def estimate_item_output_tokens(item: Dict[str, Any]) -> int:
+            text_size = estimate_item_tokens(item)
+            return max(MOD_ALIAS_OUTPUT_TOKENS_PER_ITEM_MIN, min(MOD_ALIAS_OUTPUT_TOKENS_PER_ITEM_MAX, text_size // 2))
 
         def fit_item_to_budget(raw_item: Dict[str, Any]) -> Dict[str, Any]:
             """尽量保留关键信息地把单条输入裁进 token 预算。
@@ -627,25 +714,6 @@ class AIManager:
             item.pop("description", None)
             return item
 
-        def build_smart_chunks(items_to_chunk: List[Dict[str, Any]]) -> list[list[dict[str, Any]]]:
-            """按估算 token 动态分块，避免固定条数导致大批次溢出。"""
-            chunks_list: list[list[dict[str, Any]]] = []
-            current_chunk: list[dict[str, Any]] = []
-            current_chunk_tokens = 0
-            for raw_item in items_to_chunk:
-                item = fit_item_to_budget(dict(raw_item or {}))
-                item_tokens = estimate_item_tokens(item)
-                if current_chunk_tokens + item_tokens > safe_input_tokens and current_chunk:
-                    chunks_list.append(current_chunk)
-                    current_chunk = [item]
-                    current_chunk_tokens = item_tokens
-                else:
-                    current_chunk.append(item)
-                    current_chunk_tokens += item_tokens
-            if current_chunk:
-                chunks_list.append(current_chunk)
-            return chunks_list
-
         all_results_by_id: dict[str, dict[str, Any]] = {}
         successful_ids: set[str] = set()
         attempt_counts_by_id = {
@@ -655,6 +723,7 @@ class AIManager:
         }
         pending_items = [dict(item) for item in items if item.get("package_id")]
         attempt_count = 0
+        active_chunk_tasks: list[asyncio.Task] = []
 
         logger.info("AI 任务开始。task_id=%s task=%s total=%s", task_id, task_key, len(pending_items))
 
@@ -662,7 +731,14 @@ class AIManager:
             while pending_items:
                 self._raise_if_task_cancelled(task_id)
                 attempt_count += 1
-                chunks = build_smart_chunks(pending_items)
+                chunks = self.build_token_limited_chunks(
+                    pending_items,
+                    model_name=model_name,
+                    chunk_token_budget=safe_input_tokens,
+                    item_to_token_text=lambda item: json.dumps(item, ensure_ascii=False),
+                    reserve_item_tokens=lambda item, _tokens: estimate_item_output_tokens(item),
+                    fit_item_to_budget=lambda item: fit_item_to_budget(dict(item or {})),
+                )
                 semaphore = asyncio.Semaphore(max_concurrency)
                 logger.info(
                     "AI 任务进入新一轮请求。task_id=%s attempt=%s pending=%s chunks=%s",
@@ -671,27 +747,12 @@ class AIManager:
                     len(pending_items),
                     len(chunks),
                 )
-                chunk_tasks: list[tuple[asyncio.Task, list[dict[str, Any]]]] = []
-                for index, chunk in enumerate(chunks):
+                completed_chunks = 0
+                total_chunks = len(chunks)
+                def handle_chunk_result(original_chunk: list[dict[str, Any]], result: dict[str, Any]) -> None:
+                    nonlocal completed_chunks
                     self._raise_if_task_cancelled(task_id)
-                    coroutine = self._process_mod_alias_generation_chunk(
-                        chunk_id=f"a{attempt_count}_c{index}",
-                        task_key=task_key,
-                        chunk_data=chunk,
-                        prompt_config=prompt_config,
-                        runtime_variables=runtime_variables,
-                        llm_kwargs=llm_kwargs,
-                        semaphore=semaphore,
-                    )
-                    chunk_tasks.append((asyncio.create_task(coroutine), chunk))
-
-                for future, original_chunk in chunk_tasks:
-                    try:
-                        result = await future
-                    except asyncio.CancelledError as exc:
-                        raise AITaskRequestCancelled(f"AI task cancelled: {task_id}") from exc
-                    self._raise_if_task_cancelled(task_id)
-
+                    completed_chunks += 1
                     expected_ids = {
                         str(item.get("package_id") or "").strip().lower()
                         for item in original_chunk
@@ -719,20 +780,80 @@ class AIManager:
                             })
 
                     progress = min(95, int((len(successful_ids) / max(1, len(items))) * 100))
+                    progress_message = (
+                        tr(
+                            "tasks.ai.reasoning_progress_retry",
+                            "正在推理... [第{attempt}轮 {chunk}/{chunks}批] 成功: {success}/{total}",
+                            attempt=attempt_count,
+                            chunk=completed_chunks,
+                            chunks=total_chunks,
+                            success=len(successful_ids),
+                            total=len(items),
+                        )
+                        if attempt_count > 1
+                        else tr(
+                            "tasks.ai.reasoning_progress",
+                            "正在推理... [{chunk}/{chunks}批] 成功: {success}/{total}",
+                            chunk=completed_chunks,
+                            chunks=total_chunks,
+                            success=len(successful_ids),
+                            total=len(items),
+                        )
+                    )
                     EventBus.emit_progress(
                         task_id,
                         "ai-task",
                         status="running",
                         progress=progress,
-                        message=tr("tasks.ai.reasoning_progress", "正在推理... [第{attempt}轮] 成功: {success}/{total}", attempt=attempt_count, success=len(successful_ids), total=len(items)),
+                        message=progress_message,
                         metrics={
                             **task_meta,
                             "attempt_count": attempt_count,
+                            "chunk_current": completed_chunks,
+                            "chunk_total": total_chunks,
                             "current": len(successful_ids),
                             "resolved_count": len(successful_ids),
                             "failed_count": max(0, len(items) - len(successful_ids)),
                         },
                     )
+
+                chunk_queue = asyncio.Queue()
+                for index, chunk in enumerate(chunks):
+                    self._raise_if_task_cancelled(task_id)
+                    chunk_queue.put_nowait((index, chunk))
+
+                async def worker():
+                    while True:
+                        self._raise_if_task_cancelled(task_id)
+                        try:
+                            index, chunk = chunk_queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            return
+                        try:
+                            result = await self._process_mod_alias_generation_chunk(
+                                chunk_id=f"a{attempt_count}_c{index}",
+                                task_key=task_key,
+                                chunk_data=chunk,
+                                prompt_config=prompt_config,
+                                runtime_variables=runtime_variables,
+                                llm_kwargs=llm_kwargs,
+                                semaphore=semaphore,
+                                request_semaphore=request_semaphore,
+                                task_id=task_id,
+                            )
+                            handle_chunk_result(chunk, result)
+                        finally:
+                            chunk_queue.task_done()
+
+                active_chunk_tasks = [
+                    asyncio.create_task(worker())
+                    for _ in range(min(max_concurrency, len(chunks)))
+                ]
+                try:
+                    await asyncio.gather(*active_chunk_tasks)
+                except asyncio.CancelledError as exc:
+                    raise AITaskRequestCancelled(f"AI task cancelled: {task_id}") from exc
+                active_chunk_tasks = []
 
                 unresolved_ids = {
                     str(item.get("package_id") or "").strip().lower()
@@ -753,6 +874,11 @@ class AIManager:
                     self._raise_if_task_cancelled(task_id)
                     await asyncio.sleep(1)
         except AITaskRequestCancelled:
+            for chunk_task in active_chunk_tasks:
+                if not chunk_task.done():
+                    chunk_task.cancel()
+            if active_chunk_tasks:
+                await asyncio.gather(*active_chunk_tasks, return_exceptions=True)
             EventBus.emit_progress(
                 task_id,
                 "ai-task",
@@ -801,12 +927,18 @@ class AIManager:
                 },
             })
 
-        final_results = [*list(all_results_by_id.values()), *failed_results]
+        failed_results_by_id = {item["package_id"]: item for item in failed_results}
+        final_results = [
+            all_results_by_id[package_id] if package_id in all_results_by_id else failed_results_by_id[package_id]
+            for item in items
+            if (package_id := str(item.get("package_id") or "").strip().lower())
+            and (package_id in all_results_by_id or package_id in failed_results_by_id)
+        ]
         failed_count = len(failed_results)
         EventBus.emit_progress(
             task_id,
             "ai-task",
-            status="success",
+            status="failed" if failed_count else "success",
             progress=100,
             message=tr("tasks.ai.finished", "推理结束！成功: {success}, 失败: {failed}", success=len(successful_ids), failed=failed_count),
             metrics={
@@ -814,10 +946,12 @@ class AIManager:
                 "attempt_count": attempt_count,
                 "resolved_count": len(successful_ids),
                 "failed_count": failed_count,
+                "partial_failed": failed_count > 0,
                 "current": len(successful_ids),
             },
         )
         return {
+            "status": "failed" if failed_count else "success",
             "meta": {
                 **task_meta,
                 "attempt_count": attempt_count,

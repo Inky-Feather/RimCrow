@@ -6,7 +6,7 @@ import { checkResult, normalizeStringList, normalizeText, showUserErrorToast, to
 import { normalizeAssistantSessionResult } from './ai-store/runtime/aiActionRuntime'
 import {
   createAssistantRuntimePrefs, createAssistantSession, createEmptyTraceModalState,
-  normalizeAssistantWarnings, normalizeNumber, normalizeSessionMessage,
+  normalizeAssistantWarnings, normalizeNumber, normalizeSessionMessage, normalizeTimestamp,
 } from './ai-store/factories'
 import { useModelConfigActions } from './ai-store/modelConfigActions'
 import { useAttachmentActions } from './ai-store/attachmentActions'
@@ -817,6 +817,37 @@ export const useAiStore = defineStore('ai', () => {
   const setupEventListeners = () => {
     if (window._aiEventsInitialized) return
     window._aiEventsInitialized = true
+
+    window.addEventListener('ai-task-result-chunk', (e) => {
+      const taskId = normalizeText(e.detail?.task_id)
+      const requestMeta = taskId ? modAliasTaskRequestMetaById[taskId] || null : null
+      const items = Array.isArray(e.detail?.items) ? e.detail.items : []
+      if (!requestMeta || !items.length) return
+
+      // 分块事件只服务批量检阅；单项生成仍由完成等待逻辑消费。
+      const shouldStoreForReview = !!requestMeta.needsReview && Number(requestMeta.inputCount || 0) > 1
+      if (!shouldStoreForReview) return
+
+      const existingTask = getModAliasReviewTask(taskId)
+      const incomingIds = new Set(items.map(item => normalizeText(item?.package_id).toLowerCase()).filter(Boolean))
+      const existingItems = Array.isArray(existingTask?.items)
+        ? existingTask.items.filter(item => !incomingIds.has(normalizeText(item?.package_id).toLowerCase()))
+        : []
+      const meta = e.detail?.meta && typeof e.detail.meta === 'object' ? e.detail.meta : {}
+      upsertModAliasReviewTask(taskId, {
+        taskId,
+        title: normalizeText(requestMeta?.title, t('ai.mod_alias.review_title', '模组别名批量检阅')),
+        status: 'running',
+        ownerType: normalizeText(requestMeta?.ownerType, 'task'),
+        createdAt: normalizeTimestamp(meta?.created_at, requestMeta?.createdAt || Date.now()),
+        inputCount: normalizeNumber(meta?.input_total, requestMeta?.inputCount || items.length),
+        inputPackageIds: Array.isArray(requestMeta?.inputPackageIds) ? requestMeta.inputPackageIds : [],
+        meta: { ...meta, needs_review: true },
+        items: [...existingItems, ...items],
+      })
+      pruneDuplicateModAliasReviewItems(taskId, items.map(item => normalizeText(item?.package_id).toLowerCase()).filter(Boolean))
+      useAppStore().uiState.showModAliasReviewModal = true
+    })
 
     window.addEventListener('ai-task-complete', (e) => {
       const taskId = normalizeText(e.detail?.task_id)

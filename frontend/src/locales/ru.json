@@ -4320,7 +4320,8 @@
       "chunk_failed": "Не удалось обработать часть AI-запроса. Повторите попытку позже.",
       "fallback_title": "AI-задача",
       "finished": "Рассуждение завершено. Успешно: {success}, ошибок: {failed}",
-      "reasoning_progress": "Рассуждение... [раунд {attempt}] Успешно: {success}/{total}",
+      "reasoning_progress": "Рассуждение... [пакет {chunk}/{chunks}] Успешно: {success}/{total}",
+      "reasoning_progress_retry": "Рассуждение... [раунд {attempt} пакет {chunk}/{chunks}] Успешно: {success}/{total}",
       "truncated_suffix": "...(обрезано)"
     },
     "download": {

@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -623,6 +624,31 @@ class TestWorkshopSearch(unittest.TestCase):
         self.assertIn("缺少这些 key", ai_mgr.contexts[1])
         self.assertEqual(translated["title"], "现代阿尔法")
         self.assertEqual(translated["description"], "完整译文")
+
+    def test_translation_manager_splits_document_in_backend(self):
+        class DummyAIManager:
+            def __init__(self):
+                self.calls = []
+
+            def build_token_limited_chunks(self, items, **_kwargs):
+                return [items[:2], items[2:]]
+
+            def execute_structured_task(self, task_key, payload, override_config=None):
+                data = json.loads(payload["variables"]["translation_input_json"])
+                keys = [segment["key"] for segment in data["segments"]]
+                self.calls.append(keys)
+                return {"segments": [{"key": key, "text": f"译文-{key}"} for key in keys]}
+
+        document = TranslationDocument.from_segments([
+            {"key": "a", "text": "Alpha"},
+            {"key": "b", "text": "Beta"},
+            {"key": "c", "text": "Gamma"},
+        ])
+        ai_mgr = DummyAIManager()
+        translated = TranslationManager(ai_mgr).translate_document(document, "zh-CN").segment_map()
+
+        self.assertEqual(ai_mgr.calls, [["a", "b"], ["c"]])
+        self.assertEqual(translated, {"a": "译文-a", "b": "译文-b", "c": "译文-c"})
 
     def test_author_summaries_are_cached_and_attached_to_items(self):
         captured = {}

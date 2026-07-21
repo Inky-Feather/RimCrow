@@ -4320,7 +4320,8 @@
       "chunk_failed": "AI 분할 처리에 실패했습니다. 잠시 후 다시 시도하세요.",
       "fallback_title": "AI 작업",
       "finished": "추론 종료. 성공: {success}, 실패: {failed}",
-      "reasoning_progress": "추론 중... [{attempt}라운드] 성공: {success}/{total}",
+      "reasoning_progress": "추론 중... [{chunk}/{chunks}배치] 성공: {success}/{total}",
+      "reasoning_progress_retry": "추론 중... [{attempt}라운드 {chunk}/{chunks}배치] 성공: {success}/{total}",
       "truncated_suffix": "...(잘림)"
     },
     "download": {

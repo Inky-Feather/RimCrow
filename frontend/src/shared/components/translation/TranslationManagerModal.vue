@@ -150,7 +150,6 @@ const flatBuiltin = ref({})
 const flatMerged = ref({})
 const flatUser = ref({})
 const listScrollRef = ref(null)
-const BATCH_TRANSLATE_SIZE = 100
 const CUSTOM_LANGUAGE_VALUE = '__custom__'
 const toolbarIconButtonClass = 'flex size-10 shrink-0 items-center justify-center rounded-md text-accent-primary transition-colors hover:bg-bg-overlay/8 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50'
 const toPx = (value) => `${Number(value || 0)}px`
@@ -411,26 +410,23 @@ const autoTranslateBatch = async () => {
   busy.value = true
   try {
     const messages = {}
-    for (let index = 0; index < targets.length; index += BATCH_TRANSLATE_SIZE) {
-      const batch = targets.slice(index, index + BATCH_TRANSLATE_SIZE)
-      const res = await window.pywebview.api.translation_translate_document({
-        format: 'plain_text',
-        context: 'RimCrow interface text',
-        segments: batch.map(row => ({ key: row.key, text: row.sourceText, role: 'ui' })),
-      }, selectedLanguage.value, provider)
-      if (res?.status !== 'success') {
-        showUserErrorToast(res, t('messages.i18n.translation_mode.auto_translate_failed', '自动翻译失败。'))
+    const res = await window.pywebview.api.translation_translate_document({
+      format: 'plain_text',
+      context: 'RimCrow interface text',
+      segments: targets.map(row => ({ key: row.key, text: row.sourceText, role: 'ui' })),
+    }, selectedLanguage.value, provider)
+    if (res?.status !== 'success') {
+      showUserErrorToast(res, t('messages.i18n.translation_mode.auto_translate_failed', '自动翻译失败。'))
+      return
+    }
+    for (const item of (res.data?.segments || [])) {
+      if (!item?.key || !String(item?.text || '').trim()) continue
+      const error = validateImportedMessage(item.key, item.text)
+      if (error) {
+        toast.error(error)
         return
       }
-      for (const item of (res.data?.segments || [])) {
-        if (!item?.key || !String(item?.text || '').trim()) continue
-        const error = validateImportedMessage(item.key, item.text)
-        if (error) {
-          toast.error(error)
-          return
-        }
-        messages[item.key] = item.text
-      }
+      messages[item.key] = item.text
     }
     if (!Object.keys(messages).length) {
       toast.warning(t('dialog.translation_manager.batch_empty_result', '翻译器没有返回可保存的译文。'))

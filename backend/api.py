@@ -6432,7 +6432,7 @@ class API:
                 )
                 EventBus.emit("ai-task-complete", {
                     'task_id': task_id,
-                    'status': 'cancelled' if results.get('cancelled') else 'success', 
+                    'status': 'cancelled' if results.get('cancelled') else str(results.get('status') or 'success'),
                     'data': results
                 })
             except Exception as e:

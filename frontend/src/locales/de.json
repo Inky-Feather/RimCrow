@@ -4320,7 +4320,8 @@
       "chunk_failed": "AI-Blockverarbeitung fehlgeschlagen. Versuchen Sie es später erneut.",
       "fallback_title": "AI-Aufgabe",
       "finished": "Reasoning beendet. Erfolgreich: {success}, fehlgeschlagen: {failed}",
-      "reasoning_progress": "Reasoning... [Runde {attempt}] Erfolgreich: {success}/{total}",
+      "reasoning_progress": "Reasoning... [Batch {chunk}/{chunks}] Erfolgreich: {success}/{total}",
+      "reasoning_progress_retry": "Reasoning... [Runde {attempt} Batch {chunk}/{chunks}] Erfolgreich: {success}/{total}",
       "truncated_suffix": "...(gekürzt)"
     },
     "download": {
