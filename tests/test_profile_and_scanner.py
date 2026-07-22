@@ -1396,6 +1396,35 @@ class TestGameManager(unittest.TestCase):
         self.assertEqual(result["game_install_path"], normalize_path_for_storage(install_root))
         self.assertEqual(result["workshop_mods_path"], normalize_path_for_storage(workshop_root))
 
+    def test_auto_detect_paths_skips_empty_default_install_before_libraryfolders(self):
+        steam_root = self.temp_root / "Steam"
+        empty_default = steam_root / "steamapps" / "common" / "RimWorld"
+        library_root = self.temp_root / "LibraryA"
+        install_root = library_root / "steamapps" / "common" / "RimWorld"
+        empty_default.mkdir(parents=True, exist_ok=True)
+        install_root.mkdir(parents=True, exist_ok=True)
+        config_dir = steam_root / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        library_path_for_vdf = str(library_root).replace("\\", "\\\\")
+        (config_dir / "libraryfolders.vdf").write_text(
+            '"libraryfolders"\n{\n'
+            f'    "0"\n    {{\n        "path" "{library_path_for_vdf}"\n        "apps"\n        {{\n            "294100" "1"\n        }}\n    }}\n'
+            '}\n',
+            encoding="utf-8",
+        )
+
+        def fake_detect_executable(path):
+            return str(install_root / "RimWorldWin64.exe") if Path(path) == install_root else None
+
+        with patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
+             patch("backend.managers.mgr_game.winreg", None), \
+             patch.object(GameManager, "_detect_userdata_path", return_value=""), \
+             patch.object(GameManager, "_detect_steam_root_candidates", return_value=[str(steam_root)]), \
+             patch.object(GameManager, "detect_executable", side_effect=fake_detect_executable):
+            result = GameManager.auto_detect_paths()
+
+        self.assertEqual(result["game_install_path"], normalize_path_for_storage(install_root))
+
     def test_auto_detect_paths_uses_appmanifest_installdir_from_steam_library(self):
         steam_root = self.temp_root / "Steam"
         library_root = self.temp_root / "LibraryA"

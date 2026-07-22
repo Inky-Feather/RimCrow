@@ -105,6 +105,8 @@ def get_default_steam_root_candidates(system_name: str | None = None) -> list[st
         xdg_data_home = os.getenv("XDG_DATA_HOME")
         candidates.extend([
             _join_path(resolved_system_name, home, ".steam", "steam"),
+            _join_path(resolved_system_name, home, ".steam", "root"),
+            _join_path(resolved_system_name, home, ".steam", "debian-installation"),
             _join_path(resolved_system_name, home, ".local", "share", "Steam"),
             _join_path(resolved_system_name, home, "snap", "steam", "common", ".local", "share", "Steam"),
             _join_path(resolved_system_name, home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),

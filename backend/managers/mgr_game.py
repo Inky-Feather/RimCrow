@@ -3,8 +3,6 @@ import subprocess
 import platform
 from pathlib import Path
 
-import vdf
-
 try:
     import winreg
 except ImportError:  # pragma: no cover - 仅在非 Windows 平台触发
@@ -14,13 +12,12 @@ from backend.paths.game_locations import (
     detect_rimworld_executable,
     find_rimworld_install_from_steam,
     get_default_player_log_paths,
-    get_default_steam_root_candidates,
     get_default_steam_data_root_candidates,
     get_default_user_data_paths,
 )
 from backend.paths.core import unique_paths
 from backend.paths.rimworld_layout import normalize_rimworld_install_root, resolve_rimworld_layout
-from backend.utils.constants import RIMWORLD_APPMANIFEST_NAME, RIMWORLD_STEAM_APP_ID_STR
+from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR
 from backend.utils.tools import normalize_path_for_storage
 
 class GameManager:
@@ -185,6 +182,14 @@ class GameManager:
         注意这里只收口 Steam 已登记的安装位置和常见默认位置，不递归扫描磁盘。
         """
         system_name = platform.system()
+        steam_roots = cls._detect_steam_root_candidates()
+
+        # Steam 的库配置和 appmanifest 最接近真实安装状态，优先于默认目录猜测。
+        for steam_root in steam_roots:
+            rimworld_path = find_rimworld_install_from_steam(steam_root, system_name=system_name)
+            if rimworld_path and cls.detect_executable(rimworld_path):
+                return rimworld_path
+
         candidate_paths = []
         if system_name == 'Windows' and winreg is not None:
             keys = [
@@ -198,18 +203,13 @@ class GameManager:
                         candidate_paths.append(install_loc)
         candidate_paths.extend([
             os.path.join(root, "steamapps", "common", "RimWorld")
-            for root in get_default_steam_data_root_candidates(system_name=system_name)
+            for root in steam_roots
         ])
 
         for install_loc in unique_paths(candidate_paths, system_name=system_name):
-            if install_loc and os.path.exists(install_loc):
-                return normalize_path_for_storage(install_loc)
-
-        # 兜底：读取 Steam 多库配置，支持用户把 RimWorld 安装到非默认库。
-        for steam_root in cls._detect_steam_root_candidates():
-            rimworld_path = cls._find_rimworld_from_steam_libraries(steam_root)
-            if rimworld_path:
-                return rimworld_path
+            normalized_install = normalize_rimworld_install_root(install_loc, system_name=system_name)
+            if install_loc and os.path.exists(normalized_install) and cls.detect_executable(normalized_install):
+                return normalize_path_for_storage(normalized_install)
         return None
 
     @staticmethod
@@ -226,51 +226,3 @@ class GameManager:
     @staticmethod
     def _detect_steam_root_candidates() -> list[str]:
         return get_default_steam_data_root_candidates(system_name=platform.system())
-
-    @staticmethod
-    def _library_contains_rimworld(library_path: str, folder_data: dict | None = None) -> bool:
-        apps = (folder_data or {}).get("apps", {}) if isinstance(folder_data, dict) else {}
-        if isinstance(apps, dict) and RIMWORLD_STEAM_APP_ID_STR in apps:
-            return True
-        return os.path.exists(os.path.join(library_path, "steamapps", RIMWORLD_APPMANIFEST_NAME))
-
-    @staticmethod
-    def _read_steam_appmanifest_install_dir(library_path: str) -> str:
-        manifest_path = Path(library_path) / "steamapps" / RIMWORLD_APPMANIFEST_NAME
-        if not manifest_path.is_file():
-            return ""
-        try:
-            with open(manifest_path, "r", encoding="utf-8", errors="ignore") as handle:
-                data = vdf.load(handle)
-        except Exception:
-            return ""
-
-        app_state = data.get("AppState") if isinstance(data, dict) else None
-        if not isinstance(app_state, dict):
-            return ""
-        appid = str(app_state.get("appid") or "").strip()
-        if appid and appid != RIMWORLD_STEAM_APP_ID_STR:
-            return ""
-        return str(app_state.get("installdir") or "").strip()
-
-    @staticmethod
-    def _steam_library_candidates_from_vdf(steam_root: str, library_folders: dict) -> list[tuple[str, dict | None]]:
-        candidates: list[tuple[str, dict | None]] = [(normalize_path_for_storage(steam_root), None)]
-        for folder_data in library_folders.values():
-            if isinstance(folder_data, dict):
-                library_path = normalize_path_for_storage(folder_data.get("path"))
-                if library_path:
-                    candidates.append((library_path, folder_data))
-            elif isinstance(folder_data, str):
-                library_path = normalize_path_for_storage(folder_data)
-                if library_path:
-                    candidates.append((library_path, None))
-        return candidates
-
-    @staticmethod
-    def _resolve_rimworld_install_from_library(library_path: str, folder_data: dict | None = None) -> str:
-        return find_rimworld_install_from_steam(library_path, system_name=platform.system())
-
-    @staticmethod
-    def _find_rimworld_from_steam_libraries(steam_root: str) -> str:
-        return find_rimworld_install_from_steam(steam_root, system_name=platform.system())

@@ -196,6 +196,20 @@ class TestSteamActionReadiness(unittest.TestCase):
 
         self.assertEqual(candidates, ["/Users/test/Library/Application Support/Steam"])
 
+    def test_default_steam_root_candidates_include_common_linux_roots(self):
+        with patch("backend.paths.game_locations.platform.system", return_value="Linux"), \
+             patch("backend.paths.game_locations.os.path.expanduser", return_value="/home/test"), \
+             patch("backend.paths.game_locations.os.getenv", return_value="/xdg"):
+            candidates = get_default_steam_root_candidates()
+
+        self.assertEqual(candidates[:4], [
+            "/home/test/.steam/steam",
+            "/home/test/.steam/root",
+            "/home/test/.steam/debian-installation",
+            "/home/test/.local/share/Steam",
+        ])
+        self.assertIn("/xdg/Steam", candidates)
+
     @patch("backend.managers.mgr_steam.platform.system", return_value="Linux")
     def test_ensure_tools_uses_linux_steamcmd_archive(self, _platform_system):
         temp_root = Path(tempfile.mkdtemp())
