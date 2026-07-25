@@ -39,7 +39,7 @@
                 <div class="min-w-0 text-accent-warning/80">
                   {{ t('dialog.texture_opt.pending_generate', '待生成') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.generate_required_count || 0 }}</span>
                 </div>
-                <div class="col-span-3 min-w-0 flex items-center gap-4">
+                <div class="col-span-3 min-w-0 flex flex-wrap items-center gap-4">
                   <span class="shrink-0 text-accent-tip/80">
                     {{ t('dialog.texture_opt.current_scale', '当前比例') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.scaled_count || 0 }}</span>
                   </span>
@@ -54,6 +54,9 @@
                   </div>
                   <span v-if="summary.unsupported_source_count" class="shrink-0 cursor-help text-accent-warning" v-tooltip="unsupportedSummaryTooltip">
                     {{ t('dialog.texture_opt.invalid_png', '无效 PNG') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.unsupported_source_count }}</span>
+                  </span>
+                  <span v-if="summary.scan_failed_count" class="shrink-0 text-accent-danger">
+                    {{ t('tasks.texture.scan_failed_title', '贴图扫描失败') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.scan_failed_count }}</span>
                   </span>
                   <div class="min-w-0 text-accent-danger/80">
                     {{ t('dialog.texture_opt.excluded', '已排除') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.excluded_count || 0 }}</span>
@@ -310,7 +313,7 @@
                       <span class="font-mono">{{ formatDateTime(item.updated_at) }}</span>
                     </div>
                     <div class="mt-1 text-[0.8rem] opacity-80">
-                      {{ t('dialog.texture_opt.result_summary', '成功 {success} / 失败 {failed}', { success: item.summary?.current_output_count || 0, failed: item.failed_items?.length || 0 }) }}
+                      {{ t('dialog.texture_opt.result_summary', '成功 {success} / 失败 {failed}', { success: item.summary?.current_output_count || 0, failed: item.failed_count || 0 }) }}
                     </div>
                   </button>
                 </section>

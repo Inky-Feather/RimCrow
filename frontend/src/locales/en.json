@@ -3241,6 +3241,9 @@
       "no_residue_targets": "No uninstalled residue mod folders containing {format} were found",
       "no_valid_mod_paths": "No valid physical paths were found for the selected mods",
       "prepare_tool_failed": "Failed to prepare the texture tool. Check the network connection, proxy settings, tool folder permissions, and disk space.",
+      "start_analysis_failed": "Failed to start texture analysis. Check the mod path, file permissions, and backend logs, then try again.",
+      "start_clean_failed": "Failed to start texture cleanup. Check the mod path, file permissions, and backend logs, then try again.",
+      "start_optimize_failed": "Failed to start texture generation. Check the tool settings, mod path, file permissions, and backend logs, then try again.",
       "status_failed": "Failed to read texture tool status. Check the tool path and runtime environment.",
       "task_start_failed": "Failed to start the texture task. Check the selected Mod path, tool status, disk space, and file permissions.",
       "tool_download_failed": "Failed to start downloading the texture tool. Check the network connection, proxy settings, and tool folder permissions."
@@ -4448,8 +4451,10 @@
     },
     "texture": {
       "analysis_completed_elapsed": "Statistics completed in {elapsed}",
+      "analysis_completed_with_failed": "Analysis completed. {failed_count} mods failed to scan. Time used: {elapsed}",
       "cancelled": "Texture optimization task cancelled",
       "clean_completed": "{target_label} cleanup completed",
+      "clean_completed_with_failed": "{target_label} cleanup completed. Deleted {deleted}, failed {failed}.",
       "clean_finishing": "Cleanup completed, finishing task",
       "clean_progress": "Cleaning {target_label}: {mod_name}, checked {checked}, deleted {deleted}",
       "clean_start": "Starting cleanup for {target_label}",
@@ -4465,6 +4470,7 @@
       "prepare_generate_mod": "Preparing generation: {mod_name}",
       "prepare_task": "Preparing task...",
       "queue_running": "Running texture queue...",
+      "result_write_failed": "Failed to write the result record",
       "retry_recoverable": "Retrying recoverable failed items",
       "retry_start": "Main batches completed; retrying recoverable failed items",
       "scan_cancelled": "Texture scan task cancelled",

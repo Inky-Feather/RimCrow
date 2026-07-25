@@ -3241,6 +3241,9 @@
       "no_residue_targets": "{format}를 포함하는 제거된 잔여 모드 폴더가 없습니다.",
       "no_valid_mod_paths": "선택한 모드에 대해 유효한 물리적 경로를 찾을 수 없습니다.",
       "prepare_tool_failed": "텍스처 도구 준비에 실패했습니다. 네트워크 연결, 프록시 설정, 도구 폴더 권한과 디스크 공간을 확인하세요.",
+      "start_analysis_failed": "텍스처 분석을 시작하지 못했습니다. 모드 경로, 파일 권한, 백엔드 로그를 확인한 뒤 다시 시도하세요.",
+      "start_clean_failed": "텍스처 정리를 시작하지 못했습니다. 모드 경로, 파일 권한, 백엔드 로그를 확인한 뒤 다시 시도하세요.",
+      "start_optimize_failed": "텍스처 생성을 시작하지 못했습니다. 도구 설정, 모드 경로, 파일 권한, 백엔드 로그를 확인한 뒤 다시 시도하세요.",
       "status_failed": "텍스처 도구 상태를 읽지 못했습니다. 도구 경로와 실행 환경을 확인하세요.",
       "task_start_failed": "텍스처 작업을 시작하지 못했습니다. 선택한 Mod 경로, 도구 상태, 디스크 공간과 파일 권한을 확인하세요.",
       "tool_download_failed": "텍스처 도구 다운로드를 시작하지 못했습니다. 네트워크 연결, 프록시 설정과 도구 폴더 쓰기 권한을 확인하세요."
@@ -4448,8 +4451,10 @@
     },
     "texture": {
       "analysis_completed_elapsed": "{elapsed}에서 통계가 완료되었습니다.",
+      "analysis_completed_with_failed": "분석이 완료되었습니다. {failed_count}개 모드 스캔에 실패했습니다. 소요 시간: {elapsed}",
       "cancelled": "텍스처 최적화 작업이 취소되었습니다.",
       "clean_completed": "{target_label} 정리 완료",
+      "clean_completed_with_failed": "{target_label} 정리가 완료되었습니다. {deleted}개 삭제, {failed}개 실패.",
       "clean_finishing": "정리 완료, 작업 마무리",
       "clean_progress": "{target_label} 청소: {mod_name}, {checked} 확인, {deleted} 삭제",
       "clean_start": "{target_label} 정리 시작",
@@ -4465,6 +4470,7 @@
       "prepare_generate_mod": "생성 준비 중: {mod_name}",
       "prepare_task": "작업 준비 중...",
       "queue_running": "텍스처 대기열 실행 중...",
+      "result_write_failed": "결과 기록을 쓰지 못했습니다",
       "retry_recoverable": "복구 가능한 실패한 항목을 다시 시도하는 중",
       "retry_start": "메인 배치가 완료되었습니다. 복구 가능한 실패한 항목을 다시 시도하는 중",
       "scan_cancelled": "텍스처 스캔 작업이 취소되었습니다.",

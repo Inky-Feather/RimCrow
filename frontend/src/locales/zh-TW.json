@@ -3241,6 +3241,9 @@
       "no_residue_targets": "未找到包含 {format} 的卸載殘留模組目錄",
       "no_valid_mod_paths": "未能找到指定模組的有效物理路徑",
       "prepare_tool_failed": "準備貼圖工具失敗。請檢查網路連線、代理設定、工具目錄權限和磁碟空間。",
+      "start_analysis_failed": "啟動貼圖分析失敗。請檢查模組路徑、檔案權限和後端日誌後重試。",
+      "start_clean_failed": "啟動貼圖清理失敗。請檢查模組路徑、檔案權限和後端日誌後重試。",
+      "start_optimize_failed": "啟動貼圖生成失敗。請檢查工具設定、模組路徑、檔案權限和後端日誌後重試。",
       "status_failed": "讀取貼圖工具狀態失敗。請檢查工具路徑和執行環境。",
       "task_start_failed": "啟動貼圖任務失敗。請檢查選取的模組路徑、工具狀態、磁碟空間和檔案權限。",
       "tool_download_failed": "啟動貼圖工具下載失敗。請檢查網路連線、代理設定和工具目錄寫入權限。"
@@ -4448,8 +4451,10 @@
     },
     "texture": {
       "analysis_completed_elapsed": "統計完成，用時 {elapsed}",
+      "analysis_completed_with_failed": "統計完成，{failed_count} 個模組掃描失敗，用時 {elapsed}",
       "cancelled": "貼圖優化任務已取消",
       "clean_completed": "{target_label} 清理完成",
+      "clean_completed_with_failed": "{target_label} 清理完成，已刪除 {deleted} 個，失敗 {failed} 個",
       "clean_finishing": "清理完成，正在結束任務",
       "clean_progress": "清理{target_label}: {mod_name}，已檢查 {checked} 個，已刪除 {deleted} 個",
       "clean_start": "開始清理{target_label}",
@@ -4465,6 +4470,7 @@
       "prepare_generate_mod": "準備生成: {mod_name}",
       "prepare_task": "準備任務...",
       "queue_running": "正在執行貼圖佇列...",
+      "result_write_failed": "結果記錄寫入失敗",
       "retry_recoverable": "統一重試可恢復失敗項",
       "retry_start": "主批次完成，開始統一重試可恢復失敗項",
       "scan_cancelled": "貼圖掃描任務已取消",

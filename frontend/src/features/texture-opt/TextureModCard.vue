@@ -7,6 +7,9 @@
         <span v-if="storeLabel" class="shrink-0 rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-xs font-bold text-text-dim">
           {{ storeLabel }}
         </span>
+        <span v-if="mod.scan_status === 'failed'" class="shrink-0 rounded border border-accent-danger/20 bg-accent-danger/10 px-1.5 py-0.5 text-xs font-bold text-accent-danger">
+          {{ t('tasks.texture.scan_failed_title', '贴图扫描失败') }}
+        </span>
         <span v-if="mod.unsupported_source_count > 0" v-tooltip="unsupportedTooltip"
           class="shrink-0 rounded border border-accent-warning/20 bg-accent-warning/10 px-1.5 py-0.5 text-xs font-bold text-accent-warning">
           {{ t('ui.texture_opt.card.invalid_png_count', '无效 PNG {count}', { count: mod.unsupported_source_count }) }}
@@ -26,7 +29,7 @@
           <span v-if="mod.zstd_output_count">ZSTD {{ mod.zstd_output_count }}</span>
         </div>
         <button v-if="mod.package_id" class="rounded-lg border px-1 py-0.5 text-xs font-bold transition-colors"
-          :class="isExcluded ? 'border-accent-danger/30 bg-accent-danger/10 text-accent-danger' : 'border-border-base/10 bg-bg-overlay/5 text-text-dim hover:text-text-main'"
+          :class="isExcluded ? 'border-accent-danger/30 bg-accent-danger/10 text-accent-danger' : 'border-border-base/10 bg-bg-overlay/5 text-accent-warn/60 hover:text-text-main'"
           @click.stop="emit('toggle-mod-exclusion', mod)" >
           {{ isExcluded ? t('ui.texture_opt.card.excluded_label', '已排除') : t('ui.texture_opt.card.exclude_mod_label', '排除模组') }}
         </button>

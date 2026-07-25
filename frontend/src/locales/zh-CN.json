@@ -3241,6 +3241,9 @@
       "no_residue_targets": "未找到包含 {format} 的卸载残留模组目录",
       "no_valid_mod_paths": "未能找到指定模组的有效物理路径",
       "prepare_tool_failed": "准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间。",
+      "start_analysis_failed": "启动贴图分析失败。请检查模组路径、文件权限和后台日志后重试。",
+      "start_clean_failed": "启动贴图清理失败。请检查模组路径、文件权限和后台日志后重试。",
+      "start_optimize_failed": "启动贴图生成失败。请检查工具配置、模组路径、文件权限和后台日志后重试。",
       "status_failed": "读取贴图工具状态失败。请检查工具路径和运行环境。",
       "task_start_failed": "启动贴图任务失败。请检查所选模组路径、工具状态、磁盘空间和文件权限。",
       "tool_download_failed": "启动贴图工具下载失败。请检查网络连接、代理设置和工具目录写入权限。"
@@ -4448,8 +4451,10 @@
     },
     "texture": {
       "analysis_completed_elapsed": "统计完成，用时 {elapsed}",
+      "analysis_completed_with_failed": "统计完成，{failed_count} 个模组扫描失败，用时 {elapsed}",
       "cancelled": "贴图优化任务已取消",
       "clean_completed": "{target_label} 清理完成",
+      "clean_completed_with_failed": "{target_label} 清理完成，已删除 {deleted} 个，失败 {failed} 个",
       "clean_finishing": "清理完成，正在结束任务",
       "clean_progress": "清理{target_label}: {mod_name}，已检查 {checked} 个，已删除 {deleted} 个",
       "clean_start": "开始清理{target_label}",
@@ -4465,6 +4470,7 @@
       "prepare_generate_mod": "准备生成: {mod_name}",
       "prepare_task": "准备任务...",
       "queue_running": "正在执行贴图队列...",
+      "result_write_failed": "结果记录写入失败",
       "retry_recoverable": "统一重试可恢复失败项",
       "retry_start": "主批次完成，开始统一重试可恢复失败项",
       "scan_cancelled": "贴图扫描任务已取消",

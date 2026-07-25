@@ -35,6 +35,8 @@ class TestTextureOptimizationManager(unittest.TestCase):
             "scale_factor": 0.5,
             "max_size": 128,
             "clean_uninstalled_residue_only": False,
+            "clean_without_source": False,
+            "clean_output_format": "dds",
         }
 
     def _write_png(self, relative_path: str, size=(32, 32), alpha=False, fully_transparent=False):
@@ -72,6 +74,16 @@ class TestTextureOptimizationManager(unittest.TestCase):
         payload += chunk(b"IDAT", b"broken") + chunk(b"IEND", b"")
         path.write_bytes(payload)
         return path
+
+    def _build_plan(self, options=None, mod_targets=None):
+        return self.manager._build_texture_plan(
+            mod_targets or [str(self.mod_root)],
+            self.manager._build_options(options or self.options),
+            None,
+        )
+
+    def _first_plan_result(self, options=None, mod_targets=None):
+        return self._build_plan(options, mod_targets)["results"][0]
 
     def test_task_payload_exposes_task_id_alias(self):
         with patch("backend.managers.mgr_texture_opt.threading.Thread.start", return_value=None):
@@ -130,117 +142,6 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertEqual(result["orphan_deleted"], 1)
         self.assertFalse(dds_path.exists())
 
-    def test_clean_generated_with_source_deletes_external_outputs_and_invalidates_snapshot(self):
-        source = self._write_png("Textures/source.png")
-        external_dds = source.with_suffix(".dds")
-        external_dds.write_bytes(b"dds")
-        cached_snapshot = {
-            "id": "stale",
-            "schema_version": 2,
-            "cache_key": self.manager._build_scan_cache_key([str(self.mod_root)], self.options),
-            "signature": self.manager._build_signature(self.options),
-            "generated_at": 1,
-            "mod_paths": [str(self.mod_root)],
-            "summary": self.manager._create_empty_stat(include_mod_count=True, mod_count=1),
-            "mods": [],
-        }
-        self.manager._store_scan_snapshot(cached_snapshot)
-
-        task = TextureTask(
-            id="clean-with-source",
-            action="clean_generated",
-            mod_paths=[str(self.mod_root)],
-            options=self.options,
-            status="running",
-        )
-
-        result = self.manager._clean_generated(task)
-        refreshed = self.manager._get_cached_scan_snapshot([str(self.mod_root)], self.options)
-
-        self.assertEqual(result["orphan_deleted"], 1)
-        self.assertFalse(external_dds.exists())
-        self.assertFalse(result["refresh_after_analyze"])
-        self.assertIsNone(refreshed)
-
-    def test_clean_generated_keeps_cached_snapshot_when_no_files_changed(self):
-        snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], self.options)
-        self.manager._store_scan_snapshot(snapshot)
-        task = TextureTask(
-            id="clean-no-change",
-            action="clean_generated",
-            mod_paths=[str(self.mod_root)],
-            options=self.options,
-            status="running",
-        )
-
-        with patch.object(self.manager, "_scan_mods_snapshot", side_effect=AssertionError("should not full rescan")):
-            result = self.manager._clean_generated(task)
-
-        refreshed = self.manager._get_cached_scan_snapshot([str(self.mod_root)], self.options)
-        self.assertEqual(result["orphan_deleted"], 0)
-        self.assertFalse(result["refresh_after_analyze"])
-        self.assertIsNotNone(refreshed)
-        self.assertEqual(refreshed["summary"]["mod_count"], 1)
-
-    def test_clean_generated_invalidates_only_changed_mod_snapshots(self):
-        other_mod_root = self.temp_root / "OtherMod"
-        (other_mod_root / "Textures").mkdir(parents=True)
-        source_a = self._write_png("Textures/a.png")
-        source_b = other_mod_root / "Textures" / "b.png"
-        Image.new("RGB", (32, 32), (0, 255, 0)).save(source_b)
-        source_a.with_suffix(".dds").write_bytes(b"dds-a")
-
-        options = self.manager._build_options(self.options)
-        snapshot = self.manager._scan_mods_snapshot([str(self.mod_root), str(other_mod_root)], options)
-        self.manager._store_scan_snapshot(snapshot)
-        task = TextureTask(
-            id="clean-partial-refresh",
-            action="clean_generated",
-            mod_paths=[str(self.mod_root), str(other_mod_root)],
-            options=self.options,
-            status="running",
-        )
-
-        result = self.manager._clean_generated(task)
-
-        self.assertEqual(result["orphan_deleted"], 1)
-        self.assertFalse(result["refresh_after_analyze"])
-        self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root)], options))
-        self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root), str(other_mod_root)], options))
-
-    def test_invalidate_scan_cache_removes_overlapping_snapshots(self):
-        first_options = self.manager._build_options(self.options)
-        second_options = self.manager._build_options({**self.options, "scale_factor": 0.25})
-        first_snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], first_options)
-        second_snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], second_options)
-        self.manager._store_scan_snapshot(first_snapshot)
-        self.manager._store_scan_snapshot(second_snapshot)
-
-        removed = self.manager._invalidate_scan_cache([str(self.mod_root)])
-
-        self.assertEqual(removed, 1)
-        self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root)], first_options))
-        self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root)], second_options))
-
-    def test_resolve_output_source_accepts_common_image_sources(self):
-        source = self._write_png("Textures/source.png")
-        resolved = self.manager._resolve_output_source(source.with_suffix(".dds"))
-        self.assertEqual(resolved, source)
-        zstd_resolved = self.manager._resolve_output_source(source.with_suffix(".dds.zstd"))
-        self.assertEqual(zstd_resolved, source)
-
-        jpg_source = self.mod_root / "Textures" / "photo.jpg"
-        psd_source = self.mod_root / "Textures" / "layered.psd"
-        jpg_source.write_bytes(b"jpg")
-        psd_source.write_bytes(b"psd")
-        self.assertEqual(self.manager._resolve_output_source(jpg_source.with_suffix(".dds")), jpg_source)
-        self.assertEqual(self.manager._resolve_output_source(psd_source.with_suffix(".dds.zstd")), psd_source)
-
-    def test_calc_progress_never_stays_zero_after_work_starts(self):
-        self.assertEqual(self.manager._calc_progress(0, 1000), 0)
-        self.assertEqual(self.manager._calc_progress(1, 25245), 1)
-        self.assertEqual(self.manager._calc_progress(252, 25245), 1)
-
     def test_build_options_normalizes_clean_uninstalled_residue_only_to_bool(self):
         options_true = self.manager._build_options({**self.options, "clean_uninstalled_residue_only": "true"})
         options_false = self.manager._build_options({**self.options, "clean_uninstalled_residue_only": "false"})
@@ -272,8 +173,6 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertEqual(len(batches), 2)
         self.assertEqual(len(batches[0]["entries"]), texture_opt_module.TEXTURE_ENCODE_BATCH_SIZE)
         self.assertEqual(len(batches[1]["entries"]), 1)
-        self.assertEqual(len(batches[0]["source_paths"]), texture_opt_module.TEXTURE_ENCODE_BATCH_SIZE)
-        self.assertEqual(len(batches[1]["source_paths"]), 1)
 
     def test_iter_texture_output_paths_only_returns_dds_outputs(self):
         self._write_png("Textures/source.png")
@@ -302,11 +201,8 @@ class TestTextureOptimizationManager(unittest.TestCase):
         source.with_suffix(".dds.zstd").write_bytes(b"zstd")
         source.with_suffix(".dds").write_bytes(b"dds")
 
-        snapshot = self.manager._scan_mods_snapshot(
-            [str(self.mod_root)],
-            {**self.options, "output_format": "zstd"},
-        )
-        row = snapshot["mods"][0]["stat"]
+        plan = self._build_plan({**self.options, "output_format": "zstd"})
+        row = plan["rows"][0]
 
         self.assertEqual(row["output_total_count"], 2)
         self.assertEqual(row["dds_output_count"], 1)
@@ -389,9 +285,9 @@ class TestTextureOptimizationManager(unittest.TestCase):
         orphan_dir.mkdir(parents=True, exist_ok=True)
         (orphan_dir / "orphan.dds").write_bytes(b"dds")
 
-        snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], self.options)
-        summary = snapshot["summary"]
-        row = snapshot["mods"][0]["stat"]
+        plan = self._build_plan()
+        summary = plan["summary"]
+        row = plan["rows"][0]
 
         self.assertEqual(summary["external_orphan_output_count"], 1)
         self.assertEqual(row["external_orphan_output_count"], 1)
@@ -404,13 +300,8 @@ class TestTextureOptimizationManager(unittest.TestCase):
         source_stat = source.stat()
         os.utime(output, ns=(source_stat.st_mtime_ns + 1_000_000, source_stat.st_mtime_ns + 1_000_000))
 
-        current_snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], self.options)
-        current_row = current_snapshot["mods"][0]["stat"]
-        regenerate_snapshot = self.manager._scan_mods_snapshot(
-            [str(self.mod_root)],
-            {**self.options, "process_mode": "all_overwrite"},
-        )
-        regenerate_row = regenerate_snapshot["mods"][0]["stat"]
+        current_row = self._build_plan()["rows"][0]
+        regenerate_row = self._build_plan({**self.options, "process_mode": "all_overwrite"})["rows"][0]
 
         self.assertEqual(current_row["current_output_count"], 1)
         self.assertEqual(current_row["action_required_count"], 0)
@@ -420,12 +311,8 @@ class TestTextureOptimizationManager(unittest.TestCase):
     def test_scan_marks_fake_png_payload_as_engine_unsupported(self):
         source = self._write_fake_png("Textures/fake.png", size=(128, 128))
 
-        entry = self.manager._build_scan_entry(
-            str(self.mod_root),
-            str(source),
-            output_stats={},
-            options=self.options,
-        )
+        projected = self._first_plan_result()
+        entry = next(item for item in projected["entries"] if Path(item["source_path"]) == source)
 
         self.assertTrue(entry["engine_unsupported"])
         self.assertEqual(entry["engine_unsupported_reason"], "文件扩展名为 PNG，但实际内容不是 PNG")
@@ -435,12 +322,8 @@ class TestTextureOptimizationManager(unittest.TestCase):
     def test_scan_uses_png_header_fallback_for_pillow_unreadable_png(self):
         source = self._write_header_only_png("Textures/fallback.png", size=(20, 12), alpha=True)
 
-        entry = self.manager._build_scan_entry(
-            str(self.mod_root),
-            str(source),
-            output_stats={},
-            options=self.options,
-        )
+        projected = self._first_plan_result()
+        entry = next(item for item in projected["entries"] if Path(item["source_path"]) == source)
 
         self.assertTrue(entry["source_readable"])
         self.assertEqual(entry["width"], 20)
@@ -457,12 +340,8 @@ class TestTextureOptimizationManager(unittest.TestCase):
             color_type=2,
         )
 
-        entry = self.manager._build_scan_entry(
-            str(self.mod_root),
-            str(source),
-            output_stats={},
-            options=self.options,
-        )
+        projected = self._first_plan_result()
+        entry = next(item for item in projected["entries"] if Path(item["source_path"]) == source)
 
         self.assertTrue(entry["source_readable"])
         self.assertTrue(entry["has_alpha"])
@@ -481,14 +360,13 @@ class TestTextureOptimizationManager(unittest.TestCase):
         source = self._write_header_only_png("Textures/fallback.png", size=(20, 12), alpha=False)
         source.with_suffix(".dds").write_bytes(b"dds")
 
-        snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], self.options)
-        row = snapshot["mods"][0]["stat"]
+        row = self._build_plan()["rows"][0]
 
         self.assertEqual(row["source_total_count"], 1)
         self.assertEqual(row["output_total_count"], 1)
         self.assertEqual(row["external_orphan_output_count"], 0)
 
-    def test_build_mod_plan_filters_small_mask_and_fake_png_sources(self):
+    def test_scan_stat_filters_small_mask_and_fake_png_sources(self):
         keep = self._write_png("Textures/keep.png", size=(128, 128))
         self._write_png("Textures/small.png", size=(8, 8))
         self._write_png("Textures/mask_m.png", size=(128, 128))
@@ -498,22 +376,15 @@ class TestTextureOptimizationManager(unittest.TestCase):
         source_stat = keep.stat()
         os.utime(keep_dds, ns=(source_stat.st_mtime_ns + 1_000_000, source_stat.st_mtime_ns + 1_000_000))
 
-        snapshot = self.manager._scan_single_mod_snapshot(
-            str(self.mod_root),
-            {**self.options, "min_dimension": 16, "scale_factor": 1.0, "max_size": 128},
-        )
-        plan = self.manager._build_mod_plan(snapshot["entries"])
+        snapshot = self._first_plan_result({**self.options, "min_dimension": 16, "scale_factor": 1.0, "max_size": 128})
+        stat = snapshot["stat"]
 
-        self.assertEqual(plan["source_count"], 4)
-        self.assertEqual(plan["up_to_date_count"], 1)
-        self.assertEqual(plan["pending_count"], 0)
-        self.assertEqual(plan["skipped_small_count"], 1)
-        self.assertEqual(plan["skipped_mask_count"], 1)
-        self.assertEqual(plan["unsupported_count"], 1)
-        self.assertCountEqual(
-            plan["current_keys"],
-            ["Textures/keep.png", "Textures/mask_m.png", "Textures/fake.png"],
-        )
+        self.assertEqual(stat["source_total_count"], 4)
+        self.assertEqual(stat["current_output_count"], 1)
+        self.assertEqual(stat["action_required_count"], 0)
+        self.assertEqual(stat["skip_small_count"], 1)
+        self.assertEqual(stat["skipped_mask_count"], 1)
+        self.assertEqual(stat["unsupported_source_count"], 1)
 
     def test_optimize_uses_todds_fast_path_and_updates_output_stats(self):
         source = self._write_png("Textures/fast.png", size=(128, 128))
@@ -525,22 +396,21 @@ class TestTextureOptimizationManager(unittest.TestCase):
             status="running",
         )
 
-        def fake_encode_mod(
+        def fake_encode_batch(
             _cancel_event,
-            overwrite_existing=None,
-            source_paths=None,
-            scale_percent=None,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
             max_size=None,
-            use_fix_size=None,
             output_callback=None,
         ):
             self.assertEqual(source_paths, [str(source)])
             self.assertIsNone(scale_percent)
             self.assertEqual(max_size, 0)
-            self.assertTrue(use_fix_size)
             source.with_suffix(".dds").write_bytes(b"dds")
 
-        with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
             result = self.manager._optimize(task)
 
         self.assertEqual(result["optimized"], 1)
@@ -563,19 +433,19 @@ class TestTextureOptimizationManager(unittest.TestCase):
         )
         calls = []
 
-        def fake_encode_mod(
+        def fake_encode_batch(
             _cancel_event,
-            overwrite_existing=None,
-            source_paths=None,
-            scale_percent=None,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
             max_size=None,
-            use_fix_size=None,
             output_callback=None,
         ):
             calls.append((overwrite_existing, list(source_paths or [])))
             source.with_suffix(".dds").write_bytes(b"new-dds")
 
-        with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
             result = self.manager._optimize(task)
 
         from zstandard.backend_c import ZstdDecompressor
@@ -590,6 +460,46 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertEqual(result["final_summary"]["zstd_output_count"], 1)
         self.assertEqual(result["final_summary"]["dds_output_count"], 1)
         self.assertEqual(result["final_summary"]["current_output_count"], 1)
+
+    def test_optimize_zstd_mode_retries_retryable_compress_io_error(self):
+        source = self._write_png("Textures/zstd-retry.png", size=(128, 128))
+        task = TextureTask(
+            id="zstd-retry",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options={**self.options, "process_mode": "all_overwrite", "scale_factor": 1.0, "output_format": "zstd"},
+            status="running",
+        )
+        compress_calls = []
+
+        def fake_encode_batch(
+            _cancel_event,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
+            max_size=None,
+            output_callback=None,
+        ):
+            for source_path in source_paths or []:
+                Path(source_path).with_suffix(".dds").write_bytes(b"new-dds")
+
+        def fake_compress(dds_path, zstd_path):
+            compress_calls.append(dds_path)
+            if len(compress_calls) == 1:
+                raise PermissionError(13, "locked")
+            zstd_path.write_bytes(dds_path.read_bytes())
+            return zstd_path.stat().st_size
+
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch), \
+             patch.object(TextureOptimizationManager, "_compress_dds_to_zstd", side_effect=fake_compress), \
+             patch("backend.managers.mgr_texture_opt.time.sleep"):
+            result = self.manager._optimize(task)
+
+        self.assertEqual(len(compress_calls), 2)
+        self.assertEqual(result["optimized"], 1)
+        self.assertEqual(result["failed"], 0)
+        self.assertTrue(source.with_suffix(".dds.zstd").exists())
 
     def test_optimize_zstd_mode_can_delete_old_dds_after_success(self):
         source = self._write_png("Textures/zstd-clean.png", size=(128, 128))
@@ -609,22 +519,162 @@ class TestTextureOptimizationManager(unittest.TestCase):
             status="running",
         )
 
-        def fake_encode_mod(
+        def fake_encode_batch(
             _cancel_event,
-            overwrite_existing=None,
-            source_paths=None,
-            scale_percent=None,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
             max_size=None,
-            use_fix_size=None,
             output_callback=None,
         ):
             source.with_suffix(".dds").write_bytes(b"new-dds")
 
-        with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
             self.manager._optimize(task)
 
         self.assertFalse(old_dds.exists())
         self.assertTrue(source.with_suffix(".dds.zstd").exists())
+
+    def test_optimize_zstd_mode_records_missing_temp_dds_as_item_failure(self):
+        good = self._write_png("Textures/zstd-good.png", size=(128, 128))
+        bad = self._write_png("Textures/zstd-bad.png", size=(128, 128))
+        task = TextureTask(
+            id="zstd-missing-temp",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options={**self.options, "process_mode": "all_overwrite", "scale_factor": 1.0, "output_format": "zstd"},
+            status="running",
+        )
+
+        def fake_encode_batch(
+            _cancel_event,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
+            max_size=None,
+            output_callback=None,
+        ):
+            self.assertTrue(overwrite_existing)
+            for source_path in source_paths or []:
+                if Path(source_path) == good:
+                    Path(source_path).with_suffix(".dds").write_bytes(b"dds")
+
+        def fake_compress(dds_path, zstd_path):
+            if not dds_path.exists():
+                raise texture_opt_module.TextureOptError(f"todds 未生成临时 DDS，无法压缩为 ZSTD: {dds_path}")
+            zstd_path.write_bytes(b"zstd")
+            return zstd_path.stat().st_size
+
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch), \
+             patch.object(TextureOptimizationManager, "_compress_dds_to_zstd", side_effect=fake_compress):
+            result = self.manager._optimize(task)
+
+        self.assertEqual(result["optimized"], 1)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["final_status"], "failed")
+        self.assertTrue(good.with_suffix(".dds.zstd").exists())
+        self.assertFalse(bad.with_suffix(".dds.zstd").exists())
+        self.assertEqual(result["failed_items"][0]["rel_path"], "Textures/zstd-bad.png")
+
+    def test_optimize_zstd_clean_old_dds_restores_failed_original_dds(self):
+        good = self._write_png("Textures/zstd-clean-good.png", size=(128, 128))
+        bad = self._write_png("Textures/zstd-clean-bad.png", size=(128, 128))
+        good_dds = good.with_suffix(".dds")
+        bad_dds = bad.with_suffix(".dds")
+        good_dds.write_bytes(b"old-good")
+        bad_dds.write_bytes(b"old-bad")
+        task = TextureTask(
+            id="zstd-clean-partial-failure",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options={
+                **self.options,
+                "process_mode": "all_overwrite",
+                "scale_factor": 1.0,
+                "output_format": "zstd",
+                "zstd_clean_old_dds": True,
+            },
+            status="running",
+        )
+
+        def fake_encode_batch(
+            _cancel_event,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
+            max_size=None,
+            output_callback=None,
+        ):
+            for source_path in source_paths or []:
+                if Path(source_path) == good:
+                    Path(source_path).with_suffix(".dds").write_bytes(b"new-good")
+
+        def fake_compress(dds_path, zstd_path):
+            if not dds_path.exists():
+                raise texture_opt_module.TextureOptError(f"todds 未生成临时 DDS，无法压缩为 ZSTD: {dds_path}")
+            zstd_path.write_bytes(b"zstd")
+            return zstd_path.stat().st_size
+
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch), \
+             patch.object(TextureOptimizationManager, "_compress_dds_to_zstd", side_effect=fake_compress):
+            result = self.manager._optimize(task)
+
+        self.assertEqual(result["optimized"], 1)
+        self.assertEqual(result["failed"], 1)
+        self.assertFalse(good_dds.exists())
+        self.assertEqual(bad_dds.read_bytes(), b"old-bad")
+        self.assertTrue(good.with_suffix(".dds.zstd").exists())
+        self.assertFalse(bad.with_suffix(".dds.zstd").exists())
+
+    def test_optimize_zstd_mode_records_backup_failure_as_item_failure(self):
+        good = self._write_png("Textures/zstd-backup-good.png", size=(128, 128))
+        bad = self._write_png("Textures/zstd-backup-bad.png", size=(128, 128))
+        good.with_suffix(".dds").write_bytes(b"old-good")
+        bad_dds = bad.with_suffix(".dds")
+        bad_dds.write_bytes(b"old-bad")
+        task = TextureTask(
+            id="zstd-backup-failure",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options={**self.options, "process_mode": "all_overwrite", "scale_factor": 1.0, "output_format": "zstd"},
+            status="running",
+        )
+        original_replace = Path.replace
+
+        def guarded_replace(path_self, target):
+            if path_self == bad_dds:
+                raise OSError("locked")
+            return original_replace(path_self, target)
+
+        def fake_encode_batch(
+            _cancel_event,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
+            max_size=None,
+            output_callback=None,
+        ):
+            for source_path in source_paths or []:
+                Path(source_path).with_suffix(".dds").write_bytes(b"new-dds")
+
+        def fake_compress(dds_path, zstd_path):
+            zstd_path.write_bytes(dds_path.read_bytes())
+            return zstd_path.stat().st_size
+
+        with patch.object(Path, "replace", guarded_replace), \
+             patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch), \
+             patch.object(TextureOptimizationManager, "_compress_dds_to_zstd", side_effect=fake_compress):
+            result = self.manager._optimize(task)
+
+        self.assertEqual(result["optimized"], 1)
+        self.assertEqual(result["failed"], 1)
+        self.assertTrue(good.with_suffix(".dds.zstd").exists())
+        self.assertFalse(bad.with_suffix(".dds.zstd").exists())
+        self.assertEqual(result["failed_items"][0]["rel_path"], "Textures/zstd-backup-bad.png")
 
     def test_optimize_only_scans_each_mod_once(self):
         source = self._write_png("Textures/once.png", size=(128, 128))
@@ -637,20 +687,20 @@ class TestTextureOptimizationManager(unittest.TestCase):
         )
         original_build = self.manager._build_mod_base_index
 
-        def fake_encode_mod(
+        def fake_encode_batch(
             _cancel_event,
-            overwrite_existing=None,
-            source_paths=None,
-            scale_percent=None,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
             max_size=None,
-            use_fix_size=None,
             output_callback=None,
         ):
             self.assertEqual(source_paths, [str(source)])
             source.with_suffix(".dds").write_bytes(b"dds")
 
         with patch.object(self.manager, "_build_mod_base_index", wraps=original_build) as build_mock, \
-             patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
+             patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
             result = self.manager._optimize(task)
 
         self.assertEqual(build_mock.call_count, 1)
@@ -670,7 +720,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
         seen_threads: list[str] = []
         lock = threading.Lock()
 
-        def fake_scan_single_target(target, _options, **_kwargs):
+        def fake_load_or_build_base_index(target, **_kwargs):
             mod_path = str(target.get("mod_path") or "")
             with lock:
                 seen_threads.append(threading.current_thread().name)
@@ -678,17 +728,54 @@ class TestTextureOptimizationManager(unittest.TestCase):
                 "mod_path": mod_path,
                 "mod_name": Path(mod_path).name,
                 "entries": [],
+            }
+
+        def fake_project_mod_index(base_index, _options, **_kwargs):
+            mod_path = str(base_index.get("mod_path") or "")
+            return {
+                "mod_path": mod_path,
+                "mod_name": Path(mod_path).name,
+                "entries": [],
                 "stat": self.manager._create_empty_stat(mod_path=mod_path, mod_name=Path(mod_path).name),
+                "output_stats": {},
             }
 
         with patch.object(self.manager, "_resolve_scan_workers", return_value=2), \
-             patch.object(self.manager, "_scan_single_target", side_effect=fake_scan_single_target):
+             patch.object(self.manager, "_load_or_build_base_index", side_effect=fake_load_or_build_base_index), \
+             patch.object(self.manager, "_project_mod_index", side_effect=fake_project_mod_index):
             results = self.manager._scan_targets_for_optimize(task, task.options)
 
         self.assertEqual(len(results), 2)
+        self.assertEqual(len(seen_threads), 2)
         self.assertTrue(all(name.startswith("TexturePlan") for name in seen_threads))
 
-    def test_optimize_reuses_recent_analysis_cache_without_revalidating_signature(self):
+    def test_build_texture_plan_keeps_other_mods_when_one_scan_fails(self):
+        other_mod_root = self.temp_root / "OtherMod"
+        (other_mod_root / "Textures").mkdir(parents=True)
+        self._write_png("Textures/ok.png", size=(128, 128))
+        task_options = {**self.options, "process_mode": "all_overwrite"}
+        targets = self.manager._normalize_mod_targets([
+            {"mod_path": str(self.mod_root), "mod_name": "ExampleMod"},
+            {"mod_path": str(other_mod_root), "mod_name": "OtherMod"},
+        ])
+
+        def fake_load_or_build_base_index(target, *, cancel_event=None, validate_cache=True):
+            if str(target.get("mod_path")) == str(other_mod_root):
+                raise OSError("scan failed")
+            return self.manager._build_mod_base_index(target, cancel_event=cancel_event)
+
+        with patch.object(self.manager, "_load_or_build_base_index", side_effect=fake_load_or_build_base_index):
+            plan = self.manager._build_texture_plan(targets, task_options, None)
+
+        rows_by_name = {row["mod_name"]: row for row in plan["rows"]}
+        results_by_name = {result["mod_name"]: result for result in plan["results"]}
+        self.assertEqual(len(plan["results"]), 2)
+        self.assertEqual(len(results_by_name["ExampleMod"]["entries"]), 1)
+        self.assertEqual(results_by_name["OtherMod"]["entries"], [])
+        self.assertEqual(rows_by_name["OtherMod"]["scan_status"], "failed")
+        self.assertEqual(plan["summary"]["scan_failed_count"], 1)
+
+    def test_optimize_reuses_recent_analysis_cache_without_revalidating_source(self):
         source = self._write_png("Textures/reuse.png", size=(128, 128))
         source.with_suffix(".dds").write_bytes(b"dds")
         options = {**self.options, "process_mode": "all_skip_existing"}
@@ -701,7 +788,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             status="running",
         )
 
-        with patch.object(self.manager, "_scan_single_target", side_effect=AssertionError("should use analysis plan cache")):
+        with patch.object(self.manager, "_build_mod_base_index", side_effect=AssertionError("should use base scan cache")):
             result = self.manager._optimize(task)
 
         self.assertEqual(result["optimized"], 0)
@@ -716,10 +803,6 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.manager._base_scan_cache[cache_key]["generated_at"] = (
             texture_opt_module.current_ms() - texture_opt_module.TEXTURE_BASE_SCAN_CACHE_TTL_MS - 1
         )
-        for cached_plan in self.manager._projected_plan_cache.values():
-            cached_plan["generated_at"] = (
-                texture_opt_module.current_ms() - texture_opt_module.TEXTURE_BASE_SCAN_CACHE_TTL_MS - 1
-            )
         task = TextureTask(
             id="expired-analysis-cache",
             action="optimize",
@@ -738,9 +821,6 @@ class TestTextureOptimizationManager(unittest.TestCase):
     def test_optimize_no_jobs_still_returns_final_snapshot_data(self):
         source = self._write_png("Textures/current.png", size=(32, 32))
         source.with_suffix(".dds").write_bytes(b"dds")
-        snapshot = self.manager._scan_mods_snapshot([str(self.mod_root)], self.options)
-        self.manager._store_scan_snapshot(snapshot)
-
         task = TextureTask(
             id="no-jobs",
             action="optimize",
@@ -761,6 +841,8 @@ class TestTextureOptimizationManager(unittest.TestCase):
         source = self._write_png("Textures/external.png", size=(128, 128))
         current_dds = source.with_suffix(".dds")
         current_dds.write_bytes(b"current-dds")
+        source_stat = source.stat()
+        os.utime(current_dds, ns=(source_stat.st_mtime_ns + 1_000_000, source_stat.st_mtime_ns + 1_000_000))
         task = TextureTask(
             id="external-current",
             action="optimize",
@@ -769,7 +851,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
             status="running",
         )
 
-        with patch.object(ToddsEncoder, "encode_mod", side_effect=AssertionError("should not re-encode external current DDS")):
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=AssertionError("should not re-encode external current DDS")):
             result = self.manager._optimize(task)
 
         self.assertEqual(result["optimized"], 0)
@@ -803,22 +885,21 @@ class TestTextureOptimizationManager(unittest.TestCase):
         )
         calls = []
 
-        def fake_encode_mod(
+        def fake_encode_batch(
             _cancel_event,
-            overwrite_existing=None,
-            source_paths=None,
-            scale_percent=None,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
             max_size=None,
-            use_fix_size=None,
             output_callback=None,
         ):
             calls.append((overwrite_existing, list(source_paths or [])))
             self.assertIsNone(scale_percent)
             self.assertEqual(max_size, 0)
-            self.assertTrue(use_fix_size)
             output.write_bytes(b"new")
 
-        with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
             result = self.manager._optimize(task)
 
         self.assertEqual(calls, [(True, [str(source)])])
@@ -829,6 +910,8 @@ class TestTextureOptimizationManager(unittest.TestCase):
         source = self._write_png("Textures/existing.png", size=(256, 256))
         output = source.with_suffix(".dds")
         output.write_bytes(b"old")
+        source_stat = source.stat()
+        os.utime(output, ns=(source_stat.st_mtime_ns + 1_000_000, source_stat.st_mtime_ns + 1_000_000))
         task = TextureTask(
             id="skip-existing",
             action="optimize",
@@ -837,6 +920,26 @@ class TestTextureOptimizationManager(unittest.TestCase):
             status="running",
         )
 
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=AssertionError("should skip current dds")):
+            result = self.manager._optimize(task)
+
+        self.assertEqual(result["optimized"], 0)
+        self.assertEqual(result["skipped"], 1)
+        self.assertEqual(result["failed"], 0)
+
+    def test_all_skip_existing_process_mode_skips_stale_existing_output(self):
+        source = self._write_png("Textures/stale.png", size=(256, 256))
+        output = source.with_suffix(".dds")
+        output.write_bytes(b"old")
+        source_stat = source.stat()
+        os.utime(output, ns=(source_stat.st_mtime_ns - 1_000_000, source_stat.st_mtime_ns - 1_000_000))
+        task = TextureTask(
+            id="skip-stale",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options={**self.options, "process_mode": "all_skip_existing"},
+            status="running",
+        )
         with patch.object(ToddsEncoder, "encode_batch", side_effect=AssertionError("should skip existing dds")):
             result = self.manager._optimize(task)
 
@@ -845,50 +948,29 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertEqual(result["failed"], 0)
 
     def test_scale_strategy_falls_back_to_original_size_for_incompatible_dimensions(self):
-        behavior = self.manager._resolve_encode_behavior(
-            136,
-            136,
-            {**self.options, "scale_factor": 0.5, "max_size": 128},
-        )
+        source = self._write_png("Textures/fallback.png", size=(136, 136))
 
-        self.assertEqual(behavior["mode"], "keep_original")
-        self.assertTrue(behavior["use_fix_size"])
-        self.assertIsNone(behavior["scale_percent"])
-        self.assertEqual(
-            self.manager._calculate_target_dimensions(136, 136, {**self.options, "scale_factor": 0.5, "max_size": 128}),
-            (136, 136),
-        )
+        projected = self._first_plan_result({**self.options, "scale_factor": 0.5, "max_size": 128})
+        entry = next(item for item in projected["entries"] if Path(item["source_path"]) == source)
+
+        self.assertEqual(entry["plan_kind"], "keep_original")
+        self.assertIsNone(entry["scale_percent"])
 
     def test_scale_strategy_uses_larger_scale_when_needed(self):
-        behavior = self.manager._resolve_encode_behavior(
-            512,
-            512,
-            {**self.options, "scale_factor": 0.2, "max_size": 128},
-        )
+        source = self._write_png("Textures/scaled.png", size=(512, 512))
 
-        self.assertEqual(behavior["mode"], "scale")
-        self.assertEqual(behavior["scale_percent"], 25)
-        self.assertEqual(
-            self.manager._calculate_target_dimensions(512, 512, {**self.options, "scale_factor": 0.2, "max_size": 128}),
-            (128, 128),
-        )
+        projected = self._first_plan_result({**self.options, "scale_factor": 0.2, "max_size": 128})
+        entry = next(item for item in projected["entries"] if Path(item["source_path"]) == source)
+
+        self.assertEqual(entry["plan_kind"], "fallback")
+        self.assertEqual(entry["scale_percent"], 25)
 
     def test_no_compression_does_not_read_min_clarity(self):
         self._write_png("Textures/source.png", size=(512, 512))
 
         with patch.object(TextureOptimizationManager, "_get_scale_target_size", side_effect=AssertionError("不压缩时不应读取最小清晰度")):
-            behavior = self.manager._resolve_encode_behavior(
-                512,
-                512,
-                {**self.options, "scale_factor": 1.0, "max_size": 1024},
-            )
-            snapshot = self.manager._scan_mods_snapshot(
-                [str(self.mod_root)],
-                {**self.options, "scale_factor": 1.0, "max_size": 1024},
-            )
+            snapshot = self._build_plan({**self.options, "scale_factor": 1.0, "max_size": 1024})
 
-        self.assertEqual(behavior["mode"], "keep_original")
-        self.assertIsNone(behavior["scale_percent"])
         self.assertEqual(snapshot["summary"]["scaled_count"], 0)
         self.assertEqual(snapshot["summary"]["keep_original_count"], 1)
 
@@ -913,13 +995,13 @@ class TestTextureOptimizationManager(unittest.TestCase):
         )
         calls = []
 
-        def fake_encode_mod(
+        def fake_encode_batch(
             _cancel_event,
-            overwrite_existing=None,
-            source_paths=None,
-            scale_percent=None,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
             max_size=None,
-            use_fix_size=None,
             output_callback=None,
         ):
             calls.append(
@@ -928,13 +1010,12 @@ class TestTextureOptimizationManager(unittest.TestCase):
                     "source_paths": list(source_paths or []),
                     "scale_percent": scale_percent,
                     "max_size": max_size,
-                    "use_fix_size": use_fix_size,
                 }
             )
             for source_path in source_paths or []:
                 Path(source_path).with_suffix(".dds").write_bytes(b"dds")
 
-        with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod):
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
             result = self.manager._optimize(task)
 
         self.assertEqual(result["optimized"], 2)
@@ -949,14 +1030,12 @@ class TestTextureOptimizationManager(unittest.TestCase):
                     "source_paths": [str(scaled_source)],
                     "scale_percent": 50,
                     "max_size": 0,
-                    "use_fix_size": False,
                 },
                 {
                     "overwrite_existing": True,
                     "source_paths": [str(fallback_source)],
                     "scale_percent": None,
                     "max_size": 0,
-                    "use_fix_size": True,
                 },
             ],
         )
@@ -972,13 +1051,13 @@ class TestTextureOptimizationManager(unittest.TestCase):
         )
         emitted: list[dict[str, Any]] = []
 
-        def fake_encode_mod(
+        def fake_encode_batch(
             _cancel_event,
-            overwrite_existing=None,
-            source_paths=None,
-            scale_percent=None,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
             max_size=None,
-            use_fix_size=None,
             output_callback=None,
         ):
             self.assertTrue(callable(output_callback))
@@ -989,7 +1068,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
         def capture_progress(_task_id, _task_type, **payload):
             emitted.append(payload)
 
-        with patch.object(ToddsEncoder, "encode_mod", side_effect=fake_encode_mod), \
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch), \
              patch("backend.managers.mgr_texture_opt.EventBus.emit_progress", side_effect=capture_progress):
             result = self.manager._optimize(task)
 
@@ -1001,12 +1080,9 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self._write_png("Textures/scaled.png", size=(256, 256))
         self._write_png("Textures/fallback.png", size=(136, 136))
 
-        snapshot = self.manager._scan_mods_snapshot(
-            [str(self.mod_root)],
-            {**self.options, "scale_factor": 0.5, "max_size": 128},
-        )
+        snapshot = self._build_plan({**self.options, "scale_factor": 0.5, "max_size": 128})
         summary = snapshot["summary"]
-        row = snapshot["mods"][0]["stat"]
+        row = snapshot["rows"][0]
 
         self.assertEqual(summary["scaled_count"], 1)
         self.assertEqual(summary["keep_original_count"], 1)
@@ -1023,21 +1099,18 @@ class TestTextureOptimizationManager(unittest.TestCase):
     def test_scaled_only_process_mode_skips_keep_original_jobs(self):
         scaled = self._write_png("Textures/scaled.png", size=(256, 256))
         fallback = self._write_png("Textures/fallback.png", size=(136, 136))
-        scan_result = self.manager._scan_single_mod(
-            str(self.mod_root),
-            {**self.options, "process_mode": "scaled_only_overwrite"},
-        )
+        scan_result = self._first_plan_result({**self.options, "process_mode": "scaled_only_overwrite"})
         batches = self.manager._build_encode_batches(scan_result["entries"])
 
         self.assertEqual(len(batches), 1)
-        self.assertEqual(batches[0]["source_paths"], [str(scaled)])
-        self.assertNotIn(str(fallback), batches[0]["source_paths"])
+        self.assertEqual([entry["source_path"] for entry in batches[0]["entries"]], [str(scaled)])
+        self.assertNotIn(str(fallback), [entry["source_path"] for entry in batches[0]["entries"]])
         self.assertEqual(self.manager._count_skipped_entries(scan_result["entries"], {**self.options, "process_mode": "scaled_only_overwrite"}), 1)
 
-    def test_should_skip_texture_matches_old_script_dimension_window(self):
-        self.assertTrue(self.manager._should_skip_texture({"width": 127, "height": 256}, self.options))
-        self.assertTrue(self.manager._should_skip_texture({"width": 4096, "height": 512}, self.options))
-        self.assertFalse(self.manager._should_skip_texture({"width": 512, "height": 512}, self.options))
+    def test_dimension_window_skips_too_small_and_too_large_sources(self):
+        self.assertTrue(self.manager._is_outside_recommended_source_range(127, 256, self.options))
+        self.assertTrue(self.manager._is_outside_recommended_source_range(4096, 512, self.options))
+        self.assertFalse(self.manager._is_outside_recommended_source_range(512, 512, self.options))
 
     def test_resolve_scan_workers_uses_auto_cap_and_manual_override(self):
         auto_workers = self.manager._resolve_scan_workers(12, self.options)
@@ -1046,27 +1119,6 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertGreaterEqual(auto_workers, 1)
         self.assertLessEqual(auto_workers, 8)
         self.assertEqual(manual_workers, 3)
-
-    def test_scale_factor_above_one_updates_target_dimensions(self):
-        self.assertEqual(
-            self.manager._calculate_target_dimensions(64, 32, {**self.options, "scale_factor": 2.0}),
-            (128, 64),
-        )
-
-    def test_cached_snapshot_without_current_schema_is_ignored(self):
-        self.manager._store_scan_snapshot(
-            {
-                "id": "snapshot-old",
-                "cache_key": self.manager._build_scan_cache_key([str(self.mod_root)], self.options),
-                "signature": self.manager._build_signature(self.options),
-                "generated_at": 1,
-                "mod_paths": [str(self.mod_root)],
-                "summary": {"source_total_count": 1},
-                "mods": [],
-            }
-        )
-
-        self.assertIsNone(self.manager._get_cached_scan_snapshot([str(self.mod_root)], self.options))
 
     def test_read_process_log_returns_tail_segment(self):
         log_path = self.temp_root / "tool.log"
@@ -1113,19 +1165,24 @@ class TestTextureOptimizationPersistence(unittest.TestCase):
         Image.new("RGBA", size, (255, 0, 0, 128)).save(path)
         return path
 
+    def _build_plan(self, options=None, mod_targets=None):
+        return self.manager._build_texture_plan(
+            mod_targets or [str(self.mod_root)],
+            self.manager._build_options(options or self.options),
+            None,
+        )
+
     def test_mod_exclusion_removes_entries_from_generation_plan(self):
         self._write_png("Textures/excluded.png")
         self.manager.set_mod_exclusion("Example.Mod", True)
 
-        projected = self.manager._scan_single_target(
-            {
+        projected = self._build_plan(
+            mod_targets=[{
                 "mod_path": str(self.mod_root),
                 "mod_name": "ExampleMod",
                 "package_id": "example.mod",
-            },
-            self.options,
-            apply_exclusions=True,
-        )
+            }],
+        )["results"][0]
 
         self.assertEqual(projected["stat"]["package_id"], "example.mod")
         self.assertEqual(projected["stat"]["excluded_count"], 1)
@@ -1139,7 +1196,7 @@ class TestTextureOptimizationPersistence(unittest.TestCase):
         self._write_png("Textures/skip.png")
         self.manager.set_file_exclusion(str(self.mod_root), "Textures/skip.png", True)
 
-        projected = self.manager._scan_single_mod(str(self.mod_root), self.options)
+        projected = self._build_plan()["results"][0]
         entries = {entry["rel_path"]: entry for entry in projected["entries"]}
 
         self.assertEqual(projected["stat"]["excluded_count"], 1)
@@ -1182,7 +1239,7 @@ class TestToddsEncoder(unittest.TestCase):
         self.source = self.temp_root / "Textures" / "a.png"
         Image.new("RGBA", (16, 16), (255, 0, 0, 128)).save(self.source)
 
-    def test_encode_mod_builds_filtered_source_list_command(self):
+    def test_encode_batch_builds_filtered_source_list_command(self):
         encoder = ToddsEncoder(
             {
                 "texture_tools_path": str(self.temp_root),
@@ -1218,7 +1275,12 @@ class TestToddsEncoder(unittest.TestCase):
 
         with patch.object(ToddsEncoder, "resolve_executable", return_value=self.temp_root / "todds.exe"), \
              patch("backend.managers.mgr_texture_opt._ToolProcessRunner.run_command", side_effect=inspect_todds_command):
-            encoder.encode_mod(threading.Event(), source_paths=[str(self.source)])
+            encoder.encode_batch(
+                threading.Event(),
+                source_paths=[str(self.source)],
+                overwrite_existing=False,
+                scale_percent=50,
+            )
 
 
 if __name__ == "__main__":

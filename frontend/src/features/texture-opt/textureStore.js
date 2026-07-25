@@ -36,6 +36,7 @@ export const useTextureStore = defineStore('texture', () => {
     skipped_mask_count: 0,
     unsupported_source_count: 0,
     unreadable_source_count: 0,
+    scan_failed_count: 0,
     scaled_count: 0,
     fallback_scaled_count: 0,
     keep_original_count: 0,
@@ -95,6 +96,7 @@ export const useTextureStore = defineStore('texture', () => {
       skipped_mask_count: toInt(raw.skipped_mask_count ?? base.skipped_mask_count),
       unsupported_source_count: toInt(raw.unsupported_source_count ?? raw.unsupported_count ?? base.unsupported_source_count),
       unreadable_source_count: toInt(raw.unreadable_source_count ?? base.unreadable_source_count),
+      scan_failed_count: toInt(raw.scan_failed_count ?? base.scan_failed_count),
       scaled_count: toInt(raw.scaled_count ?? base.scaled_count),
       fallback_scaled_count: toInt(raw.fallback_scaled_count ?? base.fallback_scaled_count),
       keep_original_count: toInt(raw.keep_original_count ?? base.keep_original_count),
@@ -190,6 +192,7 @@ export const useTextureStore = defineStore('texture', () => {
     summary: normalizeTextureStat(raw.summary || {}, { includeModCount: true }),
     mods: normalizeTextureRows(raw.mods || []),
     failed_items: Array.isArray(raw.failed_items) ? raw.failed_items.map(normalizeFailedItem) : [],
+    failed_count: toInt(raw.failed_count ?? raw.failed ?? raw.failed_items?.length ?? 0),
     mod_paths: Array.isArray(raw.mod_paths) ? raw.mod_paths.map(item => String(item || '')) : [],
     mod_targets: Array.isArray(raw.mod_targets) ? raw.mod_targets.map(item => normalizeTextureStat(item || {})) : [],
     todds_log_path: String(raw.todds_log_path || ''),
@@ -567,6 +570,8 @@ export const useTextureStore = defineStore('texture', () => {
         isAnalyzing.value = false
       }
     } catch (e) {
+      console.error('启动贴图分析失败:', e)
+      showUserErrorToast(e, t('errors.texture.start_analysis_failed', '启动贴图分析失败。请检查模组路径、文件权限和后台日志后重试。'))
       isAnalyzing.value = false
     }
   }
@@ -595,6 +600,13 @@ export const useTextureStore = defineStore('texture', () => {
         isOptimizing.value = false
       }
     } catch (e) {
+      console.error('启动贴图任务失败:', e)
+      showUserErrorToast(
+        e,
+        action === 'clean_generated'
+          ? t('errors.texture.start_clean_failed', '启动贴图清理失败。请检查模组路径、文件权限和后台日志后重试。')
+          : t('errors.texture.start_optimize_failed', '启动贴图生成失败。请检查工具配置、模组路径、文件权限和后台日志后重试。'),
+      )
       isOptimizing.value = false
     }
   }
@@ -709,13 +721,6 @@ export const useTextureStore = defineStore('texture', () => {
 
     if (metrics.current_entry) {
       upsertCurrentEntry(metrics.current_entry)
-    }
-    if (Array.isArray(metrics.final_mods)) {
-      if (lastSingleModTargetKey.value) {
-        mergeTextureRows(metrics.final_mods)
-      } else {
-        modsData.value = normalizeTextureRows(metrics.final_mods)
-      }
     }
 
     // 处理分析进度
