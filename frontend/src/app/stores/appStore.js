@@ -290,7 +290,7 @@ export const useAppStore = defineStore('app', () => {
       theme_id: DEFAULT_THEME_ID,
       font_size: 14,
       drag_delay: 30,            // 拖动判定延迟 (毫秒)
-      detail_delay: 300,          // 详情页加载延迟 (毫秒)
+      detail_delay: 200,          // 详情页加载延迟 (毫秒)
       tooltip_hover_time: 1000,  // 鼠标悬停显示提示时间 (毫秒)
       show_mod_hover_panel: true,  // 是否显示 Mod 悬停面板
       show_ai_assistant: true,  // 是否显示 AI 助手入口

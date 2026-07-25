@@ -1065,6 +1065,7 @@
       "no_replacement_suggestion": "Mod {package_id} 沒有替換建議",
       "no_translatable_detail": "目前工坊項目沒有可翻譯的標題或說明",
       "package_detail_map_failed": "讀取工坊對應詳情失敗。請檢查外部工坊資料庫是否完整。",
+      "public_details_failed": "取得公開工坊詳情失敗。請檢查網路連線、Steam 服務狀態，或稍後再試。",
       "publish_failed": "發佈工坊檔案失敗。請檢查 Steam 登入狀態、網路連線、檔案權限和工坊表單內容。",
       "publish_invalid": "發佈工坊檔案參數無效。請檢查工坊表單內容、檔案路徑和 Steam Web API Key 後重試。",
       "same_author_failed": "獲取作者作品失敗。請檢查網路連接或外置工坊資料庫狀態後重試。",
@@ -1367,6 +1368,7 @@
       "workshop_author_profiles": "獲取作者資訊",
       "workshop_details": "獲取雲端詳情",
       "workshop_details_by_package": "根據包名獲取工坊詳情",
+      "workshop_id_lookup": "工坊 ID 查詢",
       "workshop_relation": "獲取{label}",
       "workshop_search": "工坊檢索"
     }
@@ -4893,6 +4895,7 @@
       "github_subscription_missing_url": "訂閱記錄缺少倉庫地址，無法獲取時間線",
       "github_subscription_not_found": "未找到該訂閱",
       "no_missing_workshop_downloads": "沒有可下載的工坊缺失項",
+      "workshop_id_lookup_missing": "找不到工坊 ID：{ids}",
       "workshop_relation_failed": "{label}載入失敗。請檢查網路連接、Steam 服務狀態或稍後重試。",
       "workshop_retranslated": "已重新翻譯說明",
       "workshop_translated": "已翻譯說明",
@@ -7401,6 +7404,11 @@
           "subscribers_tooltip": "訂閱人數",
           "workshop_project": "工坊項目"
         },
+        "open_sub_browser": {
+          "button": "開啟工坊",
+          "title": "Steam 工坊",
+          "tooltip": "在內建子瀏覽器開啟 Steam 工坊頁面"
+        },
         "relation": {
           "collection_children": "合集子項",
           "dependencies": "依賴項目",
@@ -7423,8 +7431,11 @@
             "dependency": "模組依賴",
             "dlc": "DLC依賴"
           },
-          "placeholder_cache": "搜尋快取，支持 t:標籤 d:DLC_AppID m:依賴工坊ID a:作者",
-          "placeholder_enhanced": "搜尋工坊，支持 t:標籤 d:DLC_AppID m:依賴工坊ID"
+          "help": {
+            "workshop_link": "支援直接貼上 Steam 工坊連結，或輸入 w:工坊ID 精確查找。"
+          },
+          "placeholder_cache": "搜尋快取工坊項目，支援 w:工坊ID t:標籤 d:DLC_AppID m:依賴工坊ID a:作者",
+          "placeholder_enhanced": "搜尋工坊項目，支援 w:工坊ID t:標籤 d:DLC_AppID m:依賴工坊ID"
         },
         "sort": {
           "author": "作者排序",

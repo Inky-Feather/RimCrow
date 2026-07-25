@@ -1065,6 +1065,7 @@
       "no_replacement_suggestion": "У мода {package_id} нет предложений по замене.",
       "no_translatable_detail": "Этот элемент Workshop не имеет названия или описания, доступного для перевода.",
       "package_detail_map_failed": "Не удалось прочитать сведения сопоставления Workshop. Проверьте целостность внешней базы Workshop.",
+      "public_details_failed": "Не удалось загрузить общедоступные сведения Workshop. Проверьте подключение к сети и состояние сервисов Steam или повторите попытку позже.",
       "publish_failed": "Не удалось опубликовать файл Workshop. Проверьте вход в Steam, сеть, права на файлы и данные формы Workshop.",
       "publish_invalid": "Неверные параметры публикации файла Workshop. Проверьте форму Workshop, пути к файлам и веб-ключ Steam API, затем повторите попытку.",
       "same_author_failed": "Не удалось получить работы того же автора. Проверьте сетевое соединение или состояние внешней базы данных Workshop и повторите попытку.",
@@ -1367,6 +1368,7 @@
       "workshop_author_profiles": "Получить информацию об авторе",
       "workshop_details": "Получить подробную информацию об облаке",
       "workshop_details_by_package": "Получите подробную информацию о Workshop по идентификатору пакета.",
+      "workshop_id_lookup": "Поиск по ID Workshop",
       "workshop_relation": "Получить {label}",
       "workshop_search": "Workshop поиск"
     }
@@ -4893,6 +4895,7 @@
       "github_subscription_missing_url": "В записи подписки нет URL-адреса хранилища, поэтому временную шкалу невозможно загрузить.",
       "github_subscription_not_found": "Подписка не найдена",
       "no_missing_workshop_downloads": "Нет загружаемых недостающих элементов Workshop.",
+      "workshop_id_lookup_missing": "ID Workshop не найден: {ids}",
       "workshop_relation_failed": "Не удалось загрузить {label}. Проверьте сетевое соединение, состояние службы Steam или повторите попытку позже.",
       "workshop_retranslated": "Описание переведено заново",
       "workshop_translated": "Описание переведено",
@@ -7401,6 +7404,11 @@
           "subscribers_tooltip": "Подписчики",
           "workshop_project": "Workshop предмет"
         },
+        "open_sub_browser": {
+          "button": "Открыть Workshop",
+          "title": "Steam Workshop",
+          "tooltip": "Открыть страницу Steam Workshop во встроенном браузере"
+        },
         "relation": {
           "collection_children": "Предметы коллекции",
           "dependencies": "Зависимости",
@@ -7423,8 +7431,11 @@
             "dependency": "Зависимость мода",
             "dlc": "Зависимость от DLC"
           },
-          "placeholder_cache": "Кэш поиска, поддерживает t:tag d:DLC_AppID m:dependentWorkshopID a:author",
-          "placeholder_enhanced": "Поиск Workshop, поддерживает t:tag d:DLC_AppID m:dependentWorkshopID"
+          "help": {
+            "workshop_link": "Вставьте ссылку Steam Workshop напрямую или введите w:WorkshopID для точного поиска."
+          },
+          "placeholder_cache": "Поиск кэшированных предметов Workshop; поддерживает w:WorkshopID t:тег d:DLC_AppID m:WorkshopID зависимости a:автор",
+          "placeholder_enhanced": "Поиск предметов Workshop; поддерживает w:WorkshopID t:тег d:DLC_AppID m:WorkshopID зависимости"
         },
         "sort": {
           "author": "Сортировать по автору",

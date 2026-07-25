@@ -7952,10 +7952,25 @@ class API:
             return ApiResponse.error("获取作者作品失败", code="WORKSHOP.SAME_AUTHOR_FAILED", detail=exc, context={"workshop_id": workshop_id}, user_message=tr("api.workshop.same_author_failed", "获取作者作品失败。请检查网络连接或外置工坊数据库状态后重试。"))
 
     @log_api_call
-    def workshop_preheat_public_details(self, workshop_ids: list[str]):
+    def workshop_preheat_public_details(self, workshop_ids: list[str], return_items: bool = False):
         """普通模式：后台批量获取公开详情，不使用 Steam Web API Key。"""
-        count = self._emit_workshop_public_details_async(workshop_ids, trace_label="workshop_related:normal")
-        return ApiResponse.success({"count": count})
+        if not return_items:
+            count = self._emit_workshop_public_details_async(workshop_ids, trace_label="workshop_related:normal")
+            return ApiResponse.success({"count": count})
+
+        normalized_ids = self._normalize_workshop_id_batch(workshop_ids)
+        if not normalized_ids:
+            return ApiResponse.success({"count": 0, "items": [], "missing_ids": []})
+        try:
+            online_data, _ = SteamWebAPI.fetch_item_details(normalized_ids, trace_label="workshop_id_lookup:normal")
+            items = self._attach_workshop_translation_meta_to_items(list((online_data or {}).values()))
+            item_map = {str(item.get("workshop_id") or ""): item for item in items if isinstance(item, dict)}
+            missing_ids = [workshop_id for workshop_id in normalized_ids if workshop_id not in item_map]
+            if item_map:
+                EventBus.emit('workspace-online-update', item_map)
+            return ApiResponse.success({"count": len(items), "items": items, "missing_ids": missing_ids})
+        except Exception as exc:
+            return ApiResponse.error("获取公开工坊详情失败", code="WORKSHOP.PUBLIC_DETAILS_FAILED", detail=exc, context={"workshop_ids": normalized_ids}, user_message=tr("api.workshop.public_details_failed", "获取公开工坊详情失败。请检查网络连接、Steam 服务状态，或稍后重试。"))
 
     @log_api_call
     def workshop_get_enhanced_details(self, workshop_id: str, current_detail: dict | None = None):

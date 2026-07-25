@@ -625,8 +625,10 @@ const expandTextarea = ref(false)
 const rawSelectedMod = computed(() => modStore.lastSelectedMod)
 
 // 2. 创建一个防抖的引用
-// 含义：当 rawSelectedMod 变化时，debouncedMod 会等待 200ms 且无新变化后才更新
-const selectedMod = refDebounced(rawSelectedMod, appStore.settings.ui.detail_delay)
+// 详情延迟需要响应设置变化；为 0 时直接显示当前项，避免残留的防抖等待。
+const detailDelay = computed(() => Math.max(0, Number(appStore.settings.ui?.detail_delay) || 0))
+const debouncedSelectedMod = refDebounced(rawSelectedMod, detailDelay)
+const selectedMod = computed(() => detailDelay.value <= 0 ? rawSelectedMod.value : debouncedSelectedMod.value)
 const selectedModIconUrl = computed(() => resolveModIconUrl(selectedMod.value))
 const modType = computed(() => modStore.displayModType(selectedMod.value))
 const detailDateFormatterOptions = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }

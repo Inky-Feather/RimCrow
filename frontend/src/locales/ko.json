@@ -1065,6 +1065,7 @@
       "no_replacement_suggestion": "Mod {package_id}에는 교체 제안이 없습니다.",
       "no_translatable_detail": "이 Workshop 항목에는 번역할 수 있는 제목이나 설명이 없습니다.",
       "package_detail_map_failed": "Workshop 매핑 상세 정보를 읽지 못했습니다. 외부 Workshop 데이터베이스가 완전한지 확인하세요.",
+      "public_details_failed": "공개 Workshop 상세 정보를 가져오지 못했습니다. 네트워크 연결과 Steam 서비스 상태를 확인하거나 잠시 후 다시 시도하세요.",
       "publish_failed": "Workshop 파일 게시에 실패했습니다. Steam 로그인 상태, 네트워크 연결, 파일 권한과 Workshop 양식 내용을 확인하세요.",
       "publish_invalid": "Workshop 파일 게시 매개변수가 잘못되었습니다. Workshop 양식, 파일 경로, Steam 웹 API 키를 확인한 후 다시 시도하세요.",
       "same_author_failed": "같은 작가의 작품을 가져오는 데 실패했습니다. 네트워크 연결 또는 외부 Workshop 데이터베이스 상태를 확인하고 다시 시도하십시오.",
@@ -1367,6 +1368,7 @@
       "workshop_author_profiles": "저자 정보 얻기",
       "workshop_details": "클라우드 세부정보 가져오기",
       "workshop_details_by_package": "패키지 ID로 Workshop 세부 정보 가져오기",
+      "workshop_id_lookup": "Workshop ID 조회",
       "workshop_relation": "{label} 가져오기",
       "workshop_search": "Workshop 검색"
     }
@@ -4893,6 +4895,7 @@
       "github_subscription_missing_url": "구독 기록에 저장소 URL이 없으므로 타임라인을 로드할 수 없습니다.",
       "github_subscription_not_found": "구독을 찾을 수 없습니다",
       "no_missing_workshop_downloads": "다운로드 가능한 누락된 Workshop 항목 없음",
+      "workshop_id_lookup_missing": "Workshop ID를 찾을 수 없습니다: {ids}",
       "workshop_relation_failed": "{label}를 로드하지 못했습니다. 네트워크 연결, Steam 서비스 상태를 확인하거나 나중에 다시 시도하세요.",
       "workshop_retranslated": "설명이 다시 번역되었습니다.",
       "workshop_translated": "설명이 번역되었습니다.",
@@ -7401,6 +7404,11 @@
           "subscribers_tooltip": "구독자",
           "workshop_project": "Workshop 아이템"
         },
+        "open_sub_browser": {
+          "button": "Workshop 열기",
+          "title": "Steam Workshop",
+          "tooltip": "내장 브라우저에서 Steam Workshop 페이지 열기"
+        },
         "relation": {
           "collection_children": "컬렉션 아이템",
           "dependencies": "종속성",
@@ -7423,8 +7431,11 @@
             "dependency": "모드 의존성",
             "dlc": "DLC 종속성"
           },
-          "placeholder_cache": "검색 캐시, t:tag d:DLC_AppID m:dependentWorkshopID a:author 지원",
-          "placeholder_enhanced": "Workshop 검색, t:tag d:DLC_AppID m:dependentWorkshopID 지원"
+          "help": {
+            "workshop_link": "Steam 창작마당 링크를 바로 붙여넣거나 w:WorkshopID를 입력해 정확히 찾을 수 있습니다."
+          },
+          "placeholder_cache": "캐시된 창작마당 항목 검색, w:WorkshopID t:태그 d:DLC_AppID m:의존성 WorkshopID a:작성자 지원",
+          "placeholder_enhanced": "창작마당 항목 검색, w:WorkshopID t:태그 d:DLC_AppID m:의존성 WorkshopID 지원"
         },
         "sort": {
           "author": "작성자별로 정렬",

@@ -1065,6 +1065,7 @@
       "no_replacement_suggestion": "Mod {package_id} hat keinen Ersatzvorschlag",
       "no_translatable_detail": "Für diesen Workshop-Artikel ist weder ein Titel noch eine Beschreibung zur Übersetzung verfügbar",
       "package_detail_map_failed": "Workshop-Zuordnungsdetails konnten nicht gelesen werden. Prüfen Sie, ob die externe Workshop-Datenbank vollständig ist.",
+      "public_details_failed": "Öffentliche Workshop-Details konnten nicht geladen werden. Prüfe die Netzwerkverbindung und den Steam-Dienststatus oder versuche es später erneut.",
       "publish_failed": "Workshop-Datei konnte nicht veröffentlicht werden. Prüfen Sie Steam-Anmeldung, Netzwerkverbindung, Dateirechte und Workshop-Formular.",
       "publish_invalid": "Ungültige Workshop-Dateiveröffentlichungsparameter. Überprüfen Sie das Workshop-Formular, die Dateipfade und den Steam Web-API-Schlüssel und versuchen Sie es dann erneut.",
       "same_author_failed": "Es konnten keine Werke desselben Autors abgerufen werden. Überprüfen Sie die Netzwerkverbindung oder den Status der externen Workshop-Datenbank und versuchen Sie es erneut.",
@@ -1367,6 +1368,7 @@
       "workshop_author_profiles": "Holen Sie sich Autoreninformationen",
       "workshop_details": "Holen Sie sich Cloud-Details",
       "workshop_details_by_package": "Rufen Sie Workshop-Details nach Paket-ID ab",
+      "workshop_id_lookup": "Workshop-ID-Suche",
       "workshop_relation": "Holen Sie sich {label}",
       "workshop_search": "Workshop-Suche"
     }
@@ -4893,6 +4895,7 @@
       "github_subscription_missing_url": "Der Abonnementdatensatz hat keine Repository-URL, daher kann die Zeitleiste nicht geladen werden",
       "github_subscription_not_found": "Abonnement nicht gefunden",
       "no_missing_workshop_downloads": "Keine herunterladbaren fehlenden Workshop-Elemente",
+      "workshop_id_lookup_missing": "Workshop-ID nicht gefunden: {ids}",
       "workshop_relation_failed": "{label} konnte nicht geladen werden. Überprüfen Sie die Netzwerkverbindung und den Steam-Dienststatus oder versuchen Sie es später erneut.",
       "workshop_retranslated": "Beschreibung neu übersetzt",
       "workshop_translated": "Beschreibung übersetzt",
@@ -7401,6 +7404,11 @@
           "subscribers_tooltip": "Abonnenten",
           "workshop_project": "Workshop Artikel"
         },
+        "open_sub_browser": {
+          "button": "Workshop öffnen",
+          "title": "Steam Workshop",
+          "tooltip": "Steam-Workshop-Seite im integrierten Browser öffnen"
+        },
         "relation": {
           "collection_children": "Sammlungsstücke",
           "dependencies": "Abhängigkeiten",
@@ -7423,8 +7431,11 @@
             "dependency": "Mod-Abhängigkeit",
             "dlc": "DLC-Abhängigkeit"
           },
-          "placeholder_cache": "Suchcache, unterstützt t:tag d:DLC_AppID m:dependencyWorkshopID a:author",
-          "placeholder_enhanced": "Suche Workshop, unterstützt t:tag d:DLC_AppID m:dependencyWorkshopID"
+          "help": {
+            "workshop_link": "Füge direkt einen Steam-Workshop-Link ein oder gib w:WorkshopID für eine genaue Suche ein."
+          },
+          "placeholder_cache": "Gecachte Workshop-Objekte suchen; unterstützt w:WorkshopID t:Tag d:DLC_AppID m:Abhängigkeits-WorkshopID a:Autor",
+          "placeholder_enhanced": "Workshop-Objekte suchen; unterstützt w:WorkshopID t:Tag d:DLC_AppID m:Abhängigkeits-WorkshopID"
         },
         "sort": {
           "author": "Nach Autor sortieren",

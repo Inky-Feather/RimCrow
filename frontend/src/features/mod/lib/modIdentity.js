@@ -79,11 +79,22 @@ export const normalizeUrl = (value = '') => {
 export const extractWorkshopId = (value = '') => {
   const text = String(value || '').trim()
   if (!text) return ''
-  // 兼容直接传工坊 ID。
-  if (/^\d{7,}$/.test(text)) return text
-  // 兼容从 Steam 链接里提取 `?id=xxxx`。
-  const match = text.match(/[?&]id=(\d{7,})/i)
-  return match?.[1] || ''
+  const candidates = [text]
+  try {
+    const decoded = decodeURIComponent(text)
+    if (decoded !== text) candidates.push(decoded)
+  } catch {}
+  for (const candidate of candidates) {
+    // 兼容直接传工坊 ID 或搜索框里的 w:ID。
+    const directMatch = candidate.match(/^(?:w:)?(\d{6,20})$/i)
+    if (directMatch) return directMatch[1]
+    // 兼容 Steam 网页链接和 steam://url/CommunityFilePage/ID。
+    const queryMatch = candidate.match(/[?&]id=(\d{6,20})/i)
+    if (queryMatch) return queryMatch[1]
+    const protocolMatch = candidate.match(/CommunityFilePage\/(\d{6,20})/i)
+    if (protocolMatch) return protocolMatch[1]
+  }
+  return ''
 }
 
 export const buildWorkshopUrl = (workshopId = '') => {

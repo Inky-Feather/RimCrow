@@ -1065,6 +1065,7 @@
       "no_replacement_suggestion": "Mod {package_id} has no replacement suggestion",
       "no_translatable_detail": "This Workshop item has no title or description available for translation",
       "package_detail_map_failed": "Failed to load Workshop mapping details. Check that the external Workshop database is complete.",
+      "public_details_failed": "Failed to load public Workshop details. Check your network connection and Steam service status, or try again later.",
       "publish_failed": "Failed to publish the Workshop file. Check Steam login status, network connection, file permissions, and the Workshop form.",
       "publish_invalid": "Invalid Workshop file publishing parameters. Check the Workshop form, file paths, and Steam Web API key, then try again.",
       "same_author_failed": "Failed to get works by the same author. Check the network connection or external Workshop database status and try again.",
@@ -1367,6 +1368,7 @@
       "workshop_author_profiles": "Get author information",
       "workshop_details": "Get cloud details",
       "workshop_details_by_package": "Get Workshop details by package ID",
+      "workshop_id_lookup": "Workshop ID lookup",
       "workshop_relation": "Get {label}",
       "workshop_search": "Workshop search"
     }
@@ -4893,6 +4895,7 @@
       "github_subscription_missing_url": "Subscription record has no repository URL, so timeline cannot be loaded",
       "github_subscription_not_found": "Subscription not found",
       "no_missing_workshop_downloads": "No downloadable missing Workshop items",
+      "workshop_id_lookup_missing": "Workshop ID not found: {ids}",
       "workshop_relation_failed": "Failed to load {label}. Check network connection, Steam service status, or try again later.",
       "workshop_retranslated": "Description retranslated",
       "workshop_translated": "Description translated",
@@ -7401,6 +7404,11 @@
           "subscribers_tooltip": "Subscribers",
           "workshop_project": "Workshop item"
         },
+        "open_sub_browser": {
+          "button": "Open Workshop",
+          "title": "Steam Workshop",
+          "tooltip": "Open the Steam Workshop page in the built-in browser"
+        },
         "relation": {
           "collection_children": "Collection items",
           "dependencies": "Dependencies",
@@ -7423,8 +7431,11 @@
             "dependency": "Mod dependency",
             "dlc": "DLC dependency"
           },
-          "placeholder_cache": "Search cache, supports t:tag d:DLC_AppID m:dependencyWorkshopID a:author",
-          "placeholder_enhanced": "Search Workshop, supports t:tag d:DLC_AppID m:dependencyWorkshopID"
+          "help": {
+            "workshop_link": "Paste a Steam Workshop link directly, or enter w:WorkshopID for an exact match."
+          },
+          "placeholder_cache": "Search cached Workshop items; supports w:WorkshopID t:tag d:DLC_AppID m:dependency WorkshopID a:author",
+          "placeholder_enhanced": "Search Workshop items; supports w:WorkshopID t:tag d:DLC_AppID m:dependency WorkshopID"
         },
         "sort": {
           "author": "Sort by author",

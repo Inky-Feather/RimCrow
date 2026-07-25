@@ -14,7 +14,11 @@
             <span class="font-mono text-sm text-text-soft">{{ t('ui.workspace.workshop.results.count', '{count} 项结果', { count: workshopDisplayTotal }) }}</span>
           </div>
           <div class="flex items-center gap-2">
-            
+            <button type="button" @click="openWorkshopHomeSubBrowser" v-tooltip="t('ui.workspace.workshop.open_sub_browser.tooltip', '在内置子浏览器打开 Steam 工坊页面')"
+              class="inline-flex h-[1.85rem] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border-base/10 bg-bg-inset/85 px-2.5 text-[0.7rem] font-bold text-text-dim transition-all hover:border-accent-primary/40 hover:text-accent-primary active:scale-[0.98]">
+              <PanelTopOpen class="size-3.5" />
+              <span>{{ t('ui.workspace.workshop.open_sub_browser.button', '打开工坊') }}</span>
+            </button>
             <CommonSwitch v-model="workspaceStore.workshopSearch.isEnhancedMode" :mini="true" :disabled="!workshopSearchReady" @change="toggleEnhancedMode"
               :label="t('ui.workspace.workshop.enhanced_mode.label', '增强模式')" :description="t('ui.workspace.workshop.enhanced_mode.description', '开启后使用专用接口获取更完整的工坊信息；关闭该功能后，系统会依靠本地缓存工坊库以及公开接口来读取工坊相关信息；受本地缓存库的局限，查询到的结果并不完整，也无法获取刚发布的最新模组。')" />
           </div>
@@ -507,9 +511,10 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css' // 确保引入 CSS
-import { Search, Globe, Cpu, Download, Link, Flag, FlagOff, LoaderCircle, Network, User, Image, Layers, UserRound, SlidersHorizontal, Star, ThumbsUp, ThumbsDown, HardDrive, ShieldAlert, TriangleAlert, Heart, Hash, Copy, Tag, Plus, MessageSquareMore, Package, CalendarPlus, CalendarArrowUp } from 'lucide-vue-next'
+import { Search, Globe, Cpu, Download, Link, Flag, FlagOff, LoaderCircle, Network, User, Image, Layers, UserRound, SlidersHorizontal, Star, ThumbsUp, ThumbsDown, HardDrive, ShieldAlert, TriangleAlert, Heart, Hash, Copy, Tag, Plus, MessageSquareMore, Package, CalendarPlus, CalendarArrowUp, PanelTopOpen } from 'lucide-vue-next'
 import { useAppStore } from '../../../app/stores/appStore'
 import { useTaskStore } from '../../../app/stores/taskStore'
+import { isBrowserRuntime, openManagedSubBrowserUrl } from '../../../app/bridge/runtimeBridge'
 import { toast } from '../../../shared/lib/common'
 import { cleanRichText, parseUnityRichText } from '../../../shared/lib/text'
 import { imageViewerOptions } from '../../../shared/lib/domEffects'
@@ -522,6 +527,7 @@ import TranslationFeatureControls from '../../../shared/components/translation/T
 import WorkshopItemActions from '../../../shared/components/WorkshopItemActions.vue'
 import TagSearchInput from '../../../shared/components/tag-search/TagSearchInput.vue'
 import { createTagSearchController, TAG_FIELD_TYPES } from '../../../shared/components/tag-search/tagSearchEngine'
+import { extractWorkshopId } from '../../mod/lib/modIdentity'
 import {
   getLocalizedWorkshopDayRangeOptions, getLocalizedWorkshopSortOptions, getLocalizedWorkshopTextTargetOptions,
   allowsWorkshopUntilNow, formatWorkshopSortStateLabel, hasWorkshopSearchText, resolveWorkshopSortSelection, supportsWorkshopDayRange,
@@ -531,6 +537,16 @@ import { getCurrentLocale, t } from '../../../shared/i18n.js'
 const appStore = useAppStore()
 const taskStore = useTaskStore()
 const workspaceStore = useWorkspaceStore()
+const RIMWORLD_WORKSHOP_HOME_URL = 'https://steamcommunity.com/app/294100/workshop/'
+const createWorkshopIdSearchToken = (workshopId = '', schema = null, options = {}) => ({
+  type: 'rule',
+  key: 'workshop_id',
+  originalKey: options.originalKey || 'w',
+  value: workshopId,
+  displayValue: workshopId,
+  exclude: !!options.exclude,
+  schema,
+})
 
 const workshopSearchInputRef = ref(null)
 const advancedButtonRef = ref(null)
@@ -587,12 +603,13 @@ const knownTagOptions = computed(() => ([
 ]))
 const workshopSearchPlaceholder = computed(() => (
   workspaceStore.workshopSearch.isEnhancedMode
-    ? t('ui.workspace.workshop.search.placeholder_enhanced', '搜索工坊，支持 t:标签 d:DLC_AppID m:依赖工坊ID')
-    : t('ui.workspace.workshop.search.placeholder_cache', '搜索缓存，支持 t:标签 d:DLC_AppID m:依赖工坊ID a:作者')
+    ? t('ui.workspace.workshop.search.placeholder_enhanced', '搜索工坊项目，支持 w:工坊ID t:标签 d:DLC_AppID m:依赖工坊ID')
+    : t('ui.workspace.workshop.search.placeholder_cache', '搜索缓存工坊项目，支持 w:工坊ID t:标签 d:DLC_AppID m:依赖工坊ID a:作者')
 ))
 const workshopTokenSchema = computed(() => {
   const schema = {
     text: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.search.field.text', '搜索文本'), alias: ['q', 'text'], suggest: true, defaultSearch: true },
+    workshop_id: { type: TAG_FIELD_TYPES.STRING, label: t('common.field.workshop_id', '工坊 ID'), alias: ['w', 'wid', 'workshop'], suggest: false },
     tag: { type: TAG_FIELD_TYPES.LIST, label: t('common.field.tags', '标签'), alias: ['t', 'tag'], suggest: true },
     dlc: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.workshop.search.field.dlc', 'DLC依赖'), alias: ['d', 'dlc'], suggest: true },
     dependency: { type: TAG_FIELD_TYPES.STRING, label: t('ui.workspace.workshop.search.field.dependency', '模组依赖'), alias: ['m', 'mod', 'dep'], suggest: false },
@@ -606,17 +623,47 @@ const workshopTokenValueOptions = computed(() => ({
   tag: knownTagOptions.value,
   dlc: workspaceStore.workshopSearch.dlcOptions.map(item => ({ label: item.label, value: String(item.appid) })),
 }))
-const workshopSearchController = computed(() => createTagSearchController({
-  schema: workshopTokenSchema.value,
-  valueOptions: workshopTokenValueOptions.value,
-}))
+const workshopSearchController = computed(() => {
+  const baseController = createTagSearchController({
+    schema: workshopTokenSchema.value,
+    valueOptions: workshopTokenValueOptions.value,
+  })
+  return {
+    ...baseController,
+    parse: (input) => {
+      const parsed = baseController.parse(input)
+      const workshopId = extractWorkshopId(parsed?.key === 'workshop_id' ? parsed.value : input)
+      if (workshopId) {
+        return createWorkshopIdSearchToken(workshopId, baseController.schema?.workshop_id, {
+          exclude: !!parsed?.exclude,
+          originalKey: parsed?.originalKey || 'w',
+        })
+      }
+      return parsed
+    },
+  }
+})
 const workshopInputHelpText = computed(() => [
   t('ui.workspace.search.help.title', '**输入关键词并回车确认**'),
   t('ui.workspace.search.help.basic', '可直接输入关键词，或使用 类别:关键词 格式'),
+  t('ui.workspace.workshop.search.help.workshop_link', '支持直接粘贴 Steam 工坊链接，或输入 w:工坊ID 精确查找。'),
   t('ui.workspace.search.help.logic', '搜索文本支持用英文括号约束内部条件，可使用 [[+]]、^^|^^、!!-!! 表示[[必须包含]]、^^任意匹配^^、!!排除匹配!!。'),
   t('ui.workspace.search.help.example', '例如：(红色 ^^|^^ !!-!!蓝色) 表示：匹配红色或排除蓝色。'),
   t('ui.workspace.search.help.tab', '\n[[(使用 Tab 键应用输入建议)]]'),
 ].join('\n'))
+
+const openWorkshopHomeSubBrowser = () => {
+  const title = t('ui.workspace.workshop.open_sub_browser.title', 'Steam 工坊')
+  if (isBrowserRuntime()) {
+    openManagedSubBrowserUrl(RIMWORLD_WORKSHOP_HOME_URL, title)
+    return
+  }
+  if (window.pywebview?.api?.open_sub_browser) {
+    window.pywebview.api.open_sub_browser(RIMWORLD_WORKSHOP_HOME_URL, title)
+    return
+  }
+  window.open(RIMWORLD_WORKSHOP_HOME_URL, '_blank')
+}
 
 // 仅在用户真正打开工坊页且当前没有任何结果时，才触发默认搜索。
 onMounted(async () => {

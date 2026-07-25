@@ -12,7 +12,7 @@ import { matchesTranslationSourceDetection } from '../../shared/lib/translationD
 import { openWorkshopPage } from '../../shared/lib/steamUri'
 import {
   dedupeNormalizedPackageIds, normalizeInstallSources,
-  normalizePackageId, normalizeUrl, normalizeWorkshopId,
+  normalizePackageId, normalizeUrl, normalizeWorkshopId, extractWorkshopId,
 } from '../mod/lib/modIdentity'
 import { hasWorkshopSearchText, resolveWorkshopDays, resolveWorkshopSort } from './workshopSearchOptions'
 import { isMatrixModAvailable } from './lib/matrixItemState'
@@ -952,6 +952,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   const normalizeWorkshopQueryValue = (value = '') => String(value ?? '').trim()
+  const WORKSHOP_ID_TOKEN_PATTERN = /^\d{6,20}$/
+  const normalizeWorkshopIdForLookup = (value = '') => {
+    const workshopId = normalizeWorkshopId(extractWorkshopId(value) || value)
+    return WORKSHOP_ID_TOKEN_PATTERN.test(workshopId) ? workshopId : ''
+  }
   const mergeUniqueWorkshopTerms = (...groups) => {
     const seen = new Set()
     return groups.flat().map(normalizeWorkshopQueryValue).filter(value => {
@@ -1052,6 +1057,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       excludedDlcAppids: [],
       dependencyWorkshopIds: [],
       excludedDependencyWorkshopIds: [],
+      workshopIds: [],
+      excludedWorkshopIds: [],
       author: '',
     }
 
@@ -1070,6 +1077,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         ;(token.exclude ? compiled.excludedDlcAppids : compiled.requiredDlcAppids).push(value)
       } else if (token.key === 'dependency') {
         ;(token.exclude ? compiled.excludedDependencyWorkshopIds : compiled.dependencyWorkshopIds).push(value)
+      } else if (token.key === 'workshop_id') {
+        const workshopId = normalizeWorkshopIdForLookup(value)
+        if (workshopId) {
+          ;(token.exclude ? compiled.excludedWorkshopIds : compiled.workshopIds).push(workshopId)
+        }
       } else if (token.key === 'author' && !token.exclude) {
         compiled.author = value
       }
@@ -1084,6 +1096,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       excludedDlcAppids: mergeUniqueWorkshopTerms(compiled.excludedDlcAppids),
       dependencyWorkshopIds: mergeUniqueWorkshopTerms(compiled.dependencyWorkshopIds),
       excludedDependencyWorkshopIds: mergeUniqueWorkshopTerms(compiled.excludedDependencyWorkshopIds),
+      workshopIds: mergeUniqueWorkshopTerms(compiled.workshopIds),
+      excludedWorkshopIds: mergeUniqueWorkshopTerms(compiled.excludedWorkshopIds),
     }
   }
 
@@ -1451,6 +1465,79 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
   }
 
+  const mergeWorkshopSearchResultsWithPatches = (currentItems = [], patchItems = []) => {
+    const mergedItems = mergeWorkshopSearchResults([], currentItems)
+    const indexByWorkshopId = new Map()
+    mergedItems.forEach((item, index) => {
+      const workshopId = String(item?.workshop_id || '').trim()
+      if (workshopId) indexByWorkshopId.set(workshopId, index)
+    })
+    for (const patch of patchItems || []) {
+      const workshopId = String(patch?.workshop_id || '').trim()
+      if (!workshopId) continue
+      const currentIndex = indexByWorkshopId.get(workshopId)
+      if (currentIndex === undefined) {
+        indexByWorkshopId.set(workshopId, mergedItems.length)
+        mergedItems.push(patch)
+      } else {
+        mergedItems[currentIndex] = mergeWorkshopItemPatch(mergedItems[currentIndex], patch)
+      }
+    }
+    return mergedItems
+  }
+
+  const hasWorkshopMainSearchTerms = (compiledTokens = {}) => (
+    !!compiledTokens.query
+    || !!compiledTokens.author
+    || [
+      'requiredTags', 'excludedTags',
+      'requiredDlcAppids', 'excludedDlcAppids',
+      'dependencyWorkshopIds', 'excludedDependencyWorkshopIds',
+    ].some(key => (compiledTokens[key] || []).length > 0)
+  )
+
+  const filterWorkshopSearchResultsByExcludedIds = (items = [], excludedIds = []) => {
+    const excludedIdSet = new Set((excludedIds || []).map(normalizeWorkshopIdForLookup).filter(Boolean))
+    if (!excludedIdSet.size) return items
+    return (items || []).filter(item => !excludedIdSet.has(String(item?.workshop_id || '').trim()))
+  }
+
+  const lookupWorkshopIdsForSearch = async (workshopIds = []) => {
+    const ids = mergeUniqueWorkshopTerms(workshopIds).map(normalizeWorkshopIdForLookup).filter(Boolean)
+    if (!ids.length) return { items: [], missingIds: [], request: null, response: null }
+    if (!workshopSearch.isEnhancedMode) {
+      const request = { api: 'workshop_preheat_public_details', args: [ids, true] }
+      const response = await window.pywebview.api.workshop_preheat_public_details(...request.args)
+      if (!checkResult(response, t('check.workspace.workshop_id_lookup', '工坊 ID 查询'))) {
+        return { items: [], missingIds: [], request, response }
+      }
+      const items = (response.data?.items || []).map(normalizeWorkshopSearchItem)
+      const missingIds = Array.isArray(response.data?.missing_ids)
+        ? response.data.missing_ids.map(normalizeWorkshopIdForLookup).filter(Boolean)
+        : ids.filter(id => !items.some(item => item.workshop_id === id))
+      if (missingIds.length) {
+        toast.warning(t('toast.workspace.workshop_id_lookup_missing', '未找到工坊 ID：{ids}', { ids: missingIds.join(', ') }))
+      }
+      return { items, missingIds, request, response }
+    }
+
+    const request = { api: 'workshop_get_enhanced_details', args: ids.map(id => [id, null]) }
+    const responses = await Promise.all(ids.map(id => window.pywebview.api.workshop_get_enhanced_details(id, null)))
+    const items = []
+    const missingIds = []
+    responses.forEach((response, index) => {
+      if (checkResult(response, t('check.workspace.workshop_id_lookup', '工坊 ID 查询'), false, { silent: true }) && response.data) {
+        items.push(normalizeWorkshopSearchItem(response.data))
+      } else {
+        missingIds.push(ids[index])
+      }
+    })
+    if (missingIds.length) {
+      toast.warning(t('toast.workspace.workshop_id_lookup_missing', '未找到工坊 ID：{ids}', { ids: missingIds.join(', ') }))
+    }
+    return { items, missingIds, request, response: responses }
+  }
+
   const findWorkshopListItem = (workshopId) => {
     const normalizedId = String(workshopId || '').trim()
     if (!normalizedId) return null
@@ -1759,6 +1846,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         await loadSteamLanguageOptions()
       }
       const filters = buildWorkshopSearchFilters(compiledTokens)
+      const lookupIds = !isAppend ? compiledTokens.workshopIds : []
+      const shouldLookupIds = lookupIds.length > 0
+      const shouldRunMainSearch = isAppend || !shouldLookupIds || hasWorkshopMainSearchTerms(compiledTokens) || !!normalizeWorkshopQueryValue(queryStr)
       // 主搜索的请求层分界：普通模式不读 API Key，只查缓存库；增强模式才调用 QueryFiles。
       const request = isEnhancedMode
         ? {
@@ -1769,38 +1859,67 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             api: 'workshop_search',
             args: [normalizedQuery, workshopSearch.page, filters],
           }
-      const res = isEnhancedMode
-        ? await window.pywebview.api.workshop_search_enhanced(...request.args)
-        : await window.pywebview.api.workshop_search(...request.args)
-      if (checkResult(res, t('check.workspace.workshop_search', '工坊检索'))) {
-        const newItems = (res.data.items || []).map(normalizeWorkshopSearchItem)
-        if (isAppend) {
-          workshopSearch.results = mergeWorkshopSearchResults(workshopSearch.results, newItems)
-        } else {
-          workshopSearch.results = mergeWorkshopSearchResults([], newItems)
-          workshopSearch.total = res.data.total
+      let res = null
+      let newItems = []
+      if (shouldRunMainSearch) {
+        res = isEnhancedMode
+          ? await window.pywebview.api.workshop_search_enhanced(...request.args)
+          : await window.pywebview.api.workshop_search(...request.args)
+        if (checkResult(res, t('check.workspace.workshop_search', '工坊检索'))) {
+          newItems = (res.data.items || []).map(normalizeWorkshopSearchItem)
+          if (isAppend) {
+            workshopSearch.results = mergeWorkshopSearchResults(workshopSearch.results, newItems)
+          } else {
+            workshopSearch.results = mergeWorkshopSearchResults([], newItems)
+            workshopSearch.total = Number(res.data.total || newItems.length)
+          }
+          if (isEnhancedMode) {
+            workshopSearch.cursor = String(res.data.cursor || workshopSearch.cursor || '*')
+            workshopSearch.nextCursor = String(res.data.next_cursor || '')
+            workshopSearch.hasMore = !!res.data.has_more
+          } else {
+            workshopSearch.hasMore = workshopSearch.results.length < Number(res.data.total || 0)
+          }
         }
-        if (isEnhancedMode) {
-          workshopSearch.cursor = String(res.data.cursor || workshopSearch.cursor || '*')
-          workshopSearch.nextCursor = String(res.data.next_cursor || '')
-          workshopSearch.hasMore = !!res.data.has_more
-        } else {
-          workshopSearch.hasMore = workshopSearch.results.length < res.data.total
-        }
-        logWorkshopSearchDebug({
-          isEnhancedMode,
-          isAppend,
-          request,
-          response: res,
-          items: newItems,
-        })
       } else {
+        workshopSearch.total = 0
+        workshopSearch.hasMore = false
+        workshopSearch.cursor = '*'
+        workshopSearch.nextCursor = ''
+      }
+
+      let idLookup = { items: [], missingIds: [], request: null, response: null }
+      if (shouldLookupIds) {
+        const beforeCount = workshopSearch.results.length
+        idLookup = await lookupWorkshopIdsForSearch(lookupIds)
+        workshopSearch.results = mergeWorkshopSearchResultsWithPatches(workshopSearch.results, idLookup.items)
+        const addedCount = Math.max(workshopSearch.results.length - beforeCount, 0)
+        workshopSearch.total = shouldRunMainSearch
+          ? Number(workshopSearch.total || 0) + addedCount
+          : workshopSearch.results.length
+        if (!shouldRunMainSearch || !isEnhancedMode) {
+          workshopSearch.hasMore = shouldRunMainSearch
+            ? workshopSearch.results.length < Number(workshopSearch.total || 0)
+            : false
+        }
+      }
+
+      if (compiledTokens.excludedWorkshopIds.length) {
+        const beforeCount = workshopSearch.results.length
+        workshopSearch.results = filterWorkshopSearchResultsByExcludedIds(workshopSearch.results, compiledTokens.excludedWorkshopIds)
+        const removedCount = beforeCount - workshopSearch.results.length
+        if (removedCount > 0 && !isAppend) {
+          workshopSearch.total = Math.max(0, Number(workshopSearch.total || 0) - removedCount)
+        }
+      }
+
+      if (shouldRunMainSearch || shouldLookupIds) {
         logWorkshopSearchDebug({
           isEnhancedMode,
           isAppend,
-          request,
+          request: shouldLookupIds ? { main: shouldRunMainSearch ? request : null, idLookup: idLookup.request } : request,
           response: res,
-          items: [],
+          items: shouldLookupIds ? workshopSearch.results : newItems,
         })
       }
     } finally {
