@@ -1146,8 +1146,12 @@
       "frontend_missing": "Es wurden keine Frontend-Seiten-Assets gefunden. Erstellen Sie das Frontend neu oder überprüfen Sie die Integrität des Installationspakets."
     },
     "workshop": {
+      "direct_load": {
+        "message": "Das Laden über den Proxy ist vorübergehend nicht verfügbar. Der integrierte Browser öffnet die Originalseite direkt.",
+        "title": "Steam-Workshop-Seite wird geöffnet"
+      },
       "error": {
-        "load_failed": "Seite konnte nicht geladen werden. Prüfen Sie Netzwerkverbindung und Proxy-Einstellungen oder versuchen Sie es später erneut.",
+        "load_failed": "Die Seite konnte nicht geladen werden. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen oder das Zertifikat des Beschleunigungstools und versuchen Sie es später erneut.",
         "missing_url": "Es wurde keine Ziel-URL der Workshop-Seite angegeben",
         "unsupported_url": "Hier können nur Steam Workshop-Seiten als Proxy verwendet werden"
       },
@@ -5718,13 +5722,24 @@
         "unnamed": "Unbenannte Abschnittsgruppe"
       },
       "sort": {
+        "assembly_file_count": "Assembly-Anzahl",
+        "audio_file_count": "Audioanzahl",
+        "def_file_count": "Definitionsanzahl",
         "default": "Standard",
         "file_create_time": "Zeit geschaffen",
         "file_modify_time": "Geänderte Zeit",
         "file_size": "Dateigröße",
+        "group": {
+          "file": "Datei",
+          "time": "Zeit"
+        },
+        "language_xml_file_count": "Übersetzungsanzahl",
         "last_active_time": "Aktivierungszeit",
         "last_moved_time": "Verschobene Zeit",
-        "multiplayer_compat": "Multiplayer-Kompatibilität"
+        "multiplayer_compat": "Multiplayer-Kompatibilität",
+        "patch_file_count": "Patch-Anzahl",
+        "texture_file_count": "Texturanzahl",
+        "xml_file_count": "XML-Anzahl"
       }
     },
     "mod_rule_editor": {

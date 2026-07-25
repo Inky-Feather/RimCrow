@@ -3,6 +3,12 @@ import os
 import socket
 import atexit
 import platform
+
+try:
+    import pip_system_certs  # type: ignore  # noqa: F401
+except ImportError:
+    pass
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -10,12 +16,15 @@ from backend.settings import settings
 from backend.utils.logger import logger
 
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 RimCrow"
+PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy")
 
 class NetworkManager:
     def __init__(self):
         # 保存原始的 getaddrinfo，防止重复 patch 导致死循环
         self._original_getaddrinfo = socket.getaddrinfo
         self._is_socket_patched = False
+        # 保留启动前已有的环境代理。用户关闭管理器代理时，不应把系统/启动环境代理清空。
+        self._original_proxy_env = {key: os.environ.get(key) for key in PROXY_ENV_KEYS}
         
         # 定义系统 Hosts 文件路径
         if platform.system() == "Windows":
@@ -57,14 +66,22 @@ class NetworkManager:
         if cfg.enabled and cfg.host and cfg.port:
             auth = f"{cfg.username}:{cfg.password}@" if getattr(cfg, 'username', None) else ""
             proxy_url = f"{cfg.type}://{auth}{cfg.host}:{cfg.port}"
-            os.environ['HTTP_PROXY'] = proxy_url
-            os.environ['HTTPS_PROXY'] = proxy_url
+            for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+                os.environ[key] = proxy_url
             if getattr(cfg, 'bypass_list', None):
-                os.environ['NO_PROXY'] = ",".join(cfg.bypass_list)
+                bypass = ",".join(cfg.bypass_list)
+                os.environ['NO_PROXY'] = bypass
+                os.environ['no_proxy'] = bypass
+            else:
+                os.environ.pop('NO_PROXY', None)
+                os.environ.pop('no_proxy', None)
         else:
-            os.environ.pop('HTTP_PROXY', None)
-            os.environ.pop('HTTPS_PROXY', None)
-            os.environ.pop('NO_PROXY', None)
+            for key in PROXY_ENV_KEYS:
+                value = self._original_proxy_env.get(key)
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
     
     def get_proxy_url(self) -> str:
         """获取当前的代理 URL 字符串"""
@@ -174,6 +191,8 @@ def build_retry_session(*, total: int = 3, connect: int = 3, read: int = 3, redi
     allowed_methods: tuple[str, ...] = ("GET", "HEAD"), pool_connections: int = 8, pool_maxsize: int = 8) -> requests.Session:
     
     session = requests.Session()
+    # 明确保留 requests 对系统/环境代理的读取；Windows 上还会配合 pip-system-certs 使用系统证书。
+    session.trust_env = True
     retry = Retry(
         total=total,
         connect=connect,

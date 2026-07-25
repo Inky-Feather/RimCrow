@@ -1146,8 +1146,12 @@
       "frontend_missing": "未找到前端頁面資源，請重新構建前端或檢查安裝包完整性。"
     },
     "workshop": {
+      "direct_load": {
+        "message": "代理載入暫時不可用，正在切換為內建瀏覽器直接開啟原網頁。",
+        "title": "正在開啟 Steam 工坊頁面"
+      },
       "error": {
-        "load_failed": "載入頁面失敗。請檢查網路連線、代理設定或稍後重試。",
+        "load_failed": "載入頁面失敗。請檢查網路連線、代理設定、加速工具憑證，或稍後重試。",
         "missing_url": "未提供目標工坊頁面地址",
         "unsupported_url": "目前僅代理 Steam 創意工坊相關頁面"
       },
@@ -5718,13 +5722,24 @@
         "unnamed": "未命名分割組"
       },
       "sort": {
+        "assembly_file_count": "程式集數量",
+        "audio_file_count": "音訊數量",
+        "def_file_count": "定義數量",
         "default": "預設",
         "file_create_time": "創建時間",
         "file_modify_time": "修改時間",
         "file_size": "檔案大小",
+        "group": {
+          "file": "檔案",
+          "time": "時間"
+        },
+        "language_xml_file_count": "翻譯數量",
         "last_active_time": "啟用時間",
         "last_moved_time": "移動時間",
-        "multiplayer_compat": "聯機兼容性"
+        "multiplayer_compat": "聯機兼容性",
+        "patch_file_count": "補丁數量",
+        "texture_file_count": "貼圖數量",
+        "xml_file_count": "XML 數量"
       }
     },
     "mod_rule_editor": {

@@ -90,8 +90,30 @@
                 :class="`px-2.5 py-1 m-0 rounded-lg bg-accent-${listColor}/50 hover:bg-accent-${listColor} 
                 text-text-dim hover:text-text-main text-xs font-bold shadow-lg shadow-accent-${listColor}/10 transition-all relative`">
                 {{ sortIcon }}
-                <div v-show="isSortChange" class="absolute min-w-20 w-fit px-1 h-auto py-0.5 top-full mt-1 right-1/2 left-1/2 transform -translate-x-1/2 size-4 rounded-md bg-bg-highlight/80 border border-border-base/10 shadow-2xl backdrop-blur-sm text-xs text-center text-text-dim flex flex-col gap-0.5">
-                  <div v-for="(icon, mode) in SORT_MODE_MAP" :key="mode" @click="sortMode = mode" class="w-full rounded-md hover:bg-bg-overlay/10 hover:text-text-main">{{ icon }}</div>
+                <div v-show="isSortChange" @mousedown.prevent
+                  class="absolute min-w-28 w-max px-1 h-auto py-0.5 top-full mt-1 right-1/2 left-1/2 transform -translate-x-1/2 rounded-md bg-bg-highlight/90 border border-border-base/10 shadow-2xl backdrop-blur-sm text-xs text-left text-text-dim flex flex-col gap-0.5 z-30">
+                  <template v-for="group in SORT_MENU_GROUPS" :key="group.key">
+                    <div v-if="!group.label" class="flex flex-col gap-0.5">
+                      <div v-for="mode in group.items" :key="mode" @click.stop="sortMode = mode; isSortChange = false"
+                        class="w-full rounded-md px-2 py-1 hover:bg-bg-overlay/10 hover:text-text-main"
+                        :class="sortMode === mode ? 'bg-bg-overlay/12 text-text-main' : ''">
+                        {{ SORT_MODE_MAP[mode] }}
+                      </div>
+                    </div>
+                    <div v-else class="relative group/sort-submenu">
+                      <div class="w-full min-w-24 rounded-md px-2 py-1 flex items-center justify-between gap-3 hover:bg-bg-overlay/10 hover:text-text-main">
+                        <span>{{ group.label }}</span>
+                        <span class="text-text-subtle">&gt;</span>
+                      </div>
+                      <div class="absolute top-0 right-full min-w-32 px-1 py-0.5 rounded-md bg-bg-highlight/95 border border-border-base/10 shadow-2xl backdrop-blur-sm text-xs text-text-dim flex flex-col gap-0.5 opacity-0 invisible pointer-events-none group-hover/sort-submenu:opacity-100 group-hover/sort-submenu:visible group-hover/sort-submenu:pointer-events-auto transition-opacity">
+                        <div v-for="mode in group.items" :key="mode" @click.stop="sortMode = mode; isSortChange = false"
+                          class="w-full rounded-md px-2 py-1 whitespace-nowrap hover:bg-bg-overlay/10 hover:text-text-main"
+                          :class="sortMode === mode ? 'bg-bg-overlay/12 text-text-main' : ''">
+                          {{ SORT_MODE_MAP[mode] }}
+                        </div>
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </button>
               <!-- 逆序切换按钮 -->
@@ -265,6 +287,7 @@ const normalizeTokenId = (value: string) => normalizePackageToken(value)
 const normalizeCanonicalId = (value: string) => normalizePackageId(value)
 const {
   SORT_MODE_MAP,
+  SORT_MENU_GROUPS,
   // 视图与排序
   isSimpleView, toggleSimpleView, isSortAsc, sortMode, allowSort, sortIcon, isSortChange,
   // 搜索定位

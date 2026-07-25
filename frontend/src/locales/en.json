@@ -1146,8 +1146,12 @@
       "frontend_missing": "Frontend page assets were not found. Rebuild the frontend or check the installation package integrity."
     },
     "workshop": {
+      "direct_load": {
+        "message": "Proxy loading is temporarily unavailable. Switching the built-in browser to open the original page directly.",
+        "title": "Opening Steam Workshop page"
+      },
       "error": {
-        "load_failed": "Failed to load the page. Check the network connection, proxy settings, or try again later.",
+        "load_failed": "Failed to load the page. Check your network connection, proxy settings, acceleration tool certificate, or try again later.",
         "missing_url": "No target Workshop page URL was provided",
         "unsupported_url": "Only Steam Workshop pages can be proxied here"
       },
@@ -5718,13 +5722,24 @@
         "unnamed": "Unnamed section group"
       },
       "sort": {
+        "assembly_file_count": "Assembly count",
+        "audio_file_count": "Audio count",
+        "def_file_count": "Definition count",
         "default": "Default",
         "file_create_time": "Created time",
         "file_modify_time": "Modified time",
         "file_size": "File size",
+        "group": {
+          "file": "File",
+          "time": "Time"
+        },
+        "language_xml_file_count": "Translation count",
         "last_active_time": "Activation time",
         "last_moved_time": "Moved time",
-        "multiplayer_compat": "Multiplayer compatibility"
+        "multiplayer_compat": "Multiplayer compatibility",
+        "patch_file_count": "Patch count",
+        "texture_file_count": "Texture count",
+        "xml_file_count": "XML count"
       }
     },
     "mod_rule_editor": {

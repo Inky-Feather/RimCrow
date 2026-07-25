@@ -64,8 +64,57 @@ export function useModListQuery({
     file_create_time: t('ui.mod_list.sort.file_create_time', '创建时间'),
     file_modify_time: t('ui.mod_list.sort.file_modify_time', '修改时间'),
     file_size: t('ui.mod_list.sort.file_size', '文件大小'),
+    xml_file_count: t('ui.mod_list.sort.xml_file_count', 'XML数量'),
+    def_file_count: t('ui.mod_list.sort.def_file_count', '定义数量'),
+    patch_file_count: t('ui.mod_list.sort.patch_file_count', '补丁数量'),
+    language_xml_file_count: t('ui.mod_list.sort.language_xml_file_count', '翻译数量'),
+    texture_file_count: t('ui.mod_list.sort.texture_file_count', '贴图数量'),
+    audio_file_count: t('ui.mod_list.sort.audio_file_count', '音频数量'),
+    assembly_file_count: t('ui.mod_list.sort.assembly_file_count', '程序集数量'),
     multiplayer_compat: t('ui.mod_list.sort.multiplayer_compat', '联机兼容性'),
   }))
+  const SORT_MENU_GROUPS = computed(() => [
+    {
+      key: 'basic',
+      items: ['default', 'name', 'package_id', 'author', 'multiplayer_compat'],
+    },
+    {
+      key: 'time',
+      label: t('ui.mod_list.sort.group.time', '时间'),
+      items: ['last_active_time', 'last_moved_time', 'file_create_time', 'file_modify_time'],
+    },
+    {
+      key: 'file',
+      label: t('ui.mod_list.sort.group.file', '文件'),
+      items: ['file_size', 'xml_file_count', 'def_file_count', 'patch_file_count', 'language_xml_file_count', 'texture_file_count', 'audio_file_count', 'assembly_file_count'],
+    },
+  ])
+
+  const getFileStat = (mod, key) => Number(mod?.file_stats?.[key] || 0)
+  const getXmlFileCount = (mod) => getFileStat(mod, 'game_xml') + getFileStat(mod, 'patch_xml') + getFileStat(mod, 'lang_xml')
+  const getSortValue = (mod, id, fallbackId = '') => {
+    if (id === 'name') return String(mod?.name || fallbackId)
+    if (id === 'author') return String(mod?.author?.[0] || '')
+    if (id === 'package_id') return String(mod?.package_id || fallbackId)
+    if (id === 'last_active_time') return Number(mod?.last_active_time || 0)
+    if (id === 'last_moved_time') return Number(mod?.last_moved_time || 0)
+    if (id === 'file_create_time') return Number(mod?.file_create_time || 0)
+    if (id === 'file_modify_time') return Number(mod?.file_modify_time || 0)
+    if (id === 'file_size') return Number(mod?.file_size || 0)
+    if (id === 'xml_file_count') return getXmlFileCount(mod)
+    if (id === 'def_file_count') return getFileStat(mod, 'game_xml')
+    if (id === 'patch_file_count') return getFileStat(mod, 'patch_xml')
+    if (id === 'language_xml_file_count') return getFileStat(mod, 'lang_xml')
+    if (id === 'texture_file_count') return getFileStat(mod, 'image')
+    if (id === 'audio_file_count') return getFileStat(mod, 'audio')
+    if (id === 'assembly_file_count') return getFileStat(mod, 'code_dll')
+    if (id === 'multiplayer_compat') return Number(mod?.multiplayer_compat?.sort_rank || 0)
+    return 0
+  }
+  const compareSortValue = (left, right) => {
+    if (typeof left === 'string' || typeof right === 'string') return String(left).localeCompare(String(right))
+    return Number(left || 0) - Number(right || 0)
+  }
 
   const normalizeExactText = (value) => String(value ?? '').trim().toLowerCase()
   const getExactTagValues = (mod, tag) => {
@@ -243,17 +292,7 @@ export function useModListQuery({
       list.sort((a, b) => {
         const mA = modStore.takeModById(a)
         const mB = modStore.takeModById(b)
-        if (sortMode.value === 'name') return (mA?.name || a).localeCompare(mB?.name || b)
-        if (sortMode.value === 'author') return (mA?.author?.[0] || '').localeCompare(mB?.author?.[0] || '')
-        if (sortMode.value === 'package_id') return (mA?.package_id || a).localeCompare(mB?.package_id || b)
-        if (sortMode.value === 'last_active_time') return (mA?.last_active_time || 0) - (mB?.last_active_time || 0)
-        if (sortMode.value === 'last_moved_time') return (mA?.last_moved_time || 0) - (mB?.last_moved_time || 0)
-        if (sortMode.value === 'file_create_time') return (mA?.file_create_time || 0) - (mB?.file_create_time || 0)
-        if (sortMode.value === 'file_modify_time') return (mA?.file_modify_time || 0) - (mB?.file_modify_time || 0)
-        if (sortMode.value === 'file_size') return (mA?.file_size || 0) - (mB?.file_size || 0)
-        if (sortMode.value === 'multiplayer_compat') return (mA?.multiplayer_compat?.sort_rank || 0) - (mB?.multiplayer_compat?.sort_rank || 0)
-
-        return 0
+        return compareSortValue(getSortValue(mA, sortMode.value, a), getSortValue(mB, sortMode.value, b))
       })
     }
     // 如果需要逆序，反转数组
@@ -352,6 +391,7 @@ export function useModListQuery({
 
   return {
     SORT_MODE_MAP,
+    SORT_MENU_GROUPS,
     isSimpleView,
     isSortAsc,
     sortMode,

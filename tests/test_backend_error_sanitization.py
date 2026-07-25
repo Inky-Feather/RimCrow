@@ -70,10 +70,13 @@ def test_texture_task_failure_payload_hides_raw_exception(monkeypatch):
 
 
 def test_workshop_proxy_error_page_hides_raw_request_exception(monkeypatch):
-    def fail_request(*_args, **_kwargs):
-        raise RuntimeError("SECRET_PROXY_FAILURE")
+    class FailingSession:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def get(self, *_args, **_kwargs):
+            raise RuntimeError("SECRET_PROXY_FAILURE")
 
-    monkeypatch.setattr("backend.browser_runtime.requests.get", fail_request)
+    monkeypatch.setattr("backend.browser_runtime.build_retry_session", lambda **_kwargs: FailingSession())
 
     html = WorkshopPageRenderer().render("https://steamcommunity.com/sharedfiles/filedetails/?id=123456")
 

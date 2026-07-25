@@ -1146,8 +1146,12 @@
       "frontend_missing": "프런트엔드 페이지 자산을 찾을 수 없습니다. 프런트엔드를 다시 빌드하거나 설치 패키지 무결성을 확인하세요."
     },
     "workshop": {
+      "direct_load": {
+        "message": "프록시 로드를 일시적으로 사용할 수 없습니다. 내장 브라우저에서 원본 페이지를 직접 엽니다.",
+        "title": "Steam Workshop 페이지 여는 중"
+      },
       "error": {
-        "load_failed": "페이지를 불러오지 못했습니다. 네트워크 연결, 프록시 설정을 확인하거나 잠시 후 다시 시도하세요.",
+        "load_failed": "페이지를 불러오지 못했습니다. 네트워크 연결, 프록시 설정 또는 가속 도구 인증서를 확인한 뒤 나중에 다시 시도하세요.",
         "missing_url": "대상 Workshop 페이지 URL이 제공되지 않았습니다.",
         "unsupported_url": "여기서는 Steam Workshop 페이지만 프록시할 수 있습니다."
       },
@@ -5718,13 +5722,24 @@
         "unnamed": "이름이 없는 섹션 그룹"
       },
       "sort": {
+        "assembly_file_count": "어셈블리 수",
+        "audio_file_count": "오디오 수",
+        "def_file_count": "정의 수",
         "default": "기본",
         "file_create_time": "생성시간",
         "file_modify_time": "수정된 시간",
         "file_size": "파일 크기",
+        "group": {
+          "file": "파일",
+          "time": "시간"
+        },
+        "language_xml_file_count": "번역 수",
         "last_active_time": "활성화 시간",
         "last_moved_time": "이동된 시간",
-        "multiplayer_compat": "멀티플레이어 호환성"
+        "multiplayer_compat": "멀티플레이어 호환성",
+        "patch_file_count": "패치 수",
+        "texture_file_count": "텍스처 수",
+        "xml_file_count": "XML 수"
       }
     },
     "mod_rule_editor": {

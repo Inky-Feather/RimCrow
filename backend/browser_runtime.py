@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse
 
-import requests
 from bs4 import BeautifulSoup
 import html
 
+from backend.managers.mgr_network import PROXY_ENV_KEYS, build_retry_session, merge_headers, network_mgr
 from backend.static_page import (
     build_sub_browser_helper_html,
     build_workshop_error_html,
@@ -79,25 +79,54 @@ class WorkshopPageRenderer:
         if not self.is_steamcommunity_url(normalized_url):
             return build_workshop_error_html(tr("browser.workshop.error.unsupported_url", "当前仅代理 Steam 创意工坊相关页面"), normalized_url)
 
+        parsed = urlparse(normalized_url)
+        workshop_id = self.extract_workshop_id(normalized_url)
+        proxy_url = network_mgr.get_proxy_url()
+        request_kwargs = {
+            "timeout": REMOTE_FETCH_TIMEOUT_SECONDS,
+            "headers": merge_headers(user_agent=REMOTE_USER_AGENT),
+        }
+        if proxy_url:
+            request_kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
+
         try:
-            response = requests.get(
-                normalized_url,
-                timeout=REMOTE_FETCH_TIMEOUT_SECONDS,
-                headers={"User-Agent": REMOTE_USER_AGENT},
-            )
-            response.raise_for_status()
-        except Exception:
-            parsed = urlparse(normalized_url)
+            with build_retry_session(total=2, connect=2, read=2, status_forcelist=(500, 502, 503, 504), allowed_methods=("GET", "HEAD")) as session:
+                response = session.get(normalized_url, **request_kwargs)
+                response.raise_for_status()
+        except Exception as exc:
+            status_code = int(getattr(getattr(exc, "response", None), "status_code", 0) or 0)
+            proxy_context = {
+                "app_proxy_enabled": bool(proxy_url),
+                "env_proxy_available": any(bool(os.environ.get(key)) for key in PROXY_ENV_KEYS),
+                "proxy_type": "",
+                "proxy_host": "",
+                "proxy_port": 0,
+            }
+            if proxy_url:
+                parsed_proxy = urlparse(proxy_url)
+                proxy_context.update({
+                    "proxy_type": parsed_proxy.scheme,
+                    "proxy_host": parsed_proxy.hostname or "",
+                    "proxy_port": parsed_proxy.port or 0,
+                })
             logger.warning(
-                "创意工坊代理请求失败。workshop_id=%s",
-                self.extract_workshop_id(normalized_url),
+                "创意工坊代理请求失败: host=%s path=%s workshop_id=%s app_proxy_enabled=%s env_proxy_available=%s status_code=%s error_type=%s",
+                parsed.netloc,
+                parsed.path,
+                workshop_id,
+                bool(proxy_url),
+                proxy_context["env_proxy_available"],
+                status_code,
+                type(exc).__name__,
                 exc_info=True,
                 extra={
                     "error_code": "STEAM.WORKSHOP_PROXY_FAILED",
-                    "extra_context": {"host": parsed.netloc, "path": parsed.path, "workshop_id": self.extract_workshop_id(normalized_url)},
+                    "extra_context": {"host": parsed.netloc, "path": parsed.path, "workshop_id": workshop_id, "status_code": status_code, "error_type": type(exc).__name__, **proxy_context},
                 },
             )
-            return build_workshop_error_html(tr("browser.workshop.error.load_failed", "加载页面失败。请检查网络连接、代理设置或稍后重试。"), normalized_url)
+            if self.navigation_mode == "webview":
+                return self._build_direct_load_html(normalized_url)
+            return build_workshop_error_html(tr("browser.workshop.error.load_failed", "加载页面失败。请检查网络连接、代理设置、加速工具证书或稍后重试。"), normalized_url)
 
         final_url = response.url or normalized_url
         soup = BeautifulSoup(response.text, "html.parser")
@@ -109,6 +138,39 @@ class WorkshopPageRenderer:
         bridge_script = self._build_bridge_script(final_url)
         combined_body = f"{self._build_toolbar_html(page_title, final_url)}<main class=\"rimcrow-proxy-page\">{remote_body_html}</main>"
         return build_workshop_page_html(page_title, final_url, head_html, combined_body, bridge_script)
+
+    @staticmethod
+    def _build_direct_load_html(target_url: str):
+        safe_url = html.escape(target_url or "", quote=True)
+        js_url = json.dumps(target_url or "", ensure_ascii=False).replace("</", "<\\/")
+        title = html.escape(tr("browser.workshop.direct_load.title", "正在打开 Steam 工坊页面"))
+        message = html.escape(tr("browser.workshop.direct_load.message", "代理加载暂时不可用，正在切换为内置浏览器直接打开原网页。"))
+        open_original = html.escape(tr("browser.workshop.toolbar.open_original", "打开原网页"))
+        return f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="0;url={safe_url}">
+  <title>{title}</title>
+  <style>
+    body {{ margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0f172a; color: #e5e7eb; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+    main {{ width: min(560px, calc(100vw - 48px)); }}
+    h1 {{ margin: 0 0 12px; font-size: 22px; font-weight: 700; }}
+    p {{ margin: 0 0 18px; color: #cbd5e1; line-height: 1.7; }}
+    a {{ color: #38bdf8; text-decoration: none; overflow-wrap: anywhere; }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>{title}</h1>
+    <p>{message}</p>
+    <a href="{safe_url}">{open_original}</a>
+  </main>
+  <script>
+    window.location.replace({js_url});
+  </script>
+</body>
+</html>"""
 
     def _sanitize_remote_soup(self, soup: BeautifulSoup, base_url: str):
         for tag in soup.find_all("script"):
@@ -192,6 +254,7 @@ class WorkshopPageRenderer:
         workshop_id = self.extract_workshop_id(target_url)
         safe_title = html.escape(page_title or "Steam Workshop")
         safe_url = html.escape(target_url or "")
+        safe_workshop_id_label = html.escape(tr("common.field.workshop_id", "工坊 ID"))
         safe_workshop_id = html.escape(workshop_id or tr("browser.workshop.toolbar.unknown_id", "未识别"))
         open_original_text = html.escape(tr("browser.workshop.toolbar.open_original", "打开原网页"))
         open_in_steam_text = html.escape(tr("browser.workshop.toolbar.open_in_steam", "在 Steam 打开"))
@@ -206,7 +269,7 @@ class WorkshopPageRenderer:
     <div class="rimcrow-toolbar-url">{safe_url}</div>
   </div>
   <div class="rimcrow-toolbar-right">
-    <div class="rimcrow-toolbar-id">Workshop ID: <strong>{safe_workshop_id}</strong></div>
+    <div class="rimcrow-toolbar-id">{safe_workshop_id_label}: <strong>{safe_workshop_id}</strong></div>
     <div class="rimcrow-toolbar-actions">
       <button id="rimcrow-open-original" class="ghost">{open_original_text}</button>
       <button id="rimcrow-open-in-steam" class="ghost">{open_in_steam_text}</button>
