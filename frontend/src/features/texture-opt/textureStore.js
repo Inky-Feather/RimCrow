@@ -6,6 +6,34 @@ import { toast, checkResult, showUserErrorToast } from '../../shared/lib/common'
 import { useTaskStore } from '../../app/stores/taskStore'
 import { t, translateMessagePayload } from '../../shared/i18n.js'
 
+const toInt = (value, fallback = 0) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : fallback
+}
+
+export const getTextureScaleBreakdownItems = (stat = {}, kind = '') => (
+  (Array.isArray(stat?.scale_breakdown) ? stat.scale_breakdown : [])
+    .filter(item => String(item?.kind || 'keep_original') === kind && toInt(item?.count) > 0)
+)
+
+export const sumTextureScaleBreakdownItems = (items = []) => (
+  Array.isArray(items) ? items.reduce((total, item) => total + toInt(item?.count), 0) : 0
+)
+
+export const getTextureKeepOriginalReasonItems = (stat = {}, labels = {}) => {
+  const total = toInt(stat?.keep_original_count)
+  const mask = toInt(stat?.keep_original_mask_count)
+  const range = toInt(stat?.keep_original_range_count ?? stat?.skip_small_count)
+  const normal = stat?.keep_original_normal_count == null
+    ? Math.max(0, total - mask - range)
+    : toInt(stat.keep_original_normal_count)
+  return [
+    { label: labels.normal || '不缩放', count: normal },
+    { label: labels.mask || '遮罩贴图不缩放', count: mask },
+    { label: labels.range || '超范围不缩放', count: range },
+  ].filter(item => item.count > 0)
+}
+
 export const useTextureStore = defineStore('texture', () => {
   const appStore = useAppStore()
   const taskStore = useTaskStore()
@@ -40,6 +68,9 @@ export const useTextureStore = defineStore('texture', () => {
     scaled_count: 0,
     fallback_scaled_count: 0,
     keep_original_count: 0,
+    keep_original_normal_count: 0,
+    keep_original_mask_count: 0,
+    keep_original_range_count: 0,
     source_vram_bytes_est: 0,
     output_vram_bytes_est: 0,
     vram_saving_bytes_est: 0,
@@ -54,11 +85,6 @@ export const useTextureStore = defineStore('texture', () => {
     engine_unsupported_preview: [],
     mod_count: 0,
   })
-
-  const toInt = (value, fallback = 0) => {
-    const num = Number(value)
-    return Number.isFinite(num) ? num : fallback
-  }
 
   const normalizeTextureStat = (raw = {}, { includeModCount = false } = {}) => {
     const base = createEmptyTextureStat()
@@ -100,6 +126,9 @@ export const useTextureStore = defineStore('texture', () => {
       scaled_count: toInt(raw.scaled_count ?? base.scaled_count),
       fallback_scaled_count: toInt(raw.fallback_scaled_count ?? base.fallback_scaled_count),
       keep_original_count: toInt(raw.keep_original_count ?? base.keep_original_count),
+      keep_original_normal_count: toInt(raw.keep_original_normal_count ?? base.keep_original_normal_count),
+      keep_original_mask_count: toInt(raw.keep_original_mask_count ?? base.keep_original_mask_count),
+      keep_original_range_count: toInt(raw.keep_original_range_count ?? base.keep_original_range_count),
       source_vram_bytes_est: toInt(raw.source_vram_bytes_est ?? base.source_vram_bytes_est),
       output_vram_bytes_est: toInt(raw.output_vram_bytes_est ?? base.output_vram_bytes_est),
       vram_saving_bytes_est: toInt(
@@ -129,6 +158,11 @@ export const useTextureStore = defineStore('texture', () => {
     Array.isArray(rows) ? rows.map(item => normalizeTextureStat(item)) : []
   )
 
+  const getScaleLabelSortValue = (label) => {
+    const match = String(label || '').match(/(\d+(?:\.\d+)?)\s*%/)
+    return match ? Number(match[1]) : Number.POSITIVE_INFINITY
+  }
+
   const sumScaleBreakdown = (rows = []) => {
     const counts = new Map()
     rows.forEach(row => {
@@ -149,7 +183,7 @@ export const useTextureStore = defineStore('texture', () => {
       .filter(item => item.count > 0)
       .sort((a, b) => (
         (order[a.kind] ?? 99) - (order[b.kind] ?? 99)
-        || b.count - a.count
+        || getScaleLabelSortValue(a.label) - getScaleLabelSortValue(b.label)
         || a.label.localeCompare(b.label)
       ))
   }
@@ -180,6 +214,7 @@ export const useTextureStore = defineStore('texture', () => {
     mod_path: String(raw.mod_path || ''),
     mod_name: String(raw.mod_name || ''),
     rel_path: String(raw.rel_path || ''),
+    file_path: String(raw.file_path || ''),
     error: String(raw.error || ''),
     todds_log_path: String(raw.todds_log_path || ''),
   })

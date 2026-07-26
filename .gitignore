@@ -8,6 +8,7 @@ nuitka-*
 updates/
 *.md
 !README.md
+!doc/贴图优化说明.md
 .*/
 .worktrees/
 tools/

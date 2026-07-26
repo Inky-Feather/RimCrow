@@ -117,6 +117,33 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertTrue(standalone_dds.exists())
         self.assertFalse(result["refresh_after_analyze"])
 
+    def test_clean_generated_reports_failed_items(self):
+        source = self._write_png("Textures/locked.png")
+        generated_dds = source.with_suffix(".dds")
+        generated_dds.write_bytes(b"dds")
+        task = TextureTask(
+            id="clean-failed-item",
+            action="clean_generated",
+            mod_paths=[str(self.mod_root)],
+            mod_targets=[{
+                "mod_path": str(self.mod_root),
+                "mod_name": "ExampleMod",
+                "package_id": "example.mod",
+                "requires_png_source": True,
+            }],
+            options=self.options,
+            status="running",
+        )
+
+        with patch.object(Path, "unlink", side_effect=PermissionError("file is locked")):
+            result = self.manager._clean_generated(task)
+
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["failed_items"][0]["mod_name"], "ExampleMod")
+        self.assertEqual(result["failed_items"][0]["rel_path"], "Textures/locked.dds")
+        self.assertEqual(result["failed_items"][0]["file_path"], str(generated_dds))
+        self.assertIn("file is locked", result["failed_items"][0]["error"])
+
     def test_clean_generated_residue_target_deletes_dds_without_png_after_normalize(self):
         residue_root = self.temp_root / "2978572782"
         dds_path = residue_root / "Textures" / "Things" / "Building" / "SubMap" / "LadderDown_m.dds"
@@ -366,7 +393,7 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertEqual(row["output_total_count"], 1)
         self.assertEqual(row["external_orphan_output_count"], 0)
 
-    def test_scan_stat_filters_small_mask_and_fake_png_sources(self):
+    def test_scan_stat_reports_keep_original_reasons_and_fake_png_sources(self):
         keep = self._write_png("Textures/keep.png", size=(128, 128))
         self._write_png("Textures/small.png", size=(8, 8))
         self._write_png("Textures/mask_m.png", size=(128, 128))
@@ -381,9 +408,13 @@ class TestTextureOptimizationManager(unittest.TestCase):
 
         self.assertEqual(stat["source_total_count"], 4)
         self.assertEqual(stat["current_output_count"], 1)
-        self.assertEqual(stat["action_required_count"], 0)
+        self.assertEqual(stat["action_required_count"], 1)
         self.assertEqual(stat["skip_small_count"], 1)
-        self.assertEqual(stat["skipped_mask_count"], 1)
+        self.assertEqual(stat["skipped_mask_count"], 0)
+        self.assertEqual(stat["keep_original_count"], 3)
+        self.assertEqual(stat["keep_original_normal_count"], 1)
+        self.assertEqual(stat["keep_original_mask_count"], 1)
+        self.assertEqual(stat["keep_original_range_count"], 1)
         self.assertEqual(stat["unsupported_source_count"], 1)
 
     def test_optimize_uses_todds_fast_path_and_updates_output_stats(self):
@@ -1076,6 +1107,37 @@ class TestTextureOptimizationManager(unittest.TestCase):
         self.assertTrue(source.with_suffix(".dds").exists())
         self.assertTrue(any(item.get("metrics", {}).get("current_batch_done") == 1 for item in emitted))
 
+    def test_optimize_generates_mask_textures_at_original_size(self):
+        mask = self._write_png("Textures/mask_m.png", size=(256, 256))
+        task = TextureTask(
+            id="mask-original",
+            action="optimize",
+            mod_paths=[str(self.mod_root)],
+            options={**self.options, "process_mode": "all_overwrite", "scale_factor": 0.2, "max_size": 128},
+            status="running",
+        )
+        calls = []
+
+        def fake_encode_batch(
+            _cancel_event,
+            *,
+            source_paths,
+            overwrite_existing,
+            scale_percent,
+            max_size=None,
+            output_callback=None,
+        ):
+            calls.append({"source_paths": list(source_paths or []), "scale_percent": scale_percent})
+            for source_path in source_paths or []:
+                Path(source_path).with_suffix(".dds").write_bytes(b"dds")
+
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
+            result = self.manager._optimize(task)
+
+        self.assertEqual(result["optimized"], 1)
+        self.assertEqual(calls, [{"source_paths": [str(mask)], "scale_percent": None}])
+        self.assertTrue(mask.with_suffix(".dds").exists())
+
     def test_scan_summary_reports_scale_breakdown(self):
         self._write_png("Textures/scaled.png", size=(256, 256))
         self._write_png("Textures/fallback.png", size=(136, 136))
@@ -1092,7 +1154,31 @@ class TestTextureOptimizationManager(unittest.TestCase):
             row["scale_breakdown"],
             [
                 {"kind": "scaled", "label": "50%", "count": 1},
-                {"kind": "keep_original", "label": "原尺寸", "count": 1},
+                {"kind": "keep_original", "label": "不缩放", "count": 1},
+            ],
+        )
+
+    def test_scale_breakdown_sorts_scale_labels_by_percent(self):
+        breakdown = TextureOptimizationManager._finalize_scale_breakdown({
+            ("fallback", "50%"): 200,
+            ("fallback", "25%"): 10,
+            ("fallback", "40%"): 50,
+            ("fallback", "80%"): 1,
+            ("fallback", "75%"): 5,
+            ("scaled", "20%"): 300,
+            ("keep_original", "不缩放"): 20,
+        })
+
+        self.assertEqual(
+            breakdown,
+            [
+                {"kind": "scaled", "label": "20%", "count": 300},
+                {"kind": "fallback", "label": "25%", "count": 10},
+                {"kind": "fallback", "label": "40%", "count": 50},
+                {"kind": "fallback", "label": "50%", "count": 200},
+                {"kind": "fallback", "label": "75%", "count": 5},
+                {"kind": "fallback", "label": "80%", "count": 1},
+                {"kind": "keep_original", "label": "不缩放", "count": 20},
             ],
         )
 

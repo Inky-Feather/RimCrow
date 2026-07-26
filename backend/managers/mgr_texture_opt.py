@@ -2209,8 +2209,30 @@ class TextureOptimizationManager:
         deleted = 0
         checked = 0
         delete_failed = 0
+        failed_items: list[dict[str, Any]] = []
         total_mods = max(1, len(task.mod_targets))
         last_emit_at = 0.0
+
+        def remember_delete_failed(mod_target: dict[str, Any], output_path: Path, exc: OSError) -> None:
+            mod_path = str(mod_target.get("mod_path") or "")
+            mod_name = str(mod_target.get("mod_name") or Path(mod_path).name)
+            try:
+                rel_path = output_path.resolve().relative_to(Path(mod_path).resolve()).as_posix()
+            except (OSError, ValueError):
+                rel_path = output_path.name
+            logger.warning("删除贴图清理输出失败：mod_path=%s rel_path=%s path=%s error=%s", mod_path, rel_path, output_path, exc)
+            if len(failed_items) < 20:
+                failed_items.append(
+                    {
+                        "package_id": str(mod_target.get("package_id") or ""),
+                        "mod_path": mod_path,
+                        "mod_name": mod_name,
+                        "rel_path": rel_path,
+                        "file_path": str(output_path),
+                        "error": f"删除 {output_label} 失败: {output_path}，{exc}",
+                        "todds_log_path": "",
+                    }
+                )
 
         def emit_clean_progress(index: int, mod_name: str, *, force: bool = False) -> None:
             nonlocal last_emit_at
@@ -2303,7 +2325,7 @@ class TextureOptimizationManager:
                     deleted += 1
                 except OSError as exc:
                     delete_failed += 1
-                    logger.warning("删除贴图清理输出失败：path=%s error=%s", output_path, exc)
+                    remember_delete_failed(mod_target, output_path, exc)
                 emit_clean_progress(index, mod_name)
         self._emit_progress(
             task,
@@ -2342,6 +2364,7 @@ class TextureOptimizationManager:
             "skipped": 0,
             "failed": delete_failed,
             "failed_count": delete_failed,
+            "failed_items": failed_items,
             "final_status": "failed" if delete_failed > 0 else "success",
             "preexisting_dds": 0,
             "orphan_deleted": deleted,
@@ -2510,7 +2533,7 @@ class TextureOptimizationManager:
             entry["small_skipped"] = False
             entry["needs_action"] = False
             entry["plan_kind"] = "keep_original"
-            entry["plan_label"] = "原尺寸"
+            entry["plan_label"] = "不缩放"
             entry["scale_percent"] = None
             entry["action_status"] = "unreadable"
             entry["is_mask_source"] = str(entry.get("rel_path") or "").lower().endswith("_m.png")
@@ -2536,9 +2559,15 @@ class TextureOptimizationManager:
                 supported_scales,
                 min_output_size,
             )
+            if bool(entry.get("is_mask_source")):
+                scale_percent = None
 
             entry["small_skipped"] = oversize_or_small
             entry["scale_percent"] = scale_percent
+            if oversize_or_small:
+                entry["plan_label"] = "超范围不缩放"
+            if bool(entry.get("is_mask_source")):
+                entry["plan_label"] = "遮罩贴图不缩放"
             is_excluded = apply_exclusions and (
                 bool(package_id and package_id in excluded_mod_ids)
                 or (
@@ -2553,10 +2582,6 @@ class TextureOptimizationManager:
                 continue
             if is_excluded:
                 entry["action_status"] = "excluded"
-                entries.append(entry)
-                continue
-            if bool(entry.get("is_mask_source")):
-                entry["action_status"] = "mask_skipped"
                 entries.append(entry)
                 continue
             if scale_percent is None:
@@ -2598,6 +2623,8 @@ class TextureOptimizationManager:
         if process_mode == "all_skip_existing":
             return not output_exists
         if process_mode == "scaled_only_overwrite":
+            if bool(entry.get("is_mask_source")):
+                return True
             return scale_percent is not None
         return True
 
@@ -2703,15 +2730,17 @@ class TextureOptimizationManager:
             if bool(entry.get("excluded")):
                 stat["excluded_count"] += 1
                 continue
-            if bool(entry.get("is_mask_source")):
-                stat["skipped_mask_count"] += 1
-                continue
-
             plan_kind = str(entry.get("plan_kind") or "keep_original")
             if plan_kind == "fallback":
                 stat["fallback_scaled_count"] += 1
             elif plan_kind == "keep_original":
                 stat["keep_original_count"] += 1
+                if bool(entry.get("is_mask_source")):
+                    stat["keep_original_mask_count"] += 1
+                elif bool(entry.get("small_skipped")):
+                    stat["keep_original_range_count"] += 1
+                else:
+                    stat["keep_original_normal_count"] += 1
             else:
                 stat["scaled_count"] += 1
 
@@ -3223,6 +3252,9 @@ class TextureOptimizationManager:
             "scaled_count": 0,
             "fallback_scaled_count": 0,
             "keep_original_count": 0,
+            "keep_original_normal_count": 0,
+            "keep_original_mask_count": 0,
+            "keep_original_range_count": 0,
             "combined_total_bytes": 0,
             "scale_breakdown": [],
             "projection_basis": [],
@@ -3253,8 +3285,17 @@ class TextureOptimizationManager:
             for (kind, label), count in scale_buckets.items()
             if int(count) > 0
         ]
-        items.sort(key=lambda item: (order.get(str(item["kind"]), 99), -int(item["count"]), str(item["label"])))
+        items.sort(key=lambda item: (
+            order.get(str(item["kind"]), 99),
+            TextureOptimizationManager._scale_label_sort_value(str(item["label"])),
+            str(item["label"]),
+        ))
         return items
+
+    @staticmethod
+    def _scale_label_sort_value(label: str) -> float:
+        match = re.search(r"(\d+(?:\.\d+)?)\s*%", str(label or ""))
+        return float(match.group(1)) if match else float("inf")
 
     @staticmethod
     def _merge_stat(target: dict[str, Any], source: dict[str, Any]) -> None:

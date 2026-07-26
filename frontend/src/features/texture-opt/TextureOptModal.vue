@@ -43,15 +43,12 @@
                   <span class="shrink-0 text-accent-tip/80">
                     {{ t('dialog.texture_opt.current_scale', '当前比例') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.scaled_count || 0 }}</span>
                   </span>
-                  <span class="shrink-0 text-accent-secondary/80">
+                  <span class="shrink-0 cursor-help text-accent-secondary/80" v-tooltip="fallbackScaleTooltip">
                     {{ t('dialog.texture_opt.auto_fallback', '自动回退') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.fallback_scaled_count || 0 }}</span>
                   </span>
-                  <span class="shrink-0 text-text-dim">
+                  <span class="shrink-0 cursor-help text-text-dim" v-tooltip="keepOriginalTooltip">
                     {{ t('dialog.texture_opt.keep_original_size', '保留原尺寸') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.keep_original_count || 0 }}</span>
                   </span>
-                  <div class="min-w-0 text-text-dim">
-                    {{ t('dialog.texture_opt.out_of_range_unscaled', '超范围未缩放') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.skip_small_count || 0 }}</span>
-                  </div>
                   <span v-if="summary.unsupported_source_count" class="shrink-0 cursor-help text-accent-warning" v-tooltip="unsupportedSummaryTooltip">
                     {{ t('dialog.texture_opt.invalid_png', '无效 PNG') }} <span class="ml-1 font-mono font-bold text-text-main">{{ summary.unsupported_source_count }}</span>
                   </span>
@@ -431,7 +428,7 @@ import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import { useNow } from '@vueuse/core'
 import { AlertTriangle, Ban, BrushCleaning, CheckCircle2, Copy, Cpu, FileText, FolderOpen, Images, Inbox, Loader2, Plus, Rocket, ScanSearch, ScrollText, Search, Trash2, X } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore'
-import { useTextureStore } from './textureStore'
+import { getTextureKeepOriginalReasonItems, getTextureScaleBreakdownItems, useTextureStore } from './textureStore'
 import { useModStore } from '../mod/stores/modStore'
 import CommonSwitch from '../../shared/components/input/CommonSwitch.vue'
 import CommonSelect from '../../shared/components/input/CommonSelect.vue'
@@ -503,7 +500,7 @@ const failedSearchQuery = ref('')
 const excludeModQuery = ref('')
 const excludeFileQuery = ref('')
 const pathExclusionInput = ref('')
-const textureOptHelpText = computed(() => t('dialog.texture_opt.help', '把 PNG 贴图预先生成为更适合游戏读取的 DDS 贴图输出。\nDDS 主要用来减少显存压力、加快加载；通常情况下，DDS 能在大型模组环境下减少卡顿和爆显存风险；代价是生成比较耗时，DDS 也往往会比源 PNG 更占磁盘空间。\nRimWorld 1.6 起游戏可原生读取 DDS，1.6 以前通常需要[[ Graphics Settings+ ]]才能加载。\n\nZSTD 会生成 .dds.zstd，本质上相当于把已经生成好的 DDS 再打包压缩一层，主要作用是进一步节省磁盘空间，但需要[[ Image Opt ]]才能被游戏读取。\n\n缩放功能部分感谢贴吧老哥 ##贴吧用户_0CWt68M## 提供的帮助'))
+const textureOptHelpText = computed(() => t('dialog.texture_opt.help', '把 PNG 贴图预先生成为更适合游戏读取的 DDS 贴图输出。\nDDS 主要用来减少显存压力、加快加载；通常情况下，DDS 能在大型模组环境下减少卡顿和爆显存风险；代价是生成比较耗时，DDS 也往往会比源 PNG 更占磁盘空间。\nRimWorld 1.6 起游戏可原生读取 DDS，1.6 以前通常需要[[ Graphics Settings+ ]]才能加载。\n\nZSTD 会生成 .dds.zstd，本质上相当于把已经生成好的 DDS 再打包压缩一层，主要作用是进一步节省磁盘空间，但需要[[ Image Opt ]]才能被游戏读取。\n\n缩放主要用来降低显存占用；比例越低越省资源，但画质越容易下降。自动回退会在图片不适合当前比例时改用更稳妥的比例，必要时保留原尺寸；遮罩贴图会生成原尺寸 DDS，但不参与缩放。\n\n缩放功能部分感谢贴吧老哥 ##贴吧用户_0CWt68M## 提供的帮助'))
 const textureListMinItemSize = computed(() => appStore.scalePx(101, 14))
 const viewModes = computed(() => [
   { label: t('dialog.texture_opt.view.all', '综合视图'), value: 'ALL' },
@@ -612,6 +609,34 @@ const getRowSizeDependencies = (item) => [
   Number(item?.dds_output_bytes || 0),
   Number(item?.zstd_output_bytes || 0),
 ]
+
+const fallbackScaleTooltip = computed(() => {
+  const items = getTextureScaleBreakdownItems(summary.value, 'fallback')
+  if (!items.length) return t('dialog.texture_opt.fallback_tooltip_empty', '当前没有自动回退的图片。')
+  return [
+    t('dialog.texture_opt.fallback_tooltip_title', '自动回退明细：'),
+    ...items.map(item => t('ui.texture_opt.detail_item', '{label}: {count} 张', {
+      label: String(item.label || ''),
+      count: Number(item.count || 0),
+    })),
+  ].join('\n')
+})
+
+const keepOriginalTooltip = computed(() => {
+  const items = getTextureKeepOriginalReasonItems(summary.value, {
+    normal: t('ui.texture_opt.card.scale.keep_normal_label', '不缩放'),
+    mask: t('ui.texture_opt.card.scale.keep_mask_label', '遮罩贴图不缩放'),
+    range: t('ui.texture_opt.card.scale.keep_range_label', '超范围不缩放'),
+  })
+  return [
+    t('dialog.texture_opt.keep_original_tooltip_title', '保留原尺寸明细：'),
+    ...items.map(item => t('ui.texture_opt.detail_item', '{label}: {count} 张', {
+      label: item.label,
+      count: item.count,
+    })),
+  ].join('\n')
+})
+
 const unsupportedSummaryTooltip = computed(() => {
   const preview = Array.isArray(summary.value.engine_unsupported_preview) ? summary.value.engine_unsupported_preview : []
   if (!preview.length) return t('dialog.texture_opt.unsupported_summary_empty', '有些文件看起来像图片，其实不是正常图片，已经自动跳过。')
@@ -697,6 +722,7 @@ const filteredFailedItems = computed(() => {
     return (
       String(item.mod_name || '').toLowerCase().includes(query)
       || String(item.rel_path || '').toLowerCase().includes(query)
+      || String(item.file_path || '').toLowerCase().includes(query)
       || String(item.error || '').toLowerCase().includes(query)
     )
   })
