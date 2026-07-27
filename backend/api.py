@@ -5701,7 +5701,7 @@ class API:
             ok = self.scanner.stop_scan(normalized_task_id or None)
             return ApiResponse.success(message=tr("api.task.cancel_scan_requested", "已请求取消扫描任务")) if ok else ApiResponse.error(tr("api.task.no_scan_task_to_cancel", "当前没有可取消的扫描任务"))
 
-        if normalized_type in {"steamcmd-download", "steamcmd-init"}:
+        if normalized_type in {"steamcmd-download", "steamcmd-workshop-repair", "steamcmd-init"}:
             if not normalized_task_id:
                 return ApiResponse.error(tr("api.task.id_missing", "缺少任务 ID"))
             ok = self.steam_mgr.cancel_steamcmd_task(normalized_task_id)
@@ -6078,6 +6078,37 @@ class API:
                 detail=e,
                 context={"workshop_ids": workshop_ids},
                 user_message=tr("errors.steamcmd.download_start_failed", "启动 SteamCMD 下载失败。请检查网络连接、代理设置、SteamCMD 状态和目标目录权限。"),
+            )
+
+    @log_api_call
+    def steamcmd_workshop_repair_download(self, workshop_ids: list):
+        """
+        通过 SteamCMD 补救 Steam 工坊库：下载、覆盖文件、同步 ACF 记录。
+        """
+        try:
+            if not self.steam_mgr.steamcmd_ready:
+                return ApiResponse.error(
+                    "SteamCMD 未就绪",
+                    code="STEAMCMD.NOT_READY",
+                    user_message=tr("errors.steamcmd.not_ready", "SteamCMD 尚未就绪。请先在工具环境检查中完成安装或修复，然后重试下载。"),
+                )
+            if self.steam_mgr.is_steam_running():
+                return ApiResponse.warning(
+                    "Steam 正在运行",
+                    code="STEAMCMD.REPAIR_STEAM_RUNNING",
+                    data={"action": "close_steam_required"},
+                    user_message=tr("errors.steamcmd.workshop_repair_steam_running", "补救下载需要先完全退出 Steam。请关闭 Steam 后重试，避免 Steam 覆盖或锁定工坊记录。"),
+                )
+
+            task_id = self.steam_mgr.repair_workshop_items_via_steamcmd(workshop_ids, on_success=lambda: self.scan_mods())
+            return ApiResponse.success({"task_id": task_id}, message=tr("api.steamcmd.workshop_repair_started", "SteamCMD 补救下载任务已启动"))
+        except Exception as e:
+            return ApiResponse.error(
+                "启动 SteamCMD 补救下载失败",
+                code="STEAMCMD.WORKSHOP_REPAIR_START_FAILED",
+                detail=e,
+                context={"workshop_ids": workshop_ids},
+                user_message=tr("errors.steamcmd.workshop_repair_start_failed", "启动补救下载失败。请检查 SteamCMD 状态、工坊目录、Steam 工坊记录文件权限和磁盘空间。"),
             )
 
     @log_api_call
@@ -7331,7 +7362,7 @@ class API:
         perf_start_at = time.perf_counter()
         if not self.active_context or not self.active_context.is_healthy:
             _log_startup_perf("workspace_get_startup_inventory_summary", "early_return_unhealthy_context", perf_start_at)
-            return ApiResponse.success({"events": [], "counts": {"changed": 0, "missing": 0, "deleted": 0}})
+            return ApiResponse.success({"events": [], "counts": {"changed": 0, "missing": 0, "deleted": 0, "update": 0}})
 
         workshop_map = self.steam_mgr.workshop_merged_data()
         subscribed_workshop_ids = [wid for wid, data in workshop_map.items() if data.get("is_subscribed")]
@@ -7354,6 +7385,8 @@ class API:
                 str(event.get("pathHash") or ""),
                 normalize_path_for_compare(event.get("path")),
                 str(event.get("downloadTime") or 0),
+                str(event.get("latestTime") or 0),
+                str(event.get("remoteManifest") or ""),
             ])
             if key in seen_keys:
                 return
@@ -7381,15 +7414,26 @@ class API:
                 continue
             workshop_id = normalize_workshop_id(mod.get("workshop_id"))
             steam_status = workshop_map.get(workshop_id) if workshop_id else None
+            has_update_event = not status and steam_status and steam_status.get("needs_update")
+            if has_update_event:
+                push_event({
+                    **base_event,
+                    "status": "update",
+                    "localTime": normalize_timestamp(steam_status.get("time_downloaded") or steam_status.get("installed_version_time")),
+                    "latestTime": normalize_timestamp(steam_status.get("latest_version_time")),
+                    "localManifest": str(steam_status.get("local_manifest") or ""),
+                    "remoteManifest": str(steam_status.get("remote_manifest") or ""),
+                })
             download_time = normalize_timestamp((steam_status or {}).get("time_last_sync"))
             scanned_time = normalize_timestamp(mod.get("last_scanned_at"))
-            if base_event["path"] and download_time and download_time > scanned_time:
+            if not has_update_event and base_event["path"] and download_time and download_time > scanned_time:
                 push_event({**base_event, "status": "changed", "downloadTime": download_time, "scannedTime": scanned_time})
 
         counts = {
             "changed": sum(1 for event in events if event.get("status") == "changed"),
             "missing": sum(1 for event in events if event.get("status") == "missing"),
             "deleted": sum(1 for event in events if event.get("status") == "deleted"),
+            "update": sum(1 for event in events if event.get("status") == "update"),
         }
         _log_startup_perf(
             "workspace_get_startup_inventory_summary",
@@ -7399,6 +7443,7 @@ class API:
             changed=counts["changed"],
             missing=counts["missing"],
             deleted=counts["deleted"],
+            update=counts["update"],
         )
         return ApiResponse.success({"events": events, "counts": counts})
 

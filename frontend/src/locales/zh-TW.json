@@ -966,7 +966,8 @@
       "workshop_download_submitted": "已向 Steam 提交工坊下載請求"
     },
     "steamcmd": {
-      "download_started": "SteamCMD 下載任務已啟動"
+      "download_started": "SteamCMD 下載任務已啟動",
+      "workshop_repair_started": "SteamCMD 補救下載任務已啟動"
     },
     "task": {
       "cancel_ai_requested": "已請求取消 AI 任務",
@@ -3230,7 +3231,9 @@
       "execution_failed_with_target": "SteamCMD 執行失敗，請檢查 Steam 安裝、網路連線和下載目錄權限。",
       "not_ready": "SteamCMD 尚未就緒。請先在工具環境檢查中完成安裝或修復，然後重試下載。",
       "ssl_init_failed": "網路或代理設定導致初始化失敗，請檢查 SteamCMD 下載環境。",
-      "timeout": "SteamCMD 執行超時，請稍後重試。"
+      "timeout": "SteamCMD 執行超時，請稍後重試。",
+      "workshop_repair_start_failed": "啟動補救下載失敗。請檢查 SteamCMD 狀態、工坊目錄、Steam 工坊記錄檔案權限和磁碟空間。",
+      "workshop_repair_steam_running": "補救下載需要先完全退出 Steam。請關閉 Steam 後重試，避免 Steam 覆蓋或鎖定工坊記錄。"
     },
     "system": {
       "invalid_input": "請求參數無效。請檢查設定、輸入內容或介面相容性。",
@@ -4244,6 +4247,10 @@
       "steamcmd_download": {
         "failed": "SteamCMD 下載失敗。請檢查網路連線、代理設定、下載來源可用性和目標目錄權限。"
       },
+      "steamcmd_workshop_repair": {
+        "complete": "補救下載已完成",
+        "failed": "補救下載失敗。請檢查 SteamCMD、工坊目錄、Steam 工坊記錄檔案權限和磁碟空間，並確認 Steam 已完全退出。"
+      },
       "suspend": {
         "cleared_scan_tasks": "已清理掛起前遺留的掃描任務，請按需重新重新整理。"
       },
@@ -4515,6 +4522,7 @@
       "steam_workshop_download": "Steam 工坊下載",
       "steamcmd_download": "SteamCMD 下載",
       "steamcmd_init": "SteamCMD 初始化",
+      "steamcmd_workshop_repair": "SteamCMD 補救下載",
       "texture_opt": "貼圖優化",
       "texture_opt_analyze": "貼圖分析",
       "update": "軟體更新",
@@ -4853,6 +4861,7 @@
       "download_failed": "Steam 工坊下載請求失敗。請確認 Steam 已登入、網路可用，且目標工坊項目仍可訪問。",
       "download_incomplete": "Steam 下載未完成。請確認 Steam 已登入並正常聯網，或稍後在 Steam 下載佇列中查看進度。",
       "download_started": "開始下載 {count} 個創意工坊項目",
+      "download_submitted_background": "已向 Steam 提交 {count} 個工坊項目的下載請求，任務會在背景繼續處理。",
       "download_submitted_waiting": "已向 Steam 提交 {count} 個創意工坊項目的下載請求，正在等待下載完成。",
       "download_temporarily_unavailable": "Steam 暫時無法處理工坊下載請求。請確認 Steam 已登入、網路可用，稍後重試。",
       "subscribe_failed": "訂閱失敗。請確認 Steam 已登入、網路可用，且目標工坊項目仍可訪問。",
@@ -4868,6 +4877,11 @@
       "url_source_subscribe_skipped": "已跳過 {count} 個 URL 來源訂閱項",
       "url_source_subscribe_unsupported": "URL 來源暫不支持訂閱，只能打開來源頁或後續擴展下載流程。",
       "url_sources_opened": "已打開 {count} 個外部來源，後續可接入專門下載流程。"
+    },
+    "steamcmd": {
+      "workshop_repair_failed": "補救下載啟動失敗。請檢查 SteamCMD 狀態、工坊目錄、Steam 工坊記錄檔案權限和磁碟空間。",
+      "workshop_repair_submitted": "已提交 {count} 個工坊項的補救下載任務，任務會在背景繼續處理。",
+      "workshop_repair_unavailable": "暫時無法開始補救下載。請完全退出 Steam 後重試。"
     },
     "texture": {
       "tool_download_done": "貼圖工具下載完成: {path}",
@@ -4901,6 +4915,7 @@
       "github_subscription_missing_url": "訂閱記錄缺少倉庫地址，無法獲取時間線",
       "github_subscription_not_found": "未找到該訂閱",
       "no_missing_workshop_downloads": "沒有可下載的工坊缺失項",
+      "no_update_workshop_downloads": "沒有需要更新的工坊項",
       "workshop_id_lookup_missing": "找不到工坊 ID：{ids}",
       "workshop_relation_failed": "{label}載入失敗。請檢查網路連接、Steam 服務狀態或稍後重試。",
       "workshop_retranslated": "已重新翻譯說明",
@@ -7133,10 +7148,10 @@
           "same": "跨庫同項:",
           "storage": "儲存佔用:"
         },
-        "download_missing": {
+        "download_workshop_state": {
           "confirm": "請求 Steam 下載",
-          "message": "將處理 {count} 個仍處於訂閱狀態但本地檔案缺失的工坊項。\n\n此操作不會取消訂閱，而是直接請求 Steam 客戶端重新下載或校驗這些項目，並在任務欄等待 Steam 確認本地檔案已下載完成。\n\n如果 Steam 網路異常、下載排隊過久或項目本身不可用，任務會顯示失敗。",
-          "title": "Steam 下載缺失項"
+          "message": "將處理 {count} 個已訂閱且狀態為「{scope}」的工坊項。\n\n此操作不會取消訂閱，而是直接請求 Steam 用戶端重新下載或校驗這些項目，並在工作列等待 Steam 確認本機內容已下載完成。\n\n如果 Steam 網路異常、下載佇列過久或項目本身不可用，任務會顯示失敗。",
+          "title": "Steam 下載[{scope}]"
         },
         "empty": "庫內暫無資料",
         "filter": {
@@ -7171,24 +7186,23 @@
           "move_to_self": "移動到 管理器庫",
           "move_to_workshop": "移動到 創意工坊庫",
           "open_workshop": "訪問創意工坊",
-          "redownload_missing": {
-            "label": "重新下載缺失項{count}",
-            "tooltip": "直接請求 Steam 重新下載或校驗這些缺失項。"
+          "redownload_workshop_state": {
+            "label": "重新下載[{scope}]{count}",
+            "tooltip": "直接請求 Steam 重新下載或校驗這些「{scope}」工坊項。"
           },
-          "resubscribe_missing": {
-            "label": "重新訂閱缺失項{count}",
-            "tooltip": "先取消訂閱，再重新訂閱，讓 Steam 重新排隊獲取這些缺失項。\n此操作會改變訂閱狀態，網路異常時可能出現取消成功但重新訂閱失敗，請謹慎使用。"
+          "repair_workshop_state": {
+            "label": "補救下載[{scope}]{count}",
+            "tooltip": "嘗試改用 SteamCMD 下載，然後覆蓋 Steam 工坊檔案並同步記錄，在 Steam 無法正確下載或更新時使用。請先完全退出 Steam。"
+          },
+          "resubscribe_workshop_state": {
+            "label": "重新訂閱[{scope}]{count}",
+            "tooltip": "先取消訂閱，再重新訂閱，讓 Steam 重新排隊取得這些「{scope}」工坊項。\n此操作會改變訂閱狀態，通常只建議在重新下載無效時使用。"
           },
           "steam_actions": "Steam操作",
           "subscribe_mod": "訂閱模組{count}",
           "transfer": "轉移...{count}",
           "unsubscribe": "取消訂閱{count}",
           "update_redownload": "更新模組[再次下載]{count}",
-          "update_resubscribe": "更新模組[再次訂閱]{count}",
-          "update_steam_redownload": {
-            "label": "更新 Mod[再次下載]{count}",
-            "tooltip": "直接請求 Steam 重新下載或校驗這些可更新的工坊項。"
-          },
           "view_timeline": "查看變動"
         },
         "no_image": "無圖",
@@ -7196,11 +7210,16 @@
         "refresh_after_clean_records": "清理庫存記錄後同步模組資料",
         "refresh_after_inventory_change": "庫存變更後同步模組資料",
         "refresh_after_unsubscribe": "取消訂閱後同步模組資料",
-        "resubscribe_missing": {
+        "repair_workshop_state": {
+          "confirm": "開始補救下載",
+          "message": "將處理 {count} 個已訂閱且狀態為「{scope}」的工坊項。\n\n此操作會改用 SteamCMD 下載目標工坊內容，不依賴 Steam 用戶端下載佇列；下載完成後，會用 SteamCMD 下載結果覆蓋 Steam 創意工坊庫中的對應檔案，並同步 Steam 的工坊記錄，使本機清單指向這次下載到的版本；隨後會刪除 SteamCMD 端的暫存下載檔案和對應記錄。\n\n執行前必須完全退出 Steam，否則 Steam 可能鎖定檔案、覆蓋 Steam 工坊記錄，或把補救結果重新改回舊狀態。此操作會替換本機工坊檔案，只建議在 Steam 用戶端無法成功下載或校驗時作為補救措施使用。",
+          "title": "補救下載[{scope}]"
+        },
+        "resubscribe_workshop_state": {
           "confirm": "開始重新訂閱",
-          "message": "將處理 {count} 個仍處於訂閱狀態但本地檔案缺失的工坊項。\n\n此操作會先向 Steam 發送取消訂閱請求，並等待 Steam 返回成功；隨後再重新發送訂閱請求，讓 Steam 重新拉取這些項目。\n\n由於 Steam 客戶端和網路狀態不可控，過程中可能出現取消訂閱成功但重新訂閱失敗、Steam 下載排隊較久、或列表重新整理延遲。執行後請等待 Steam 下載完成，再重新整理庫存或重新掃描。",
-          "success": "已重新發送 {count} 個缺失項的訂閱請求，請等待 Steam 下載完成",
-          "title": "重新訂閱缺失項"
+          "message": "將處理 {count} 個已訂閱且狀態為「{scope}」的工坊項。\n\n此操作會先向 Steam 發送取消訂閱請求，並等待 Steam 返回成功；隨後再重新發送訂閱請求，讓 Steam 重新排隊取得這些項目。\n\n通常優先使用「重新下載/校驗」。只有 Steam 無法正常下載、下載佇列異常或本機狀態混亂時，才建議使用重新訂閱。",
+          "success": "已重新發送 {count} 個工坊項的訂閱請求，請等待 Steam 下載完成",
+          "title": "重新訂閱[{scope}]"
         },
         "search": {
           "placeholder": "在此域檢索..."
@@ -7238,6 +7257,11 @@
           "conflict": "目前庫存在同包名衝突項",
           "replacement": "已檢測到替代項",
           "same": "其它庫存在相同項"
+        },
+        "workshop_fix_scope": {
+          "missing": "缺失項",
+          "mixed": "更新/缺失",
+          "update": "可更新項"
         }
       },
       "search": {
@@ -7260,7 +7284,10 @@
           "details": "查看詳情",
           "download_missing": "重新下載",
           "download_missing_all": "重新下載缺失項",
-          "download_missing_count": "重新下載（{count}項）"
+          "download_missing_count": "重新下載（{count}項）",
+          "download_update": "重新下載/校驗",
+          "download_update_all": "更新可更新項",
+          "download_update_count": "重新下載/校驗（{count}項）"
         },
         "empty": "目前沒有需要處理的庫存項。",
         "group": {
@@ -7276,6 +7303,10 @@
           "missing": {
             "description": "仍在工坊訂閱列表中，但本地檔案不完整或不存在。訂閱內容很多時，Steam 同步佇列可能漏掉少量項目導致檔案缺失；工坊訂閱超過 1000 項時更容易遇到。可重新下載補齊。",
             "title": "缺失模組"
+          },
+          "update": {
+            "description": "Steam 已偵測到這些工坊項有新版本。可請求 Steam 重新下載或校驗，讓本機內容更新到最新版本。",
+            "title": "可更新模組"
           }
         },
         "more_items": "\n等 {count} 個模組。",

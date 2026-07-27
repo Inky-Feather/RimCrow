@@ -471,11 +471,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     startupWorkshopChangeState.changes = Array.isArray(summary?.events) ? summary.events : []
     return startupWorkshopChangeState.changes
   }
-  const STARTUP_EVENT_STATUSES = ['deleted', 'missing', 'changed']
+  const STARTUP_EVENT_STATUSES = ['deleted', 'missing', 'update', 'changed']
   const STARTUP_EVENT_FILTER_MAP = {
     deleted: 'deleted',
     missing: 'missing',
     changed: 'change',
+    update: 'update',
   }
   const formatStartupEventNames = (changes = [], status = '', limit = 8) => {
     const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.status === status)
@@ -503,6 +504,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       title: t('ui.workspace.startup.group.changed.title', '已变更模组'),
       description: t('ui.workspace.startup.group.changed.description', '工坊内容已被作者更新。建议重新扫描，刷新大小、时间和状态。')
     }
+    if (status === 'update') return {
+      id: 'update',
+      title: t('ui.workspace.startup.group.update.title', '可更新模组'),
+      description: t('ui.workspace.startup.group.update.description', 'Steam 已检测到这些工坊项有新版本。可请求 Steam 重新下载或校验，让本地内容更新到最新版本。')
+    }
     return null
   }
   const formatStartupInventorySummary = (changes = [], beforeScan = false) => {
@@ -518,6 +524,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
   const resolveStartupMissingWorkshopIds = (changes = []) => [...new Set((Array.isArray(changes) ? changes : [])
     .filter(item => item?.status === 'missing')
+    .map(item => normalizeWorkshopId(item?.workshopId))
+    .filter(Boolean))]
+  const resolveStartupUpdateWorkshopIds = (changes = []) => [...new Set((Array.isArray(changes) ? changes : [])
+    .filter(item => item?.status === 'update')
     .map(item => normalizeWorkshopId(item?.workshopId))
     .filter(Boolean))]
   const getStartupEventGroupLabel = (status = '') => getStartupEventGroupConfig(status)?.title || t('ui.workspace.startup.group.default', '库存状态')
@@ -588,6 +598,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     item.pathHash || '',
     normalizeSizeRefreshPathKey(item.path),
     item.downloadTime || 0,
+    item.latestTime || 0,
+    item.remoteManifest || '',
   ].join('|')
   const loadStartupPromptAck = () => {
     try {
@@ -646,11 +658,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       group.items = group.items.filter(item => !ids.has(item.id))
     })
     startupInventoryDialog.groups = startupInventoryDialog.groups.filter(group => group.items.length > 0)
+    startupInventoryDialog.targets = startupInventoryDialog.groups
+      .flatMap(group => group.items.map(item => item?.raw).filter(Boolean))
     if (startupInventoryDialog.groups.length === 0) closeStartupInventoryDialog()
   }
-  const closeStartupInventoryDialog = () => {
+  const closeStartupInventoryDialog = (options = {}) => {
     startupInventoryDialog.visible = false
-    saveStartupPromptAck(startupInventoryDialog.targets)
+    if (options.saveAck !== false) {
+      const ackItems = Array.isArray(options.ackItems) ? options.ackItems : startupInventoryDialog.targets
+      saveStartupPromptAck(ackItems)
+    }
     if (typeof startupInventoryDialog.resolve === 'function') {
       startupInventoryDialog.resolve(true)
       startupInventoryDialog.resolve = null
@@ -665,18 +682,29 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     startupInventoryDialog.pendingActions = [...startupInventoryDialog.pendingActions, pendingKey]
     try {
       let ok = false
+      const steamDownloadOptions = { highPriority: true, waitSeconds: 30, waitForCompletion: options.closeAfterSubmit ? false : undefined }
       if (actionId === 'download_missing') {
         const workshopIds = resolveStartupMissingWorkshopIds(targets)
         if (!workshopIds.length) {
           toast.warning(t('toast.workspace.no_missing_workshop_downloads', '没有可下载的工坊缺失项'))
           return false
         }
-        ok = await appStore.downloadWorkshopItemsViaSteam(workshopIds, { highPriority: true, waitSeconds: 30 })
+        ok = await appStore.downloadWorkshopItemsViaSteam(workshopIds, steamDownloadOptions)
+      } else if (actionId === 'download_update') {
+        const workshopIds = resolveStartupUpdateWorkshopIds(targets)
+        if (!workshopIds.length) {
+          toast.warning(t('toast.workspace.no_update_workshop_downloads', '没有需要更新的工坊项'))
+          return false
+        }
+        ok = await appStore.downloadWorkshopItemsViaSteam(workshopIds, steamDownloadOptions)
       } else if (actionId === 'cleanup_deleted') {
         ok = await cleanupDeletedStartupRecords(targets, { confirm: false })
       }
       if (ok) {
-        const handledIds = (Array.isArray(items) ? items : []).map(item => item?.id).filter(Boolean)
+        const handledItems = Array.isArray(items) ? items : []
+        const handledTargets = handledItems.map(item => item?.raw || item).filter(Boolean)
+        saveStartupPromptAck(handledTargets)
+        const handledIds = handledItems.map(item => item?.id).filter(Boolean)
         removeStartupInventoryDialogItems(handledIds)
       }
       return ok

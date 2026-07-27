@@ -966,7 +966,8 @@
       "workshop_download_submitted": "Workshop download request submitted to Steam"
     },
     "steamcmd": {
-      "download_started": "SteamCMD download task started"
+      "download_started": "SteamCMD download task started",
+      "workshop_repair_started": "SteamCMD repair download task started"
     },
     "task": {
       "cancel_ai_requested": "AI task cancellation requested",
@@ -3230,7 +3231,9 @@
       "execution_failed_with_target": "SteamCMD failed. Check the Steam installation, network connection, and download folder permissions.",
       "not_ready": "SteamCMD is not ready. Complete installation or repair in tool environment check, then try downloading again.",
       "ssl_init_failed": "Network or proxy settings prevented initialization. Check the SteamCMD download environment.",
-      "timeout": "SteamCMD timed out. Try again later."
+      "timeout": "SteamCMD timed out. Try again later.",
+      "workshop_repair_start_failed": "Failed to start repair download. Check SteamCMD status, the Workshop folder, Steam Workshop record file permissions, and disk space.",
+      "workshop_repair_steam_running": "Repair download requires Steam to be fully closed first. Close Steam and try again to prevent Steam from overwriting or locking Workshop records."
     },
     "system": {
       "invalid_input": "Invalid request settings. Check settings, input, or API compatibility.",
@@ -4244,6 +4247,10 @@
       "steamcmd_download": {
         "failed": "SteamCMD download failed. Check the network connection, proxy settings, download source, and target folder permissions."
       },
+      "steamcmd_workshop_repair": {
+        "complete": "Repair download complete",
+        "failed": "Repair download failed. Check SteamCMD, the Workshop folder, Steam Workshop record file permissions, disk space, and make sure Steam is fully closed."
+      },
       "suspend": {
         "cleared_scan_tasks": "Cleared scan tasks left before suspension. Refresh again if needed."
       },
@@ -4515,6 +4522,7 @@
       "steam_workshop_download": "Steam Workshop download",
       "steamcmd_download": "SteamCMD download",
       "steamcmd_init": "SteamCMD initialization",
+      "steamcmd_workshop_repair": "SteamCMD repair download",
       "texture_opt": "Texture optimization",
       "texture_opt_analyze": "Texture analysis",
       "update": "Software update",
@@ -4853,6 +4861,7 @@
       "download_failed": "Steam Workshop download request failed. Make sure Steam is logged in, the network is available, and the target Workshop item is still accessible.",
       "download_incomplete": "Steam download did not finish. Make sure Steam is logged in and online, or check Steam's download queue later.",
       "download_started": "Started downloading {count} Workshop items",
+      "download_submitted_background": "Submitted download requests for {count} Workshop items to Steam. The task will continue in the background.",
       "download_submitted_waiting": "Submitted {count} Workshop download requests to Steam. Waiting for the download to finish.",
       "download_temporarily_unavailable": "Steam cannot process Workshop download requests now. Make sure Steam is logged in and the network is available, then try again later.",
       "subscribe_failed": "Subscription failed. Make sure Steam is logged in, the network is available, and the target Workshop item is still accessible.",
@@ -4868,6 +4877,11 @@
       "url_source_subscribe_skipped": "Skipped {count} URL source subscriptions",
       "url_source_subscribe_unsupported": "URL sources cannot be subscribed yet. Open the source page instead, or extend a dedicated download flow later.",
       "url_sources_opened": "Opened {count} external sources. A dedicated download flow can be added later."
+    },
+    "steamcmd": {
+      "workshop_repair_failed": "Failed to start repair download. Check SteamCMD status, the Workshop folder, Steam Workshop record file permissions, and disk space.",
+      "workshop_repair_submitted": "Submitted repair download tasks for {count} Workshop items. The task will continue in the background.",
+      "workshop_repair_unavailable": "Repair download cannot start right now. Fully close Steam and try again."
     },
     "texture": {
       "tool_download_done": "Texture tool downloaded: {path}",
@@ -4901,6 +4915,7 @@
       "github_subscription_missing_url": "Subscription record has no repository URL, so timeline cannot be loaded",
       "github_subscription_not_found": "Subscription not found",
       "no_missing_workshop_downloads": "No downloadable missing Workshop items",
+      "no_update_workshop_downloads": "No Workshop items need updating",
       "workshop_id_lookup_missing": "Workshop ID not found: {ids}",
       "workshop_relation_failed": "Failed to load {label}. Check network connection, Steam service status, or try again later.",
       "workshop_retranslated": "Description retranslated",
@@ -7133,10 +7148,10 @@
           "same": "Same item across libraries:",
           "storage": "Storage used:"
         },
-        "download_missing": {
+        "download_workshop_state": {
           "confirm": "Request Steam download",
-          "message": "This will process {count} Workshop items that are still subscribed but missing local files.\n\nThis will not unsubscribe them. It directly asks the Steam client to redownload or verify these items, then waits in the task bar until Steam confirms the local files are downloaded.\n\nIf Steam network is unavailable, downloads stay queued too long, or the item itself is unavailable, the task will fail.",
-          "title": "Download missing items with Steam"
+          "message": "This will process {count} subscribed Workshop items marked \"{scope}\".\n\nThis does not unsubscribe them. It directly asks the Steam client to redownload or verify these items, and waits in the task panel until Steam confirms the local content has been downloaded.\n\nIf Steam has network issues, the download queue takes too long, or the item is unavailable, the task will fail.",
+          "title": "Steam download [{scope}]"
         },
         "empty": "No data in this library",
         "filter": {
@@ -7171,24 +7186,23 @@
           "move_to_self": "Move to manager library",
           "move_to_workshop": "Move to Workshop library",
           "open_workshop": "Open Workshop",
-          "redownload_missing": {
-            "label": "Redownload missing items{count}",
-            "tooltip": "Directly ask Steam to redownload or verify these missing items."
+          "redownload_workshop_state": {
+            "label": "Redownload [{scope}]{count}",
+            "tooltip": "Ask Steam to redownload or verify these \"{scope}\" Workshop items."
           },
-          "resubscribe_missing": {
-            "label": "Resubscribe missing items{count}",
-            "tooltip": "Unsubscribe first, then subscribe again so Steam can queue these missing items again.\nThis changes subscription state. If the network fails, unsubscribe may succeed while resubscribe fails. Use with care."
+          "repair_workshop_state": {
+            "label": "Repair download[{scope}]{count}",
+            "tooltip": "Use SteamCMD to download the item, then replace the Steam Workshop files and sync the records. Use this when Steam cannot download or update correctly. Close Steam completely first."
+          },
+          "resubscribe_workshop_state": {
+            "label": "Resubscribe [{scope}]{count}",
+            "tooltip": "Unsubscribe first, then subscribe again so Steam queues these \"{scope}\" Workshop items again.\nThis changes subscription state and is usually only recommended when redownload does not work."
           },
           "steam_actions": "Steam actions",
           "subscribe_mod": "Subscribe mod{count}",
           "transfer": "Transfer...{count}",
           "unsubscribe": "Unsubscribe{count}",
           "update_redownload": "Update mod [redownload]{count}",
-          "update_resubscribe": "Update mod [resubscribe]{count}",
-          "update_steam_redownload": {
-            "label": "Update Mods [Redownload] {count}",
-            "tooltip": "Direct Steam to redownload or verify these updatable Workshop items."
-          },
           "view_timeline": "View changes"
         },
         "no_image": "NO IMG",
@@ -7196,11 +7210,16 @@
         "refresh_after_clean_records": "Sync mod data after cleaning inventory records",
         "refresh_after_inventory_change": "Sync mod data after inventory change",
         "refresh_after_unsubscribe": "Sync mod data after unsubscribe",
-        "resubscribe_missing": {
+        "repair_workshop_state": {
+          "confirm": "Start repair download",
+          "message": "This will process {count} subscribed Workshop items marked \"{scope}\".\n\nIt uses SteamCMD to download the target Workshop content instead of the Steam client download queue. After downloading, it overwrites the matching files in the Steam Workshop library and syncs Steam Workshop records so the local inventory points to the downloaded version. It then removes the temporary SteamCMD download files and records.\n\nClose Steam completely before starting. Otherwise Steam may lock files, overwrite Workshop records, or change the repaired result back to the old state. This replaces local Workshop files and should only be used when the Steam client cannot download or verify them normally.",
+          "title": "Repair download[{scope}]"
+        },
+        "resubscribe_workshop_state": {
           "confirm": "Start resubscribe",
-          "message": "This will process {count} Workshop items that are still subscribed but missing local files.\n\nThe manager will first send unsubscribe requests to Steam and wait for success, then subscribe again so Steam can fetch these items again.\n\nBecause Steam client and network state are outside the manager's control, unsubscribe may succeed while resubscribe fails, downloads may queue for a long time, or list refresh may be delayed. After running this, wait for Steam downloads to complete, then refresh inventory or scan again.",
-          "success": "Resubscribe requests sent for {count} missing items. Wait for Steam downloads to finish.",
-          "title": "Resubscribe missing items"
+          "message": "This will process {count} subscribed Workshop items marked \"{scope}\".\n\nIt first sends an unsubscribe request to Steam and waits for success, then sends a subscribe request again so Steam queues these items again.\n\nUsually use \"Redownload/verify\" first. Resubscribe is only recommended when Steam cannot download normally, the download queue is stuck, or local state is inconsistent.",
+          "success": "Resent subscription requests for {count} Workshop items. Wait for Steam to finish downloading.",
+          "title": "Resubscribe [{scope}]"
         },
         "search": {
           "placeholder": "Search in this library..."
@@ -7238,6 +7257,11 @@
           "conflict": "Conflicting item exists in the current library",
           "replacement": "Replacement item detected",
           "same": "Same item exists in another library"
+        },
+        "workshop_fix_scope": {
+          "missing": "Missing items",
+          "mixed": "Update/missing",
+          "update": "Updatable items"
         }
       },
       "search": {
@@ -7260,7 +7284,10 @@
           "details": "View details",
           "download_missing": "Redownload",
           "download_missing_all": "Redownload missing items",
-          "download_missing_count": "Redownload ({count} items)"
+          "download_missing_count": "Redownload ({count} items)",
+          "download_update": "Redownload/verify",
+          "download_update_all": "Update available items",
+          "download_update_count": "Redownload/verify ({count} items)"
         },
         "empty": "There are no inventory items that need attention.",
         "group": {
@@ -7276,6 +7303,10 @@
           "missing": {
             "description": "These items are still in the Workshop subscription list, but local files are incomplete or missing. When there are many subscriptions, Steam sync may miss a few items; this is more common above 1000 Workshop subscriptions. Redownload to fill them in.",
             "title": "Missing mods"
+          },
+          "update": {
+            "description": "Steam detected newer versions for these Workshop items. You can ask Steam to redownload or verify them so local content is updated to the latest version.",
+            "title": "Updatable mods"
           }
         },
         "more_items": "\nand {count} more mods.",

@@ -38,6 +38,10 @@ export const useSteamWorkshopActions = ({
     )
     if (res?.status === 'success') {
       const taskId = String(res?.data?.task_id || '')
+      if (options.waitForCompletion === false) {
+        toast.info(t('toast.steam.download_submitted_background', '已向 Steam 提交 {count} 个工坊项目的下载请求，任务会在后台继续处理。', { count: workshop_ids.length }), { timeout: 3500 })
+        return { success: true, taskId }
+      }
       let task = null
       toast.info(t('toast.steam.download_submitted_waiting', '已向 Steam 提交 {count} 个创意工坊项目的下载请求，正在等待下载完成。', { count: workshop_ids.length }), { timeout: 3500 })
       if (taskId) {
@@ -59,6 +63,22 @@ export const useSteamWorkshopActions = ({
       return false
     }
     showUserErrorToast(res, t('toast.steam.download_failed', 'Steam 工坊下载请求失败。请确认 Steam 已登录、网络可用，且目标工坊项目仍可访问。'))
+    return false
+  }
+
+  const repairWorkshopItemsViaSteamCMD = async (workshop_ids) => {
+    if (!window.pywebview) return false
+    if (!workshop_ids || workshop_ids.length === 0) return false
+    const res = await window.pywebview.api.steamcmd_workshop_repair_download(workshop_ids)
+    if (res?.status === 'success') {
+      toast.info(t('toast.steamcmd.workshop_repair_submitted', '已提交 {count} 个工坊项的补救下载任务，任务会在后台继续处理。', { count: workshop_ids.length }), { timeout: 3500 })
+      return { success: true, taskId: String(res?.data?.task_id || '') }
+    }
+    if (res?.status === 'warning') {
+      toast.warning(toUserMessage(res, t('toast.steamcmd.workshop_repair_unavailable', '暂时无法开始补救下载。请完全退出 Steam 后重试。')), { timeout: 6000 })
+      return false
+    }
+    showUserErrorToast(res, t('toast.steamcmd.workshop_repair_failed', '补救下载启动失败。请检查 SteamCMD 状态、工坊目录、Steam 工坊记录文件权限和磁盘空间。'))
     return false
   }
 
@@ -318,7 +338,7 @@ export const useSteamWorkshopActions = ({
     // 订阅与下载
     downloadWorkshopItems, subscribeInstallSources, downloadInstallSources,
     downloadPackageIds, subscribePackageIds, subscribeWorkshopIds, unsubscribeWorkshopIds,
-    downloadWorkshopItemsViaSteam, querySteamWorkshopDetails,
+    downloadWorkshopItemsViaSteam, repairWorkshopItemsViaSteamCMD, querySteamWorkshopDetails,
     // 合集
     getCollectionItems,
   }

@@ -104,7 +104,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { Motion } from 'motion-v'
-import { Activity, ArrowRightLeft, Cable, Copy, CornerUpRight, DownloadCloud, Flag, FlagOff, FolderInput, Lock, LockOpen, Download, Trash2, Upload } from 'lucide-vue-next'
+import { Activity, ArrowRightLeft, Cable, Copy, CornerUpRight, DownloadCloud, Flag, FlagOff, FolderInput, Lock, LockOpen, Download, Trash2, Wrench } from 'lucide-vue-next'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import MatrixItem from '../components/MatrixItem.vue'
 import { useAppStore } from '../../../app/stores/appStore'
@@ -413,15 +413,31 @@ const unsubscribeAndClearMissingWorkshopRecords = async (mods) => {
   return true
 }
 
-const resubscribeMissingWorkshopItems = async (mods) => {
-  const targets = (mods || []).filter(mod => mod?.is_missing && mod?.workshop_id && mod?.steam_status?.is_subscribed === true)
+const resolveWorkshopFixTargets = (mods = []) => {
+  const targets = (mods || []).filter(mod =>
+    mod?.workshop_id &&
+    mod?.steam_status?.is_subscribed === true &&
+    (mod?.is_missing || mod?.steam_status?.needs_update || mod?.has_update)
+  )
+  const hasMissing = targets.some(mod => mod?.is_missing)
+  const hasUpdate = targets.some(mod => mod?.steam_status?.needs_update || mod?.has_update)
+  const scope = hasMissing && hasUpdate
+    ? t('ui.workspace.matrix.workshop_fix_scope.mixed', '更新/缺失')
+    : hasUpdate
+      ? t('ui.workspace.matrix.workshop_fix_scope.update', '可更新项')
+      : t('ui.workspace.matrix.workshop_fix_scope.missing', '缺失项')
   const workshopIds = getUniqueWorkshopIds(targets)
+  return { workshopIds, scope, countText: buildCountText(workshopIds.length) }
+}
+
+const resubscribeWorkshopFixTargets = async (fixTargets) => {
+  const workshopIds = fixTargets?.workshopIds || []
   if (!workshopIds.length) return false
 
   const check = await confirmStore.confirmAction(
-    t('ui.workspace.matrix.resubscribe_missing.title', '重新订阅缺失项'),
-    t('ui.workspace.matrix.resubscribe_missing.message', '将处理 {count} 个仍处于订阅状态但本地文件缺失的工坊项。\n\n此操作会先向 Steam 发送取消订阅请求，并等待 Steam 返回成功；随后再重新发送订阅请求，让 Steam 重新拉取这些项目。\n\n由于 Steam 客户端和网络状态不可控，过程中可能出现取消订阅成功但重新订阅失败、Steam 下载排队较久、或列表刷新延迟。执行后请等待 Steam 下载完成，再刷新库存或重新扫描。', { count: workshopIds.length }),
-    { type: 'warning', confirmText: t('ui.workspace.matrix.resubscribe_missing.confirm', '开始重新订阅'), cancelText: t('common.action.cancel', '取消') }
+    t('ui.workspace.matrix.resubscribe_workshop_state.title', '重新订阅[{scope}]', { scope: fixTargets.scope }),
+    t('ui.workspace.matrix.resubscribe_workshop_state.message', '将处理 {count} 个已订阅且状态为“{scope}”的工坊项。\n\n此操作会先向 Steam 发送取消订阅请求，并等待 Steam 返回成功；随后再重新发送订阅请求，让 Steam 重新排队获取这些项目。\n\n通常优先使用“重新下载/校验”。只有 Steam 无法正常下载、下载队列异常或本地状态混乱时，才建议使用重新订阅。', { count: workshopIds.length, scope: fixTargets.scope }),
+    { type: 'warning', confirmText: t('ui.workspace.matrix.resubscribe_workshop_state.confirm', '开始重新订阅'), cancelText: t('common.action.cancel', '取消') }
   )
   if (!check) return false
 
@@ -431,20 +447,19 @@ const resubscribeMissingWorkshopItems = async (mods) => {
   const subscribeResult = await appStore.subscribeWorkshopIds(workshopIds)
   if (!subscribeResult) return false
 
-  toast.success(t('ui.workspace.matrix.resubscribe_missing.success', '已重新发送 {count} 个缺失项的订阅请求，请等待 Steam 下载完成', { count: workshopIds.length }))
+  toast.success(t('ui.workspace.matrix.resubscribe_workshop_state.success', '已重新发送 {count} 个工坊项的订阅请求，请等待 Steam 下载完成', { count: workshopIds.length }))
   await workspaceStore.fetchLibrariesMods()
   return true
 }
 
-const downloadMissingWorkshopItemsViaSteam = async (mods) => {
-  const targets = (mods || []).filter(mod => mod?.is_missing && mod?.workshop_id && mod?.steam_status?.is_subscribed === true)
-  const workshopIds = getUniqueWorkshopIds(targets)
+const downloadWorkshopFixTargetsViaSteam = async (fixTargets) => {
+  const workshopIds = fixTargets?.workshopIds || []
   if (!workshopIds.length) return false
 
   const check = await confirmStore.confirmAction(
-    t('ui.workspace.matrix.download_missing.title', 'Steam 下载缺失项'),
-    t('ui.workspace.matrix.download_missing.message', '将处理 {count} 个仍处于订阅状态但本地文件缺失的工坊项。\n\n此操作不会取消订阅，而是直接请求 Steam 客户端重新下载或校验这些项目，并在任务栏等待 Steam 确认本地文件已下载完成。\n\n如果 Steam 网络异常、下载排队过久或项目本身不可用，任务会显示失败。', { count: workshopIds.length }),
-    { type: 'warning', confirmText: t('ui.workspace.matrix.download_missing.confirm', '请求 Steam 下载'), cancelText: t('common.action.cancel', '取消') }
+    t('ui.workspace.matrix.download_workshop_state.title', 'Steam 下载[{scope}]', { scope: fixTargets.scope }),
+    t('ui.workspace.matrix.download_workshop_state.message', '将处理 {count} 个已订阅且状态为“{scope}”的工坊项。\n\n此操作不会取消订阅，而是直接请求 Steam 客户端重新下载或校验这些项目，并在任务栏等待 Steam 确认本地内容已下载完成。\n\n如果 Steam 网络异常、下载排队过久或项目本身不可用，任务会显示失败。', { count: workshopIds.length, scope: fixTargets.scope }),
+    { type: 'warning', confirmText: t('ui.workspace.matrix.download_workshop_state.confirm', '请求 Steam 下载'), cancelText: t('common.action.cancel', '取消') }
   )
   if (!check) return false
 
@@ -455,11 +470,18 @@ const downloadMissingWorkshopItemsViaSteam = async (mods) => {
   return true
 }
 
-const redownloadUpdatedWorkshopItemsViaSteam = async (workshopIds) => {
-  const result = await appStore.downloadWorkshopItemsViaSteam(workshopIds, { highPriority: true, waitSeconds: 30 })
-  if (!result) return false
-  await workspaceStore.fetchLibrariesMods()
-  return true
+const repairWorkshopFixTargetsViaSteamCMD = async (fixTargets) => {
+  const workshopIds = fixTargets?.workshopIds || []
+  if (!workshopIds.length) return false
+
+  const check = await confirmStore.confirmAction(
+    t('ui.workspace.matrix.repair_workshop_state.title', '补救下载[{scope}]', { scope: fixTargets.scope }),
+    t('ui.workspace.matrix.repair_workshop_state.message', '将处理 {count} 个已订阅且状态为“{scope}”的工坊项。\n\n此操作会改用 SteamCMD 下载目标工坊内容，不依赖 Steam 客户端下载队列；下载完成后，会用 SteamCMD 下载结果覆盖 Steam 创意工坊库中的对应文件，并同步 Steam 的工坊记录，使本地清单指向这次下载到的版本；随后会删除 SteamCMD 侧的临时下载文件和对应记录。\n\n执行前必须完全退出 Steam，否则 Steam 可能锁定文件、覆盖 Steam 工坊记录，或把补救结果重新改回旧状态。此操作会替换本地工坊文件，只建议在 Steam 客户端无法成功下载或校验时作为补救措施使用。', { count: workshopIds.length, scope: fixTargets.scope }),
+    { type: 'warning', confirmText: t('ui.workspace.matrix.repair_workshop_state.confirm', '开始补救下载'), cancelText: t('common.action.cancel', '取消') }
+  )
+  if (!check) return false
+
+  return await appStore.repairWorkshopItemsViaSteamCMD(workshopIds)
 }
 
 const clearMissingRecords = async (pathHashes) => {
@@ -522,8 +544,10 @@ const handleContextMenu = async (event, targetMod) => {
   const selectedAvailableMods = selectedMods.filter(isMatrixModAvailable)
   const selectedAvailablePathHashes = getUniquePathHashes(selectedAvailableMods)
   const selectedAvailableNumStr = buildCountText(selectedAvailablePathHashes.length)
-  const selectedUpdatedWorkshopIds = getUniqueWorkshopIds(selectedMods.filter(mod => (mod?.steam_status?.needs_update || mod?.has_update) && mod?.workshop_id))
+  const selectedUpdatedWorkshopMods = selectedMods.filter(mod => (mod?.steam_status?.needs_update || mod?.has_update) && mod?.workshop_id)
+  const selectedUpdatedWorkshopIds = getUniqueWorkshopIds(selectedUpdatedWorkshopMods)
   const selectedUpdatedNumStr = buildCountText(selectedUpdatedWorkshopIds.length)
+  const selectedWorkshopFixTargets = resolveWorkshopFixTargets(selectedMods)
   const selectedSubscribableWorkshopIds = getUniqueWorkshopIds(selectedMods.filter(mod => mod?.workshop_id && mod?.steam_status?.is_subscribed !== true))
   const selectedSubscribableNumStr = buildCountText(selectedSubscribableWorkshopIds.length)
   const selectedSubscribedWorkshopMods = selectedMods.filter(mod => isMatrixModAvailable(mod) && mod?.workshop_id && mod?.steam_status?.is_subscribed === true)
@@ -586,20 +610,27 @@ const handleContextMenu = async (event, targetMod) => {
       ]
     })
   }
-  // 更新
-  if (selectedUpdatedWorkshopIds.length > 0) {
-    if (props.storeType === 'workshop') {
-      menuItems.push({ label: t('ui.workspace.matrix.menu.update_resubscribe', '更新模组[再次订阅]{count}', { count: selectedUpdatedNumStr }), icon: Upload, action: () => appStore.subscribeWorkshopIds(selectedUpdatedWorkshopIds)
-      })
-      menuItems.push({
-        label: t('ui.workspace.matrix.menu.update_steam_redownload.label', '更新模组[重新下载]{count}', { count: selectedUpdatedNumStr }), icon: DownloadCloud, level: 'success',
-        tooltip: t('ui.workspace.matrix.menu.update_steam_redownload.tooltip', '直接请求 Steam 重新下载或校验这些可更新的工坊项。'),
-        action: () => redownloadUpdatedWorkshopItemsViaSteam(selectedUpdatedWorkshopIds),
-      })
-    } else {
-      menuItems.push({ label: t('ui.workspace.matrix.menu.update_redownload', '更新模组[再次下载]{count}', { count: selectedUpdatedNumStr }), icon: Upload, action: () => appStore.downloadWorkshopItems(selectedUpdatedWorkshopIds)
-      })
-    }
+  if (props.storeType === 'workshop' && selectedWorkshopFixTargets.workshopIds.length > 0) {
+    menuItems.push(
+      {
+        label: t('ui.workspace.matrix.menu.redownload_workshop_state.label', '重新下载[{scope}]{count}', { scope: selectedWorkshopFixTargets.scope, count: selectedWorkshopFixTargets.countText }), icon: DownloadCloud, level: 'success',
+        tooltip: t('ui.workspace.matrix.menu.redownload_workshop_state.tooltip', '直接请求 Steam 重新下载或校验这些“{scope}”工坊项。', { scope: selectedWorkshopFixTargets.scope }),
+        action: () => downloadWorkshopFixTargetsViaSteam(selectedWorkshopFixTargets),
+      },
+      {
+        label: t('ui.workspace.matrix.menu.repair_workshop_state.label', '补救下载[{scope}]{count}', { scope: selectedWorkshopFixTargets.scope, count: selectedWorkshopFixTargets.countText }), icon: Wrench, level: 'warn',
+        tooltip: t('ui.workspace.matrix.menu.repair_workshop_state.tooltip', '尝试改用 SteamCMD 下载，然后覆盖 Steam 工坊文件并同步记录，在 Steam 无法正确下载更新时尝试使用。请先完全退出 Steam。', { scope: selectedWorkshopFixTargets.scope }),
+        action: () => repairWorkshopFixTargetsViaSteamCMD(selectedWorkshopFixTargets),
+      },
+      {
+        label: t('ui.workspace.matrix.menu.resubscribe_workshop_state.label', '重新订阅[{scope}]{count}', { scope: selectedWorkshopFixTargets.scope, count: selectedWorkshopFixTargets.countText }), level: 'warn', icon: Flag,
+        tooltip: t('ui.workspace.matrix.menu.resubscribe_workshop_state.tooltip', '先取消订阅，再重新订阅，让 Steam 重新排队获取这些“{scope}”工坊项。\n此操作会改变订阅状态，通常只建议在重新下载无效时使用。', { scope: selectedWorkshopFixTargets.scope }),
+        action: () => resubscribeWorkshopFixTargets(selectedWorkshopFixTargets),
+      },
+    )
+  } else if (props.storeType !== 'workshop' && selectedUpdatedWorkshopIds.length > 0) {
+    menuItems.push({ label: t('ui.workspace.matrix.menu.update_redownload', '更新模组[再次下载]{count}', { count: selectedUpdatedNumStr }), icon: Download, action: () => appStore.downloadWorkshopItems(selectedUpdatedWorkshopIds)
+    })
   }
   menuItems.push({ label: t('ui.workspace.matrix.menu.download_to_self', '下载到管理器{count}', { count: selectedWorkshopNumStr }), disabled: selectedWorkshopIds.length === 0, icon: Download, action: () => appStore.downloadWorkshopItems(selectedWorkshopIds) })
   // 3. Steam API 相关操作
@@ -620,16 +651,6 @@ const handleContextMenu = async (event, targetMod) => {
   if (props.storeType === 'workshop' && selectedSubscribedMissingMods.length > 0) {
     // 工坊列中仍处于订阅状态的缺失项，代表“订阅还在但文件异常丢失”。
     menuItems.push(
-      {
-        label: t('ui.workspace.matrix.menu.redownload_missing.label', '重新下载缺失项{count}', { count: selectedSubscribedMissingNumStr }), level: 'success', icon: DownloadCloud,
-        tooltip: t('ui.workspace.matrix.menu.redownload_missing.tooltip', '直接请求 Steam 重新下载或校验这些缺失项。'),
-        action: () => downloadMissingWorkshopItemsViaSteam(selectedSubscribedMissingMods),
-      },
-      {
-        label: t('ui.workspace.matrix.menu.resubscribe_missing.label', '重新订阅缺失项{count}', { count: selectedSubscribedMissingNumStr }), level: 'warn', icon: Flag,
-        tooltip: t('ui.workspace.matrix.menu.resubscribe_missing.tooltip', '先取消订阅，再重新订阅，让 Steam 重新排队获取这些缺失项。\n此操作会改变订阅状态，网络异常时可能出现取消成功但重新订阅失败，请谨慎使用。'),
-        action: () => resubscribeMissingWorkshopItems(selectedSubscribedMissingMods),
-      },
       { label: t('ui.workspace.matrix.menu.clean_invalid_unsubscribe', '清理失效并取消订阅{count}', { count: selectedSubscribedMissingNumStr }), icon: Trash2, level: 'danger', action: () => unsubscribeAndClearMissingWorkshopRecords(selectedSubscribedMissingMods) }
     )
   }

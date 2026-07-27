@@ -966,7 +966,8 @@
       "workshop_download_submitted": "Workshop-Download-Anfrage an Steam übermittelt"
     },
     "steamcmd": {
-      "download_started": "SteamCMD-Download-Aufgabe gestartet"
+      "download_started": "SteamCMD-Download-Aufgabe gestartet",
+      "workshop_repair_started": "SteamCMD-Reparaturdownload wurde gestartet"
     },
     "task": {
       "cancel_ai_requested": "Abbruch der KI-Aufgabe angefordert",
@@ -3230,7 +3231,9 @@
       "execution_failed_with_target": "SteamCMD-Ausführung fehlgeschlagen. Prüfen Sie Steam-Installation, Netzwerkverbindung und Rechte des Downloadordners.",
       "not_ready": "SteamCMD ist nicht bereit. Schließen Sie die Installation oder Reparatur in der Tool-Umgebungsprüfung ab und versuchen Sie dann erneut, den Download durchzuführen.",
       "ssl_init_failed": "Initialisierung wegen Netzwerk- oder Proxy-Konfiguration fehlgeschlagen. Prüfen Sie die SteamCMD-Downloadumgebung.",
-      "timeout": "SteamCMD-Ausführung ist abgelaufen. Versuchen Sie es später erneut."
+      "timeout": "SteamCMD-Ausführung ist abgelaufen. Versuchen Sie es später erneut.",
+      "workshop_repair_start_failed": "Reparaturdownload konnte nicht gestartet werden. Prüfe SteamCMD-Status, Workshop-Ordner, Berechtigungen der Steam-Workshop-Datendatei und Speicherplatz.",
+      "workshop_repair_steam_running": "Für den Reparaturdownload muss Steam vollständig beendet sein. Schließe Steam und versuche es erneut, damit Steam Workshop-Datensätze nicht überschreibt oder sperrt."
     },
     "system": {
       "invalid_input": "Ungültige Anfrageparameter. Prüfen Sie Konfiguration, Eingaben oder Schnittstellenkompatibilität.",
@@ -4244,6 +4247,10 @@
       "steamcmd_download": {
         "failed": "SteamCMD-Download fehlgeschlagen. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen, Verfügbarkeit der Downloadquelle und Zielordnerrechte."
       },
+      "steamcmd_workshop_repair": {
+        "complete": "Reparaturdownload abgeschlossen",
+        "failed": "Reparaturdownload fehlgeschlagen. Prüfe SteamCMD, Workshop-Ordner, Berechtigungen der Steam-Workshop-Datendatei und Speicherplatz, und stelle sicher, dass Steam vollständig beendet ist."
+      },
       "suspend": {
         "cleared_scan_tasks": "Die vor der Unterbrechung verbliebenen Scan-Aufgaben wurden gelöscht. Bei Bedarf erneut aktualisieren."
       },
@@ -4515,6 +4522,7 @@
       "steam_workshop_download": "Steam Workshop herunterladen",
       "steamcmd_download": "SteamCMD herunterladen",
       "steamcmd_init": "SteamCMD-Initialisierung",
+      "steamcmd_workshop_repair": "SteamCMD-Reparaturdownload",
       "texture_opt": "Texturoptimierung",
       "texture_opt_analyze": "Texturanalyse",
       "update": "Software-Update",
@@ -4853,6 +4861,7 @@
       "download_failed": "Steam Workshop Download-Anfrage fehlgeschlagen. Stellen Sie sicher, dass Steam angemeldet ist, das Netzwerk verfügbar ist und auf das Zielelement Workshop weiterhin zugegriffen werden kann.",
       "download_incomplete": "Der Download von Steam wurde nicht abgeschlossen. Stellen Sie sicher, dass Steam angemeldet und online ist, oder überprüfen Sie später die Download-Warteschlange von Steam.",
       "download_started": "Mit dem Herunterladen von {count} Workshop-Elementen begonnen",
+      "download_submitted_background": "Downloadanfragen für {count} Workshop-Einträge wurden an Steam gesendet. Die Aufgabe läuft im Hintergrund weiter.",
       "download_submitted_waiting": "Eingereichte {count} Workshop Download-Anfragen an Steam. Warten, bis der Download abgeschlossen ist.",
       "download_temporarily_unavailable": "Steam kann derzeit keine Workshop-Download-Anfragen verarbeiten. Stellen Sie sicher, dass Steam angemeldet ist und das Netzwerk verfügbar ist, und versuchen Sie es später erneut.",
       "subscribe_failed": "Das Abonnement ist fehlgeschlagen. Stellen Sie sicher, dass Steam angemeldet ist, das Netzwerk verfügbar ist und auf das Zielelement Workshop weiterhin zugegriffen werden kann.",
@@ -4868,6 +4877,11 @@
       "url_source_subscribe_skipped": "{count} URL-Quellabonnements wurden übersprungen",
       "url_source_subscribe_unsupported": "URL sources cannot be subscribed yet. Öffnen Sie stattdessen die Quellseite oder erweitern Sie später einen dedizierten Download-Flow.",
       "url_sources_opened": "Externe {count}-Quellen geöffnet. Ein dedizierter Download-Flow kann später hinzugefügt werden."
+    },
+    "steamcmd": {
+      "workshop_repair_failed": "Reparaturdownload konnte nicht gestartet werden. Prüfe SteamCMD-Status, Workshop-Ordner, Berechtigungen der Steam-Workshop-Datendatei und Speicherplatz.",
+      "workshop_repair_submitted": "Reparaturdownload für {count} Workshop-Einträge wurde gestartet. Die Aufgabe läuft im Hintergrund weiter.",
+      "workshop_repair_unavailable": "Reparaturdownload kann derzeit nicht gestartet werden. Beende Steam vollständig und versuche es erneut."
     },
     "texture": {
       "tool_download_done": "Texturtool heruntergeladen: {path}",
@@ -4901,6 +4915,7 @@
       "github_subscription_missing_url": "Der Abonnementdatensatz hat keine Repository-URL, daher kann die Zeitleiste nicht geladen werden",
       "github_subscription_not_found": "Abonnement nicht gefunden",
       "no_missing_workshop_downloads": "Keine herunterladbaren fehlenden Workshop-Elemente",
+      "no_update_workshop_downloads": "Keine Workshop-Elemente müssen aktualisiert werden",
       "workshop_id_lookup_missing": "Workshop-ID nicht gefunden: {ids}",
       "workshop_relation_failed": "{label} konnte nicht geladen werden. Überprüfen Sie die Netzwerkverbindung und den Steam-Dienststatus oder versuchen Sie es später erneut.",
       "workshop_retranslated": "Beschreibung neu übersetzt",
@@ -7133,10 +7148,10 @@
           "same": "Gleiches Element in allen Bibliotheken:",
           "storage": "Verwendeter Speicher:"
         },
-        "download_missing": {
-          "confirm": "Fordern Sie den Steam-Download an",
-          "message": "Dadurch werden {count} Workshop Elemente verarbeitet, die noch abonniert sind, denen aber lokale Dateien fehlen.\n\nDadurch werden sie nicht abgemeldet. Es fordert den Steam-Client direkt auf, diese Elemente erneut herunterzuladen oder zu überprüfen, und wartet dann in der Taskleiste, bis Steam bestätigt, dass die lokalen Dateien heruntergeladen wurden.\n\nWenn das Steam-Netzwerk nicht verfügbar ist, Downloads zu lange in der Warteschlange bleiben oder das Element selbst nicht verfügbar ist, schlägt die Aufgabe fehl.",
-          "title": "Laden Sie fehlende Elemente mit Steam herunter"
+        "download_workshop_state": {
+          "confirm": "Steam-Download anfordern",
+          "message": "Es werden {count} abonnierte Workshop-Elemente mit dem Status „{scope}“ verarbeitet.\n\nDabei wird nichts abbestellt. Der Steam-Client wird direkt aufgefordert, diese Elemente erneut herunterzuladen oder zu prüfen. Im Aufgabenbereich wird gewartet, bis Steam bestätigt, dass die lokalen Inhalte heruntergeladen wurden.\n\nBei Netzwerkproblemen, zu langer Download-Warteschlange oder nicht verfügbaren Elementen schlägt die Aufgabe fehl.",
+          "title": "Steam-Download [{scope}]"
         },
         "empty": "Keine Daten in dieser Bibliothek",
         "filter": {
@@ -7171,24 +7186,23 @@
           "move_to_self": "In die Manager-Bibliothek verschieben",
           "move_to_workshop": "Wechseln Sie in die Workshop-Bibliothek",
           "open_workshop": "Öffnen Sie Workshop",
-          "redownload_missing": {
-            "label": "Fehlende Artikel erneut herunterladen{count}",
-            "tooltip": "Bitten Sie Steam direkt, diese fehlenden Elemente erneut herunterzuladen oder zu überprüfen."
+          "redownload_workshop_state": {
+            "label": "Erneut herunterladen [{scope}]{count}",
+            "tooltip": "Fordert Steam auf, diese Workshop-Elemente mit Status „{scope}“ erneut herunterzuladen oder zu prüfen."
           },
-          "resubscribe_missing": {
-            "label": "Fehlende Artikel erneut abonnieren{count}",
-            "tooltip": "Melden Sie sich zuerst ab und abonnieren Sie es dann erneut, damit Steam diese fehlenden Elemente erneut in die Warteschlange stellen kann.\nDadurch ändert sich der Abonnementstatus. Wenn das Netzwerk ausfällt, kann das Abbestellen des Abonnements erfolgreich sein, während das erneute Abonnieren fehlschlägt. Mit Vorsicht verwenden."
+          "repair_workshop_state": {
+            "label": "Reparaturdownload[{scope}]{count}",
+            "tooltip": "Lädt das Element über SteamCMD herunter, ersetzt danach die Steam-Workshop-Dateien und synchronisiert die Einträge. Verwenden, wenn Steam nicht korrekt herunterlädt oder aktualisiert. Steam vorher vollständig beenden."
+          },
+          "resubscribe_workshop_state": {
+            "label": "Neu abonnieren [{scope}]{count}",
+            "tooltip": "Erst abbestellen, dann erneut abonnieren, damit Steam diese Workshop-Elemente mit Status „{scope}“ neu einreiht.\nDies ändert den Abonnementstatus und wird normalerweise nur empfohlen, wenn erneutes Herunterladen nicht hilft."
           },
           "steam_actions": "Steam-Aktionen",
           "subscribe_mod": "Abonnieren Sie mod{count}",
           "transfer": "Übertragen...{count}",
           "unsubscribe": "Abmelden{count}",
           "update_redownload": "Mod aktualisieren [erneut herunterladen]{count}",
-          "update_resubscribe": "Mod aktualisieren [erneut abonnieren]{count}",
-          "update_steam_redownload": {
-            "label": "Mod aktualisieren [erneut herunterladen]{count}",
-            "tooltip": "Fordern Sie Steam direkt auf, diese aktualisierbaren Workshop-Objekte erneut herunterzuladen oder zu überprüfen."
-          },
           "view_timeline": "Änderungen anzeigen"
         },
         "no_image": "KEIN IMG",
@@ -7196,11 +7210,16 @@
         "refresh_after_clean_records": "Synchronisieren Sie Mod-Daten nach der Bereinigung der Inventardatensätze",
         "refresh_after_inventory_change": "Mod-Daten nach Inventaränderung synchronisieren",
         "refresh_after_unsubscribe": "Mod-Daten nach der Abmeldung synchronisieren",
-        "resubscribe_missing": {
-          "confirm": "Beginnen Sie mit dem erneuten Abonnieren",
-          "message": "Dadurch werden {count} Workshop Elemente verarbeitet, die noch abonniert sind, denen aber lokale Dateien fehlen.\n\nDer Manager sendet zunächst Abmeldeanfragen an Steam und wartet auf den Erfolg. Anschließend abonniert er erneut, damit Steam diese Elemente erneut abrufen kann.\n\nDa der Steam-Client und der Netzwerkstatus außerhalb der Kontrolle des Managers liegen, kann das Abbestellen des Abonnements erfolgreich sein, während das erneute Abonnieren fehlschlägt, Downloads möglicherweise lange in der Warteschlange stehen oder die Aktualisierung der Liste verzögert wird. Warten Sie nach der Ausführung, bis die Steam-Downloads abgeschlossen sind, und aktualisieren Sie dann den Bestand oder scannen Sie erneut.",
-          "success": "Für fehlende {count}-Artikel wurden erneut Abonnementanfragen gesendet. Warten Sie, bis die Steam-Downloads abgeschlossen sind.",
-          "title": "Fehlende Artikel erneut abonnieren"
+        "repair_workshop_state": {
+          "confirm": "Reparaturdownload starten",
+          "message": "Dies verarbeitet {count} abonnierte Workshop-Elemente mit dem Status „{scope}“.\n\nDabei wird SteamCMD verwendet, um die Zielinhalte herunterzuladen, ohne die Download-Warteschlange des Steam-Clients zu nutzen. Nach dem Download werden die passenden Dateien in der Steam-Workshop-Bibliothek überschrieben und die Steam-Workshop-Datensätze synchronisiert, damit der lokale Bestand auf diese heruntergeladene Version zeigt. Anschließend werden die temporären SteamCMD-Download-Dateien und Datensätze entfernt.\n\nBeende Steam vor dem Start vollständig. Andernfalls kann Steam Dateien sperren, Workshop-Datensätze überschreiben oder das reparierte Ergebnis wieder auf den alten Zustand zurücksetzen. Diese Aktion ersetzt lokale Workshop-Dateien und sollte nur verwendet werden, wenn der Steam-Client sie nicht normal herunterladen oder prüfen kann.",
+          "title": "Reparaturdownload[{scope}]"
+        },
+        "resubscribe_workshop_state": {
+          "confirm": "Neu abonnieren starten",
+          "message": "Es werden {count} abonnierte Workshop-Elemente mit dem Status „{scope}“ verarbeitet.\n\nZuerst wird eine Abbestellungsanfrage an Steam gesendet und auf Erfolg gewartet. Danach wird erneut abonniert, damit Steam diese Elemente neu einreiht.\n\nVerwenden Sie normalerweise zuerst „Erneut herunterladen/prüfen“. Neu abonnieren wird nur empfohlen, wenn Steam nicht normal herunterladen kann, die Download-Warteschlange festhängt oder der lokale Status inkonsistent ist.",
+          "success": "Abonnementanfragen für {count} Workshop-Elemente wurden erneut gesendet. Warten Sie, bis Steam den Download abgeschlossen hat.",
+          "title": "Neu abonnieren [{scope}]"
         },
         "search": {
           "placeholder": "In dieser Bibliothek suchen..."
@@ -7238,6 +7257,11 @@
           "conflict": "In der aktuellen Bibliothek ist ein widersprüchliches Element vorhanden",
           "replacement": "Ersatzartikel erkannt",
           "same": "Das gleiche Element ist in einer anderen Bibliothek vorhanden"
+        },
+        "workshop_fix_scope": {
+          "missing": "Fehlende Elemente",
+          "mixed": "Update/fehlend",
+          "update": "Aktualisierbare Elemente"
         }
       },
       "search": {
@@ -7260,7 +7284,10 @@
           "details": "Details anzeigen",
           "download_missing": "Erneut herunterladen",
           "download_missing_all": "Laden Sie fehlende Elemente erneut herunter",
-          "download_missing_count": "Erneut herunterladen ({count}-Artikel)"
+          "download_missing_count": "Erneut herunterladen ({count}-Artikel)",
+          "download_update": "Erneut herunterladen/prüfen",
+          "download_update_all": "Verfügbare Updates installieren",
+          "download_update_count": "Erneut herunterladen/prüfen ({count} Elemente)"
         },
         "empty": "Es gibt keine Inventargegenstände, die Ihrer Aufmerksamkeit bedürfen.",
         "group": {
@@ -7276,6 +7303,10 @@
           "missing": {
             "description": "Diese Elemente befinden sich weiterhin in der Workshop-Abonnementliste, die lokalen Dateien sind jedoch unvollständig oder fehlen. Wenn viele Abonnements vorhanden sind, fehlen bei der Steam-Synchronisierung möglicherweise einige Elemente. Dies ist häufiger bei mehr als 1000 Workshop-Abonnements der Fall. Laden Sie sie erneut herunter, um sie auszufüllen.",
             "title": "Fehlende Mods"
+          },
+          "update": {
+            "description": "Steam hat neuere Versionen für diese Workshop-Elemente erkannt. Sie können Steam bitten, sie erneut herunterzuladen oder zu prüfen, damit die lokalen Inhalte auf den neuesten Stand gebracht werden.",
+            "title": "Aktualisierbare Mods"
           }
         },
         "more_items": "und {count} weitere Mods.",

@@ -141,6 +141,7 @@ const taskTypeMeta = {
   download: { title: () => t('tasks.type.download', '下载任务'), icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
   update: { title: () => t('tasks.type.update', '软件更新'), icon: Download, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
   'steamcmd-download': { title: () => t('tasks.type.steamcmd_download', 'SteamCMD 下载'), icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  'steamcmd-workshop-repair': { title: () => t('tasks.type.steamcmd_workshop_repair', 'SteamCMD 补救下载'), icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
   'steam-subscribe': { title: () => t('tasks.type.steam_subscribe', 'Steam 订阅'), icon: Flag, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
   'steam-unsubscribe': { title: () => t('tasks.type.steam_unsubscribe', 'Steam 取消订阅'), icon: FlagOff, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
   'steam-workshop-download': { title: () => t('tasks.type.steam_workshop_download', 'Steam 工坊下载'), icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },

@@ -966,7 +966,8 @@
       "workshop_download_submitted": "Workshop 다운로드 요청이 Steam에 제출되었습니다."
     },
     "steamcmd": {
-      "download_started": "SteamCMD 다운로드 작업이 시작되었습니다."
+      "download_started": "SteamCMD 다운로드 작업이 시작되었습니다.",
+      "workshop_repair_started": "SteamCMD 복구 다운로드 작업이 시작되었습니다"
     },
     "task": {
       "cancel_ai_requested": "AI 작업 취소 요청됨",
@@ -3230,7 +3231,9 @@
       "execution_failed_with_target": "SteamCMD 실행에 실패했습니다. Steam 설치, 네트워크 연결과 다운로드 폴더 권한을 확인하세요.",
       "not_ready": "SteamCMD가 준비되지 않았습니다. 도구 환경 확인에서 설치 또는 복구를 완료한 후 다시 다운로드해 보세요.",
       "ssl_init_failed": "네트워크 또는 프록시 설정 때문에 초기화에 실패했습니다. SteamCMD 다운로드 환경을 확인하세요.",
-      "timeout": "SteamCMD 실행 시간이 초과되었습니다. 잠시 후 다시 시도하세요."
+      "timeout": "SteamCMD 실행 시간이 초과되었습니다. 잠시 후 다시 시도하세요.",
+      "workshop_repair_start_failed": "복구 다운로드를 시작하지 못했습니다. SteamCMD 상태, 워크샵 폴더, Steam 워크샵 기록 파일 권한, 디스크 공간을 확인하세요.",
+      "workshop_repair_steam_running": "복구 다운로드를 실행하려면 먼저 Steam을 완전히 종료해야 합니다. Steam이 Workshop 기록을 덮어쓰거나 잠그지 않도록 Steam을 닫은 뒤 다시 시도하세요."
     },
     "system": {
       "invalid_input": "요청 매개변수가 올바르지 않습니다. 설정, 입력 내용 또는 인터페이스 호환성을 확인하세요.",
@@ -4244,6 +4247,10 @@
       "steamcmd_download": {
         "failed": "SteamCMD 다운로드에 실패했습니다. 네트워크 연결, 프록시 설정, 다운로드 소스와 대상 폴더 권한을 확인하세요."
       },
+      "steamcmd_workshop_repair": {
+        "complete": "복구 다운로드가 완료되었습니다",
+        "failed": "복구 다운로드에 실패했습니다. SteamCMD, 워크샵 폴더, Steam 워크샵 기록 파일 권한, 디스크 공간을 확인하고 Steam이 완전히 종료되었는지 확인하세요."
+      },
       "suspend": {
         "cleared_scan_tasks": "정지되기 전에 남은 스캔 작업을 지웠습니다. 필요한 경우 다시 새로고침하세요."
       },
@@ -4515,6 +4522,7 @@
       "steam_workshop_download": "Steam Workshop 다운로드",
       "steamcmd_download": "SteamCMD 다운로드",
       "steamcmd_init": "SteamCMD 초기화",
+      "steamcmd_workshop_repair": "SteamCMD 복구 다운로드",
       "texture_opt": "텍스처 최적화",
       "texture_opt_analyze": "질감 분석",
       "update": "소프트웨어 업데이트",
@@ -4853,6 +4861,7 @@
       "download_failed": "Steam Workshop 다운로드 요청에 실패했습니다. Steam가 로그인되어 있고, 네트워크를 사용할 수 있으며, 대상 Workshop 항목에 계속 액세스할 수 있는지 확인하세요.",
       "download_incomplete": "Steam 다운로드가 완료되지 않았습니다. Steam가 로그인되어 온라인 상태인지 확인하거나 나중에 Steam의 다운로드 대기열을 확인하세요.",
       "download_started": "{count} Workshop 아이템 다운로드 시작",
+      "download_submitted_background": "Steam에 Workshop 항목 {count}개의 다운로드 요청을 제출했습니다. 작업은 백그라운드에서 계속 처리됩니다.",
       "download_submitted_waiting": "{count} Workshop 다운로드 요청을 Steam에 제출했습니다. 다운로드가 완료되기를 기다리고 있습니다.",
       "download_temporarily_unavailable": "Steam는 ​​현재 Workshop 다운로드 요청을 처리할 수 없습니다. Steam가 로그인되어 있고 네트워크를 사용할 수 있는지 확인한 후 나중에 다시 시도하십시오.",
       "subscribe_failed": "구독에 실패했습니다. Steam가 로그인되어 있고, 네트워크를 사용할 수 있으며, 대상 Workshop 항목에 계속 액세스할 수 있는지 확인하세요.",
@@ -4868,6 +4877,11 @@
       "url_source_subscribe_skipped": "건너뛴 {count} URL 소스 구독",
       "url_source_subscribe_unsupported": "아직 URL 소스를 구독할 수 없습니다. 대신 소스 페이지를 열거나 나중에 전용 다운로드 흐름을 확장하세요.",
       "url_sources_opened": "{count} 외부 소스를 열었습니다. 나중에 전용 다운로드 흐름을 추가할 수 있습니다."
+    },
+    "steamcmd": {
+      "workshop_repair_failed": "복구 다운로드를 시작하지 못했습니다. SteamCMD 상태, 워크샵 폴더, Steam 워크샵 기록 파일 권한, 디스크 공간을 확인하세요.",
+      "workshop_repair_submitted": "Workshop 항목 {count}개의 복구 다운로드 작업을 제출했습니다. 작업은 백그라운드에서 계속 처리됩니다.",
+      "workshop_repair_unavailable": "현재 복구 다운로드를 시작할 수 없습니다. Steam을 완전히 종료한 뒤 다시 시도하세요."
     },
     "texture": {
       "tool_download_done": "텍스처 도구 다운로드 완료: {path}",
@@ -4901,6 +4915,7 @@
       "github_subscription_missing_url": "구독 기록에 저장소 URL이 없으므로 타임라인을 로드할 수 없습니다.",
       "github_subscription_not_found": "구독을 찾을 수 없습니다",
       "no_missing_workshop_downloads": "다운로드 가능한 누락된 Workshop 항목 없음",
+      "no_update_workshop_downloads": "업데이트할 Workshop 항목이 없습니다",
       "workshop_id_lookup_missing": "Workshop ID를 찾을 수 없습니다: {ids}",
       "workshop_relation_failed": "{label}를 로드하지 못했습니다. 네트워크 연결, Steam 서비스 상태를 확인하거나 나중에 다시 시도하세요.",
       "workshop_retranslated": "설명이 다시 번역되었습니다.",
@@ -7133,10 +7148,10 @@
           "same": "여러 라이브러리에서 동일한 항목:",
           "storage": "사용된 저장소:"
         },
-        "download_missing": {
+        "download_workshop_state": {
           "confirm": "Steam 다운로드 요청",
-          "message": "이는 아직 구독 중이지만 로컬 파일이 누락된 {count} Workshop 항목을 처리합니다.\n\n구독이 취소되지는 않습니다. Steam 클라이언트에게 이러한 항목을 다시 다운로드하거나 확인하도록 직접 요청한 다음 Steam가 로컬 파일이 다운로드되었음을 확인할 때까지 작업 표시줄에서 기다립니다.\n\nSteam 네트워크를 사용할 수 없거나 다운로드가 너무 오랫동안 대기열에 있거나 항목 자체를 사용할 수 없는 경우 작업이 실패합니다.",
-          "title": "Steam로 누락된 항목 다운로드"
+          "message": "구독 중이며 상태가 \"{scope}\"인 Workshop 항목 {count}개를 처리합니다.\n\n이 작업은 구독을 취소하지 않습니다. Steam 클라이언트에 이 항목들을 다시 다운로드하거나 확인하도록 직접 요청하고, 작업 패널에서 Steam이 로컬 콘텐츠 다운로드 완료를 확인할 때까지 기다립니다.\n\nSteam 네트워크 문제, 긴 다운로드 대기열, 항목 이용 불가가 있으면 작업이 실패합니다.",
+          "title": "Steam 다운로드 [{scope}]"
         },
         "empty": "이 라이브러리에 데이터가 없습니다",
         "filter": {
@@ -7171,24 +7186,23 @@
           "move_to_self": "관리자 라이브러리로 이동",
           "move_to_workshop": "Workshop 라이브러리로 이동",
           "open_workshop": "Workshop 열기",
-          "redownload_missing": {
-            "label": "누락된 항목 다시 다운로드{count}",
-            "tooltip": "누락된 항목을 다시 다운로드하거나 확인하도록 Steam에 직접 요청하세요."
+          "redownload_workshop_state": {
+            "label": "다시 다운로드 [{scope}]{count}",
+            "tooltip": "Steam에 이 \"{scope}\" Workshop 항목들을 다시 다운로드하거나 확인하도록 요청합니다."
           },
-          "resubscribe_missing": {
-            "label": "누락된 항목 재구독{count}",
-            "tooltip": "먼저 구독을 취소한 다음 다시 구독하면 Steam가 누락된 항목을 다시 대기열에 추가할 수 있습니다.\n그러면 구독 상태가 변경됩니다. 네트워크에 장애가 발생하면 구독 취소는 성공하지만 재구독은 실패할 수 있습니다. 주의해서 사용하세요."
+          "repair_workshop_state": {
+            "label": "복구 다운로드[{scope}]{count}",
+            "tooltip": "SteamCMD로 항목을 다운로드한 뒤 Steam Workshop 파일을 교체하고 기록을 동기화합니다. Steam이 다운로드나 업데이트를 제대로 완료하지 못할 때 사용하세요. 먼저 Steam을 완전히 종료해야 합니다."
+          },
+          "resubscribe_workshop_state": {
+            "label": "다시 구독 [{scope}]{count}",
+            "tooltip": "먼저 구독을 취소한 뒤 다시 구독하여 Steam이 이 \"{scope}\" Workshop 항목들을 다시 대기열에 넣게 합니다.\n이 작업은 구독 상태를 변경하므로 다시 다운로드가 효과가 없을 때만 권장됩니다."
           },
           "steam_actions": "Steam 작업",
           "subscribe_mod": "mod{count} 구독",
           "transfer": "전송...{count}",
           "unsubscribe": "구독 취소{count}",
           "update_redownload": "모드 업데이트 [다시 다운로드]{count}",
-          "update_resubscribe": "모드 업데이트 [재구독]{count}",
-          "update_steam_redownload": {
-            "label": "Mod 업데이트[다시 다운로드]{count}",
-            "tooltip": "Steam에 이러한 업데이트 가능한 워크숍 항목을 다시 다운로드하거나 확인하도록 직접 요청합니다."
-          },
           "view_timeline": "변경사항 보기"
         },
         "no_image": "이미지 없음",
@@ -7196,11 +7210,16 @@
         "refresh_after_clean_records": "인벤토리 기록 정리 후 모드 데이터 동기화",
         "refresh_after_inventory_change": "인벤토리 변경 후 모드 데이터 동기화",
         "refresh_after_unsubscribe": "구독 취소 후 모드 데이터 동기화",
-        "resubscribe_missing": {
-          "confirm": "재구독 시작",
-          "message": "이는 아직 구독 중이지만 로컬 파일이 누락된 {count} Workshop 항목을 처리합니다.\n\n관리자는 먼저 Steam에 구독 취소 요청을 보내고 성공할 때까지 기다린 다음 Steam가 이러한 항목을 다시 가져올 수 있도록 다시 구독합니다.\n\nSteam 클라이언트 및 네트워크 상태는 관리자의 통제 범위를 벗어나기 때문에 구독 취소는 성공하더라도 재구독은 실패할 수 있고, 다운로드가 오랜 시간 동안 대기하거나 목록 새로 고침이 지연될 수 있습니다. 이를 실행한 후 Steam 다운로드가 완료될 때까지 기다린 다음 인벤토리를 새로 고치거나 다시 스캔하세요.",
-          "success": "{count} 누락된 항목에 대한 재구독 요청이 전송되었습니다. Steam 다운로드가 완료될 때까지 기다립니다.",
-          "title": "누락된 항목 재구독"
+        "repair_workshop_state": {
+          "confirm": "복구 다운로드 시작",
+          "message": "상태가 \"{scope}\"인 구독 워크샵 항목 {count}개를 처리합니다.\n\n이 작업은 Steam 클라이언트 다운로드 대기열 대신 SteamCMD로 대상 워크샵 콘텐츠를 다운로드합니다. 다운로드가 끝나면 Steam 워크샵 라이브러리의 해당 파일을 SteamCMD 다운로드 결과로 덮어쓰고 Steam 워크샵 기록을 동기화해 로컬 목록이 이번에 받은 버전을 가리키도록 합니다. 이후 SteamCMD 쪽의 임시 다운로드 파일과 기록을 삭제합니다.\n\n시작하기 전에 Steam을 완전히 종료해야 합니다. 그렇지 않으면 Steam이 파일을 잠그거나 워크샵 기록을 덮어쓰거나 복구 결과를 이전 상태로 되돌릴 수 있습니다. 이 작업은 로컬 워크샵 파일을 교체하므로 Steam 클라이언트가 정상적으로 다운로드하거나 검증하지 못할 때만 사용하는 것이 좋습니다.",
+          "title": "복구 다운로드[{scope}]"
+        },
+        "resubscribe_workshop_state": {
+          "confirm": "다시 구독 시작",
+          "message": "구독 중이며 상태가 \"{scope}\"인 Workshop 항목 {count}개를 처리합니다.\n\n먼저 Steam에 구독 취소 요청을 보내고 성공을 기다린 뒤, 다시 구독 요청을 보내 Steam이 이 항목들을 다시 대기열에 넣게 합니다.\n\n보통은 먼저 \"다시 다운로드/확인\"을 사용하세요. Steam이 정상적으로 다운로드하지 못하거나 다운로드 대기열이 멈췄거나 로컬 상태가 꼬였을 때만 다시 구독을 권장합니다.",
+          "success": "Workshop 항목 {count}개의 구독 요청을 다시 보냈습니다. Steam 다운로드가 완료될 때까지 기다리세요.",
+          "title": "다시 구독 [{scope}]"
         },
         "search": {
           "placeholder": "이 도서관에서 검색하세요..."
@@ -7238,6 +7257,11 @@
           "conflict": "현재 라이브러리에 충돌하는 항목이 있습니다.",
           "replacement": "교체 품목이 감지되었습니다.",
           "same": "동일한 항목이 다른 라이브러리에 존재합니다."
+        },
+        "workshop_fix_scope": {
+          "missing": "누락 항목",
+          "mixed": "업데이트/누락",
+          "update": "업데이트 가능 항목"
         }
       },
       "search": {
@@ -7260,7 +7284,10 @@
           "details": "세부정보 보기",
           "download_missing": "다시 다운로드",
           "download_missing_all": "누락된 항목 다시 다운로드",
-          "download_missing_count": "다시 다운로드({count} 항목)"
+          "download_missing_count": "다시 다운로드({count} 항목)",
+          "download_update": "다시 다운로드/확인",
+          "download_update_all": "업데이트 가능한 항목 업데이트",
+          "download_update_count": "다시 다운로드/확인({count}개 항목)"
         },
         "empty": "주의가 필요한 재고 품목이 없습니다.",
         "group": {
@@ -7276,6 +7303,10 @@
           "missing": {
             "description": "이러한 항목은 여전히 ​​Workshop 구독 목록에 있지만 로컬 파일이 불완전하거나 누락되었습니다. 구독이 많은 경우 Steam 동기화에서 몇 가지 항목이 누락될 수 있습니다. 이는 1000개의 Workshop 구독 이상에서 더 일반적입니다. 내용을 채우려면 다시 다운로드하세요.",
             "title": "누락된 모드"
+          },
+          "update": {
+            "description": "Steam에서 이 Workshop 항목들의 새 버전을 감지했습니다. Steam에 다시 다운로드하거나 확인하도록 요청해 로컬 콘텐츠를 최신 버전으로 업데이트할 수 있습니다.",
+            "title": "업데이트 가능한 모드"
           }
         },
         "more_items": "그리고 {count} 더 많은 모드.",

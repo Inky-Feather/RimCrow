@@ -1391,14 +1391,7 @@ class SteamManager:
         EventBus.resume()   # 恢复事件总线
         if not self.steamcmd_ready:
             raise Exception("SteamCMD is not installed.")
-        normalized_ids = []
-        seen_ids = set()
-        for workshop_id in workshop_ids or []:
-            normalized_id = str(workshop_id or "").strip()
-            if not normalized_id or not normalized_id.isdigit() or normalized_id in seen_ids:
-                continue
-            seen_ids.add(normalized_id)
-            normalized_ids.append(normalized_id)
+        normalized_ids = _normalize_workshop_ids(workshop_ids)
         if not normalized_ids:
             raise ValueError("No valid workshop IDs provided")
         # SteamCMD 下载目录当前与管理器自管目录共用物理数据。
@@ -1411,17 +1404,282 @@ class SteamManager:
         t.start()
         return task_id
 
-    def _run_steamcmd_process(self, mod_ids, task_id, on_success=None):
+    def repair_workshop_items_via_steamcmd(self, workshop_ids: list, on_success=None):
+        """
+        通过 SteamCMD 下载目标工坊项，再覆盖 Steam 客户端工坊目录并同步 ACF。
+        这是 Steam 客户端下载异常时的补救路径，必须在 Steam 完全退出后执行。
+        """
+        EventBus.resume()
+        if not self.steamcmd_ready:
+            raise Exception("SteamCMD is not installed.")
+        normalized_ids = _normalize_workshop_ids(workshop_ids)
+        if not normalized_ids:
+            raise ValueError("No valid workshop IDs provided")
+        if self.is_steam_running():
+            raise RuntimeError("Steam is running; close Steam before repairing workshop files.")
+
+        workshop_root = Path(str(settings.config.workshop_mods_path or "")).resolve()
+        if not workshop_root.exists() or not workshop_root.is_dir():
+            raise FileNotFoundError("Steam Workshop content directory is not available.")
+        acf_path = self._get_acf_path()
+        if not acf_path or not Path(acf_path).exists():
+            raise FileNotFoundError("Steam Workshop ACF file is not available.")
+
+        self.reconcile_steamcmd_acf()
+        task_id = "steamcmd_repair_" + str(time.time_ns() // 1000000)
+        t = threading.Thread(target=self._run_steamcmd_workshop_repair_process, args=(normalized_ids, task_id, on_success), daemon=True)
+        t.start()
+        return task_id
+
+    def _build_steamcmd_process_env(self) -> dict[str, str]:
         current_env = os.environ.copy()
         if settings.config.network.use_proxy_on_steamcmd:
-            proxy_env = network_mgr.get_proxy_env()
-            current_env.update(proxy_env)
+            current_env.update(network_mgr.get_proxy_env())
             logger.info("SteamCMD 将使用代理运行。")
         else:
             current_env.pop("HTTP_PROXY", None)
             current_env.pop("HTTPS_PROXY", None)
             current_env.pop("ALL_PROXY", None)
             logger.info("SteamCMD 将不使用代理运行。")
+        return current_env
+
+    def _run_steamcmd_workshop_repair_process(self, mod_ids: list[str], task_id: str, on_success=None):
+        task_type = "steamcmd-workshop-repair"
+        current_env = self._build_steamcmd_process_env()
+        target_dir = settings.config.workshop_mods_path
+        total_items = len(mod_ids)
+        self._emit_progress_event(task_id, "正在通过 SteamCMD 下载补救内容...", 0, TaskStatus.RUNNING, target_dir, "SteamCMD 补救下载", task_type=task_type, targets=mod_ids)
+
+        completed_ids: set[str] = set()
+        failed_ids: set[str] = set()
+        current_item_idx = 0
+        batch_list = [mod_ids[i:i + STEAMCMD_DOWNLOAD_BATCH_SIZE] for i in range(0, total_items, STEAMCMD_DOWNLOAD_BATCH_SIZE)]
+        workshop_log_path = Path(self.steamcmd_dir) / "logs" / "workshop_log.txt"
+        debug_show_console = platform.system() == "Windows" and bool(settings.config.debug_mode)
+
+        try:
+            for batch in batch_list:
+                if self._is_steamcmd_task_cancelled(task_id):
+                    self._emit_progress_event(task_id, "SteamCMD 补救下载已取消", int((current_item_idx / max(total_items, 1)) * 60), TaskStatus.CANCELLED, target_dir, "SteamCMD 补救下载", task_type=task_type, targets=mod_ids)
+                    return
+
+                current_item_idx_ref = [current_item_idx]
+                batch_result = self._run_single_steamcmd_batch(
+                    batch=batch,
+                    task_id=task_id,
+                    current_env=current_env,
+                    completed_ids=completed_ids,
+                    failed_ids=failed_ids,
+                    current_item_idx_ref=current_item_idx_ref,
+                    total_items=total_items,
+                    workshop_log_path=workshop_log_path,
+                    target_dir=target_dir,
+                    debug_show_console=debug_show_console,
+                    task_type=task_type,
+                    final_download_status=TaskStatus.RUNNING,
+                )
+                current_item_idx = current_item_idx_ref[0]
+                if batch_result.get("batch_failed"):
+                    retry_ids = [item_id for item_id in batch if item_id not in completed_ids]
+                    if retry_ids:
+                        self._retry_steamcmd_batch(
+                            retry_ids=retry_ids,
+                            task_id=task_id,
+                            current_env=current_env,
+                            completed_ids=completed_ids,
+                            failed_ids=failed_ids,
+                            current_item_idx_ref=current_item_idx_ref,
+                            total_items=total_items,
+                            workshop_log_path=workshop_log_path,
+                            target_dir=target_dir,
+                            debug_show_console=debug_show_console,
+                            task_type=task_type,
+                            final_download_status=TaskStatus.RUNNING,
+                        )
+                        current_item_idx = current_item_idx_ref[0]
+
+            if self._is_steamcmd_task_cancelled(task_id):
+                self._emit_progress_event(task_id, "SteamCMD 补救下载已取消", int((current_item_idx / max(total_items, 1)) * 60), TaskStatus.CANCELLED, target_dir, "SteamCMD 补救下载", task_type=task_type, targets=mod_ids)
+                return
+            repair_ids = [item_id for item_id in mod_ids if item_id in completed_ids and item_id not in failed_ids]
+            if not repair_ids:
+                self._emit_progress_event(task_id, "SteamCMD 补救下载失败", int((current_item_idx / max(total_items, 1)) * 60), TaskStatus.ERROR, target_dir, "SteamCMD 补救下载", error="没有成功下载的工坊项", task_type=task_type, targets=mod_ids)
+                return
+
+            self._emit_progress_event(task_id, "正在覆盖 Steam 工坊文件并同步记录...", 70, TaskStatus.RUNNING, target_dir, "SteamCMD 补救下载", task_type=task_type, targets=repair_ids)
+            result = self._apply_steamcmd_repair_items(repair_ids, task_id, task_type)
+            repaired_ids = result["repaired_ids"]
+            failed_repair_ids = sorted(set(mod_ids) - set(repaired_ids))
+            if failed_repair_ids:
+                failed_text = ", ".join(failed_repair_ids[:5]) + (" ..." if len(failed_repair_ids) > 5 else "")
+                self._emit_progress_event(task_id, "SteamCMD 补救下载未全部完成", 95, TaskStatus.ERROR, target_dir, "SteamCMD 补救下载", error=f"失败项: {failed_text}", task_type=task_type, targets=mod_ids)
+                return
+
+            self._emit_progress_event(task_id, f"补救下载完成 ({len(repaired_ids)})", 100, TaskStatus.COMPLETED, target_dir, "SteamCMD 补救下载", task_type=task_type, targets=repaired_ids)
+            if callable(on_success):
+                try:
+                    on_success()
+                except Exception as refresh_error:
+                    logger.warning(f"SteamCMD 补救下载完成后自动刷新失败: {refresh_error}")
+        except Exception as e:
+            logger.error(f"SteamCMD 补救下载失败：{e}", exc_info=True)
+            self._emit_progress_event(task_id, "SteamCMD 补救下载失败，请检查 SteamCMD、工坊目录、Steam 工坊记录文件权限和磁盘空间。", 0, TaskStatus.ERROR, target_dir, "SteamCMD 补救下载", error=str(e), task_type=task_type, targets=mod_ids)
+        finally:
+            with self._steamcmd_lock:
+                self._steamcmd_processes.pop(task_id, None)
+                self._steamcmd_cancelled.discard(task_id)
+
+    def _apply_steamcmd_repair_items(self, workshop_ids: list[str], task_id: str, task_type: str) -> dict[str, Any]:
+        import vdf
+
+        if self.is_steam_running():
+            raise RuntimeError("Steam 已在补救下载期间重新启动，请完全退出 Steam 后重试。")
+
+        steam_acf_path = Path(cast(str, self._get_acf_path()))
+        steamcmd_acf_path = self._get_steamcmd_acf_path()
+        steamcmd_content_root = self._get_steamcmd_content_root()
+        workshop_root = Path(str(settings.config.workshop_mods_path or "")).resolve()
+        if not steam_acf_path.exists():
+            raise FileNotFoundError(f"Steam ACF 不存在: {steam_acf_path}")
+        if not steamcmd_acf_path.exists():
+            raise FileNotFoundError(f"SteamCMD ACF 不存在: {steamcmd_acf_path}")
+
+        with open(steam_acf_path, 'r', encoding='utf-8', errors='ignore') as f:
+            steam_payload = cast(dict[str, Any], vdf.load(f) or {})
+        with open(steamcmd_acf_path, 'r', encoding='utf-8', errors='ignore') as f:
+            steamcmd_payload = cast(dict[str, Any], vdf.load(f) or {})
+
+        steam_app = cast(dict[str, Any], steam_payload.setdefault("AppWorkshop", {}))
+        cmd_app = cast(dict[str, Any], steamcmd_payload.get("AppWorkshop") or {})
+        steam_installed = cast(dict[str, Any], steam_app.setdefault("WorkshopItemsInstalled", {}))
+        steam_details = cast(dict[str, Any], steam_app.setdefault("WorkshopItemDetails", {}))
+        cmd_installed = cast(dict[str, Any], cmd_app.get("WorkshopItemsInstalled") or {})
+        cmd_details = cast(dict[str, Any], cmd_app.get("WorkshopItemDetails") or {})
+
+        repaired_ids: list[str] = []
+        restore_plan: list[dict[str, Path | None]] = []
+        temp_paths: list[Path] = []
+        acf_backup_path = steam_acf_path.with_suffix(".acf.rimcrow-repair.bak")
+        try:
+            shutil.copy2(steam_acf_path, acf_backup_path)
+        except Exception as e:
+            raise RuntimeError(f"创建 Steam 工坊记录补救备份失败: {e}") from e
+
+        try:
+            for index, workshop_id in enumerate(workshop_ids, start=1):
+                if self._is_steamcmd_task_cancelled(task_id):
+                    raise RuntimeError("任务已取消")
+                source_dir = steamcmd_content_root / workshop_id
+                if not source_dir.is_dir():
+                    logger.warning("跳过 SteamCMD 补救项：源目录不存在 workshop_id=%s path=%s", workshop_id, source_dir)
+                    continue
+                installed_entry = cast(dict[str, Any], cmd_installed.get(workshop_id) or {})
+                detail_entry = cast(dict[str, Any], cmd_details.get(workshop_id) or {})
+                if not installed_entry and not detail_entry:
+                    logger.warning("跳过 SteamCMD 补救项：SteamCMD ACF 缺少记录 workshop_id=%s", workshop_id)
+                    continue
+
+                target_dir = workshop_root / workshop_id
+                marker = f"{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+                temp_dir = workshop_root / f".rimcrow_repair_{workshop_id}_{marker}.tmp"
+                backup_dir = workshop_root / f".rimcrow_repair_{workshop_id}_{marker}.bak"
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir)
+                shutil.copytree(source_dir, temp_dir)
+                temp_paths.append(temp_dir)
+                if target_dir.exists():
+                    shutil.move(str(target_dir), str(backup_dir))
+                restore_plan.append({"target": target_dir, "backup": backup_dir if backup_dir.exists() else None})
+                shutil.move(str(temp_dir), str(target_dir))
+
+                preserved_subscriber = cast(dict[str, Any], steam_details.get(workshop_id) or {}).get("subscribedby")
+                steam_installed[workshop_id] = dict(installed_entry or detail_entry)
+                merged_detail = dict(detail_entry or installed_entry)
+                if preserved_subscriber and not merged_detail.get("subscribedby"):
+                    merged_detail["subscribedby"] = preserved_subscriber
+                manifest = str(steam_installed[workshop_id].get("manifest") or merged_detail.get("manifest") or "")
+                timeupdated = str(steam_installed[workshop_id].get("timeupdated") or merged_detail.get("timeupdated") or "0")
+                if manifest:
+                    merged_detail["manifest"] = manifest
+                    merged_detail["latest_manifest"] = manifest
+                if timeupdated:
+                    merged_detail["timeupdated"] = timeupdated
+                    merged_detail["latest_timeupdated"] = timeupdated
+                merged_detail["timetouched"] = str(int(time.time()))
+                steam_details[workshop_id] = merged_detail
+                repaired_ids.append(workshop_id)
+                self._emit_progress_event(task_id, f"正在补救写入 ({index}/{len(workshop_ids)})", 70 + int(index / max(len(workshop_ids), 1) * 20), TaskStatus.RUNNING, str(workshop_root), "SteamCMD 补救下载", task_type=task_type, targets=workshop_ids)
+
+            if repaired_ids:
+                steam_app["WorkshopItemsInstalled"] = steam_installed
+                steam_app["WorkshopItemDetails"] = steam_details
+                for update_key in ("WorkshopItemsRequiringUpdate", "WorkshopItemsDownloading"):
+                    update_map = steam_app.get(update_key)
+                    if isinstance(update_map, dict):
+                        for workshop_id in repaired_ids:
+                            update_map.pop(workshop_id, None)
+                steam_payload["AppWorkshop"] = steam_app
+                with open(steam_acf_path, 'w', encoding='utf-8', newline='\n') as f:
+                    vdf.dump(steam_payload, f, pretty=True)
+
+            try:
+                self._cleanup_steamcmd_repair_sources(repaired_ids, steamcmd_payload, steamcmd_acf_path)
+            except Exception as cleanup_error:
+                # 补救内容和 Steam 记录已经写入成功，清理 SteamCMD 临时记录失败不应回滚已修复的工坊文件。
+                logger.warning("SteamCMD 补救下载已写入，但清理 SteamCMD 临时记录失败: %s", cleanup_error, exc_info=True)
+                self._invalidate_steamcmd_cache()
+
+            for item in restore_plan:
+                backup = item.get("backup")
+                if isinstance(backup, Path) and backup.exists():
+                    shutil.rmtree(backup, ignore_errors=True)
+            self._invalidate_workshop_cache()
+            return {"repaired_ids": repaired_ids}
+        except Exception:
+            for item in reversed(restore_plan):
+                target = item.get("target")
+                backup = item.get("backup")
+                if isinstance(target, Path) and target.exists():
+                    shutil.rmtree(target, ignore_errors=True)
+                if isinstance(backup, Path) and backup.exists():
+                    shutil.move(str(backup), str(target))
+            if acf_backup_path.exists():
+                try:
+                    shutil.copy2(acf_backup_path, steam_acf_path)
+                except Exception as restore_error:
+                    logger.error(f"恢复 Steam ACF 补救备份失败: {restore_error}")
+            raise
+        finally:
+            for temp_path in temp_paths:
+                if temp_path.exists():
+                    shutil.rmtree(temp_path, ignore_errors=True)
+
+    def _cleanup_steamcmd_repair_sources(self, workshop_ids: list[str], steamcmd_payload: dict[str, Any], steamcmd_acf_path: Path) -> None:
+        if not workshop_ids:
+            return
+        import vdf
+
+        content_root = self._get_steamcmd_content_root()
+        app_workshop = cast(dict[str, Any], steamcmd_payload.setdefault("AppWorkshop", {}))
+        for key in ("WorkshopItemsInstalled", "WorkshopItemDetails", "WorkshopItemsRequiringUpdate", "WorkshopItemsDownloading"):
+            item_map = app_workshop.get(key)
+            if isinstance(item_map, dict):
+                for workshop_id in workshop_ids:
+                    item_map.pop(workshop_id, None)
+        with open(steamcmd_acf_path, 'w', encoding='utf-8', newline='\n') as f:
+            vdf.dump(steamcmd_payload, f, pretty=True)
+        for workshop_id in workshop_ids:
+            shutil.rmtree(content_root / workshop_id, ignore_errors=True)
+        self._invalidate_steamcmd_cache()
+
+    def _invalidate_workshop_cache(self) -> None:
+        self._cached_merged_data = []
+        self._cached_ws_map = None
+        self._last_ws_log_mtime = 0
+        self._last_ws_acf_mtime = 0
+
+    def _run_steamcmd_process(self, mod_ids, task_id, on_success=None):
+        current_env = self._build_steamcmd_process_env()
 
         target_dir = settings.config.steamcmd_mods_path
         total_items = len(mod_ids)
@@ -1540,6 +1798,8 @@ class SteamManager:
         workshop_log_path: Path,
         target_dir: str,
         debug_show_console: bool,
+        task_type: str = "steamcmd-download",
+        final_download_status: TaskStatus = TaskStatus.COMPLETED,
     ) -> dict[str, int | bool]:
         batch_failed = False
         script_path = self._build_steamcmd_download_script(batch)
@@ -1589,6 +1849,8 @@ class SteamManager:
                     total_items=total_items,
                     task_id=task_id,
                     target_dir=target_dir,
+                    task_type=task_type,
+                    final_download_status=final_download_status,
                 )
                 current_item_idx_ref[0] = current_item_idx
                 if len(completed_ids) != previous_completed or len(failed_ids) != previous_failed or batch_error:
@@ -1621,6 +1883,8 @@ class SteamManager:
                 total_items=total_items,
                 task_id=task_id,
                 target_dir=target_dir,
+                task_type=task_type,
+                final_download_status=final_download_status,
             )
             current_item_idx_ref[0] = current_item_idx
             if len(completed_ids) != previous_completed or len(failed_ids) != previous_failed or batch_error:
@@ -1656,6 +1920,8 @@ class SteamManager:
         workshop_log_path: Path,
         target_dir: str,
         debug_show_console: bool,
+        task_type: str = "steamcmd-download",
+        final_download_status: TaskStatus = TaskStatus.COMPLETED,
         depth: int = 0,
     ) -> None:
         if not retry_ids or self._is_steamcmd_task_cancelled(task_id): return
@@ -1679,6 +1945,8 @@ class SteamManager:
                 workshop_log_path=workshop_log_path,
                 target_dir=target_dir,
                 debug_show_console=debug_show_console,
+                task_type=task_type,
+                final_download_status=final_download_status,
             )
             after_completed = len(completed_ids)
             remaining = [item_id for item_id in batch if item_id not in completed_ids]
@@ -1696,6 +1964,8 @@ class SteamManager:
                     workshop_log_path=workshop_log_path,
                     target_dir=target_dir,
                     debug_show_console=debug_show_console,
+                    task_type=task_type,
+                    final_download_status=final_download_status,
                     depth=depth + 1,
                 )
             if after_completed == before_completed and result.get("batch_failed"):
@@ -1711,6 +1981,8 @@ class SteamManager:
         total_items: int,
         task_id: str,
         target_dir: str,
+        task_type: str = "steamcmd-download",
+        final_download_status: TaskStatus = TaskStatus.COMPLETED,
     ) -> tuple[int, int, str | None, str | None]:
         """
         调试窗口模式下无法再从 stdout 管道读取 SteamCMD 输出，
@@ -1765,7 +2037,7 @@ class SteamManager:
                     TaskStatus.RUNNING,
                     target_dir,
                     "SteamCMD",
-                    task_type="steamcmd-download",
+                    task_type=task_type,
                 )
 
             for item_id in success_matches:
@@ -1779,10 +2051,10 @@ class SteamManager:
                     task_id,
                     f"下载中 ({current_item_idx}/{total_items})",
                     int(total_percent),
-                    TaskStatus.RUNNING if current_item_idx < total_items else TaskStatus.COMPLETED,
+                    TaskStatus.RUNNING if current_item_idx < total_items else final_download_status,
                     target_dir,
                     "SteamCMD",
-                    task_type="steamcmd-download",
+                    task_type=task_type,
                 )
 
             for item_id in failure_matches:
@@ -2130,7 +2402,7 @@ class SteamManager:
         )
 
     def cancel_steamcmd_task(self, task_id: str) -> bool:
-        """请求取消 SteamCMD 下载或初始化任务。"""
+        """请求取消 SteamCMD 下载、补救下载或初始化任务。"""
         normalized_task_id = str(task_id or "").strip()
         if not normalized_task_id: return False
         with self._steamcmd_lock:

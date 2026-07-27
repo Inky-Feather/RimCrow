@@ -517,7 +517,7 @@ export const useAppStore = defineStore('app', () => {
     // 订阅与下载
     downloadWorkshopItems, subscribeInstallSources, downloadInstallSources,
     downloadPackageIds, subscribePackageIds, subscribeWorkshopIds, unsubscribeWorkshopIds,
-    downloadWorkshopItemsViaSteam, querySteamWorkshopDetails,
+    downloadWorkshopItemsViaSteam, repairWorkshopItemsViaSteamCMD, querySteamWorkshopDetails,
     // 合集
     getCollectionItems,
   } = useSteamWorkshopActions({
@@ -553,14 +553,14 @@ export const useAppStore = defineStore('app', () => {
 
 
   // === Getters ===
-  const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update', 'steamcmd-download', 'steam-workshop-download']))
+  const isDownloading = computed(() => taskStore.hasActiveTaskOfType(['download', 'update', 'steamcmd-download', 'steamcmd-workshop-repair', 'steam-workshop-download']))
   const isScanRunning = computed(() => taskStore.hasActiveTaskOfType('scan'))
   const updateInstallPrompted = new Set()
   const exportCompletePrompted = new Set()
   const pendingModScanRequested = ref(null)
   // 记录当前扫描请求的列表保留策略，等扫描完成事件回来时再交给 Mod Store。
   const activeModScanRequest = ref(null)
-  const modInventoryTaskTypes = new Set(['steamcmd-download', 'steam-workshop-download', 'steam-subscribe', 'steam-unsubscribe'])
+  const modInventoryTaskTypes = new Set(['steamcmd-download', 'steamcmd-workshop-repair', 'steam-workshop-download', 'steam-subscribe', 'steam-unsubscribe'])
   // 这里只保留后端已实现“真实终止点”的任务类型，避免按钮可点但实际上无法取消。
   const cancellableTaskTypes = new Set([
     'scan',
@@ -570,6 +570,7 @@ export const useAppStore = defineStore('app', () => {
     'mod-import',
     'mod-export',
     'steamcmd-download',
+    'steamcmd-workshop-repair',
     'steamcmd-init',
     'steam-subscribe',
     'steam-unsubscribe',
@@ -1268,11 +1269,16 @@ export const useAppStore = defineStore('app', () => {
       if (task.type === 'steamcmd-download' && task.status === 'failed') {
         showUserErrorToast(task, t('messages.app.steamcmd_download.failed', 'SteamCMD 下载失败。请检查网络连接、代理设置、下载源可用性和目标目录权限。'))
       }
+      if (task.type === 'steamcmd-workshop-repair' && task.status === 'failed') {
+        showUserErrorToast(task, t('messages.app.steamcmd_workshop_repair.failed', '补救下载失败。请检查 SteamCMD、工坊目录、Steam 工坊记录文件权限和磁盘空间，并确认 Steam 已完全退出。'))
+      }
       if (modInventoryTaskTypes.has(task.type) && task.status === 'success') {
         void (async () => {
           await requestModScan({ forceCoreRefresh: true })
           if (task.type === 'steam-workshop-download') {
             toast.success(t('messages.app.steam_workshop_download.complete', 'Steam 下载已完成'))
+          } else if (task.type === 'steamcmd-workshop-repair') {
+            toast.success(t('messages.app.steamcmd_workshop_repair.complete', '补救下载已完成'))
           } else if (task.type === 'steam-subscribe') {
             toast.success(t('messages.app.steam_subscribe.complete', 'Steam 订阅已完成'))
           }
@@ -1939,7 +1945,7 @@ export const useAppStore = defineStore('app', () => {
     // 下载与工坊
     startDownload, waitForDownload, downloadWorkshopItems, getCollectionItems, downloadPackageIds, subscribePackageIds, openSteamWorkshopById,
     openSteamWorkshopUrl, unsubscribeWorkshopIds, subscribeWorkshopIds, subscribeInstallSources, downloadInstallSources, openInstallSource,
-    downloadWorkshopItemsViaSteam, querySteamWorkshopDetails,
+    downloadWorkshopItemsViaSteam, repairWorkshopItemsViaSteamCMD, querySteamWorkshopDetails,
     // 设置、任务与应用维护
     saveSetting, applySettings, revealSecret, clearSecret, refreshUserThemes, saveUserTheme, deleteUserTheme, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
     checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks, checkUpdate, updateExternalDB,
