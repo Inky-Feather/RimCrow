@@ -14,7 +14,7 @@
 │   │   ├──  def_entries.py
 │   │   ├──  def_model_capabilities.py
 │   │   └──  def_output_contracts.py
-│   │
+│   │   
 │   ├── ·[database]
 │   │   ├──  dao.py
 │   │   ├──  dao_ext.py
@@ -24,10 +24,12 @@
 │   │   ├──  repair.py
 │   │   ├──  runtime.py
 │   │   └──  workshop_selection.py
-│   │
+│   │   
+│   ├── ·[environment]
 │   ├── ·[i18n]
-│   │   └──  language_registry.py
-│   │
+│   │   ├──  language_registry.py
+│   │   └──  messages.py
+│   │   
 │   ├── ·[load_order]
 │   │   ├──  detector.py
 │   │   ├──  import_check.py
@@ -36,7 +38,7 @@
 │   │   ├──  package_tokens.py
 │   │   ├──  parsers.py
 │   │   └──  share_code.py
-│   │
+│   │   
 │   ├── ·[managers]
 │   │   ├──  mgr_data_bundle.py
 │   │   ├──  mgr_download.py
@@ -64,46 +66,47 @@
 │   │   ├──  mgr_texture_opt.py
 │   │   ├──  mgr_update.py
 │   │   └──  mgr_workshop_db.py
-│   │
+│   │   
 │   ├── ·[migrations]
 │   │   ├──  app_relocation.py
 │   │   ├──  app_upgrade.py
 │   │   └──  path_normalization.py
-│   │
+│   │   
 │   ├── ·[paths]
 │   │   ├──  core.py
 │   │   ├──  game_locations.py
 │   │   └──  rimworld_layout.py
-│   │
+│   │   
 │   ├── ·[platform]
 │   │   └──  runtime.py
-│   │
+│   │   
 │   ├── ·[profile]
 │   │   └──  user_data_root.py
-│   │
+│   │   
 │   ├── ·[scanner]
 │   │   ├──  analyzer.py
 │   │   ├──  mod_scanner.py
 │   │   ├──  parser_dlc.py
 │   │   └──  parser_xml.py
-│   │
+│   │   
 │   ├── ·[startup]
 │   │   └──  coordinator.py
-│   │
+│   │   
 │   ├── ·[text_search]
 │   │   ├──  backends.py
 │   │   ├──  effective_files.py
 │   │   ├──  manager.py
 │   │   ├──  models.py
 │   │   └──  tooling.py
-│   │
+│   │   
 │   ├── ·[translation]
 │   │   ├──  contracts.py
 │   │   └──  service.py
-│   │
+│   │   
 │   ├── ·[utils]
 │   │   ├──  bundle_io.py
 │   │   ├──  constants.py
+│   │   ├──  error_contract.py
 │   │   ├──  event_bus.py
 │   │   ├──  json_io.py
 │   │   ├──  lanzou_parser.py
@@ -116,7 +119,7 @@
 │   │   ├──  text_decode.py
 │   │   ├──  tools.py
 │   │   └──  versioning.py
-│   │
+│   │   
 │   ├──  _version.py
 │   ├──  api.py
 │   ├──  browser_runtime.py
@@ -124,53 +127,59 @@
 │   ├──  static_page.py
 │   ├──  theme_store.py
 │   └──  window_state.py
-│
+│   
 ├── ·[doc]
-│   └── ·[assets]
-│
-│       ├──  Preview.png
-│       └──  主界面.png
-│
+│   ├── ·[assets]
+│   │   ├──  Preview.png
+│   │   └──  主界面.png
+│   │   
+│   └──  贴图优化说明.md
+│   
+├── ·[docs]
+│   └── ·[superpowers]
+│   
+│       └── ·[plans]
+│       
 ├── ·[frontend]
 │   ├── ·[public]
 │   │   ├── ·[project-assets]
 │   │   │   └──  donate-qr.png
-│   │   │
+│   │   │   
 │   │   ├──  icon.svg
 │   │   ├──  project-meta.json
 │   │   └──  vite.svg
-│   │
+│   │   
 │   ├── ·[src]
 │   │   ├── ·[app]
 │   │   │   ├── ·[bridge]
 │   │   │   │   ├──  pywebviewBridge.js
 │   │   │   │   └──  runtimeBridge.js
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[commands]
 │   │   │   │   ├──  builtinCommands.js
 │   │   │   │   └──  modListActions.js
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[shell]
 │   │   │   │   ├──  RimHeader.vue
 │   │   │   │   └──  StatusBar.vue
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[stores]
 │   │   │   │   ├── ·[app]
 │   │   │   │   ├──  appStore.js
 │   │   │   │   ├──  startupStore.js
 │   │   │   │   └──  taskStore.js
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[styles]
 │   │   │   │   ├──  builtinThemes.json
 │   │   │   │   ├──  style.css
 │   │   │   │   └──  toast.scss
-│   │   │   │
+│   │   │   │   
 │   │   │   ├──  App.vue
 │   │   │   └──  main.js
-│   │   │
+│   │   │   
 │   │   ├── ·[dev]
 │   │   │   └──  DebugPanel.vue
-│   │   │
+│   │   │   
 │   │   ├── ·[features]
 │   │   │   ├── ·[ai]
 │   │   │   │   ├── ·[ai-store]
@@ -183,32 +192,33 @@
 │   │   │   │   ├──  aiUsageTooltips.js
 │   │   │   │   ├──  ModAliasReviewModal.vue
 │   │   │   │   └──  promptQueueStore.js
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[app-log]
 │   │   │   │   ├──  logStore.js
 │   │   │   │   ├──  LogViewer.vue
 │   │   │   │   └──  UnifiedLogPanel.vue
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[dialogs]
 │   │   │   │   ├──  ConflictResolver.vue
+│   │   │   │   ├──  SortRuleConflictResolver.vue
 │   │   │   │   └──  UpdateModal.vue
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[file-search]
 │   │   │   │   ├──  FileSearchPreviewEditor.vue
 │   │   │   │   ├──  fileSearchStore.js
 │   │   │   │   └──  FileSearchWorkbench.vue
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[guide]
 │   │   │   │   ├──  GuideCenter.vue
 │   │   │   │   ├──  guideConfig.js
 │   │   │   │   └──  guideStore.js
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[load-order]
 │   │   │   │   ├──  BackupItem.vue
 │   │   │   │   ├──  BackupList.vue
 │   │   │   │   ├──  ListDiffView.vue
 │   │   │   │   └──  orderStore.js
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[mod]
 │   │   │   │   ├── ·[lib]
 │   │   │   │   ├── ·[list]
@@ -222,60 +232,69 @@
 │   │   │   │   ├──  ModDetails.vue
 │   │   │   │   ├──  ModItem.vue
 │   │   │   │   ├──  ModSettingsManagerModal.vue
-│   │   │   │   └──  RecommendationExportModal.vue
-│   │   │   │
+│   │   │   │   ├──  RecommendationExportModal.vue
+│   │   │   │   └──  ResetActiveListManagerModal.vue
+│   │   │   │   
 │   │   │   ├── ·[mod-residue]
 │   │   │   │   ├──  ModResidueCleanupModal.vue
 │   │   │   │   └──  modResidueStore.js
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[package-transfer]
 │   │   │   │   └──  PackageTransferDialog.vue
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[profiles]
 │   │   │   │   ├──  ProfileDrawer.vue
 │   │   │   │   ├──  profileStore.js
 │   │   │   │   └──  ProfileSwitcher.vue
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[rules]
 │   │   │   │   ├──  ModRuleEditor.vue
 │   │   │   │   ├──  RulePanel.vue
 │   │   │   │   ├──  RuleRelationSection.vue
 │   │   │   │   └──  ruleStore.js
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[settings]
 │   │   │   │   ├── ·[panel]
 │   │   │   │   ├── ·[theme]
 │   │   │   │   └──  SettingsPanel.vue
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[supplement]
 │   │   │   │   ├──  MissingInstallDialog.vue
 │   │   │   │   ├──  missingInstallStore.js
 │   │   │   │   ├──  SupplementSelectionDialog.vue
 │   │   │   │   └──  supplementStore.js
-│   │   │   │
+│   │   │   │   
 │   │   │   ├── ·[texture-opt]
 │   │   │   │   ├──  TextureModCard.vue
 │   │   │   │   ├──  TextureOptModal.vue
 │   │   │   │   └──  textureStore.js
-│   │   │   │
+│   │   │   │   
 │   │   │   └── ·[workspace]
-│   │   │
+│   │   │   
 │   │   │       ├── ·[components]
 │   │   │       ├── ·[lib]
 │   │   │       ├── ·[views]
 │   │   │       ├──  workshopSearchOptions.js
 │   │   │       ├──  WorkspaceOverlay.vue
 │   │   │       └──  workspaceStore.js
-│   │   │
+│   │   │       
+│   │   ├── ·[locales]
+│   │   │   ├──  de.json
+│   │   │   ├──  en.json
+│   │   │   ├──  ko.json
+│   │   │   ├──  ru.json
+│   │   │   ├──  zh-CN.json
+│   │   │   └──  zh-TW.json
+│   │   │   
 │   │   └── ·[shared]
-│   │
+│   │   
 │   │       ├── ·[assets]
 │   │       │   └──  vue.svg
-│   │       │
+│   │       │   
 │   │       ├── ·[branding]
 │   │       │   ├──  brandProfile.js
 │   │       │   └──  BrandSignature.vue
-│   │       │
+│   │       │   
 │   │       ├── ·[commands]
 │   │       │   ├──  commandRegistry.js
 │   │       │   ├──  commandStore.js
@@ -283,7 +302,7 @@
 │   │       │   ├──  keybindingParser.js
 │   │       │   ├──  keybindingRuntime.js
 │   │       │   └──  keyScopeStore.js
-│   │       │
+│   │       │   
 │   │       ├── ·[components]
 │   │       │   ├── ·[context-menu]
 │   │       │   ├── ·[input]
@@ -296,42 +315,49 @@
 │   │       │   ├──  GlobalColorPicker.vue
 │   │       │   ├──  StatItem.vue
 │   │       │   └──  WorkshopItemActions.vue
-│   │       │
+│   │       │   
 │   │       ├── ·[decorations]
 │   │       │   ├──  ImageCloud.vue
 │   │       │   ├──  LampEffect.vue
 │   │       │   └──  LuxBreatheIcon.vue
-│   │       │
+│   │       │   
 │   │       ├── ·[directives]
 │   │       │   ├──  dragScroll.js
 │   │       │   ├──  vLongPressFeedback.js
 │   │       │   ├──  vPreview.js
 │   │       │   ├──  vSelection.js
 │   │       │   └──  vTooltip.js
-│   │       │
-│   │       └── ·[lib]
-│   │
-│   │           ├──  color.js
-│   │           ├──  common.js
-│   │           ├──  constants.js
-│   │           ├──  domEffects.js
-│   │           ├──  format.js
-│   │           ├──  markdown.js
-│   │           ├──  startupPerf.js
-│   │           ├──  steamUri.js
-│   │           ├──  text.js
-│   │           └──  translationDetection.js
-│   │
+│   │       │   
+│   │       ├── ·[lib]
+│   │       │   ├──  color.js
+│   │       │   ├──  common.js
+│   │       │   ├──  constants.js
+│   │       │   ├──  domEffects.js
+│   │       │   ├──  format.js
+│   │       │   ├──  markdown.js
+│   │       │   ├──  startupPerf.js
+│   │       │   ├──  steamUri.js
+│   │       │   ├──  text.js
+│   │       │   ├──  translationDetection.js
+│   │       │   └──  userErrorMessage.js
+│   │       │   
+│   │       └──  i18n.js
+│   │       
 │   ├──  .gitignore
 │   ├──  index.html
 │   ├──  package-lock.json
 │   ├──  package.json
 │   ├──  README.md
 │   └──  vite.config.js
-│
+│   
 ├── ·[scripts]
-│   └──  setup_steamworks_runtime.py
-│
+│   ├──  analyze_i18n_duplicates.py
+│   ├──  create_locale.py
+│   ├──  extract_i18n_messages.py
+│   ├──  locale_workfile.py
+│   ├──  setup_steamworks_runtime.py
+│   └──  validate_locale_quality.py
+│   
 ├──  .gitignore
 ├──  .gitmodules
 ├──  .python-version
