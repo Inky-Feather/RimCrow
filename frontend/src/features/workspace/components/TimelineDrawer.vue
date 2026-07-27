@@ -9,10 +9,10 @@
           <div>
             <h3 class="text-xl font-black italic tracking-wider flex items-center gap-2">
               <History class="size-5 text-accent-primary" />
-              变动<span class="text-accent-primary">时间线</span>
+              {{ t('ui.workspace.timeline.title_prefix', '变动') }}<span class="text-accent-primary">{{ t('ui.workspace.timeline.title_highlight', '时间线') }}</span>
             </h3>
             <p class="text-xs text-text-dim mt-1 max-w-50 truncate" v-tooltip="modName">{{ modName }}</p>
-            <p class="text-[0.7rem] font-mono text-text-disabled mt-0.5">ID: {{ workshopId }}</p>
+            <p class="text-[0.7rem] font-mono text-text-disabled mt-0.5">{{ t('common.field.id_prefix', 'ID：{value}', { value: workshopId }) }}</p>
           </div>
           <button @click="$emit('close')" class="p-2 bg-bg-overlay/5 hover:bg-accent-danger/20 hover:text-accent-danger rounded-xl transition-colors">
             <X class="size-5"/>
@@ -34,7 +34,7 @@
         <div v-else class="flex-1 overflow-y-auto custom-scrollbar relative p-6 pl-8">
           <div v-if="!logs || logs.length === 0" class="h-full flex flex-col items-center justify-center text-text-disabled">
             <Activity class="size-12 mb-3 opacity-30" />
-            <p class="text-sm font-bold">Steam 本地日志未记录该项目的变动</p>
+            <p class="text-sm font-bold">{{ t('ui.workspace.timeline.empty', 'Steam 本地日志未记录该项目的变动') }}</p>
           </div>
 
           <div v-else>
@@ -53,13 +53,13 @@
                 </span>
                 <span class="px-2 py-0.5 rounded-full text-[0.7rem] font-black uppercase tracking-wider bg-bg-overlay/5 border border-border-base/5"
                   :class="getColorClass(log.color, 'text')">
-                  {{ log.title }}
+                  {{ timelineTitle(log) }}
                 </span>
               </div>
               
               <!-- 具体描述 -->
               <div class="modal-section-subtle mt-2 break-all p-2.5 text-xs leading-relaxed text-text-dim">
-                {{ log.desc }}
+                {{ timelineDesc(log) }}
               </div>
             </div>
           </div>
@@ -74,7 +74,7 @@
 import { ref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core' 
 import { X, History, Activity } from 'lucide-vue-next'
-import { useToast } from 'vue-toastification'
+import { getCurrentLocale, t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -84,7 +84,6 @@ const props = defineProps({
   logs: Array
 })
 const emit = defineEmits(['close'])
-const toast = useToast()
 const drawerRef = ref(null)
 
 // 监听弹窗打开时拉取数据
@@ -93,8 +92,11 @@ watch(() => props.isOpen, (val) => {
 })
 
 const formatDate = (ts) => {
-  return new Date(ts).toLocaleString('zh-CN', {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return new Date(ts).toLocaleString(getCurrentLocale(), {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
+
+const timelineTitle = (log) => t(log?.title_key || '', log?.title || '', log?.title_params || {})
+const timelineDesc = (log) => t(log?.desc_key || '', log?.desc || '', log?.desc_params || {})
 // 监听点击外侧事件
 onClickOutside(drawerRef, (event) => {
   if (props.isOpen && !event.target.closest('.timeline-trigger')) {

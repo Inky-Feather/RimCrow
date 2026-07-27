@@ -10,6 +10,30 @@ import sys
 import threading
 import time
 
+
+class _NullTextStream:
+    encoding = 'utf-8'
+
+    def write(self, text):
+        return len(text or '')
+
+    def flush(self):
+        pass
+
+    def isatty(self):
+        return False
+
+
+def _ensure_stdio():
+    # 打包无控制台时标准流可能是 None；提前补空流，避免 pywebview 或日志导入期把缺失流转成 nul 报错。
+    if sys.stdout is None:
+        sys.stdout = _NullTextStream()
+    if sys.stderr is None:
+        sys.stderr = _NullTextStream()
+
+
+_ensure_stdio()
+
 from backend.window_state import MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, WindowStateManager, enable_per_monitor_dpi_awareness
 
 # 必须在创建任何窗口前调用
@@ -24,11 +48,10 @@ from backend.settings import settings, BASE_RESOURCE_DIR, HOME_DIR
 from backend.utils.event_bus import EventBus
 from backend.utils.tools import current_ms
 from validate_environment import (
-    get_entrypoint,
-    get_local_frontend_root,
-    is_port_available,
-    show_native_error,
-    validate_environment,
+    # 前端入口
+    get_entrypoint, get_local_frontend_root, show_native_error, validate_environment,
+    # 开发服探测
+    DEV_SERVER_HOST, DEV_SERVER_PORT, is_port_available,
 )
 
 from icecream import ic
@@ -73,10 +96,6 @@ def get_webview_proxy_args():
         "proxy_server": proxy_str,
         "proxy_bypass_list": bypass_str
     }
-
-def on_main_window_closed():
-    """窗口关闭时触发"""
-    persist_exit_state()
 
 def persist_exit_state():
     """统一持久化退出状态"""
@@ -284,7 +303,7 @@ def main():
             browser_runtime = BrowserAppServer(
                 api=api,
                 static_root=static_root,
-                use_dev_server=(not getattr(sys, 'frozen', False) and is_port_available("localhost", 5173)),
+                use_dev_server=(not getattr(sys, 'frozen', False) and is_port_available(DEV_SERVER_HOST, DEV_SERVER_PORT)),
             )
             browser_runtime.start()
             api.set_browser_base_url(browser_runtime.base_url)
@@ -328,6 +347,12 @@ def main():
         logger.info(f"Entrypoint: {entrypoint}")
         log_startup_perf("window_created")
         if window: 
+            def persist_main_window_state():
+                try:
+                    window_state.capture_window(window)
+                finally:
+                    persist_exit_state()
+
             api.set_window(window)
             # `shown` 是“窗口可见”的信号，用它来结束 PyInstaller 启动画面；
             # `loaded` 仍然保留，用于区分页面是否真正完成加载，并配合超时提示给用户更准确的信息。
@@ -337,8 +362,8 @@ def main():
             window.events.moved += window_state.on_moved
             window.events.maximized += window_state.on_maximized
             window.events.restored += window_state.on_restored
+            window.events.closing += persist_main_window_state
             window.events.closed += api.cleanup
-            window.events.closed += on_main_window_closed  # 窗口关闭时退出应用
         # 注册窗口到事件总线
         EventBus.set_window(window) # type: ignore
         start_desktop_startup_timeout_guard()

@@ -7,20 +7,20 @@
       <div class="px-4 py-3 bg-bg-overlay/10 border-b border-border-base/10 flex items-center justify-between">
         <div class="flex items-center gap-2">
           <Github class="size-4 text-text-main" />
-          <h3 class="text-sm font-bold text-text-main">Git 仓库订阅</h3>
+          <h3 class="text-sm font-bold text-text-main">{{ t('ui.workspace.github.title', 'Git 仓库订阅') }}</h3>
         </div>
         <div class="flex items-center gap-2">
           <div class="grid grid-cols-2 gap-1 p-1 bg-bg-inset/80 rounded-xl border border-border-base/10">
             <button @click="setListMode('subscribed')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
               :class="listMode === 'subscribed' ? 'bg-bg-contrast text-text-inverse' : 'text-text-dim hover:text-text-main'">
-              已订阅
+              {{ t('ui.workspace.common.subscribed', '已订阅') }}
             </button>
             <button @click="setListMode('recommend')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
               :class="listMode === 'recommend' ? 'bg-bg-contrast text-text-inverse' : 'text-text-dim hover:text-text-main'">
-              推荐列表
+              {{ t('ui.workspace.github.tabs.recommend', '推荐列表') }}
             </button>
           </div>
-          <button @click="listMode === 'recommend' ? workspaceStore.fetchGithubProviderCatalog({ force: true }) : workspaceStore.fetchGithubRepos()" v-tooltip="'刷新当前列表'" class="p-1 text-text-dim hover:text-text-main transition-colors">
+          <button @click="listMode === 'recommend' ? workspaceStore.fetchGithubProviderCatalog({ force: true }) : workspaceStore.fetchGithubRepos()" v-tooltip="t('ui.workspace.github.refresh.tooltip', '刷新当前列表')" class="p-1 text-text-dim hover:text-text-main transition-colors">
             <RefreshCw class="size-4" :class="{'animate-spin': workspaceStore.github.isLoading || workspaceStore.github.isCatalogLoading}" />
           </button>
         </div>
@@ -35,13 +35,13 @@
           <div class="relative flex-1">
             <Search class="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-text-dim" />
             <input v-model="catalogFilter"
-              placeholder="筛选名称、包名、作者或版本"
+              :placeholder="t('ui.workspace.github.catalog.filter_placeholder', '筛选名称、包名、作者或版本')"
               class="w-full bg-bg-inset/90 border border-border-base/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-text-main outline-none focus:border-border-base/18" />
           </div>
         </div>
         <div v-if="workspaceStore.github.catalogMeta.total" class="mt-2 truncate text-[0.6rem] text-text-dim">
-          推荐来源: {{ workspaceStore.github.catalogMeta.total || 0 }} 项 / {{ catalogSourceOptions.length - 1 }} 个来源
-          <span v-if="workspaceStore.github.catalogMeta.is_stale" class="text-accent-warn">缓存</span>
+          {{ t('ui.workspace.github.catalog.source_summary', '推荐来源: {total} 项 / {sourceCount} 个来源', { total: workspaceStore.github.catalogMeta.total || 0, sourceCount: catalogSourceOptions.length - 1 }) }}
+          <span v-if="workspaceStore.github.catalogMeta.is_stale" class="text-accent-warn">{{ t('ui.workspace.github.catalog.cache_badge', '缓存') }}</span>
         </div>
 
       </div>
@@ -71,13 +71,13 @@
           </div>
           
           <div class="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 bg-glass-medium/60 p-1 rounded-xl backdrop-blur-lg border border-border-base/5 opacity-0 group-hover:opacity-100 transition-all z-20">
-            <button @click.stop="openRepoOriginal(repo)" v-tooltip="'打开原始地址'" class="p-2 rounded-lg bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
+            <button @click.stop="openRepoOriginal(repo)" v-tooltip="t('ui.workspace.github.actions.open_original', '打开原始地址')" class="p-2 rounded-lg bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <ExternalLink class="size-4" />
             </button>
-            <button v-if="repo.local_path || repo.local_folder" @click.stop="openRepoLocal(repo)" v-tooltip="'打开本地目录'" class="p-2 rounded-lg bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
+            <button v-if="repo.local_path || repo.local_folder" @click.stop="openRepoLocal(repo)" v-tooltip="t('ui.workspace.github.actions.open_local', '打开本地目录')" class="p-2 rounded-lg bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <FolderOpen class="size-4" />
             </button>
-            <button @click.stop="removeRepo(repo.repo_url)" v-tooltip="'移除订阅'" class="p-2 rounded-lg bg-accent-danger/20 text-accent-danger hover:bg-accent-danger hover:text-on-accent-danger transition-colors">
+            <button @click.stop="removeRepo(repo.repo_url)" v-tooltip="t('ui.workspace.github.remove.title', '移除订阅')" class="p-2 rounded-lg bg-accent-danger/20 text-accent-danger hover:bg-accent-danger hover:text-on-accent-danger transition-colors">
               <Trash2 class="size-4" />
             </button>
           </div>
@@ -86,7 +86,7 @@
 
       <div v-else class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
         <div v-if="workspaceStore.github.isCatalogLoading" class="h-full flex items-center justify-center text-xs text-text-dim">
-          正在读取推荐列表...
+          {{ t('ui.workspace.github.catalog.loading', '正在读取推荐列表...') }}
         </div>
         <div v-else-if="workspaceStore.github.catalogError" class="p-3 rounded-xl border border-accent-danger/30 bg-accent-danger/10 text-xs text-accent-danger">
           {{ workspaceStore.github.catalogError }}
@@ -95,7 +95,7 @@
           {{ workspaceStore.github.catalogMeta.warning }}
         </div>
         <div v-else-if="filteredRecommendedRepos.length === 0" class="h-full flex items-center justify-center text-xs text-text-dim">
-          没有匹配的推荐项
+          {{ t('ui.workspace.github.catalog.empty', '没有匹配的推荐项') }}
         </div>
         <div v-for="item in filteredRecommendedRepos" :key="`${item.category}:${item.key}`"
           @click="selectRecommendedItem(item)"
@@ -112,15 +112,15 @@
               <div class="mt-1 flex flex-wrap gap-1 text-[0.6rem] font-mono text-text-dim">
                 <span class="px-1.5 py-0.5 rounded bg-bg-inset/90 border border-border-base/10">{{ item.category }}</span>
                 <span class="px-1.5 py-0.5 rounded bg-bg-inset/90 border border-border-base/10">{{ catalogHostLabel(item) }}</span>
-                <span v-if="item.branch" class="px-1.5 py-0.5 rounded bg-accent-secondary/10 text-accent-secondary">branch: {{ item.branch }}</span>
+                <span v-if="item.branch" class="px-1.5 py-0.5 rounded bg-accent-secondary/10 text-accent-secondary">{{ t('ui.workspace.github.catalog.branch', '分支：{branch}', { branch: item.branch }) }}</span>
                 <span v-for="version in catalogDisplayVersions(item.game_versions)" :key="`${item.key}:${version}`"
                   class="px-1.5 py-0.5 rounded border"
                   :class="catalogVersionClass(version)">
                   {{ version }}
                 </span>
-                <span v-if="item.workshop_url" class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary">Workshop</span>
-                <span v-if="subscribedRepoUrls.has(item.url)" class="px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success">已添加 Git 订阅</span>
-                <span v-if="item.workshop_url && isWorkshopSubscribed(item)" class="px-1.5 py-0.5 rounded bg-accent-secondary/10 text-accent-secondary">已订阅创意工坊</span>
+                <span v-if="item.workshop_url" class="px-1.5 py-0.5 rounded bg-accent-primary/10 text-accent-primary">{{ t('ui.workspace.github.catalog.workshop_badge', '工坊') }}</span>
+                <span v-if="subscribedRepoUrls.has(item.url)" class="px-1.5 py-0.5 rounded bg-accent-success/10 text-accent-success">{{ t('ui.workspace.github.catalog.git_subscribed', '已添加 Git 订阅') }}</span>
+                <span v-if="item.workshop_url && isWorkshopSubscribed(item)" class="px-1.5 py-0.5 rounded bg-accent-secondary/10 text-accent-secondary">{{ t('ui.workspace.github.catalog.workshop_subscribed', '已订阅创意工坊') }}</span>
               </div>
             </div>
             <button v-if="!isOfficialCatalogItem(item)" @click.stop="subscribeRecommendedItem(item)"
@@ -137,14 +137,14 @@
             </div>
             <div class="flex items-center gap-1">
               <button v-if="item.workshop_url" @click.stop="toggleWorkshopSubscription(item)" :disabled="isWorkshopBusy"
-                v-tooltip="isWorkshopSubscribed(item) ? '取消订阅创意工坊' : '订阅创意工坊'"
+                v-tooltip="isWorkshopSubscribed(item) ? t('ui.workspace.github.workshop.unsubscribe', '取消订阅创意工坊') : t('ui.workspace.github.workshop.subscribe', '订阅创意工坊')"
                 class="shrink-0 p-1.5 rounded-md transition-colors disabled:opacity-40"
                 :class="workshopActionButtonClass(item)">
                 <FlagOff v-if="isWorkshopSubscribed(item)" class="size-3.5" />
                 <Flag v-else class="size-3.5" />
               </button>
               <button v-if="item.info_url || item.url" @click.stop="openExternal(item.info_url || item.url)"
-              v-tooltip="'打开原始地址'"
+              v-tooltip="t('ui.workspace.github.actions.open_original', '打开原始地址')"
               class="shrink-0 p-1.5 rounded-md text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
                 <ExternalLink class="size-3.5" />
               </button>
@@ -162,13 +162,13 @@
         <div class="flex-1 relative">
           <Link class="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-text-dim" />
           <input v-model="newRepoUrl" @keydown.enter="parseNewRepo"
-            v-tooltip="'支持以下仓库：GitHub、GitLab、GitGud。'"
-            placeholder="粘贴公开 Git 仓库地址 如: https://github.com/user/repo (支持 GitHub / GitLab / GitGud)"
+            v-tooltip="t('ui.workspace.github.input.supported_tooltip', '支持以下仓库：GitHub、GitLab、GitGud。')"
+            :placeholder="t('ui.workspace.github.input.placeholder', '粘贴公开 Git 仓库地址 如: https://github.com/user/repo (支持 GitHub / GitLab / GitGud)')"
             class="w-full bg-bg-inset border border-border-base/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-text-main outline-none focus:border-border-base/18 transition-all" />
         </div>
         <button @click="parseNewRepo" :disabled="isParsing"
           class="px-6 py-2.5 bg-bg-overlay/10 text-text-main hover:bg-bg-contrast hover:text-text-inverse border border-border-base/18 rounded-xl text-sm font-black transition-all disabled:opacity-50 flex items-center gap-2">
-          <span v-if="isParsing" class="animate-spin">⟳</span> 解析地址
+          <span v-if="isParsing" class="animate-spin">⟳</span> {{ t('ui.workspace.github.input.parse', '解析地址') }}
         </button>
       </div>
 
@@ -176,30 +176,30 @@
       <div v-if="workspaceStore.github.previewInfo" data-tour="workspace-github-preview" class="p-6 bg-accent-primary/10 border border-accent-primary/30 rounded-2xl animate-in zoom-in-95">
         <h3 class="text-lg font-black text-text-main mb-2">{{ workspaceStore.github.previewInfo.repo }}</h3>
         <p class="text-sm text-text-dim mb-4">
-          作者: {{ workspaceStore.github.previewInfo.owner }} | 默认分支: {{ workspaceStore.github.previewInfo.default_branch }}
+          {{ t('ui.workspace.github.preview.meta', '作者: {owner} | 默认分支: {branch}', { owner: workspaceStore.github.previewInfo.owner, branch: workspaceStore.github.previewInfo.default_branch }) }}
           <template v-if="repoPreviewTimeText(workspaceStore.github.previewInfo)"> | {{ repoPreviewTimeText(workspaceStore.github.previewInfo) }}</template>
         </p>
         
         <div class="flex gap-4">
           <!-- Source 模式 -->
           <button @click="confirmSubscribe('source')" class="flex-1 p-4 rounded-xl border border-accent-secondary/30 bg-accent-secondary/10 hover:bg-accent-secondary/20 transition-all text-left">
-            <div class="font-bold text-accent-secondary mb-1">同步源码分支 (Source)</div>
-            <div class="text-xs text-text-dim">获取分支最新代码。适合频繁更新或未发布 Release 的测试版模组。</div>
+            <div class="font-bold text-accent-secondary mb-1">{{ t('ui.workspace.github.preview.source.title', '同步源码分支 (Source)') }}</div>
+            <div class="text-xs text-text-dim">{{ t('ui.workspace.github.preview.source.description', '获取分支最新代码。适合频繁更新或未发布 Release 的测试版模组。') }}</div>
           </button>
 
           <!-- Release 模式 -->
           <button @click="confirmSubscribe('release')" :disabled="!workspaceStore.github.previewInfo.has_release"
             class="flex-1 p-4 rounded-xl border border-accent-success/30 bg-accent-success/10 hover:bg-accent-success/20 transition-all text-left disabled:opacity-30 disabled:cursor-not-allowed">
-            <div class="font-bold text-accent-success mb-1">获取发行版 (Release)</div>
-            <div class="text-xs text-text-dim mb-2">获取作者打包的稳定版。</div>
+            <div class="font-bold text-accent-success mb-1">{{ t('ui.workspace.github.preview.release.title', '获取发行版 (Release)') }}</div>
+            <div class="text-xs text-text-dim mb-2">{{ t('ui.workspace.github.preview.release.description', '获取作者打包的稳定版。') }}</div>
             <div v-if="workspaceStore.github.previewInfo.has_release" class="inline-block px-2 py-0.5 bg-bg-inset/80 rounded text-[0.65rem] font-mono text-text-main">
-              Latest: {{ workspaceStore.github.previewInfo.latest_release_tag }}
+              {{ t('ui.workspace.github.preview.latest_release', '最新：{version}', { version: workspaceStore.github.previewInfo.latest_release_tag }) }}
             </div>
-            <div v-else class="text-xs text-accent-warn">该仓库尚未发布任何 Release</div>
+            <div v-else class="text-xs text-accent-warn">{{ t('ui.workspace.github.preview.release.none', '该仓库尚未发布任何 Release') }}</div>
           </button>
         </div>
         <div class="mt-4">
-          <div v-if="previewReadme.isLoading" class="text-xs text-text-dim">正在读取 README...</div>
+          <div v-if="previewReadme.isLoading" class="text-xs text-text-dim">{{ t('ui.workspace.github.readme.loading', '正在读取 README...') }}</div>
           <div v-else-if="previewReadme.error" class="text-xs text-accent-warn">{{ previewReadme.error }}</div>
           <div v-else-if="previewReadme.content" v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert max-w-none text-text-dim" v-html="renderMarkdown(previewReadme.content)"></div>
         </div>
@@ -213,15 +213,15 @@
             <div class="flex flex-wrap gap-2 mt-2">
               <span class="px-2 py-1 rounded bg-bg-inset/90 text-[0.65rem] font-mono text-text-dim">{{ catalogSourceName(selectedCatalogItem.source_id) || selectedCatalogItem.category }}</span>
               <span class="px-2 py-1 rounded bg-bg-inset/90 text-[0.65rem] font-mono text-text-dim">{{ catalogHostLabel(selectedCatalogItem) }}</span>
-              <span v-if="selectedCatalogItem.workshop_url" class="px-2 py-1 rounded bg-accent-primary/10 text-[0.65rem] text-accent-primary">Workshop</span>
-              <span v-if="isOfficialCatalogItem(selectedCatalogItem)" v-tooltip="availabilityTooltip(selectedCatalogItem)" class="px-2 py-1 rounded bg-accent-primary/10 text-[0.65rem] text-accent-primary">官方内容</span>
-              <span v-if="selectedCatalogItem.not_recommended" v-tooltip="availabilityTooltip(selectedCatalogItem)" class="px-2 py-1 rounded bg-accent-warn/10 text-[0.65rem] text-accent-warn">当前不建议使用</span>
+              <span v-if="selectedCatalogItem.workshop_url" class="px-2 py-1 rounded bg-accent-primary/10 text-[0.65rem] text-accent-primary">{{ t('ui.workspace.github.catalog.workshop_badge', '工坊') }}</span>
+              <span v-if="isOfficialCatalogItem(selectedCatalogItem)" v-tooltip="availabilityTooltip(selectedCatalogItem)" class="px-2 py-1 rounded bg-accent-primary/10 text-[0.65rem] text-accent-primary">{{ t('ui.workspace.github.catalog.official', '官方内容') }}</span>
+              <span v-if="selectedCatalogItem.not_recommended" v-tooltip="availabilityTooltip(selectedCatalogItem)" class="px-2 py-1 rounded bg-accent-warn/10 text-[0.65rem] text-accent-warn">{{ t('ui.workspace.github.catalog.not_recommended', '当前不建议使用') }}</span>
               <span v-if="catalogUpdatedText(selectedCatalogItem)" class="px-2 py-1 rounded bg-bg-inset/90 text-[0.65rem] font-mono text-text-dim">{{ catalogUpdatedText(selectedCatalogItem) }}</span>
             </div>
           </div>
           <div class="flex items-center gap-2">
             <button v-if="selectedCatalogItem.workshop_url" @click.stop="toggleWorkshopSubscription(selectedCatalogItem)" :disabled="isWorkshopBusy"
-              v-tooltip="isWorkshopSubscribed(selectedCatalogItem) ? '取消订阅创意工坊' : '订阅创意工坊'"
+              v-tooltip="isWorkshopSubscribed(selectedCatalogItem) ? t('ui.workspace.github.workshop.unsubscribe', '取消订阅创意工坊') : t('ui.workspace.github.workshop.subscribe', '订阅创意工坊')"
               class="p-3 rounded-xl transition-colors disabled:opacity-40"
               :class="workshopActionButtonClass(selectedCatalogItem)">
               <FlagOff v-if="isWorkshopSubscribed(selectedCatalogItem)" class="size-4" />
@@ -235,7 +235,7 @@
               <ListPlus class="size-4" />
             </button>
             <button v-if="selectedCatalogItem.info_url || selectedCatalogItem.url" @click.stop="openExternal(selectedCatalogItem.info_url || selectedCatalogItem.url)"
-              v-tooltip="'打开原始地址'"
+              v-tooltip="t('ui.workspace.github.actions.open_original', '打开原始地址')"
               class="p-3 rounded-xl bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <ExternalLink class="size-4" />
             </button>
@@ -244,7 +244,7 @@
         <div class="flex-1 overflow-y-auto custom-scrollbar p-6">
           <p v-if="selectedCatalogItem.description" class="text-sm text-text-dim leading-relaxed mb-4">{{ selectedCatalogItem.description }}</p>
           <div v-if="selectedCatalogItem.game_versions?.length" class="mb-4 flex flex-wrap items-center gap-1 text-[0.65rem]">
-            <span class="text-text-dim mr-1">RimWorld:</span>
+            <span class="text-text-dim mr-1">{{ t('ui.workspace.github.detail.rimworld_versions', 'RimWorld：') }}</span>
             <span v-for="version in catalogDisplayVersions(selectedCatalogItem.game_versions)" :key="version"
               class="px-2 py-1 rounded border"
               :class="catalogVersionClass(version)">
@@ -254,25 +254,25 @@
           <div class="mb-4 rounded-lg bg-bg-muted/80 border border-border-base/10 p-3">
             <div class="grid grid-cols-4 gap-3 text-xs">
               <div class="min-w-0 flex items-center gap-2">
-                <div class="text-text-dim shrink-0">来源</div>
+                <div class="text-text-dim shrink-0">{{ t('common.field.source', '来源') }}</div>
                 <div class="text-text-main font-mono truncate">{{ catalogSourceName(selectedCatalogItem.source_id) || selectedCatalogItem.source_id || '-' }}</div>
               </div>
               <div class="min-w-0 flex items-center gap-2">
-                <div class="text-text-dim shrink-0">安装类型</div>
-                <div class="text-text-main font-mono">{{ isCatalogZipItem(selectedCatalogItem) ? 'Zip 直链' : 'Git 仓库' }}</div>
+                <div class="text-text-dim shrink-0">{{ t('ui.workspace.github.detail.install_type', '安装类型') }}</div>
+                <div class="text-text-main font-mono">{{ isCatalogZipItem(selectedCatalogItem) ? t('ui.workspace.github.install_type.zip_link', 'Zip 直链') : t('ui.workspace.github.install_type.git_repo', 'Git 仓库') }}</div>
               </div>
               <div class="min-w-0 flex items-center gap-2">
-                <div class="text-text-dim shrink-0">默认分支</div>
+                <div class="text-text-dim shrink-0">{{ t('ui.workspace.github.detail.default_branch', '默认分支') }}</div>
                 <div class="text-text-main font-mono truncate">{{ selectedCatalogItem.branch || selectedCatalogItem.default_branch || '-' }}</div>
               </div>
               <div class="min-w-0 flex items-center gap-2">
-                <div class="text-text-dim shrink-0">作者</div>
+                <div class="text-text-dim shrink-0">{{ t('common.field.author', '作者') }}</div>
                 <div class="text-text-main truncate">{{ catalogAuthorText(selectedCatalogItem) || '-' }}</div>
               </div>
             </div>
           </div>
           <div v-if="catalogDependencies.length" class="mb-4 rounded-lg bg-bg-muted/70 border border-border-base/10 p-3">
-            <div class="text-xs font-bold text-text-dim uppercase tracking-widest mb-2">依赖项</div>
+            <div class="text-xs font-bold text-text-dim uppercase tracking-widest mb-2">{{ t('ui.workspace.github.detail.dependencies', '依赖项') }}</div>
             <div class="flex flex-wrap gap-2">
               <span v-for="dep in catalogDependencies" :key="dep.package_id"
                 v-tooltip="catalogDependencyTooltip(dep)"
@@ -282,13 +282,13 @@
                 <div v-if="dep.kind !== 'official' && dep.kind !== 'missing'" class="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto flex gap-0.5 justify-center items-center text-[0.6rem] transition-all">
                   <button v-if="dep.kind === 'catalog'" @click.stop="subscribeRecommendedItem(dep.sourceItem)"
                     :disabled="!isInstallable(dep.sourceItem) || subscribedRepoUrls.has(dep.sourceItem?.url) || isParsing"
-                    v-tooltip="subscribedRepoUrls.has(dep.sourceItem?.url) ? '该依赖已添加 Git 订阅' : '添加 Git 订阅'"
+                    v-tooltip="subscribedRepoUrls.has(dep.sourceItem?.url) ? t('ui.workspace.github.dependency.git_already_added', '该依赖已添加 Git 订阅') : t('ui.workspace.github.dependency.add_git', '添加 Git 订阅')"
                     class="p-1.5 cursor-pointer rounded-full disabled:opacity-30 disabled:cursor-not-allowed transition-all scale-90 hover:scale-105"
                     :class="gitActionButtonClass(dep.sourceItem)">
                     <ListPlus class="size-3" />
                   </button>
                   <button v-if="dep.workshopId" @click.stop="toggleWorkshopSubscription(dep)" :disabled="isWorkshopBusy"
-                    v-tooltip="isWorkshopSubscribed(dep) ? '取消订阅创意工坊依赖' : '订阅创意工坊依赖'"
+                    v-tooltip="isWorkshopSubscribed(dep) ? t('ui.workspace.github.dependency.unsubscribe_workshop', '取消订阅创意工坊依赖') : t('ui.workspace.github.dependency.subscribe_workshop', '订阅创意工坊依赖')"
                     class="p-1.5 cursor-pointer rounded-full transition-all disabled:opacity-40 scale-90 hover:scale-105"
                     :class="workshopActionButtonClass(dep)">
                     <FlagOff v-if="isWorkshopSubscribed(dep)" class="size-3" />
@@ -298,7 +298,7 @@
               </span>
             </div>
           </div>
-          <div v-if="catalogReadme.isLoading" class="text-xs text-text-dim">正在读取 README...</div>
+          <div v-if="catalogReadme.isLoading" class="text-xs text-text-dim">{{ t('ui.workspace.github.readme.loading', '正在读取 README...') }}</div>
           <div v-else-if="catalogReadme.error" class="text-xs text-accent-warn">{{ catalogReadme.error }}</div>
           <div v-else-if="catalogReadme.content" v-viewer.rebuild="imageViewerOptions" class="prose prose-sm prose-invert max-w-none text-text-dim" v-html="renderMarkdown(catalogReadme.content)"></div>
         </div>
@@ -313,14 +313,14 @@
             <div class="flex items-center justify-between gap-0.5">
               <h2 class="text-2xl font-black text-text-main">{{ workspaceStore.github.activeRepo.repo_name }}</h2>
               <span class="px-2 py-1 rounded bg-bg-inset/90 text-[0.65rem] font-mono text-text-dim">
-                当前模式: {{ workspaceStore.github.activeRepo.install_type.toUpperCase() }}
+                {{ t('ui.workspace.github.active.current_mode', '当前模式: {mode}', { mode: workspaceStore.github.activeRepo.install_type.toUpperCase() }) }}
               </span>
             </div>
             
             <div class="flex gap-2 mt-2">
               
               <span class="px-2 py-1 rounded bg-bg-inset/90 text-[0.65rem] font-mono text-text-dim border border-border-base/10">
-                已部署版本: {{ workspaceStore.github.activeRepo.installed_version || 'NONE' }}
+                {{ t('ui.workspace.github.active.installed_version', '已部署版本: {version}', { version: workspaceStore.github.activeRepo.installed_version || 'NONE' }) }}
               </span>
               <span class="px-2 py-1 rounded bg-bg-inset/90 text-[0.65rem] font-mono" :class="githubStatus(workspaceStore.github.activeRepo).tone">
                 {{ githubStatus(workspaceStore.github.activeRepo).label }}<template v-if="githubStatus(workspaceStore.github.activeRepo).version"> ({{ githubStatus(workspaceStore.github.activeRepo).version }})</template>
@@ -330,18 +330,18 @@
           
           <!-- 一键更新/部署按钮 -->
           <div class="flex items-center gap-2">
-            <button @click="openRepoOriginal(workspaceStore.github.activeRepo)" v-tooltip="'打开原始地址'"
+            <button @click="openRepoOriginal(workspaceStore.github.activeRepo)" v-tooltip="t('ui.workspace.github.actions.open_original', '打开原始地址')"
               class="p-3 rounded-xl bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <ExternalLink class="size-4" />
             </button>
-            <button v-if="workspaceStore.github.activeRepo.local_path || workspaceStore.github.activeRepo.local_folder" @click="openRepoLocal(workspaceStore.github.activeRepo)" v-tooltip="'打开本地目录'"
+            <button v-if="workspaceStore.github.activeRepo.local_path || workspaceStore.github.activeRepo.local_folder" @click="openRepoLocal(workspaceStore.github.activeRepo)" v-tooltip="t('ui.workspace.github.actions.open_local', '打开本地目录')"
               class="p-3 rounded-xl bg-bg-overlay/10 text-text-dim hover:text-text-main hover:bg-bg-overlay/10 transition-colors">
               <FolderOpen class="size-4" />
             </button>
-            <button @click="checkAndUpdate" :disabled="isChecking" v-tooltip="'获取并部署当前订阅'"
+            <button @click="checkAndUpdate" :disabled="isChecking" v-tooltip="t('ui.workspace.github.active.deploy_tooltip', '获取并部署当前订阅')"
               class="px-4 py-3 rounded-xl bg-accent-success text-on-accent-success font-black text-sm shadow-[0_0_15px_rgba(var(--rgb-accent-success),0.3)] hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50">
               <CloudDownload class="size-4" :class="{'animate-bounce': isChecking}" />
-              {{ workspaceStore.github.activeRepo.installed_version ? '获取并部署最新' : '立即部署' }}
+              {{ workspaceStore.github.activeRepo.installed_version ? t('ui.workspace.github.active.deploy_latest', '获取并部署最新') : t('ui.workspace.github.active.deploy_now', '立即部署') }}
             </button>
           </div>
         </div>
@@ -349,7 +349,7 @@
         <!-- 本地日志时间线 (Timeline) -->
         <div class="flex-1 overflow-y-auto custom-scrollbar p-6 relative">
           <h4 class="text-xs font-bold text-text-dim uppercase tracking-widest mb-6 flex items-center gap-2">
-            <Activity class="size-4" /> 本地执行追踪 (Local Audit Log)
+            <Activity class="size-4" /> {{ t('ui.workspace.github.active.local_audit_log', '本地执行追踪 (Local Audit Log)') }}
           </h4>
 
           <div class="relative pl-4">
@@ -371,7 +371,7 @@
             </div>
             
             <div v-if="workspaceStore.github.repoTimelines.length === 0" class="text-sm text-text-disabled italic">
-              暂无追踪记录
+              {{ t('ui.workspace.github.active.no_logs', '暂无追踪记录') }}
             </div>
           </div>
         </div>
@@ -381,7 +381,7 @@
       <!-- 闲置空状态 -->
       <div v-else class="flex-1 flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-border-base/18 rounded-2xl">
         <Github class="size-24 mb-4" />
-        <span class="text-sm font-black uppercase tracking-widest">Select or Add a Repository</span>
+        <span class="text-sm font-black uppercase tracking-widest">{{ t('ui.workspace.github.empty.select_or_add', '选择或添加仓库') }}</span>
       </div>
 
     </div>
@@ -401,6 +401,7 @@ import { renderMarkdownContent } from '../../../shared/lib/markdown'
 import { isOfficialPackageId } from '../../mod/lib/packageScope'
 import CommonSelect from '../../../shared/components/input/CommonSelect.vue'
 import { useConfirmStore } from '../../../shared/components/modal/confirmStore'
+import { getCurrentLocale, t } from '../../../shared/i18n.js'
 
 const toast = useToast()
 const appStore = useAppStore()
@@ -433,10 +434,10 @@ const subscribedRepoUrls = computed(() => new Set(
   workspaceStore.github.subscribedRepos.map(repo => String(repo.repo_url || '').trim())
 ))
 const catalogSourceOptions = computed(() => [
-  { value: 'all', label: '全部' },
+  { value: 'all', label: t('ui.workspace.github.catalog.source_all', '全部') },
   ...(workspaceStore.github.catalogMeta.sources || []).map(source => ({
     value: String(source.id || ''),
-    label: String(source.label || source.name || source.id || '清单'),
+    label: String(source.label || source.name || source.id || t('ui.workspace.github.catalog.source_catalog', '清单')),
   })).filter(source => source.value)
 ])
 const catalogSourceLabelMap = computed(() => Object.fromEntries(
@@ -480,7 +481,7 @@ const parseNewRepo = async () => {
   previewReadme.value = { isLoading: false, content: '', error: '' }
   try {
     const res = await window.pywebview.api.github_fetch_info(newRepoUrl.value)
-    if (checkResult(res, "解析 Git 仓库链接")) {
+    if (checkResult(res, t('ui.workspace.github.action.parse_repo', '解析 Git 仓库链接'))) {
       workspaceStore.github.previewInfo = res.data
       await loadRepoReadme(newRepoUrl.value, res.data?.latest_source_branch || res.data?.default_branch || '', previewReadme)
     }
@@ -541,7 +542,7 @@ const formatDate = (value) => {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(getCurrentLocale(), {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -553,20 +554,22 @@ const catalogUpdatedText = (item) => {
   const value = item?.published_at || item?.released_at || item?.latest_release_published_at || item?.latest_source_commit_at || item?.updated_at || item?.remote_last_modified || ''
   const formatted = formatDate(value)
   if (!formatted) return ''
-  return (item?.published_at || item?.released_at || item?.latest_release_published_at) ? `发布: ${formatted}` : `更新: ${formatted}`
+  return (item?.published_at || item?.released_at || item?.latest_release_published_at)
+    ? t('ui.workspace.github.time.published', '发布: {time}', { time: formatted })
+    : t('ui.workspace.github.time.updated', '更新: {time}', { time: formatted })
 }
 const repoPreviewTimeText = (info) => {
   const releaseTime = formatDate(info?.latest_release_published_at)
-  if (releaseTime) return `发布: ${releaseTime}`
+  if (releaseTime) return t('ui.workspace.github.time.published', '发布: {time}', { time: releaseTime })
   const sourceTime = formatDate(info?.latest_source_commit_at)
-  return sourceTime ? `更新: ${sourceTime}` : ''
+  return sourceTime ? t('ui.workspace.github.time.updated', '更新: {time}', { time: sourceTime }) : ''
 }
 const catalogItemTooltip = (item) => {
   const lines = [
     catalogDisplayName(item),
     item?.description ? String(item.description).trim() : '',
-    item?.package_id ? `包名: ${item.package_id}` : '',
-    catalogAuthorText(item) ? `作者: ${catalogAuthorText(item)}` : '',
+    item?.package_id ? t('ui.workspace.github.tooltip.package_id', '包名: {packageId}', { packageId: item.package_id }) : '',
+    catalogAuthorText(item) ? t('ui.workspace.github.tooltip.author', '作者: {author}', { author: catalogAuthorText(item) }) : '',
     catalogUpdatedText(item),
   ].filter(Boolean)
   return lines.join('\n')
@@ -589,16 +592,16 @@ const isInstallable = (item) => {
 }
 
 const formatAvailability = (item) => {
-  if (isOfficialCatalogItem(item)) return '官方内容'
-  if (item?.not_recommended) return '当前不建议使用'
-  if (!isInstallable(item)) return '暂不支持'
+  if (isOfficialCatalogItem(item)) return t('ui.workspace.github.catalog.official', '官方内容')
+  if (item?.not_recommended) return t('ui.workspace.github.catalog.not_recommended', '当前不建议使用')
+  if (!isInstallable(item)) return t('ui.workspace.github.catalog.unsupported', '暂不支持')
   return ''
 }
 
 const availabilityTooltip = (item) => {
-  if (isOfficialCatalogItem(item)) return '游戏本体或官方 DLC 不需要订阅'
-  if (item?.not_recommended) return '该项目可能暂时不兼容，建议确认说明后再添加'
-  if (!isInstallable(item)) return '该项目缺少可用下载地址'
+  if (isOfficialCatalogItem(item)) return t('ui.workspace.github.catalog.official_tooltip', '游戏本体或官方 DLC 不需要订阅')
+  if (item?.not_recommended) return t('ui.workspace.github.catalog.not_recommended_tooltip', '该项目可能暂时不兼容，建议确认说明后再添加')
+  if (!isInstallable(item)) return t('ui.workspace.github.catalog.unsupported_tooltip', '该项目缺少可用下载地址')
   return ''
 }
 
@@ -658,10 +661,12 @@ const catalogVersionClass = (version) => (
 const githubStatus = (repo) => repo?.status || workspaceStore.getGithubRepoStatus(repo)
 
 const recommendedActionTooltip = (item) => {
-  if (isOfficialCatalogItem(item)) return '游戏本体或官方 DLC 不需要订阅'
-  if (!isInstallable(item)) return '该项目缺少可用下载地址'
-  if (subscribedRepoUrls.value.has(item.url)) return '已添加 Git 订阅'
-  return isCatalogZipItem(item) ? '添加为 Git 订阅并部署 zip' : '添加为 Git 订阅'
+  if (isOfficialCatalogItem(item)) return t('ui.workspace.github.catalog.official_tooltip', '游戏本体或官方 DLC 不需要订阅')
+  if (!isInstallable(item)) return t('ui.workspace.github.catalog.unsupported_tooltip', '该项目缺少可用下载地址')
+  if (subscribedRepoUrls.value.has(item.url)) return t('ui.workspace.github.catalog.git_subscribed', '已添加 Git 订阅')
+  return isCatalogZipItem(item)
+    ? t('ui.workspace.github.catalog.add_zip_subscription', '添加为 Git 订阅并部署 zip')
+    : t('ui.workspace.github.catalog.add_git_subscription', '添加为 Git 订阅')
 }
 
 const gitActionButtonClass = (item) => {
@@ -713,11 +718,11 @@ const loadRepoReadme = async (url, branch, targetRef) => {
       targetRef.value.content = String(res.data?.content || '')
       targetRef.value.error = ''
     } else {
-      targetRef.value.error = toUserMessage(res?.message, '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。')
+      targetRef.value.error = toUserMessage(res, t('ui.workspace.github.readme.error', '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。'))
     }
   } catch (error) {
     console.warn('读取 Git 仓库 README 失败:', error)
-    targetRef.value.error = toUserMessage(error?.message || error, '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。')
+    targetRef.value.error = toUserMessage(error, t('ui.workspace.github.readme.error', '读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。'))
   } finally {
     targetRef.value.isLoading = false
   }
@@ -757,7 +762,7 @@ const resolveCatalogDependencies = async (item) => {
   catalogDependencies.value = deps.map(dep => {
     const packageId = String(dep.package_id || '').toLowerCase()
     if (isOfficialPackageId(packageId)) {
-      return { ...dep, kind: 'official', name: dep.name || '官方内容' }
+      return { ...dep, kind: 'official', name: dep.name || t('ui.workspace.github.catalog.official', '官方内容') }
     }
     const workshop = workshopMap[packageId]
     if (dep.kind === 'catalog') return dep
@@ -782,7 +787,7 @@ const buildCatalogDependenciesFromPackageIds = (item) => {
   return packageIds.map(packageId => {
     const normalizedId = String(packageId || '').trim().toLowerCase()
     if (isOfficialPackageId(normalizedId)) {
-      return { package_id: packageId, kind: 'official', name: '官方内容' }
+      return { package_id: packageId, kind: 'official', name: t('ui.workspace.github.catalog.official', '官方内容') }
     }
     const matched = catalogItems.find(candidate => {
       if (sourceId && String(candidate.source_id || '') !== sourceId) return false
@@ -811,11 +816,11 @@ const catalogDependencyClass = (dep) => {
 }
 
 const catalogDependencyTooltip = (dep) => {
-  const lines = [`包名: ${dep.package_id}`]
-  if (dep.kind === 'official') lines.push('游戏本体或官方 DLC，不需要订阅')
-  else if (dep.kind === 'catalog') lines.push(subscribedRepoUrls.value.has(dep.sourceItem?.url) ? '已添加 Git 订阅' : '可添加 Git 订阅')
-  else if (dep.kind === 'workshop') lines.push(isWorkshopSubscribed(dep) ? '已订阅创意工坊' : '可订阅创意工坊')
-  else if (dep.kind === 'missing') lines.push('没有找到可直接添加的来源')
+  const lines = [t('ui.workspace.github.tooltip.package_id', '包名: {packageId}', { packageId: dep.package_id })]
+  if (dep.kind === 'official') lines.push(t('ui.workspace.github.dependency.official', '游戏本体或官方 DLC，不需要订阅'))
+  else if (dep.kind === 'catalog') lines.push(subscribedRepoUrls.value.has(dep.sourceItem?.url) ? t('ui.workspace.github.catalog.git_subscribed', '已添加 Git 订阅') : t('ui.workspace.github.dependency.can_add_git', '可添加 Git 订阅'))
+  else if (dep.kind === 'workshop') lines.push(isWorkshopSubscribed(dep) ? t('ui.workspace.github.catalog.workshop_subscribed', '已订阅创意工坊') : t('ui.workspace.github.dependency.can_subscribe_workshop', '可订阅创意工坊'))
+  else if (dep.kind === 'missing') lines.push(t('ui.workspace.github.dependency.missing_source', '没有找到可直接添加的来源'))
   return lines.join('\n')
 }
 
@@ -851,7 +856,7 @@ const useRecommendedRepo = async (item) => {
   isParsing.value = true
   try {
     const res = await window.pywebview.api.github_fetch_info(item.url, item.branch || '')
-    if (checkResult(res, "解析推荐仓库")) {
+    if (checkResult(res, t('ui.workspace.github.action.parse_recommended_repo', '解析推荐仓库'))) {
       newRepoUrl.value = item.url
       selectedCatalogItem.value = null
       workspaceStore.clearActiveGithubRepo()
@@ -882,8 +887,8 @@ const subscribeCatalogZip = async (item) => {
     info: item,
   }
   const res = await window.pywebview.api.github_subscribe(payload)
-  if (checkResult(res, "建立清单订阅")) {
-    toast.success("清单项已成功订阅")
+  if (checkResult(res, t('ui.workspace.github.action.create_catalog_subscription', '建立清单订阅'))) {
+    toast.success(t('ui.workspace.github.subscribe.catalog_success', '清单项已成功订阅'))
     workspaceStore.fetchGithubRepos()
   }
 }
@@ -904,12 +909,12 @@ const confirmSubscribe = async (type) => {
     info: info,
   }
   const res = await window.pywebview.api.github_subscribe(payload)
-  if (checkResult(res, "建立订阅")) {
+  if (checkResult(res, t('ui.workspace.github.action.create_subscription', '建立订阅'))) {
     workspaceStore.github.previewInfo = null
     selectedCatalogItem.value = null
     previewReadme.value = { isLoading: false, content: '', error: '' }
     newRepoUrl.value = ''
-    toast.success("仓库已成功订阅")
+    toast.success(t('ui.workspace.github.subscribe.repo_success', '仓库已成功订阅'))
     workspaceStore.fetchGithubRepos()
   }
 }
@@ -925,13 +930,13 @@ const selectRepo = async (repo) => {
 const removeRepo = async (url) => {
   const repo = workspaceStore.github.subscribedRepos.find(item => item.repo_url === url)
   const ok = await confirmStore.confirmAction(
-    '移除订阅',
-    `确定要移除 Git 订阅「${repo?.repo_name || url}」吗？\n本地已下载文件不会被删除。`,
-    { type: 'error', confirmText: '移除' }
+    t('ui.workspace.github.remove.title', '移除订阅'),
+    t('ui.workspace.github.remove.message', '确定要移除 Git 订阅「{name}」吗？\n本地已下载文件不会被删除。', { name: repo?.repo_name || url }),
+    { type: 'error', confirmText: t('ui.workspace.github.remove.confirm', '移除') }
   )
   if (!ok) return
   const res = await window.pywebview.api.github_remove_subscription(url)
-  if (checkResult(res, "移除订阅")) {
+  if (checkResult(res, t('ui.workspace.github.remove.title', '移除订阅'))) {
     if (workspaceStore.github.activeRepo?.repo_url === url) {
       workspaceStore.clearActiveGithubRepo()
     }
@@ -947,8 +952,8 @@ const checkAndUpdate = async () => {
   try {
     if (repo.install_type === 'zip') {
       const dlRes = await window.pywebview.api.github_trigger_download(repo.repo_url, repo.install_type, repo.online_info?.catalog_signature || '')
-      if (checkResult(dlRes, "请求数据传输")) {
-        toast.info("已开始获取数据流，请在底部状态栏查看进度", {timeout: 4000})
+      if (checkResult(dlRes, t('ui.workspace.github.action.request_transfer', '请求数据传输'))) {
+        toast.info(t('ui.workspace.github.deploy.started', '已开始获取数据流，请在底部状态栏查看进度'), {timeout: 4000})
         workspaceStore.startGithubTimelinePolling(repo.repo_url, { intervalMs: 4000, maxPolls: 15 })
       }
       return
@@ -968,18 +973,18 @@ const checkAndUpdate = async () => {
     } else if (repo.install_type === 'release') {
       targetVersion = repo.online_info?.latest_release_tag || ''
       if (!targetVersion) {
-        toast.error("无法获取 Release 版本信息，当前也没有可用缓存")
+        toast.error(t('ui.workspace.github.deploy.no_release_cache', '无法获取 Release 版本信息，当前也没有可用缓存'))
         return
       }
-      toast.warning("Git 仓库信息查询失败，已改用本地缓存的 Release 版本继续部署")
+      toast.warning(t('ui.workspace.github.deploy.use_cached_release', 'Git 仓库信息查询失败，已改用本地缓存的 Release 版本继续部署'))
     } else {
       targetVersion = repo.target_branch || repo.online_info?.latest_source_branch || 'main'
-      toast.warning("Git 仓库信息查询失败，已跳过元数据刷新，直接按当前分支继续部署")
+      toast.warning(t('ui.workspace.github.deploy.skip_metadata_refresh', 'Git 仓库信息查询失败，已跳过元数据刷新，直接按当前分支继续部署'))
     }
     // 2. 触发下载引擎 (带着钩子)
     const dlRes = await window.pywebview.api.github_trigger_download(repo.repo_url, repo.install_type, targetVersion)
-    if (checkResult(dlRes, "请求数据传输")) {
-      toast.info("已开始获取数据流，请在底部状态栏查看进度", {timeout: 4000})
+    if (checkResult(dlRes, t('ui.workspace.github.action.request_transfer', '请求数据传输'))) {
+      toast.info(t('ui.workspace.github.deploy.started', '已开始获取数据流，请在底部状态栏查看进度'), {timeout: 4000})
       workspaceStore.startGithubTimelinePolling(repo.repo_url, { intervalMs: 4000, maxPolls: 15 })
     }
   } finally {
@@ -1016,7 +1021,9 @@ const getLogBgColor = (action) => {
 :deep(.prose pre) {
   margin: 0.75rem 0;
   padding: 0.75rem;
-  overflow-x: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   background-color: var(--color-bg-inset);
   border: 1px solid var(--color-border-subtle);
   border-radius: 0.5rem;

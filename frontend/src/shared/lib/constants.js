@@ -2,6 +2,7 @@
 
 import { h, markRaw } from 'vue'
 import defaultLogoUrl from '../../../../icon.svg'
+import { t } from '../i18n.js'
 
 export const RIMWORLD_STEAM_APP_ID = 294100
 
@@ -71,40 +72,37 @@ export const ISSUE_TYPE = {
 
 }
 
-// 定义类型到中文标题的映射
-export const ISSUE_TITLE_MAP = {
-  'missing_file': '文件缺失',
-  'missing_dependency': '依赖缺失',
-  'inactive_dependency': '依赖未启用',
-  'incompatible': '模组冲突',
-  'wrong_order': '排序错误',
-  'version_mismatch': '版本不符',
-  'link_mod_missing': '联锁模组缺失',
-  'link_wrong_order': '联锁排序错误',
-  'info_alternative_used': '依赖替代',
-
-  'warn_missing_language': '缺少语言支持',
-  'warn_inactive_language_pack': '语言包未启用',
-  'warn_unknown_target': '语言包指向未知',
-  'warn_inactive_target': '语言包指向未启用',
-  'warn_multiplayer_compatibility': '联机兼容性',
-  'multiplayer_incompatible': '不兼容联机',
-  'multiplayer_barely_compatible': '勉强兼容联机',
-  'multiplayer_unknown': '联机兼容性未知',
-
-  'default': '其他问题'
-
+export const getIssueTitle = (type) => {
+  const key = String(type || 'default')
+  if (key === 'missing_file') return t('ui.issue.missing_file', '文件缺失')
+  if (key === 'missing_dependency') return t('ui.issue.missing_dependency', '依赖缺失')
+  if (key === 'inactive_dependency') return t('ui.issue.inactive_dependency', '依赖未启用')
+  if (key === 'incompatible') return t('ui.issue.incompatible', '模组冲突')
+  if (key === 'wrong_order') return t('ui.issue.wrong_order', '排序错误')
+  if (key === 'version_mismatch') return t('ui.issue.version_mismatch', '版本不符')
+  if (key === 'link_mod_missing') return t('ui.issue.link_mod_missing', '联锁模组缺失')
+  if (key === 'link_wrong_order') return t('ui.issue.link_wrong_order', '联锁排序错误')
+  if (key === 'info_alternative_used') return t('ui.issue.info_alternative_used', '依赖替代')
+  if (key === 'warn_missing_language') return t('ui.issue.warn_missing_language', '缺少语言支持')
+  if (key === 'warn_inactive_language_pack') return t('ui.issue.warn_inactive_language_pack', '语言包未启用')
+  if (key === 'warn_unknown_target') return t('ui.issue.warn_unknown_target', '语言包指向未知')
+  if (key === 'warn_inactive_target') return t('ui.issue.warn_inactive_target', '语言包指向未启用')
+  if (key === 'warn_multiplayer_compatibility') return t('ui.issue.warn_multiplayer_compatibility', '联机兼容性')
+  if (key === 'multiplayer_incompatible') return t('ui.issue.multiplayer_incompatible', '不兼容联机')
+  if (key === 'multiplayer_barely_compatible') return t('ui.issue.multiplayer_barely_compatible', '勉强兼容联机')
+  if (key === 'multiplayer_unknown') return t('ui.issue.multiplayer_unknown', '联机兼容性未知')
+  return t('ui.issue.default', '其他问题')
 }
 
-// 模组类型映射
-export const MOD_TYPE_MAP = {
-  'LanguagePack': '语言包',
-  'XML': '纯XML',
-  'Assembly': '含程序集',
-  'Texture': '纹理包',
-  'Audio': '音频包',
-  'Mixed': '混合',
-  'Unknown': '未知类型'
+export const getModTypeLabel = (type) => {
+  if (type === 'LanguagePack') return t('ui.mod_type.LanguagePack', '语言包')
+  if (type === 'XML') return t('ui.mod_type.XML', '纯XML')
+  if (type === 'Assembly') return t('ui.mod_type.Assembly', '含程序集')
+  if (type === 'Texture') return t('ui.mod_type.Texture', '纹理包')
+  if (type === 'Audio') return t('ui.mod_type.Audio', '音频包')
+  if (type === 'Mixed') return t('ui.mod_type.Mixed', '混合')
+  if (type === 'Unknown') return t('ui.mod_type.Unknown', '未知类型')
+  return type || t('ui.mod_type.Unknown', '未知类型')
 }
 export const MOD_TYPE_ICON_MAP = {
   LanguagePack: createIcon('text-accent-warn', [
@@ -156,41 +154,45 @@ export const MOD_TYPE_ICON_MAP = {
   ]),
 }
 // 模组颜色列表
-export const MOD_SIGN_COLOR_MAP = {
-  '#ef4444': '红色',
-  '#ec4899': '粉色',
-  '#8b5cf6': '紫色',
-  '#3b82f6': '蓝色',
-  '#06b6d4': '青色',
-  '#10b981': '绿色',
-  '#84cc16': '草色',
-  '#eab308': '黄色',
-  '#f97316': '橙色',
+export const MOD_SIGN_COLORS = ['#ef4444', '#ec4899', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#84cc16', '#eab308', '#f97316']
+export const getModSignColorLabel = (color) => {
+  if (color === '#ef4444') return t('ui.mod_sign_color.red', '红色')
+  if (color === '#ec4899') return t('ui.mod_sign_color.pink', '粉色')
+  if (color === '#8b5cf6') return t('ui.mod_sign_color.purple', '紫色')
+  if (color === '#3b82f6') return t('ui.mod_sign_color.blue', '蓝色')
+  if (color === '#06b6d4') return t('ui.mod_sign_color.cyan', '青色')
+  if (color === '#10b981') return t('ui.mod_sign_color.green', '绿色')
+  if (color === '#84cc16') return t('ui.mod_sign_color.lime', '草色')
+  if (color === '#eab308') return t('ui.mod_sign_color.yellow', '黄色')
+  if (color === '#f97316') return t('ui.mod_sign_color.orange', '橙色')
+  return color || t('common.status.none', '无')
 }
-// 模组来源映射
-export const SOURCE_TYPE_MAP = {
-  'core': '游戏本体',
-  'dlc': 'DLC',
-  'github': 'Git 仓库',
-  'workshop': 'Steam 创意工坊',
-  'local': '本地模组',
-  'self': '管理器下载',
-  'other': '其它来源'
+export const getSourceTypeLabel = (source) => {
+  if (source === 'core') return t('common.source.core', '游戏本体')
+  if (source === 'dlc') return t('common.source.dlc', 'DLC')
+  if (source === 'github') return t('common.source.github', 'Git 仓库')
+  if (source === 'workshop') return t('common.source.workshop', 'Steam 创意工坊')
+  if (source === 'local') return t('common.source.local', '本地模组')
+  if (source === 'self') return t('common.source.self', '管理器下载')
+  if (source === 'other') return t('common.source.other', '其它来源')
+  return source || t('common.source.unknown', '未知来源')
 }
-export const STORE_TYPE_MAP = {
-  'core': '本体',
-  'dlc': 'DLC',
-  'workshop': '工坊',
-  'local': '本地',
-  'self': '管理器',
-  'other': '其它'
+export const getStoreTypeLabel = (store) => {
+  if (store === 'core') return t('common.store.core', '本体')
+  if (store === 'dlc') return t('common.store.dlc', 'DLC')
+  if (store === 'local') return t('common.store.local', '本地')
+  if (store === 'self') return t('common.store.self', '管理器')
+  if (store === 'workshop') return t('common.store.workshop', '工坊')
+  if (store === 'other') return t('common.store.other', '其它')
+  return store || t('common.store.unknown', '未知')
 }
 
 
-export const RUN_COMMAND_TAGS = [
-  { value: '-popupwindow', label: '无边框窗口模式' },
-  { value: '-quicktest', label: '快速测试' },
+export const getRunCommandTags = () => [
+  { value: '-popupwindow', label: t('common.run_command.popup_window', '无边框窗口模式') },
+  { value: '-quicktest', label: t('common.run_command.quick_test', '快速测试') },
 ]
+export const RUN_COMMAND_TAGS = getRunCommandTags()
 const STEAM_ICON_PATH = 'M273.5 177.5a61 61 0 1 1 122 0 61 61 0 1 1 -122 0zm174.5 .2c0 63-51 113.8-113.7 113.8L225 371.3c-4 43-40.5 76.8-84.5 76.8-40.5 0-74.7-28.8-83-67L0 358 0 250.7 97.2 290c15.1-9.2 32.2-13.3 52-11.5l71-101.7C220.7 114.5 271.7 64 334.2 64 397 64 448 115 448 177.7zM203 363c0-34.7-27.8-62.5-62.5-62.5-4.5 0-9 .5-13.5 1.5l26 10.5c25.5 10.2 38 39 27.7 64.5-10.2 25.5-39.2 38-64.7 27.5-10.2-4-20.5-8.3-30.7-12.2 10.5 19.7 31.2 33.2 55.2 33.2 34.7 0 62.5-27.8 62.5-62.5zM410.5 177.7a76.4 76.4 0 1 0 -152.8 0 76.4 76.4 0 1 0 152.8 0z'
 export const IconSteam = markRaw({
   name: 'IconSteam',

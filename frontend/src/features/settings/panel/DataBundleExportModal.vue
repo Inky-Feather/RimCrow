@@ -1,7 +1,7 @@
 <template>
   <CommonModalShell :show="show" size="default" :z-index="120" accent="primary" panel-class="border-accent-primary/20" content-class="min-h-0 flex flex-col"
-    title="导出软件数据" description="勾选要打包的数据；如果选择环境数据，会打包对应环境的完整目录。"
-    @close="emit('close')"
+    :title="t('ui.settings.data_export.title', '导出软件数据')" :description="t('ui.settings.data_export.description', '勾选要打包的数据；如果选择环境数据，会打包对应环境的完整目录。')"
+    :show-close="!exporting" :close-on-backdrop="!exporting" :close-on-esc="!exporting" @close="closeModal"
   >
     <div class="absolute -top-20 -left-16 w-56 h-56 rounded-full bg-accent-primary/10 blur-3xl pointer-events-none"></div>
     <div class="absolute -bottom-20 -right-16 w-56 h-56 rounded-full bg-accent-special/10 blur-3xl pointer-events-none"></div>
@@ -15,7 +15,7 @@
             <input :checked="!!dataBundleModuleSelection[module.key]" type="checkbox" class="accent-accent-primary"
               @change="toggleDataBundleModule(module.key, $event.target.checked)"
             >
-            <span class="text-sm font-bold text-text-main">{{ module.label }}</span>
+            <span class="text-sm font-bold text-text-main">{{ bundleModuleLabel(module) }}</span>
             <button v-if="buildBundleModuleTooltip(module)" type="button" v-tooltip="buildBundleModuleTooltip(module)" @click.prevent
               class="ml-auto size-5 rounded-full border border-border-base/10 text-xs font-bold text-text-dim hover:text-text-main hover:border-border-base/18 transition-all"
             >?
@@ -27,11 +27,11 @@
       <div v-if="isBundleProfileModuleSelected" class="modal-section mt-4">
         <button @click="showBundleProfilePicker = !showBundleProfilePicker" class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left" >
           <div>
-            <div class="text-sm font-bold text-text-main">环境数据</div>
-            <div class="text-xs text-text-dim mt-1">选择要打包的环境。</div>
+            <div class="text-sm font-bold text-text-main">{{ t('ui.settings.data_export.profile_data', '环境数据') }}</div>
+            <div class="text-xs text-text-dim mt-1">{{ t('ui.settings.data_export.profile_data_desc', '选择要打包的环境。') }}</div>
           </div>
           <span class="text-xs font-bold text-accent-primary">
-            {{ showBundleProfilePicker ? '收起' : '展开' }}
+            {{ showBundleProfilePicker ? t('common.action.collapse', '收起') : t('common.action.expand', '展开') }}
           </span>
         </button>
 
@@ -45,11 +45,11 @@
                 <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-sm font-bold text-text-main">{{ profile.name }}</span>
-                    <span v-if="profile.is_default" class="text-[0.7rem] px-1.5 py-0.5 rounded bg-accent-highlight/20 text-accent-highlight">默认</span>
+                    <span v-if="profile.is_default" class="text-[0.7rem] px-1.5 py-0.5 rounded bg-accent-highlight/20 text-accent-highlight">{{ t('common.status.default', '默认') }}</span>
                     <span v-if="profile.game_version" class="text-[0.7rem] px-1.5 py-0.5 rounded bg-accent-secondary/20 text-accent-secondary">{{ profile.game_version }}</span>
                   </div>
                   <p class="text-xs text-text-dim mt-1">
-                    {{ profile.has_user_data ? (profile.description || '将打包整个环境目录') : '未检测到可打包的用户数据目录' }}
+                    {{ profile.has_user_data ? (profile.description || t('ui.settings.data_export.pack_full_profile_dir', '将打包整个环境目录')) : t('ui.settings.data_export.no_user_data_dir', '未检测到可打包的用户数据目录') }}
                   </p>
                 </div>
               </div>
@@ -61,14 +61,14 @@
 
     <footer class="modal-footer relative z-10 flex items-center justify-between gap-4 px-5 py-4">
       <p class="text-xs leading-relaxed text-text-dim">
-        <span class="text-accent-primary font-bold">环境数据</span> 会打包整个环境目录；
-        <span class="text-accent-tip font-bold">路径绑定、敏感信息、当前激活环境 ID</span> 不会导出。
-        <span class="text-accent-warn font-bold">环境导入冲突</span> 会在导入面板统一处理新建/覆盖。
+        <span class="text-accent-primary font-bold">{{ t('ui.settings.data_export.profile_data', '环境数据') }}</span> {{ t('ui.settings.data_export.profile_data_notice', '会打包整个环境目录；') }}
+        <span class="text-accent-tip font-bold">{{ t('ui.settings.data_export.excluded_data', '路径绑定、敏感信息、当前激活环境 ID') }}</span> {{ t('ui.settings.data_export.excluded_data_notice', '不会导出。') }}
+        <span class="text-accent-warn font-bold">{{ t('ui.settings.data_export.import_conflicts', '环境导入冲突') }}</span> {{ t('ui.settings.data_export.import_conflicts_notice', '会在导入面板统一处理新建/覆盖。') }}
       </p>
-      <button @click="handleExportDataBundle"
-        class="shrink-0 px-5 py-2 rounded-xl bg-accent-primary hover:bg-accent-primary/85 text-on-accent-primary text-sm font-black shadow-[0_0_18px_rgba(var(--rgb-accent-primary),0.24)] transition-all"
+      <button @click="handleExportDataBundle" :disabled="exporting"
+        class="shrink-0 px-5 py-2 rounded-xl bg-accent-primary hover:bg-accent-primary/85 text-on-accent-primary text-sm font-black shadow-[0_0_18px_rgba(var(--rgb-accent-primary),0.24)] transition-all disabled:cursor-not-allowed disabled:opacity-50"
       >
-        导出当前选择
+        {{ exporting ? t('common.status.processing', '处理中') : t('ui.settings.data_export.export_selected', '导出当前选择') }}
       </button>
     </footer>
   </CommonModalShell>
@@ -79,6 +79,7 @@ import { computed, ref, watch } from 'vue'
 import CommonModalShell from '../../../shared/components/modal/CommonModalShell.vue'
 import { toast } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   show: Boolean,
@@ -91,9 +92,12 @@ const appStore = useAppStore()
 const showBundleProfilePicker = ref(false)
 const dataBundleModuleSelection = ref({})
 const dataBundleProfileSelection = ref([])
+const exporting = ref(false)
 
 const bundleModuleDefs = computed(() => props.schema?.modules || [])
 const bundleProfileDefs = computed(() => props.schema?.profiles || [])
+const bundleModuleLabel = (module = {}) => t(module?.label_key || '', module?.default_label || module?.label || module?.key || '')
+const bundleModuleDescription = (module = {}) => t(module?.description_key || '', module?.default_description || module?.description || '')
 const selectedBundleModuleKeys = computed(() => (
   bundleModuleDefs.value
     .filter(module => !!dataBundleModuleSelection.value?.[module.key])
@@ -155,36 +159,48 @@ const toggleDataBundleProfile = (profileId, enabled) => {
 
 const buildBundleModuleTooltip = (module) => {
   const lines = []
-  if (module?.description) {
-    lines.push(module.description)
+  const description = bundleModuleDescription(module)
+  if (description) {
+    lines.push(description)
   }
   const dependencyLabels = (module?.dependencies || [])
-    .map(key => bundleModuleDefs.value.find(item => item.key === key)?.label || key)
+    .map(key => bundleModuleLabel(bundleModuleDefs.value.find(item => item.key === key)) || key)
   if (dependencyLabels.length) {
-    lines.push(`依赖：${dependencyLabels.join('、')}`)
+    lines.push(t('tooltip.settings.data_export.dependencies', '依赖：{dependencies}', { dependencies: dependencyLabels.join('、') }))
   }
   return lines.join('\n')
 }
 
+const closeModal = () => {
+  if (exporting.value) return
+  emit('close')
+}
+
 const handleExportDataBundle = async () => {
+  if (exporting.value) return
   // 导出前只校验用户当前选择，实际打包规则仍由后端 schema 和导出接口决定。
   const moduleKeys = selectedBundleModuleKeys.value
   if (moduleKeys.length === 0) {
-    toast.warning('请至少勾选一个要导出的数据模块')
+    toast.warning(t('toast.settings.data_export.no_module_selected', '请至少勾选一个要导出的数据模块'))
     return
   }
   if (moduleKeys.includes('profiles') && dataBundleProfileSelection.value.length === 0) {
-    toast.warning('已勾选环境数据，请至少选择一个环境')
+    toast.warning(t('toast.settings.data_export.no_profile_selected', '已勾选环境数据，请至少选择一个环境'))
     return
   }
 
-  const exported = await appStore.exportDataBundle({
-    preset: 'custom',
-    module_keys: moduleKeys,
-    profile_ids: dataBundleProfileSelection.value,
-  })
-  if (exported) {
-    emit('close')
+  exporting.value = true
+  try {
+    const exported = await appStore.exportDataBundle({
+      preset: 'custom',
+      module_keys: moduleKeys,
+      profile_ids: dataBundleProfileSelection.value,
+    })
+    if (exported) {
+      emit('close')
+    }
+  } finally {
+    exporting.value = false
   }
 }
 

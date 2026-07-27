@@ -142,6 +142,23 @@ def build_install_source(
     raw_url = str(raw.get("url") or "").strip()
     supported_versions = list(raw.get("game_versions") or raw.get("supported_versions") or raw.get("new_versions") or [])
     title = str(raw.get("title") or raw.get("name") or raw.get("new_name") or package_id or workshop_id or raw_url).strip()
+    source_kind = str(raw.get("source_kind") or raw.get("sourceKind") or raw.get("kind") or "").strip().lower()
+
+    if source_kind == "git":
+        if not raw_url: return None
+        return {
+            "kind": "git",
+            "source_kind": "git",
+            "package_id": package_id,
+            "url": raw_url,
+            "title": title or raw_url,
+            "supported_versions": supported_versions,
+            "source_origin": source_origin,
+            "is_replacement": is_replacement,
+            "install_type": str(raw.get("install_type") or raw.get("installType") or "source").strip() or "source",
+            "default_branch": str(raw.get("default_branch") or raw.get("defaultBranch") or raw.get("branch") or "").strip(),
+            "info": raw.get("info") if isinstance(raw.get("info"), dict) else {},
+        }
 
     if workshop_id:
         return {
@@ -181,6 +198,8 @@ def dedupe_install_sources(sources) -> list[dict[str, Any]]:
             continue
         if normalized["kind"] == "workshop":
             key = f"workshop:{normalized['workshop_id']}"
+        elif normalized["kind"] == "git":
+            key = f"git:{normalized['url']}"
         else:
             key = f"url:{normalized['url']}"
         source_map[key] = normalized

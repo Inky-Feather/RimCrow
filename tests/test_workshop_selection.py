@@ -1,6 +1,6 @@
 import unittest
 
-from backend.database.workshop_selection import select_best_workshop_detail_for_package
+from backend.database.workshop_selection import dedupe_install_sources, select_best_workshop_detail_for_package
 from backend.utils.tools import normalize_workshop_id
 
 
@@ -83,6 +83,24 @@ class TestWorkshopSelection(unittest.TestCase):
         )
         self.assertEqual(selected["workshop_id"], "9999999999")
         self.assertTrue(selected["is_replacement_derived"])
+
+    def test_dedupe_install_sources_preserves_git_catalog_payload(self):
+        sources = dedupe_install_sources([{
+            "package_id": "author.gitmod",
+            "source_kind": "git",
+            "install_type": "source",
+            "default_branch": "Dev",
+            "url": "https://gitgud.io/team/active",
+            "name": "Git Mod",
+            "source_origin": "git_catalog",
+            "info": {"type": "git", "name": "Git Mod"},
+        }])
+
+        self.assertEqual(sources[0]["kind"], "git")
+        self.assertEqual(sources[0]["source_kind"], "git")
+        self.assertEqual(sources[0]["install_type"], "source")
+        self.assertEqual(sources[0]["default_branch"], "Dev")
+        self.assertEqual(sources[0]["info"]["name"], "Git Mod")
 
 
 if __name__ == "__main__":

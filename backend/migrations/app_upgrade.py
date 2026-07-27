@@ -17,6 +17,7 @@ from backend.database.models import GameProfile, GroupData, GroupMod, ModAsset, 
 from backend.managers.mgr_game_install import GameInstallInspector
 from backend.utils.profile_runtime import normalize_profile_runtime_flags
 from backend.settings import COMMUNITY_INSTEAD_DB_PATH, COMMUNITY_WORKSHOP_DB_PATH, DATA_DIR, TOOL_MODS_DIR, settings
+from backend.i18n.messages import tr
 from backend.utils.logger import logger
 from backend.utils.tools import (
     LEGACY_COMPANION_PACKAGE_IDS,
@@ -52,7 +53,7 @@ def run_app_upgrade_migrations(last_version: str, current_version: str) -> AppUp
 
     if last < Version("0.17.10"):
         result.pending_actions.append("recommend_scan")
-        result.messages.append("检测到核心解析引擎升级，建议执行全量扫描以获得更好的兼容性。")
+        result.messages.append(tr("startup.migration.core_engine_scan_recommended", "检测到核心解析引擎升级，建议执行全量扫描以获得更好的兼容性。"))
         settings.set('community_workshop_db_path', str(COMMUNITY_WORKSHOP_DB_PATH))
         settings.set('community_instead_db_path', str(COMMUNITY_INSTEAD_DB_PATH))
 
@@ -108,7 +109,12 @@ def _migrate_legacy_user_custom_json_fields(result: AppUpgradeResult):
             fixed_interlocks += 1
 
     if fixed_user_rows or fixed_interlocks:
-        result.messages.append(f"已修复用户自定义数据格式：用户数据 {fixed_user_rows} 项，联锁组 {fixed_interlocks} 项。")
+        result.messages.append(tr(
+            "startup.migration.user_custom_data_fixed",
+            "已修复用户自定义数据格式：用户数据 {user_count} 项，联锁组 {interlock_count} 项。",
+            user_count=fixed_user_rows,
+            interlock_count=fixed_interlocks,
+        ))
 
 
 def normalize_duplicate_group_names_on_load() -> list[tuple[str, str, str]]:
@@ -239,7 +245,7 @@ def _migrate_legacy_workshop_cache_schema(result: AppUpgradeResult):
         removed_any = True
 
     if removed_any:
-        result.messages.append("检测到工坊缓存结构升级，已清理旧版 workshop_cache 缓存库，启动后将按新结构自动重建。")
+        result.messages.append(tr("startup.migration.workshop_cache_rebuilt", "检测到工坊缓存结构升级，已清理旧版 workshop_cache 缓存库，启动后将按新结构自动重建。"))
 
 
 def _migrate_legacy_group_memberships(result: AppUpgradeResult):
@@ -349,7 +355,12 @@ def _migrate_legacy_group_memberships(result: AppUpgradeResult):
             )
         if data_source: GroupMod.insert_many(data_source).execute()
 
-    result.messages.append(f"已完成旧版分组数据修复：纠正 {fixed_count} 项，去重 {deduped_count} 项。")
+    result.messages.append(tr(
+        "startup.migration.legacy_group_memberships_fixed",
+        "已完成旧版分组数据修复：纠正 {fixed_count} 项，去重 {deduped_count} 项。",
+        fixed_count=fixed_count,
+        deduped_count=deduped_count,
+    ))
 
 
 def _migrate_profile_steam_runtime_flags(result: AppUpgradeResult):
@@ -369,7 +380,7 @@ def _migrate_profile_steam_runtime_flags(result: AppUpgradeResult):
             if detected_steam_path:
                 settings.config.steam_path = detected_steam_path
                 settings.save()
-                result.messages.append("升级迁移时已自动补全 Steam 程序路径。")
+                result.messages.append(tr("startup.migration.steam_path_detected", "升级迁移时已自动补全 Steam 程序路径。"))
         except Exception as exc:
             logger.warning(f"升级迁移时探测 Steam 路径失败: {exc}", exc_info=True)
 
@@ -402,7 +413,11 @@ def _migrate_profile_steam_runtime_flags(result: AppUpgradeResult):
             normalized_count += 1
 
     if normalized_count:
-        result.messages.append(f"已归一化 {normalized_count} 个环境的 Steam / Workshop 运行配置。")
+        result.messages.append(tr(
+            "startup.migration.profile_runtime_flags_normalized",
+            "已归一化 {count} 个环境的 Steam / Workshop 运行配置。",
+            count=normalized_count,
+        ))
 
 
 def _migrate_legacy_companion_toolmod(result: AppUpgradeResult):
@@ -458,7 +473,7 @@ def _migrate_legacy_companion_toolmod(result: AppUpgradeResult):
                 ).where(GameProfile.id == profile_id).execute()
 
     if removed_dir or legacy_path_hashes or profile_updates or migrated_active_files:
-        result.messages.append("已完成内置伴生工具模组迁移，旧版工具模组目录和排序引用已清理。")
+        result.messages.append(tr("startup.migration.companion_toolmod_migrated", "已完成内置伴生工具模组迁移，旧版工具模组目录和排序引用已清理。"))
 
 
 def _migrate_profile_active_mods_config(profile: GameProfile) -> bool:

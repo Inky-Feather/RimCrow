@@ -25,7 +25,7 @@
           type="button"
           class="px-2 text-text-dim hover:text-accent-primary transition-colors disabled:pointer-events-none disabled:opacity-60"
           :disabled="loading"
-          v-tooltip="readonlySecret ? (revealed ? '隐藏密钥' : '查看已保存密钥') : (showPassword ? '隐藏' : '显示')"
+          v-tooltip="eyeTooltip"
           @click="handleEyeClick"
         >
           <Loader2 v-if="loading" class="size-4 animate-spin" />
@@ -37,7 +37,7 @@
           v-if="readonlySecret"
           type="button"
           class="px-2 text-text-dim hover:text-accent-warn transition-colors"
-          v-tooltip="'清除已保存密钥'"
+          v-tooltip="t('tooltip.secret.clear_saved', '清除已保存密钥')"
           @click="handleClear"
         >
           <Trash2 class="size-4" />
@@ -47,7 +47,7 @@
           v-if="pendingClear"
           type="button"
           class="px-2 text-text-dim hover:text-accent-primary transition-colors"
-          v-tooltip="'保留原值'"
+          v-tooltip="t('tooltip.secret.preserve_saved', '保留原值')"
           @click="$emit('preserve', secretKey)"
         >
           <Undo2 class="size-4" />
@@ -60,6 +60,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { AlertTriangle, Eye, EyeOff, Loader2, Trash2, Undo2 } from 'lucide-vue-next'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,
@@ -83,10 +84,12 @@ const hasSaved = computed(() => !!props.secretStatus?.has_value)
 const readonlySecret = computed(() => hasSaved.value && props.preserved)
 const pendingClear = computed(() => hasSaved.value && !props.preserved && !currentValue.value)
 const statusError = computed(() => localError.value || props.secretStatus?.error || '')
-const savedLabel = computed(() => props.secretStatus?.hint ? `已保存 ${props.secretStatus.hint}` : '已保存密钥')
+const savedLabel = computed(() => props.secretStatus?.hint
+  ? t('ui.secret.saved_with_hint', '已保存 {hint}', { hint: props.secretStatus.hint })
+  : t('ui.secret.saved', '已保存密钥'))
 const inputValue = computed(() => (readonlySecret.value && !revealed.value ? savedLabel.value : currentValue.value))
 const effectivePlaceholder = computed(() => {
-  if (pendingClear.value) return '保存后会清除；也可以直接填写新密钥'
+  if (pendingClear.value) return t('ui.secret.pending_clear_placeholder', '保存后会清除；也可以直接填写新密钥')
   return props.placeholder
 })
 const inputType = computed(() => {
@@ -94,6 +97,14 @@ const inputType = computed(() => {
   return showPassword.value ? 'text' : 'password'
 })
 const showEyeButton = computed(() => readonlySecret.value || !!currentValue.value)
+const eyeTooltip = computed(() => {
+  if (readonlySecret.value) {
+    return revealed.value
+      ? t('tooltip.secret.hide_saved', '隐藏密钥')
+      : t('tooltip.secret.reveal_saved', '查看已保存密钥')
+  }
+  return showPassword.value ? t('tooltip.secret.hide', '隐藏') : t('tooltip.secret.show', '显示')
+})
 
 const handleInput = (event) => {
   if (readonlySecret.value) return
@@ -128,7 +139,7 @@ const handleEyeClick = async () => {
       emit('preserve', props.secretKey)
       return
     }
-    localError.value = '无法读取已保存密钥，保存时会保留原值'
+    localError.value = t('errors.secret.reveal_failed_preserve', '无法读取已保存密钥，保存时会保留原值')
     emit('preserve', props.secretKey)
   } finally {
     loading.value = false
@@ -139,3 +150,10 @@ watch(() => props.preserved, (preserved) => {
   if (!preserved) revealed.value = false
 })
 </script>
+
+<style scoped>
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+</style>

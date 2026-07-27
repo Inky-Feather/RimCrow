@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.23.9"  # 主版本.次版本.补丁
+__version__ = "0.24.7"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -7,6 +7,52 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # 每个版本只保留一个顶层对象，版本内的阶段性记录拆分到 entries 中
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.24.7",
+        "date": "2026-07-26",
+        "entries": [
+            {
+                "title": "功能增强与体验优化",
+                "changes": [
+                    { "type": "feature", "text": "支持通过工坊ID搜索模组，并新增子浏览器内Steam工坊主页入口" },
+                    { "type": "optimize", "text": "支持通过SteamCMD 补救工坊模组更新" },
+                    { "type": "optimize", "text": "调整模组详情页加载策略以提升页面响应速度" },
+                    { "type": "feature", "text": "强化贴图扫描模块，增加失败状态捕获与统计，并重构处理流水线以提升任务可靠性，细化不缩放分类并优化展示" },
+                    { "type": "feature", "text": "优化游戏安装目录定位逻辑，扩展Linux系统下的路径搜索范围" },
+                    { "type": "feature", "text": "改进增强网络管理器对环境代理的保留机制并配置安全连接，改进内置浏览器的系统代理机制" },
+                    { "type": "optimize", "text": "升级前端项目依赖包至最新版本" }
+                ]
+            },
+            {
+                "title": "AI任务处理与错误诊断体系",
+                "changes": [
+                    { "type": "feature", "text": "增强AI任务批量处理功能，支持长文本动态裁切与实时进度反馈" },
+                    { "type": "optimize", "text": "引入基于Token预算的智能分块与并发限流机制，解决任务并发溢出问题" },
+                    { "type": "feature", "text": "构建统一错误契约与API错误码映射体系，增强错误日志的诊断上下文" },
+                    { "type": "fix", "text": "修复浏览器模式下的接口调用异常上报逻辑" }
+                ]
+            },
+            {
+                "title": "环境管理与配置增强",
+                "changes": [
+                    { "type": "feature", "text": "支持环境数据手动恢复、孤立目录验证及配置项规范化处理" },
+                    { "type": "fix", "text": "修复环境删除后的残留问题及配置竞态冲突" },
+                    { "type": "feature", "text": "新增工坊模组强制重载功能，支持标签快捷跳转" },
+                    { "type": "feature", "text": "支持将Git仓库作为模组来源进行自动订阅与安装" },
+                    { "type": "feature", "text": "新增语言包自动判定与识别机制" }
+                ]
+            },
+            {
+                "title": "国际化系统升级与架构重构",
+                "changes": [
+                    { "type": "feature", "text": "全方位推进国际化支持，实现界面文本拾取、AI自动翻译及多语言包导入导出功能" },
+                    { "type": "feature", "text": "新增繁体中文、俄语、韩语、德语等多语言包支持" },
+                    { "type": "optimize", "text": "重构底层架构，统一处理日期格式、错误信息及日志翻译" },
+                    { "type": "feature", "text": "完善模组列表、备份管理、任务队列等多模块的本地化适配" }
+                ]
+            }
+        ]
+    },
     {
         "version": "0.23.9",
         "date": "2026-06-30",

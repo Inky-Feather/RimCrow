@@ -2,6 +2,7 @@
 
 import { useAppStore } from "../../app/stores/appStore";
 import { useModStore } from "../mod/stores/modStore";
+import { t } from "../../shared/i18n.js";
 
 export const GUIDE_VERSION = "v2.0"; // 修改版本号可以强制老用户重新看一遍新版引导
 
@@ -16,6 +17,17 @@ const clickTourTarget = async (selector) => {
   await wait();
   return true;
 };
+
+export const localizeGuideSteps = (guideKey, steps = []) => steps.map((step, index) => ({
+  ...step,
+  popover: step.popover
+    ? {
+      ...step.popover,
+      title: t(`guide.steps.${guideKey}.${index}.title`, step.popover.title || ""),
+      description: t(`guide.steps.${guideKey}.${index}.description`, step.popover.description || ""),
+    }
+    : step.popover,
+}));
 
 export const mainGuideSteps = [
   {

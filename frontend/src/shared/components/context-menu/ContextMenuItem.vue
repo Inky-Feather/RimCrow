@@ -18,7 +18,7 @@
       
       <div class="flex flex-wrap gap-[4px]">
         <template v-for="(subItem, idx) in visibleChildren" :key="idx">
-          <ContextMenuColorPickerItem v-if="subItem.type === 'color-picker'" :item="subItem" :picker-container="itemRef || 'body'" />
+          <ContextMenuColorPickerItem v-if="subItem.type === 'color-picker'" :item="subItem" picker-container="body" />
           <button v-else @click.stop="handleClick(subItem)"
           v-tooltip="subItem.tooltip || subItem.label || ''"
           class="relative flex items-center justify-center transition-all duration-200 active:scale-95 border group/btn select-none overflow-hidden"
@@ -175,6 +175,7 @@ const isOwnBranchPath = (path = '') => {
   if (!path || !props.path) return false
   return path === props.path || path.startsWith(`${props.path}.`)
 }
+const isColorPickerPanel = (target = null) => !!target?.closest?.('.vc-colorpicker, .vc-fk-colorPicker, .vc-chrome-colorPicker')
 const handleMouseEnter = () => {
   clearTimeout(hoverTimer)
   hoverPathState?.setHoveredPath(props.path)
@@ -220,6 +221,7 @@ const handleSubMenuMouseEnter = () => {
 // 鼠标离开：延迟关闭，防止鼠标划过间隙时消失
 const handleMouseLeave = (event) => {
   if (props.item.type === 'grid') return // Grid 不需要关闭逻辑
+  if (isColorPickerPanel(event?.relatedTarget || null)) return
   clearTimeout(hoverTimer)
   setHoveredPathFromTarget(event?.relatedTarget || null)
   hoverTimer = setTimeout(() => {

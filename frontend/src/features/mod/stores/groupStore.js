@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { checkResult, toast, toUserMessage } from '../../../shared/lib/common'
+import { checkResult, showUserErrorToast, toast } from '../../../shared/lib/common'
 import { useAppStore } from '../../../app/stores/appStore'
 import { normalizePackageId } from '../lib/modIdentity'
+import { t } from '../../../shared/i18n.js'
 
 export const useGroupStore = defineStore('groups', () => {
   const appStore = useAppStore()
@@ -93,6 +94,18 @@ export const useGroupStore = defineStore('groups', () => {
     pendingWriteChain = run.catch(() => {})
     return run
   }
+  const refreshAfterGroupRuleInputChange = async () => {
+    return await appStore.refreshModCoreData(t('check.group.refresh_after_group_change', '分组变更后同步模组规则状态'), {
+      preserveListState: true,
+      refreshRules: false,
+      refreshBackups: false,
+      refreshWorkspaceLibraries: false,
+    })
+  }
+  const shouldRefreshAfterGroupUpdate = (updates = {}) => (
+    Object.prototype.hasOwnProperty.call(updates, 'name')
+    || Object.prototype.hasOwnProperty.call(updates, 'mod_ids')
+  )
   // --- 数据操作 ---
   // 获取分组
   const getGroups = async () => {
@@ -100,19 +113,19 @@ export const useGroupStore = defineStore('groups', () => {
     appStore.isLoading = true
     try {
       const res = await window.pywebview.api.groups_get()
-      if (checkResult(res, "获取分组")) {
+      if (checkResult(res, t('check.group.get', '获取分组'))) {
         groupList.value = normalizeGroups(res.data.groups)
         sortGroupsByIndex(groupList.value)
       }
     } catch (e) {
       console.error("获取分组异常:", e)
-      toast.error(toUserMessage(e?.message || e, '获取分组失败。可能是数据库或当前环境暂时不可用，请稍后重试。'))
+      showUserErrorToast(e, t('toast.group.get_failed', '获取分组失败。可能是数据库或当前环境暂时不可用，请稍后重试。'))
     } finally {
       appStore.isLoading = false
     }
   }
   // 创建分组（默认名称为“新分组”，随机颜色）
-  const createGroup = async (name='新分组', color=`#${Math.floor(Math.random() * 16777216).toString(16).padStart(6, '0')}`) => {
+  const createGroup = async (name = t('common.entity.new_group', '新分组'), color=`#${Math.floor(Math.random() * 16777216).toString(16).padStart(6, '0')}`) => {
     if (!window.pywebview) return
     return enqueueWrite(async () => {
       try {
@@ -127,7 +140,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
         const res = await window.pywebview.api.group_create(name, color)
       // console.log("创建分组:", res)
-        if (checkResult(res, "创建分组")) {
+        if (checkResult(res, t('check.group.create', '创建分组'))) {
           groupList.value.push(normalizeGroup(res.data.group))
           sortGroupsByIndex(groupList.value)
           return true
@@ -137,7 +150,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("创建分组异常:", e)
-        toast.error(toUserMessage(e?.message || e, '创建分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
+        showUserErrorToast(e, t('toast.group.create_failed', '创建分组失败，正在还原列表状态。请稍后重试。'))
       // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -151,15 +164,16 @@ export const useGroupStore = defineStore('groups', () => {
       try {
         const res = await window.pywebview.api.group_delete(groupId)
       // console.log("删除分组:", res)
-        if (checkResult(res, "删除分组", true)) {
+        if (checkResult(res, t('check.group.delete', '删除分组'), true)) {
         // 从列表中移除
           groupList.value = groupList.value.filter(group => group.group_id !== groupId)
+          await refreshAfterGroupRuleInputChange()
           return true
         }
         await getGroups()
       } catch (e) {
         console.error("删除分组异常:", e)
-        toast.error(toUserMessage(e?.message || e, '删除分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
+        showUserErrorToast(e, t('toast.group.delete_failed', '删除分组失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -177,15 +191,16 @@ export const useGroupStore = defineStore('groups', () => {
         else return false
         const res = await window.pywebview.api.group_update(groupId, updates)
       // console.log("更新分组:", res)
-        if (!checkResult(res, "更新分组")) {
+        if (!checkResult(res, t('check.group.update', '更新分组'))) {
         // 失败时才重新拉取数据进行还原
           await getGroups()
         } else {
+          if (shouldRefreshAfterGroupUpdate(updates)) await refreshAfterGroupRuleInputChange()
           return true
         }
       } catch (e) {
         console.error("更新分组异常:", e)
-        toast.error(toUserMessage(e?.message || e, '更新分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
+        showUserErrorToast(e, t('toast.group.update_failed', '更新分组失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -208,15 +223,16 @@ export const useGroupStore = defineStore('groups', () => {
         else return false
         const res = await window.pywebview.api.group_add_mods(groupId, normalizedIds)
       // console.log("分组添加模组:", res)
-        if (!checkResult(res, "分组添加模组")) {
+        if (!checkResult(res, t('check.group.add_mods', '分组添加模组'))) {
         // 失败时才重新拉取数据进行还原
           await getGroups()
         } else {
+          await refreshAfterGroupRuleInputChange()
           return true
         }
       } catch (e) {
         console.error("分组添加模组异常:", e)
-        toast.error(toUserMessage(e?.message || e, '添加模组到分组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
+        showUserErrorToast(e, t('toast.group.add_mods_failed', '添加模组到分组失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -232,19 +248,20 @@ export const useGroupStore = defineStore('groups', () => {
         if (normalizedIds.length === 0) return false
         const res = await window.pywebview.api.group_remove_mods(groupId, normalizedIds)
       // console.log("分组移除模组:", res)
-        if (checkResult(res, "分组移除模组")) {
+        if (checkResult(res, t('check.group.remove_mods', '分组移除模组'))) {
         // 更新本地分组
           const group = groupList.value.find(g => g.group_id === groupId)
           if (group) {
             const currentIds = Array.isArray(group.mod_ids) ? group.mod_ids : []
             group.mod_ids = currentIds.filter(id => !normalizedIds.includes(normalizePackageId(id)))
           }
+          await refreshAfterGroupRuleInputChange()
           return true
         }
         await getGroups()
       } catch (e) {
         console.error("分组移除模组异常:", e)
-        toast.error(toUserMessage(e?.message || e, '从分组移除模组失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
+        showUserErrorToast(e, t('toast.group.remove_mods_failed', '从分组移除模组失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -260,7 +277,7 @@ export const useGroupStore = defineStore('groups', () => {
         groupList.value.forEach(group => group.is_expanded = isExpanded)
         const res = await window.pywebview.api.groups_expansion_all(isExpanded)
       // console.log("批量展开切换:", res)
-        if (!checkResult(res, "批量展开切换")) {
+        if (!checkResult(res, t('check.group.expansion_all', '批量展开切换'))) {
         // 失败时才重新拉取数据进行还原
           await getGroups()
         } else {
@@ -268,7 +285,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("批量展开切换异常:", e)
-        toast.error(toUserMessage(e?.message || e, '保存分组展开状态失败，正在还原列表状态。请稍后重试。'))
+        showUserErrorToast(e, t('toast.group.expansion_failed', '保存分组展开状态失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -284,7 +301,7 @@ export const useGroupStore = defineStore('groups', () => {
         applyGroupOrder(groupIds)
         const res = await window.pywebview.api.group_reorder(groupIds)
       // console.log("分组排序:", res)
-        if (!checkResult(res, "分组排序")) {
+        if (!checkResult(res, t('check.group.reorder', '分组排序'))) {
         // 失败时才重新拉取数据进行还原
           await getGroups()
         } else {
@@ -292,7 +309,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("分组排序异常:", e)
-        toast.error(toUserMessage(e?.message || e, '保存分组排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
+        showUserErrorToast(e, t('toast.group.reorder_failed', '保存分组排序失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }
@@ -313,7 +330,7 @@ export const useGroupStore = defineStore('groups', () => {
         else return false
         const res = await window.pywebview.api.group_content_reorder(groupId, normalizedIds)
       // console.log("分组内排序:", res)
-        if (!checkResult(res, "分组内排序")) {
+        if (!checkResult(res, t('check.group.content_reorder', '分组内排序'))) {
         // 失败时才重新拉取数据进行还原
           await getGroups()
         } else {
@@ -321,7 +338,7 @@ export const useGroupStore = defineStore('groups', () => {
         }
       } catch (e) {
         console.error("分组内排序异常:", e)
-        toast.error(toUserMessage(e?.message || e, '保存分组内排序失败，正在还原列表状态。请稍后重试，详细原因已写入系统日志。'))
+        showUserErrorToast(e, t('toast.group.content_reorder_failed', '保存分组内排序失败，正在还原列表状态。请稍后重试。'))
         // 失败时才重新拉取数据进行还原
         await getGroups()
       }

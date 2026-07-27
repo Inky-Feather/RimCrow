@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from backend.i18n.messages import tr
 from backend.settings import DATA_DIR
 from backend.utils.json_io import write_json_atomic
 
@@ -29,10 +30,10 @@ class ThemeStore:
         with open(self.path, "r", encoding="utf-8-sig") as handle:
             payload = json.load(handle)
         if not isinstance(payload, dict):
-            raise ValueError("themes.json 根节点必须是对象")
+            raise ValueError(tr("theme.errors.root_must_be_object", "themes.json 根节点必须是对象"))
         themes = payload.get("themes", [])
         if not isinstance(themes, list):
-            raise ValueError("themes.json themes 必须是数组")
+            raise ValueError(tr("theme.errors.themes_must_be_array", "themes.json themes 必须是数组"))
         return {"schema_version": int(payload.get("schema_version") or 1), "themes": themes}
 
     def _write_payload(self, payload: dict[str, Any]) -> None:
@@ -40,18 +41,18 @@ class ThemeStore:
 
     def _normalize_theme(self, theme: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(theme, dict):
-            raise ValueError("主题数据必须是对象")
+            raise ValueError(tr("theme.errors.theme_must_be_object", "主题数据必须是对象"))
         theme_id = str(theme.get("id") or "").strip()
         if not theme_id:
             theme_id = f"custom-theme-{uuid.uuid4().hex[:8]}"
         if not THEME_ID_PATTERN.match(theme_id):
-            raise ValueError("主题 ID 只能包含小写字母、数字、短横线和下划线，长度 2-64")
+            raise ValueError(tr("theme.errors.id_invalid", "主题 ID 只能包含小写字母、数字、短横线和下划线，长度 2-64"))
         name = str(theme.get("name") or "").strip()
         if not name:
-            raise ValueError("主题名称不能为空")
+            raise ValueError(tr("theme.errors.name_required", "主题名称不能为空"))
         tokens = theme.get("tokens")
         if not isinstance(tokens, dict):
-            raise ValueError("主题 tokens 必须是对象")
+            raise ValueError(tr("theme.errors.tokens_must_be_object", "主题 tokens 必须是对象"))
         return {
             "id": theme_id,
             "name": name,
@@ -84,7 +85,7 @@ class ThemeStore:
     def delete_user_theme(self, theme_id: str) -> bool:
         normalized_id = str(theme_id or "").strip()
         if not THEME_ID_PATTERN.match(normalized_id):
-            raise ValueError("主题 ID 不合法")
+            raise ValueError(tr("theme.errors.id_invalid_short", "主题 ID 不合法"))
         payload = self._load_payload()
         themes = [theme for theme in payload["themes"] if str(theme.get("id") or "") != normalized_id]
         changed = len(themes) != len(payload["themes"])

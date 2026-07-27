@@ -1,18 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { ISSUE_TYPE } from '../../../shared/lib/constants'
-
-const SORT_MODE_MAP = {
-  'default': '默认',
-  'name': '名称',
-  'package_id': '包名',
-  'author': '作者',
-  'last_active_time': '启用时间',
-  'last_moved_time': '移动时间',
-  'file_create_time': '创建时间',
-  'file_modify_time': '修改时间',
-  'file_size': '文件大小',
-  'multiplayer_compat': '联机兼容性',
-}
+import { t } from '../../../shared/i18n.js'
 
 export function useModListQuery({
   props,
@@ -23,7 +11,14 @@ export function useModListQuery({
   normalizeTokenId,
   normalizeCanonicalId,
 }) {
-  const isSimpleView = ref(true) // 是否简单视图
+  const simpleViewKeyMap = { active: 'activeListSimple', inactive: 'inactiveListSimple', temp: 'tempListSimple' }
+  const simpleViewKey = computed(() => simpleViewKeyMap[props.listId] || `${props.listId}ListSimple`)
+  const isSimpleViewPersistenceEnabled = () => Object.keys(appStore.settings.ui?.mod_list_simple_view || {}).length > 0
+  const takeSavedSimpleView = () => {
+    const viewState = appStore.settings.ui?.mod_list_simple_view
+    return viewState && Object.prototype.hasOwnProperty.call(viewState, simpleViewKey.value) ? viewState[simpleViewKey.value] !== false : true
+  }
+  const isSimpleView = ref(takeSavedSimpleView()) // 是否简单视图
   const isSortAsc = ref(true)   // 是否升序排序
   const sortMode = ref('default')  // 排序模式
 
@@ -43,6 +38,83 @@ export function useModListQuery({
   const isSortChange = ref(false) // 是否排序切换
   const engine = computed(() => searchStore.engine)
   const searchResultSet = computed(() => new Set(searchResults.value))
+  const toggleSimpleView = async () => {
+    isSimpleView.value = !isSimpleView.value
+    if (!isSimpleViewPersistenceEnabled()) return
+    const nextUi = {
+      ...(appStore.settings.ui || {}),
+      mod_list_simple_view: {
+        ...(appStore.settings.ui?.mod_list_simple_view || {}),
+        [simpleViewKey.value]: isSimpleView.value,
+      },
+    }
+    appStore.settings.ui = nextUi
+    await appStore.saveSetting('ui', nextUi)
+  }
+  watch(() => appStore.settings.ui?.mod_list_simple_view, () => {
+    isSimpleView.value = takeSavedSimpleView()
+  }, { deep: true })
+  const SORT_MODE_MAP = computed(() => ({
+    default: t('ui.mod_list.sort.default', '默认'),
+    name: t('common.field.name', '名称'),
+    package_id: t('common.field.package_id', '包名'),
+    author: t('common.field.author', '作者'),
+    last_active_time: t('ui.mod_list.sort.last_active_time', '启用时间'),
+    last_moved_time: t('ui.mod_list.sort.last_moved_time', '移动时间'),
+    file_create_time: t('ui.mod_list.sort.file_create_time', '创建时间'),
+    file_modify_time: t('ui.mod_list.sort.file_modify_time', '修改时间'),
+    file_size: t('ui.mod_list.sort.file_size', '文件大小'),
+    xml_file_count: t('ui.mod_list.sort.xml_file_count', 'XML数量'),
+    def_file_count: t('ui.mod_list.sort.def_file_count', '定义数量'),
+    patch_file_count: t('ui.mod_list.sort.patch_file_count', '补丁数量'),
+    language_xml_file_count: t('ui.mod_list.sort.language_xml_file_count', '翻译数量'),
+    texture_file_count: t('ui.mod_list.sort.texture_file_count', '贴图数量'),
+    audio_file_count: t('ui.mod_list.sort.audio_file_count', '音频数量'),
+    assembly_file_count: t('ui.mod_list.sort.assembly_file_count', '程序集数量'),
+    multiplayer_compat: t('ui.mod_list.sort.multiplayer_compat', '联机兼容性'),
+  }))
+  const SORT_MENU_GROUPS = computed(() => [
+    {
+      key: 'basic',
+      items: ['default', 'name', 'package_id', 'author', 'multiplayer_compat'],
+    },
+    {
+      key: 'time',
+      label: t('ui.mod_list.sort.group.time', '时间'),
+      items: ['last_active_time', 'last_moved_time', 'file_create_time', 'file_modify_time'],
+    },
+    {
+      key: 'file',
+      label: t('ui.mod_list.sort.group.file', '文件'),
+      items: ['file_size', 'xml_file_count', 'def_file_count', 'patch_file_count', 'language_xml_file_count', 'texture_file_count', 'audio_file_count', 'assembly_file_count'],
+    },
+  ])
+
+  const getFileStat = (mod, key) => Number(mod?.file_stats?.[key] || 0)
+  const getXmlFileCount = (mod) => getFileStat(mod, 'game_xml') + getFileStat(mod, 'patch_xml') + getFileStat(mod, 'lang_xml')
+  const getSortValue = (mod, id, fallbackId = '') => {
+    if (id === 'name') return String(mod?.name || fallbackId)
+    if (id === 'author') return String(mod?.author?.[0] || '')
+    if (id === 'package_id') return String(mod?.package_id || fallbackId)
+    if (id === 'last_active_time') return Number(mod?.last_active_time || 0)
+    if (id === 'last_moved_time') return Number(mod?.last_moved_time || 0)
+    if (id === 'file_create_time') return Number(mod?.file_create_time || 0)
+    if (id === 'file_modify_time') return Number(mod?.file_modify_time || 0)
+    if (id === 'file_size') return Number(mod?.file_size || 0)
+    if (id === 'xml_file_count') return getXmlFileCount(mod)
+    if (id === 'def_file_count') return getFileStat(mod, 'game_xml')
+    if (id === 'patch_file_count') return getFileStat(mod, 'patch_xml')
+    if (id === 'language_xml_file_count') return getFileStat(mod, 'lang_xml')
+    if (id === 'texture_file_count') return getFileStat(mod, 'image')
+    if (id === 'audio_file_count') return getFileStat(mod, 'audio')
+    if (id === 'assembly_file_count') return getFileStat(mod, 'code_dll')
+    if (id === 'multiplayer_compat') return Number(mod?.multiplayer_compat?.sort_rank || 0)
+    return 0
+  }
+  const compareSortValue = (left, right) => {
+    if (typeof left === 'string' || typeof right === 'string') return String(left).localeCompare(String(right))
+    return Number(left || 0) - Number(right || 0)
+  }
 
   const normalizeExactText = (value) => String(value ?? '').trim().toLowerCase()
   const getExactTagValues = (mod, tag) => {
@@ -142,21 +214,21 @@ export function useModListQuery({
 
   // 排序提示
   const sortTooltip = computed(() => {
-    let text = `按${SORT_MODE_MAP[sortMode.value]}排序`
-    text += `${isSortAsc.value ? '（升序）' : '（降序）'}`
-    text += "\n__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
-    text += `\n\n__[[(点击恢复默认排序)]]__`
+    let text = t('tooltip.mod_list.sort.by_mode', '按{mode}排序', { mode: SORT_MODE_MAP.value[sortMode.value] || SORT_MODE_MAP.value.default })
+    text += isSortAsc.value ? t('tooltip.mod_list.sort.asc', '（升序）') : t('tooltip.mod_list.sort.desc', '（降序）')
+    text += '\n' + t('tooltip.mod_list.visual_only', '__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__')
+    text += '\n\n' + t('tooltip.mod_list.sort.clear', '__[[(点击恢复默认排序)]]__')
     return text
   })
   // 筛选提示
   const filterTooltip = computed(() => {
     let text = ''
-    if (filterQuery.value.length > 0) { text += `已筛选检索关键词` }
-    if (isFilterByIssue.value) { text += '\n已筛选问题项' }
-    if (filterByLine.value.length > 0) { text += `\n已筛选依赖组` }
+    if (filterQuery.value.length > 0) { text += t('tooltip.mod_list.filter.keyword', '已筛选检索关键词') }
+    if (isFilterByIssue.value) { text += '\n' + t('tooltip.mod_list.filter.issue', '已筛选问题项') }
+    if (filterByLine.value.length > 0) { text += '\n' + t('tooltip.mod_list.filter.dependency_group', '已筛选依赖组') }
     text = text.trim()
-    text += "\n__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__"
-    text += `\n\n__[[(点击清除所有筛选)]]__`
+    text += '\n' + t('tooltip.mod_list.visual_only', '__筛选和排序只供视觉检阅，^^不影响实际顺序^^，\n并且此状态下^^禁止拖拽排序或插入^^__')
+    text += '\n\n' + t('tooltip.mod_list.filter.clear', '__[[(点击清除所有筛选)]]__')
     return text
   })
   // 处理点击依赖图线路（筛选依赖组）
@@ -220,17 +292,7 @@ export function useModListQuery({
       list.sort((a, b) => {
         const mA = modStore.takeModById(a)
         const mB = modStore.takeModById(b)
-        if (sortMode.value === 'name') return (mA?.name || a).localeCompare(mB?.name || b)
-        if (sortMode.value === 'author') return (mA?.author?.[0] || '').localeCompare(mB?.author?.[0] || '')
-        if (sortMode.value === 'package_id') return (mA?.package_id || a).localeCompare(mB?.package_id || b)
-        if (sortMode.value === 'last_active_time') return (mA?.last_active_time || 0) - (mB?.last_active_time || 0)
-        if (sortMode.value === 'last_moved_time') return (mA?.last_moved_time || 0) - (mB?.last_moved_time || 0)
-        if (sortMode.value === 'file_create_time') return (mA?.file_create_time || 0) - (mB?.file_create_time || 0)
-        if (sortMode.value === 'file_modify_time') return (mA?.file_modify_time || 0) - (mB?.file_modify_time || 0)
-        if (sortMode.value === 'file_size') return (mA?.file_size || 0) - (mB?.file_size || 0)
-        if (sortMode.value === 'multiplayer_compat') return (mA?.multiplayer_compat?.sort_rank || 0) - (mB?.multiplayer_compat?.sort_rank || 0)
-
-        return 0
+        return compareSortValue(getSortValue(mA, sortMode.value, a), getSortValue(mB, sortMode.value, b))
       })
     }
     // 如果需要逆序，反转数组
@@ -240,7 +302,7 @@ export function useModListQuery({
   })
 
   const sortIcon = computed(() => {
-    return SORT_MODE_MAP[sortMode.value] || '默认'
+    return SORT_MODE_MAP.value[sortMode.value] || t('ui.mod_list.sort.default', '默认')
   })
 
   // 执行搜索
@@ -269,7 +331,13 @@ export function useModListQuery({
       index++
       if (index >= results.length) {
         index = 0 // 循环
-        toast.info("已到达最后一个搜索结果，循环回到第一个", { timeout: 2000 })
+        toast.info(t('toast.mod_list.search.loop_to_first', '已到达最后一个搜索结果，循环回到第一个'), { timeout: 2000 })
+      }
+    } else {
+      index--
+      if (index < 0) {
+        index = results.length - 1 // 循环
+        toast.info(t('toast.mod_list.search.loop_to_last', '已到达第一个搜索结果，循环回到最后一个'), { timeout: 2000 })
       }
     }
     // 定位
@@ -296,7 +364,7 @@ export function useModListQuery({
       // 2. 检查是否被当前的筛选器过滤掉了
       if (!displayList.value.includes(resolvedTargetId)) {
         console.info(`目标项被当前列表筛选器过滤: ${resolvedTargetId}，列表=${props.title}`)
-        toast.warning(`搜索项 ${resolvedTargetId} 已被 ${props.title} 列表筛选器过滤，请清除筛选后重试。`)
+        toast.warning(t('toast.mod_list.search.filtered_out', '搜索项 {id} 已被 {list} 列表筛选器过滤，请清除筛选后重试。', { id: resolvedTargetId, list: props.title }))
       }
       await revealCollapsedSectionFor(resolvedTargetId)
 
@@ -323,6 +391,7 @@ export function useModListQuery({
 
   return {
     SORT_MODE_MAP,
+    SORT_MENU_GROUPS,
     isSimpleView,
     isSortAsc,
     sortMode,
@@ -345,6 +414,7 @@ export function useModListQuery({
     itemHeight,
     toggleIssueFilter,
     toggleIssueTypeFilter,
+    toggleSimpleView,
     clearFilter,
     clearSort,
     sortTooltip,

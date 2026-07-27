@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "i18n:extract": "cd .. && uv run python scripts/extract_i18n_messages.py",
+    "i18n:check": "cd .. && uv run python scripts/extract_i18n_messages.py --check",
+    "prebuild": "npm run i18n:check"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",

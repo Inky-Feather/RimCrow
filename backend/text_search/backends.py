@@ -10,6 +10,7 @@ import threading
 import time
 from typing import Callable, Iterable
 
+from backend.i18n.messages import tr
 from backend.settings import settings
 from backend.utils.logger import logger
 from backend.utils.text_decode import iter_text_decoding_candidates
@@ -132,7 +133,7 @@ class RipgrepSearchBackend(SearchBackend):
 
         executable = resolve_ripgrep_executable(str(self.executable_path or ""))
         if not executable:
-            raise RuntimeError("未找到 ripgrep 可执行文件。")
+            raise RuntimeError(tr("text_search.ripgrep.executable_missing", "未找到 ripgrep 可执行文件。"))
 
         items = list(search_roots)
         total = len(items)
@@ -222,7 +223,7 @@ class RipgrepSearchBackend(SearchBackend):
             )
         if cancel_event.is_set(): return
         if return_code not in {0, 1}:
-            raise RuntimeError(stderr_text or "ripgrep 搜索执行失败")
+            raise RuntimeError(stderr_text or tr("text_search.ripgrep.search_failed", "ripgrep 搜索执行失败"))
 
     def _build_command(self, executable: Path, request: SearchRequest, search_roots: list[SearchRoot]) -> list[str]:
         command = [

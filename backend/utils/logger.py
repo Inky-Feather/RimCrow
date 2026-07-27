@@ -16,6 +16,16 @@ from icecream import ic
 from backend.settings import DATA_DIR
 
 
+def _is_console_stream_available(stream) -> bool:
+    """判断标准流是否真的适合做控制台日志输出。"""
+    if stream is None or getattr(stream, 'closed', False): return False
+    name = str(getattr(stream, 'name', '') or '').lower()
+    # 无控制台打包环境可能暴露 nul/devnull 流；这类目标不需要控制台 handler，文件日志仍会保留。
+    if name in {'nul', os.devnull, '/dev/null'}: return False
+    writable = getattr(stream, 'writable', None)
+    return bool(writable()) if callable(writable) else True
+
+
 def generate_log_id(timestamp: str, level: str, message: str) -> str:
     """生成基于内容的唯一哈希 ID，保证跨重启和双端的绝对去重"""
     raw_str = f"{timestamp}_{level}_{message}"
@@ -220,6 +230,39 @@ class BaseLogReader:
     
 
 # 定义日志格式
+def _resolve_log_error_meta(record):
+    error_code = getattr(record, "error_code", "")
+    error_type = getattr(record, "error_type", "")
+    error_id = getattr(record, "error_id", "")
+    user_message = getattr(record, "user_message", "")
+    message_key = getattr(record, "message_key", "")
+    message_params = getattr(record, "message_params", None)
+    extra_context = _sanitize_log_context(getattr(record, "extra_context", None))
+    if error_code and not error_type:
+        error_type = str(error_code).split(".", 1)[0] or ""
+    elif error_type and "." in str(error_type) and (not error_code or error_type == error_code):
+        error_type = str(error_type).split(".", 1)[0] or ""
+    return {
+        "error_code": error_code,
+        "error_type": error_type,
+        "error_id": error_id,
+        "user_message": user_message,
+        "message_key": message_key,
+        "message_params": message_params,
+        "extra_context": extra_context,
+    }
+
+
+def _sanitize_log_context(value):
+    """结构化上下文只保留定位信息；原始异常内容由 details/堆栈承载，避免重复塞给日志 UI。"""
+    if isinstance(value, dict):
+        skipped = {"original_error", "fallback_error", "traceback", "stack"}
+        return {key: _sanitize_log_context(item) for key, item in value.items() if key not in skipped}
+    if isinstance(value, list):
+        return [_sanitize_log_context(item) for item in value]
+    return value
+
+
 class JSONFormatter(logging.Formatter):
     """
     结构化 JSON 格式化器
@@ -245,12 +288,21 @@ class JSONFormatter(logging.Formatter):
                 "path": record.pathname
             }
         }
-        error_code = getattr(record, "error_code", "")
-        extra_context = getattr(record, "extra_context", None)
-        if error_code:
-            log_record["error_code"] = error_code
-        if extra_context:
-            log_record["extra_context"] = extra_context
+        meta = _resolve_log_error_meta(record)
+        if meta["error_code"]:
+            log_record["error_code"] = meta["error_code"]
+        if meta["error_type"]:
+            log_record["error_type"] = meta["error_type"]
+        if meta["error_id"]:
+            log_record["error_id"] = meta["error_id"]
+        if meta["user_message"]:
+            log_record["user_message"] = meta["user_message"]
+        if meta["message_key"]:
+            log_record["message_key"] = meta["message_key"]
+        if meta["message_params"]:
+            log_record["message_params"] = meta["message_params"]
+        if meta["extra_context"]:
+            log_record["extra_context"] = meta["extra_context"]
         return json.dumps(log_record, ensure_ascii=False, default=str)
 
 class WebviewHandler(logging.Handler):
@@ -289,9 +341,9 @@ class WebviewHandler(logging.Handler):
 
     def emit(self, record):
         from backend.utils.event_bus import EventBus
-        # 如果 EventBus 没有窗口引用，直接跳过，防止报错
-        # 这里的 _window 是在 EventBus 中定义的类变量，只有在前端完全就绪时才推送日志
-        if not getattr(EventBus, '_window', None) or not getattr(EventBus, '_frontend_ready', False): return 
+        # 桌面窗口和浏览器 SSE 共用 EventBus；只有前端未就绪或没有任何派发目标时才跳过。
+        has_target = bool(getattr(EventBus, '_window', None) or getattr(EventBus, '_browser_dispatcher', None))
+        if not has_target or not getattr(EventBus, '_frontend_ready', False): return
         try:
             timestamp = datetime.datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             msg = record.getMessage()
@@ -318,12 +370,21 @@ class WebviewHandler(logging.Handler):
                     "func": record.funcName
                 }
             }
-            error_code = getattr(record, "error_code", "")
-            extra_context = getattr(record, "extra_context", None)
-            if error_code:
-                log_entry["error_code"] = error_code
-            if extra_context:
-                log_entry["extra_context"] = extra_context
+            meta = _resolve_log_error_meta(record)
+            if meta["error_code"]:
+                log_entry["error_code"] = meta["error_code"]
+            if meta["error_type"]:
+                log_entry["error_type"] = meta["error_type"]
+            if meta["error_id"]:
+                log_entry["error_id"] = meta["error_id"]
+            if meta["user_message"]:
+                log_entry["user_message"] = meta["user_message"]
+            if meta["message_key"]:
+                log_entry["message_key"] = meta["message_key"]
+            if meta["message_params"]:
+                log_entry["message_params"] = meta["message_params"]
+            if meta["extra_context"]:
+                log_entry["extra_context"] = meta["extra_context"]
             # 通过 EventBus 发送给前端
             # 前端监听 'app-log' 事件即可
             EventBus.emit('app-log', log_entry)
@@ -400,8 +461,8 @@ class LoggerManager:
                 # 如果处于某些特殊无控制台环境 (pythonw.exe)，sys.stdout 可能是 None
                 pass
         # 2. 安全地添加控制台 Handler
-        # 只有当 sys.stdout 存在（不是 None）时才添加，避免 --noconsole 模式下报错
-        if sys.stdout is not None:
+        # 只有控制台流确实可用时才添加，避免无控制台打包环境里的 nul 设备报错。
+        if _is_console_stream_available(sys.stdout):
             try:
                 console_handler = logging.StreamHandler(sys.stdout)
         

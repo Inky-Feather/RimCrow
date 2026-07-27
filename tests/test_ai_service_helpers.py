@@ -1,7 +1,9 @@
 import importlib
+import asyncio
 import json
 import re
 import sys
+import threading
 import types
 import unittest
 from pathlib import Path
@@ -230,6 +232,9 @@ class TestAIServiceHelpers(unittest.TestCase):
 
     def test_execute_structured_task_uses_task_prompt_context(self):
         manager = object.__new__(AIManager)
+        manager._request_limit_lock = threading.Lock()
+        manager._request_limit = 0
+        manager._request_semaphore = threading.BoundedSemaphore(1)
         manager._build_task_execution_context = lambda task_key, payload, override_config=None: {
             "prompt_config": {"system": "SYSTEM", "user_template": "{translation_input_json}"},
             "runtime_variables": {"translation_input_json": '{"segments":[]}'},
@@ -252,6 +257,44 @@ class TestAIServiceHelpers(unittest.TestCase):
         self.assertEqual(parsed["segments"][0]["key"], "title")
         self.assertEqual(parsed["segments"][0]["text"], "译名")
 
+    def test_execute_structured_task_uses_shared_request_limit(self):
+        manager = object.__new__(AIManager)
+        manager._request_limit_lock = threading.Lock()
+        manager._request_limit = 0
+        manager._request_semaphore = threading.BoundedSemaphore(1)
+        manager._build_task_execution_context = lambda task_key, payload, override_config=None: {
+            "prompt_config": {"system": "SYSTEM", "user_template": "{translation_input_json}"},
+            "runtime_variables": {"translation_input_json": '{"segments":[]}'},
+            "llm_kwargs": {"model": "test-model"},
+        }
+        manager._build_prompt_messages = lambda prompt_config, variables: [{"role": "user", "content": variables["translation_input_json"]}]
+        manager._message_text = lambda content: str(content or "")
+        manager._parse_structured_output = lambda task_key, text: json.loads(text)
+
+        blocked_inside_request = []
+        def completion(messages, llm_kwargs):
+            acquired = manager._request_semaphore.acquire(blocking=False)
+            blocked_inside_request.append(not acquired)
+            if acquired:
+                manager._request_semaphore.release()
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"segments":[]}'))])
+
+        manager.llm = SimpleNamespace(completion=completion)
+        original_settings = AIManager.execute_structured_task.__globals__["settings"]
+        AIManager.execute_structured_task.__globals__["settings"] = SimpleNamespace(
+            config=SimpleNamespace(ai=SimpleNamespace(model="test-model", max_concurrency=1))
+        )
+        try:
+            manager.execute_structured_task("task.translation", {"variables": {}})
+            released_after_request = manager._request_semaphore.acquire(blocking=False)
+            if released_after_request:
+                manager._request_semaphore.release()
+        finally:
+            AIManager.execute_structured_task.__globals__["settings"] = original_settings
+
+        self.assertEqual(blocked_inside_request, [True])
+        self.assertTrue(released_after_request)
+
     def test_mod_alias_chunk_budget_does_not_treat_output_tokens_as_context_window(self):
         manager = object.__new__(AIManager)
         manager.llm = SimpleNamespace(
@@ -266,8 +309,151 @@ class TestAIServiceHelpers(unittest.TestCase):
             runtime_variables={},
         )
 
-        self.assertEqual(chunk_budget, 8944)
-        self.assertEqual(max_item_tokens, 8744)
+        self.assertEqual(chunk_budget, 6000)
+        self.assertEqual(max_item_tokens, 300)
+
+    def test_mod_alias_chunk_budget_respects_explicit_context_window(self):
+        manager = object.__new__(AIManager)
+        manager.llm = SimpleNamespace(
+            estimate_messages_tokens=lambda messages, model_name: 800,
+            _message_text=lambda content: str(content or ""),
+        )
+
+        chunk_budget, max_item_tokens = manager._resolve_mod_alias_chunk_token_budget(
+            cfg=SimpleNamespace(max_output_tokens=5000, context_window_tokens=100000),
+            model_name="test-model",
+            prompt_config={"system": "SYSTEM", "user_template": "{mod_alias_input_json}"},
+            runtime_variables={},
+        )
+
+        self.assertEqual(chunk_budget, 93432)
+        self.assertEqual(max_item_tokens, 4671)
+
+    def test_mod_alias_chunk_budget_caps_huge_output_setting_for_input_planning(self):
+        manager = object.__new__(AIManager)
+        manager.llm = SimpleNamespace(
+            estimate_messages_tokens=lambda messages, model_name: 800,
+            _message_text=lambda content: str(content or ""),
+        )
+
+        chunk_budget, max_item_tokens = manager._resolve_mod_alias_chunk_token_budget(
+            cfg=SimpleNamespace(max_output_tokens=384000),
+            model_name="test-model",
+            prompt_config={"system": "SYSTEM", "user_template": "{mod_alias_input_json}"},
+            runtime_variables={},
+        )
+
+        self.assertEqual(chunk_budget, 6000)
+        self.assertEqual(max_item_tokens, 300)
+
+    def test_execute_task_async_reserves_output_budget_per_chunk_item(self):
+        manager = object.__new__(AIManager)
+        manager._cancel_lock = threading.Lock()
+        manager._cancelled_task_ids = set()
+        manager._request_limit_lock = threading.Lock()
+        manager._request_limit = 0
+        manager._request_semaphore = threading.BoundedSemaphore(1)
+        manager._build_task_execution_context = lambda task_key, payload: {
+            "task_definition": SimpleNamespace(name="别名生成"),
+            "prompt_config": {},
+            "runtime_variables": {},
+            "resolved_attachments": [],
+            "llm_kwargs": {"model": "test-model"},
+        }
+        manager._resolve_mod_alias_generation_input_items = lambda resolved_attachments, runtime_variables: [
+            {"package_id": f"mod.{index}", "name": f"Mod {index}", "description": "x"}
+            for index in range(10)
+        ]
+        manager._resolve_mod_alias_chunk_token_budget = lambda **kwargs: (1000, 1000)
+        manager._estimate_text_tokens = lambda text, model_name: 100 if str(text or "").startswith("{") else 1
+
+        chunk_sizes = []
+        progress_events = []
+        original_event_bus = AIManager.execute_task_async.__globals__["EventBus"]
+        original_settings = AIManager.execute_task_async.__globals__["settings"]
+        AIManager.execute_task_async.__globals__["EventBus"] = SimpleNamespace(
+            emit=lambda *args, **kwargs: None,
+            emit_progress=lambda *args, **kwargs: progress_events.append(kwargs),
+        )
+        AIManager.execute_task_async.__globals__["settings"] = SimpleNamespace(
+            config=SimpleNamespace(ai=SimpleNamespace(model="test-model", max_concurrency=3))
+        )
+
+        async def fake_process_chunk(**kwargs):
+            chunk_sizes.append(len(kwargs["chunk_data"]))
+            return {
+                "chunk_id": kwargs["chunk_id"],
+                "status": "success",
+                "data": [
+                    {"package_id": item["package_id"], "alias_name": "A", "notes": "ok"}
+                    for item in kwargs["chunk_data"]
+                ],
+            }
+
+        manager._process_mod_alias_generation_chunk = fake_process_chunk
+        try:
+            asyncio.run(manager.execute_task_async("task.mod_alias_generation", {}, "task-1"))
+        finally:
+            AIManager.execute_task_async.__globals__["EventBus"] = original_event_bus
+            AIManager.execute_task_async.__globals__["settings"] = original_settings
+
+        self.assertGreater(len(chunk_sizes), 1)
+        self.assertLessEqual(max(chunk_sizes), 5)
+        running_events = [event for event in progress_events if event.get("status") == "running"]
+        self.assertEqual(running_events[-1]["metrics"]["chunk_current"], len(chunk_sizes))
+        self.assertEqual(running_events[-1]["metrics"]["chunk_total"], len(chunk_sizes))
+        self.assertNotIn("第1轮", running_events[0]["message"])
+
+    def test_execute_task_async_reports_partial_failure_status(self):
+        manager = object.__new__(AIManager)
+        manager._cancel_lock = threading.Lock()
+        manager._cancelled_task_ids = set()
+        manager._request_limit_lock = threading.Lock()
+        manager._request_limit = 0
+        manager._request_semaphore = threading.BoundedSemaphore(1)
+        manager._build_task_execution_context = lambda task_key, payload: {
+            "task_definition": SimpleNamespace(name="别名生成"),
+            "prompt_config": {},
+            "runtime_variables": {},
+            "resolved_attachments": [],
+            "llm_kwargs": {"model": "test-model"},
+        }
+        manager._resolve_mod_alias_generation_input_items = lambda resolved_attachments, runtime_variables: [
+            {"package_id": "a.mod", "name": "A", "description": ""},
+            {"package_id": "b.mod", "name": "B", "description": ""},
+        ]
+        manager._resolve_mod_alias_chunk_token_budget = lambda **kwargs: (1000, 1000)
+        manager._estimate_text_tokens = lambda text, model_name: 1
+
+        progress_events = []
+        original_event_bus = AIManager.execute_task_async.__globals__["EventBus"]
+        original_settings = AIManager.execute_task_async.__globals__["settings"]
+        AIManager.execute_task_async.__globals__["EventBus"] = SimpleNamespace(
+            emit=lambda *args, **kwargs: None,
+            emit_progress=lambda *args, **kwargs: progress_events.append(kwargs),
+        )
+        AIManager.execute_task_async.__globals__["settings"] = SimpleNamespace(
+            config=SimpleNamespace(ai=SimpleNamespace(model="test-model", max_concurrency=2))
+        )
+
+        async def fake_process_chunk(**kwargs):
+            data = []
+            if any(item["package_id"] == "a.mod" for item in kwargs["chunk_data"]):
+                data.append({"package_id": "a.mod", "alias_name": "A", "notes": "ok"})
+            return {"chunk_id": kwargs["chunk_id"], "status": "success", "data": data}
+
+        manager._process_mod_alias_generation_chunk = fake_process_chunk
+        try:
+            result = asyncio.run(manager.execute_task_async("task.mod_alias_generation", {}, "task-1"))
+        finally:
+            AIManager.execute_task_async.__globals__["EventBus"] = original_event_bus
+            AIManager.execute_task_async.__globals__["settings"] = original_settings
+
+        self.assertEqual(result["success_count"], 1)
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(progress_events[-1]["status"], "failed")
+        self.assertTrue(any(item.get("_failed") for item in result["results"]))
 
     def test_test_chat_reads_reasoning_field_and_inline_think(self):
         manager = object.__new__(AIManager)
@@ -302,7 +488,7 @@ class TestAIServiceHelpers(unittest.TestCase):
         with self.assertRaises(Exception) as ctx:
             manager.test_chat("hi", {})
 
-        self.assertIn("AI 服务没有返回可用结果", str(ctx.exception))
+        self.assertIn("非 OpenAI Chat Completions 兼容格式或空 choices", str(ctx.exception))
 
     def test_assistant_definition_keeps_selectable_tool_scope(self):
         definition = AssistantDefinition.model_validate({

@@ -5,7 +5,7 @@
       <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
       </label>
-      <button @click="add" class="text-xs text-accent-primary hover:underline">+ 新增条目</button>
+      <button @click="add" class="text-xs text-accent-primary hover:underline">{{ t('ui.kv.add_item', '+ 新增条目') }}</button>
     </div>
 
     <div class="space-y-1.5">
@@ -13,13 +13,13 @@
         <input 
           :value="key"
           @change="updateKey(key, $event.target.value)"
-          placeholder="域名"
+          :placeholder="t('ui.kv.key_placeholder', '域名')"
           class="flex-1 bg-bg-inset/70 border border-border-base/5 rounded-l-md px-3 py-1.5 text-sm text-text-main font-mono focus:outline-none focus:border-accent-primary/40"
         />
         <input 
           :value="val"
           @input="updateValue(key, $event.target.value)"
-          placeholder="IP"
+          :placeholder="t('ui.kv.value_placeholder', 'IP')"
           class="flex-1 bg-bg-inset/70 border border-border-base/5 rounded-r-md px-3 py-1.5 text-sm text-accent-primary font-mono focus:outline-none focus:border-accent-primary/40"
         />
         <button @click="remove(key)" class="px-2 text-text-dim hover:text-accent-danger transition-colors opacity-0 group-hover:opacity-100">
@@ -32,6 +32,7 @@
 
 <script setup>
 import { Trash2 } from 'lucide-vue-next'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,

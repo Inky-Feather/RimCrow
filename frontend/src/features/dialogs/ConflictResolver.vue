@@ -6,37 +6,37 @@
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-lg font-black tracking-wide text-text-main">处理重复模组</h2>
+                <h2 class="text-lg font-black tracking-wide text-text-main">{{ t('dialog.conflict.title', '处理重复模组') }}</h2>
                 <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-xs text-text-dim">
-                  硬冲突 {{ summary.hardCount }}
+                  {{ t('dialog.conflict.badge.hard', '硬冲突 {count}', { count: summary.hardCount }) }}
                 </span>
                 <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-xs text-text-dim">
-                  共存 {{ summary.softCount }}
+                  {{ t('dialog.conflict.badge.soft', '共存 {count}', { count: summary.softCount }) }}
                 </span>
                 <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-xs text-text-dim">
-                  待处理 {{ summary.pendingCount }}
+                  {{ t('dialog.conflict.badge.pending', '待处理 {count}', { count: summary.pendingCount }) }}
                 </span>
                 <span class="rounded-full border border-accent-warn/22 bg-accent-warn/10 px-2 py-0.5 text-xs text-accent-warn">
-                  禁用 {{ summary.disableCount }}
+                  {{ t('dialog.conflict.badge.disable', '禁用 {count}', { count: summary.disableCount }) }}
                 </span>
                 <span class="rounded-full border border-accent-danger/22 bg-accent-danger/10 px-2 py-0.5 text-xs text-accent-danger">
-                  删除 {{ summary.deleteCount }}
+                  {{ t('dialog.conflict.badge.delete', '删除 {count}', { count: summary.deleteCount }) }}
                 </span>
                 <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-xs text-text-dim">
-                  跳过 {{ summary.skipCount }}
+                  {{ t('dialog.conflict.badge.skip', '跳过 {count}', { count: summary.skipCount }) }}
                 </span>
               </div>
               <p class="mt-1 text-xs text-text-dim">
-                先选要保留的副本，再决定其余副本是禁用还是删除。
+                {{ t('dialog.conflict.subtitle', '先选要保留的副本，再决定其余副本是禁用还是删除。') }}
               </p>
             </div>
 
             <div class="flex items-center gap-2">
               <CommonSwitch :model-value="appStore.settings.show_coexistence_message"
-                @update:modelValue="handleCoexistenceToggle" label="显示共存提示" mini
-                description="关闭后只显示同级硬冲突"
+                @update:modelValue="handleCoexistenceToggle" :label="t('dialog.conflict.show_coexistence', '显示共存提示')" mini
+                :description="t('dialog.conflict.show_coexistence_desc', '关闭后只显示同级硬冲突')"
               />
-              <button class="modal-close-button" aria-label="关闭" v-tooltip="'关闭冲突处理弹窗，稍后再处理这些重复副本'" @click="visible = false" >
+              <button class="modal-close-button" :aria-label="t('common.action.close', '关闭')" v-tooltip="t('tooltip.conflict.close', '关闭冲突处理弹窗，稍后再处理这些重复副本')" @click="visible = false" >
                 <X class="size-4" />
               </button>
             </div>
@@ -57,11 +57,11 @@
                       :class="group._type === 'hard'
                         ? 'border-accent-danger/28 bg-accent-danger/10 text-accent-danger'
                         : 'border-accent-primary/25 bg-accent-primary/10 text-accent-primary'"
-                      v-tooltip="group._type === 'hard' ? '!!在同一个目录下发现重复文件，这可能会引起冲突，需要处理!!' : '不同目录下发现重复文件，这是正常现象，可选择处理，游戏会默认使用本地版本'" >
-                      {{ group._type === 'hard' ? '硬冲突' : '共存' }}
+                      v-tooltip="group._type === 'hard' ? t('tooltip.conflict.hard_group', '!!在同一个目录下发现重复文件，这可能会引起冲突，需要处理!!') : t('tooltip.conflict.soft_group', '不同目录下发现重复文件，这是正常现象，可选择处理，游戏会默认使用本地版本')" >
+                      {{ group._type === 'hard' ? t('dialog.conflict.group_type.hard', '硬冲突') : t('dialog.conflict.group_type.soft', '共存') }}
                     </span>
                     <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-[0.7rem] text-text-dim">
-                      {{ group.items.length }} 个副本
+                      {{ t('dialog.conflict.copy_count', '{count} 个副本', { count: group.items.length }) }}
                     </span>
                   </div>
                 </div>
@@ -85,19 +85,19 @@
                     <div class="min-w-0 flex-1" tabindex="0" v-tooltip="getModTooltip(mod)">
                       <div class="flex flex-wrap items-center gap-1.5">
                         <span class="truncate text-sm font-bold text-text-main">
-                          {{ mod.name || mod.package_id || '未知模组' }}
+                          {{ mod.name || mod.package_id || t('common.entity.unknown_mod', '未知模组') }}
                         </span>
                         <span class="rounded-full border px-2 py-0.5 text-[0.7rem] font-bold" :class="storeBadgeClass(mod.store)" >
                           {{ storeLabel(mod.store) }}
                         </span>
                         <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-[0.7rem] font-mono text-text-dim">
-                          支持 {{ getHighestSupportedVersion(mod) || '?' }}
+                          {{ t('dialog.conflict.supported_version', '支持 {version}', { version: getHighestSupportedVersion(mod) || '?' }) }}
                         </span>
                         <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-[0.7rem] font-mono text-text-dim">
                           v{{ mod.version || '?' }}
                         </span>
                         <span v-if="isWinner(group, mod)" class="rounded-full border border-accent-success/25 bg-accent-success/10 px-2 py-0.5 text-[0.7rem] font-black text-accent-success" >
-                          保留
+                          {{ t('dialog.conflict.keep', '保留') }}
                         </span>
                       </div>
                       <div class="truncate font-mono text-xs text-text-dim" :title="mod.path">
@@ -107,16 +107,16 @@
 
                     <div class="flex shrink-0 items-center gap-1.5" @click.stop>
                       <button class="rounded-full border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:border-accent-cool/30 hover:text-accent-cool"
-                        v-tooltip="'打开该副本所在目录'" @click="appStore.openPath(mod.path)" >
+                        v-tooltip="t('tooltip.conflict.open_copy_folder', '打开该副本所在目录')" @click="appStore.openPath(mod.path)" >
                         <Folder class="size-3.5" />
                       </button>
                       <button v-if="canOpenModPage(mod)"
                         class="rounded-full border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:border-accent-primary/30 hover:text-accent-primary"
-                        v-tooltip="'访问该副本页面'" @click="openModPage(mod)" >
+                        v-tooltip="t('tooltip.conflict.visit_copy_page', '访问该副本页面')" @click="openModPage(mod)" >
                         <ExternalLink class="size-3.5" />
                       </button>
                       <button class="rounded-full border border-border-base/10 bg-bg-overlay/5 p-1.5 text-text-dim transition-colors hover:border-border-base/18 hover:text-text-main"
-                        v-tooltip="'更多操作'" @click="openConflictItemMenu($event, group, mod)" >
+                        v-tooltip="t('common.action.more_actions', '更多操作')" @click="openConflictItemMenu($event, group, mod)" >
                         <EllipsisVertical class="size-3.5" />
                       </button>
 
@@ -125,24 +125,24 @@
                           :class="actionMap[getItemKey(mod)] === 'disable'
                             ? 'bg-accent-warn text-on-accent-warn'
                             : 'text-text-dim hover:text-accent-warn'"
-                          @click.stop v-tooltip="'保留文件，只把该副本改为禁用状态'">
+                          @click.stop v-tooltip="t('tooltip.conflict.disable_copy', '保留文件，只把该副本改为禁用状态')">
                           <input class="sr-only" type="radio" :name="`action-${getItemKey(mod)}`" :checked="actionMap[getItemKey(mod)] === 'disable'"
                             @change="setItemAction(group, mod, 'disable')" >
-                          禁用
+                          {{ t('common.action.deactivate', '禁用') }}
                         </label>
                         <label class="cursor-pointer rounded-full px-2.5 py-1 text-xs font-bold transition-colors"
                           :class="actionMap[getItemKey(mod)] === 'delete' ? 'bg-accent-danger text-on-accent-danger'  : 'text-text-dim hover:text-accent-danger'" 
-                          @click.stop v-tooltip="'将该副本移到回收站，不再保留文件'" >
+                          @click.stop v-tooltip="t('tooltip.conflict.delete_copy', '将该副本移到回收站，不再保留文件')" >
                           <input class="sr-only" type="radio" :name="`action-${getItemKey(mod)}`" :checked="actionMap[getItemKey(mod)] === 'delete'" @change="setItemAction(group, mod, 'delete')" >
-                          删除
+                          {{ t('common.action.delete', '删除') }}
                         </label>
                         <label class="cursor-pointer rounded-full px-2.5 py-1 text-xs font-bold transition-colors"
                           :class="actionMap[getItemKey(mod)] === 'skip'
                             ? 'bg-bg-overlay/20 text-text-main'
                             : 'text-text-dim hover:text-text-main'"
-                          @click.stop v-tooltip="'本次不处理该副本，重新扫描后可能仍会提示冲突'" >
+                          @click.stop v-tooltip="t('tooltip.conflict.skip_copy', '本次不处理该副本，重新扫描后可能仍会提示冲突')" >
                           <input class="sr-only" type="radio" :name="`action-${getItemKey(mod)}`" :checked="actionMap[getItemKey(mod)] === 'skip'" @change="setItemAction(group, mod, 'skip')" >
-                          跳过
+                          {{ t('common.action.skip', '跳过') }}
                         </label>
                       </div>
                     </div>
@@ -155,55 +155,55 @@
           <aside class="w-75 shrink-0 overflow-y-auto border-l border-border-base/10 bg-[linear-gradient(180deg,rgba(var(--rgb-bg-deep),0.9),rgba(var(--rgb-bg-inset),0.92))] px-4 py-4">
             <div class="space-y-3">
               <section class="modal-section p-3" data-tour="conflict-batch">
-                <div class="text-xs font-black uppercase tracking-[0.16em] text-text-dim">批量选择</div>
+                <div class="text-xs font-black uppercase tracking-[0.16em] text-text-dim">{{ t('dialog.conflict.batch_title', '批量选择') }}</div>
                 <p class="mt-1 text-xs leading-5 text-text-dim">
-                  选范围，选保留谁，再选其余副本怎么处理。
+                  {{ t('dialog.conflict.batch_desc', '选范围，选保留谁，再选其余副本怎么处理。') }}
                 </p>
 
                 <div class="mt-3 space-y-2.5">
-                  <CommonSelect v-model="batchRule.scope" :options="SCOPE_OPTIONS" label="范围" mini />
-                  <CommonSelect v-model="batchRule.keepRule" :options="BATCH_KEEP_OPTIONS" label="保留" mini />
-                  <CommonSelect v-model="batchRule.loserAction" :options="ACTION_OPTIONS" label="其余" mini />
+                  <CommonSelect v-model="batchRule.scope" :options="scopeOptions" :label="t('dialog.conflict.scope_label', '范围')" mini />
+                  <CommonSelect v-model="batchRule.keepRule" :options="batchKeepOptions" :label="t('dialog.conflict.keep_label', '保留')" mini />
+                  <CommonSelect v-model="batchRule.loserAction" :options="actionOptions" :label="t('dialog.conflict.loser_label', '其余')" mini />
                 </div>
 
                 <div class="mt-3 flex flex-wrap gap-1.5 text-xs">
                   <button class="rounded-full border border-accent-primary/24 bg-accent-primary/10 px-3 py-1 font-bold text-accent-primary transition-colors hover:bg-accent-primary/16"
-                    v-tooltip="'按当前范围、保留规则和处理方式，一次性应用到所有目标冲突组'" @click="applyBatchRule" >
-                    应用选择条件
+                    v-tooltip="t('tooltip.conflict.apply_batch', '按当前范围、保留规则和处理方式，一次性应用到所有目标冲突组')" @click="applyBatchRule" >
+                    {{ t('dialog.conflict.apply_batch', '应用选择条件') }}
                   </button>
                   <button class="rounded-full border border-accent-success/24 bg-accent-success/10 px-3 py-1 font-bold text-accent-success transition-colors hover:bg-accent-success/16"
-                    v-tooltip="'恢复系统推荐方案：优先保留更可能实际生效的副本，其余副本改为禁用'" @click="restoreRecommended" >
-                    恢复默认
+                    v-tooltip="t('tooltip.conflict.restore_recommended', '恢复系统推荐方案：优先保留更可能实际生效的副本，其余副本改为禁用')" @click="restoreRecommended" >
+                    {{ t('dialog.conflict.restore_recommended', '恢复默认') }}
                   </button>
                   <button class="rounded-full border border-accent-warn/20 bg-accent-warn/10 px-3 py-1 font-bold text-accent-warn transition-colors hover:bg-accent-warn/16"
-                    v-tooltip="'把当前范围内所有未保留副本统一改为禁用'" @click="setLoserActionForScope('disable')" >
-                    当前范围全禁用
+                    v-tooltip="t('tooltip.conflict.disable_scope', '把当前范围内所有未保留副本统一改为禁用')" @click="setLoserActionForScope('disable')" >
+                    {{ t('dialog.conflict.disable_scope', '当前范围全禁用') }}
                   </button>
                   <button class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-3 py-1 font-bold text-text-dim transition-colors hover:text-accent-danger"
-                    v-tooltip="'把当前范围内所有未保留副本统一移到回收站'" @click="setLoserActionForScope('delete')" >
-                    当前范围全删除
+                    v-tooltip="t('tooltip.conflict.delete_scope', '把当前范围内所有未保留副本统一移到回收站')" @click="setLoserActionForScope('delete')" >
+                    {{ t('dialog.conflict.delete_scope', '当前范围全删除') }}
                   </button>
                 </div>
               </section>
 
               <section class="modal-section p-3 text-xs leading-5 text-text-dim">
                 <div class="flex flex-wrap gap-x-2 gap-y-1">
-                  <span>当前范围 {{ scopedGroups.length }} 组</span>
-                  <span>待处理 {{ countPendingForScope }}</span>
-                  <span class="text-accent-warn">禁用 {{ countDisableForScope }}</span>
-                  <span class="text-accent-danger">删除 {{ countDeleteForScope }}</span>
-                  <span>跳过 {{ countSkipForScope }}</span>
+                  <span>{{ t('dialog.conflict.scope_group_count', '当前范围 {count} 组', { count: scopedGroups.length }) }}</span>
+                  <span>{{ t('dialog.conflict.badge.pending', '待处理 {count}', { count: countPendingForScope }) }}</span>
+                  <span class="text-accent-warn">{{ t('dialog.conflict.badge.disable', '禁用 {count}', { count: countDisableForScope }) }}</span>
+                  <span class="text-accent-danger">{{ t('dialog.conflict.badge.delete', '删除 {count}', { count: countDeleteForScope }) }}</span>
+                  <span>{{ t('dialog.conflict.badge.skip', '跳过 {count}', { count: countSkipForScope }) }}</span>
                 </div>
                 <div class="mt-2">
-                  推荐方案会优先保留实际更容易生效的副本：本地 &gt; 管理器 &gt; 工坊。
+                  {{ t('dialog.conflict.recommended_order', '推荐方案会优先保留实际更容易生效的副本：本地 > 管理器 > 工坊。') }}
                 </div>
                 <div v-if="summary.workshopDeleteCount > 0" class="mt-2 text-accent-warn">
-                  删除工坊副本后，Steam 以后可能重新下载。
+                  {{ t('dialog.conflict.workshop_delete_warning', '删除工坊副本后，Steam 以后可能重新下载。') }}
                 </div>
                 <br>
                 <div>
-                  <p class="text-accent-tip">对于共存模组（位于不同目录），游戏本身会优先加载本地目录版本。</p><br>
-                  <p class="text-accent-warn">对于冲突模组（位于同一目录），游戏本身会选择一个加载，因各种因素下加载的版本可能不是最正确的，建议手动选择保留正确项，其余禁用或删除，确保加载正确。</p>
+                  <p class="text-accent-tip">{{ t('dialog.conflict.soft_note', '对于共存模组（位于不同目录），游戏本身会优先加载本地目录版本。') }}</p><br>
+                  <p class="text-accent-warn">{{ t('dialog.conflict.hard_note', '对于冲突模组（位于同一目录），游戏本身会选择一个加载，因各种因素下加载的版本可能不是最正确的，建议手动选择保留正确项，其余禁用或删除，确保加载正确。') }}</p>
                 </div>
               </section>
 
@@ -212,7 +212,7 @@
                   ? 'border-accent-danger/24 bg-accent-danger/10 text-accent-danger'
                   : 'border-accent-warn/24 bg-accent-warn/10 text-accent-warn'" >
                 <div class="font-black">
-                  {{ submitFeedback.kind === 'error' ? '处理失败' : '处理提示' }}
+                  {{ submitFeedback.kind === 'error' ? t('dialog.conflict.feedback_error', '处理失败') : t('dialog.conflict.feedback_warning', '处理提示') }}
                 </div>
                 <p class="mt-1 leading-5 text-text-main">{{ submitFeedback.message }}</p>
                 <div v-if="submitFeedback.details?.length" class="mt-2 space-y-1 text-text-dim">
@@ -227,22 +227,22 @@
 
         <div class="modal-footer flex shrink-0 items-center justify-between gap-3 px-4 py-3" data-tour="conflict-submit">
           <div class="text-xs text-text-dim">
-            选择删除将直接移除文件至回收站，操作不可逆。禁用则会通过修改加载文件(About.xml)名称，让游戏无法检测，保留文件。
-            <div class="text-accent-warn">注意：直接删除创意工坊模组后，Steam 可能会重新下载。
-              <span class="text-accent-warning">禁用模组后可以在 库存枢纽 中对应列表筛选“已禁用”查看或解禁。</span>
+            {{ t('dialog.conflict.footer_delete_disable_desc', '选择删除将直接移除文件至回收站，操作不可逆。禁用则会通过修改加载文件(About.xml)名称，让游戏无法检测，保留文件。') }}
+            <div class="text-accent-warn">{{ t('dialog.conflict.footer_workshop_warning', '注意：直接删除创意工坊模组后，Steam 可能会重新下载。') }}
+              <span class="text-accent-warning">{{ t('dialog.conflict.footer_disabled_hint', '禁用模组后可以在 库存枢纽 中对应列表筛选“已禁用”查看或解禁。') }}</span>
             </div>
             
           </div>
           <div class="flex shrink-0 items-center gap-2">
             <button class="rounded-xl border border-border-base/10 bg-bg-overlay/5 px-4 py-2 text-xs font-bold text-text-dim transition-colors hover:border-border-base/18 hover:text-text-main"
-              v-tooltip="'关闭弹窗，暂不处理这些冲突'" @click="visible = false"
+              v-tooltip="t('tooltip.conflict.defer', '关闭弹窗，暂不处理这些冲突')" @click="visible = false"
             >
-              稍后处理
+              {{ t('dialog.conflict.defer', '稍后处理') }}
             </button>
             <button class="rounded-xl bg-accent-primary px-4 py-2 text-xs font-black text-on-accent-primary transition-colors hover:bg-accent-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="processing" v-tooltip="'执行当前配置的禁用/删除操作，并在完成后自动重新扫描'" @click="submit"
+              :disabled="processing" v-tooltip="t('tooltip.conflict.submit', '执行当前配置的禁用/删除操作，并在完成后自动重新扫描')" @click="submit"
             >
-              {{ processing ? '处理中...' : '执行处理' }}
+              {{ processing ? t('common.status.processing_dots', '处理中...') : t('dialog.conflict.submit', '执行处理') }}
             </button>
           </div>
         </div>
@@ -261,7 +261,9 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { buildModExternalMenuItem, buildModInfoCopyMenuItem, normalizeModMenuSource } from '../mod/lib/modContextMenuItems'
-import { toUserMessage } from '../../shared/lib/common'
+import { showUserErrorToast, toUserMessage } from '../../shared/lib/common'
+import { getStoreTypeLabel } from '../../shared/lib/constants'
+import { getCurrentLocale, t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const modStore = useModStore()
@@ -283,31 +285,31 @@ const batchRule = reactive({
   loserAction: 'disable',
 })
 
-const SCOPE_OPTIONS = [
-  { value: 'all', label: '全部冲突', desc: '同时处理硬冲突和版本共存。' },
-  { value: 'hard', label: '只选硬冲突', desc: '只处理同级目录里的重复包 ID。' },
-  { value: 'soft', label: '只选共存', desc: '只处理不同目录间的同包 ID 共存。' },
-]
+const scopeOptions = computed(() => [
+  { value: 'all', label: t('dialog.conflict.scope.all', '全部冲突'), desc: t('dialog.conflict.scope.all_desc', '同时处理硬冲突和版本共存。') },
+  { value: 'hard', label: t('dialog.conflict.scope.hard', '只选硬冲突'), desc: t('dialog.conflict.scope.hard_desc', '只处理同级目录里的重复包 ID。') },
+  { value: 'soft', label: t('dialog.conflict.scope.soft', '只选共存'), desc: t('dialog.conflict.scope.soft_desc', '只处理不同目录间的同包 ID 共存。') },
+])
 
-const BATCH_KEEP_OPTIONS = [
-  { value: 'recommended', label: '默认推荐', desc: '优先保留更可能实际生效的副本。' },
-  { value: 'prefer_local', label: '保留本地副本', desc: '如果有本地副本，优先保留它。' },
-  { value: 'prefer_self', label: '保留管理器副本', desc: '如果有管理器副本，优先保留它。' },
-  { value: 'prefer_workshop', label: '保留工坊副本', desc: '如果有工坊副本，优先保留它。' },
-  { value: 'latest_modified', label: '保留最新修改的', desc: '优先保留最近改动过的副本。' },
-  { value: 'earliest_modified', label: '保留最早修改的', desc: '优先保留修改时间更早的副本。' },
-  { value: 'latest_created', label: '保留最新创建的', desc: '优先保留新建时间更晚的副本。' },
-  { value: 'earliest_created', label: '保留最早创建的', desc: '优先保留创建时间更早的副本。' },
-  { value: 'highest_supported_version', label: '保留支持版本更高的', desc: '优先保留支持 RimWorld 版本更高的副本。' },
-  { value: 'highest_mod_version', label: '保留模组版本更高的', desc: '优先保留模组自身版本号更高的副本。' },
-  { value: 'shortest_path', label: '保留路径更短的', desc: '优先保留路径更短的副本。' },
-  { value: 'longest_path', label: '保留路径更长的', desc: '优先保留路径更长的副本。' },
-]
+const batchKeepOptions = computed(() => [
+  { value: 'recommended', label: t('dialog.conflict.keep_rule.recommended', '默认推荐'), desc: t('dialog.conflict.keep_rule.recommended_desc', '优先保留更可能实际生效的副本。') },
+  { value: 'prefer_local', label: t('dialog.conflict.keep_rule.prefer_local', '保留本地副本'), desc: t('dialog.conflict.keep_rule.prefer_local_desc', '如果有本地副本，优先保留它。') },
+  { value: 'prefer_self', label: t('dialog.conflict.keep_rule.prefer_self', '保留管理器副本'), desc: t('dialog.conflict.keep_rule.prefer_self_desc', '如果有管理器副本，优先保留它。') },
+  { value: 'prefer_workshop', label: t('dialog.conflict.keep_rule.prefer_workshop', '保留工坊副本'), desc: t('dialog.conflict.keep_rule.prefer_workshop_desc', '如果有工坊副本，优先保留它。') },
+  { value: 'latest_modified', label: t('dialog.conflict.keep_rule.latest_modified', '保留最新修改的'), desc: t('dialog.conflict.keep_rule.latest_modified_desc', '优先保留最近改动过的副本。') },
+  { value: 'earliest_modified', label: t('dialog.conflict.keep_rule.earliest_modified', '保留最早修改的'), desc: t('dialog.conflict.keep_rule.earliest_modified_desc', '优先保留修改时间更早的副本。') },
+  { value: 'latest_created', label: t('dialog.conflict.keep_rule.latest_created', '保留最新创建的'), desc: t('dialog.conflict.keep_rule.latest_created_desc', '优先保留新建时间更晚的副本。') },
+  { value: 'earliest_created', label: t('dialog.conflict.keep_rule.earliest_created', '保留最早创建的'), desc: t('dialog.conflict.keep_rule.earliest_created_desc', '优先保留创建时间更早的副本。') },
+  { value: 'highest_supported_version', label: t('dialog.conflict.keep_rule.highest_supported_version', '保留支持版本更高的'), desc: t('dialog.conflict.keep_rule.highest_supported_version_desc', '优先保留支持 RimWorld 版本更高的副本。') },
+  { value: 'highest_mod_version', label: t('dialog.conflict.keep_rule.highest_mod_version', '保留模组版本更高的'), desc: t('dialog.conflict.keep_rule.highest_mod_version_desc', '优先保留模组自身版本号更高的副本。') },
+  { value: 'shortest_path', label: t('dialog.conflict.keep_rule.shortest_path', '保留路径更短的'), desc: t('dialog.conflict.keep_rule.shortest_path_desc', '优先保留路径更短的副本。') },
+  { value: 'longest_path', label: t('dialog.conflict.keep_rule.longest_path', '保留路径更长的'), desc: t('dialog.conflict.keep_rule.longest_path_desc', '优先保留路径更长的副本。') },
+])
 
-const ACTION_OPTIONS = [
-  { value: 'disable', label: '其余都禁用', desc: '其它副本改为禁用。' },
-  { value: 'delete', label: '其余都删除', desc: '其它副本移到回收站。' },
-]
+const actionOptions = computed(() => [
+  { value: 'disable', label: t('dialog.conflict.action.disable_all', '其余都禁用'), desc: t('dialog.conflict.action.disable_all_desc', '其它副本改为禁用。') },
+  { value: 'delete', label: t('dialog.conflict.action.delete_all', '其余都删除'), desc: t('dialog.conflict.action.delete_all_desc', '其它副本移到回收站。') },
+])
 
 const STORE_PRIORITY = {
   local: 300,
@@ -323,10 +325,8 @@ const normalizeStore = (store) => {
 
 const storeLabel = (store) => {
   const value = normalizeStore(store)
-  if (value === 'local') return '本地'
-  if (value === 'self') return '管理器'
-  if (value === 'workshop') return '工坊'
-  return store || '未知'
+  if (['local', 'self', 'workshop'].includes(value)) return getStoreTypeLabel(value)
+  return store || t('common.store.unknown', '未知')
 }
 
 const storeBadgeClass = (store) => {
@@ -360,7 +360,7 @@ const normalizeTimestamp = (value) => {
 const formatTime = (value) => {
   const timestamp = normalizeTimestamp(value)
   if (!timestamp) return '-'
-  return new Date(timestamp).toLocaleString('zh-CN', { hour12: false })
+  return new Date(timestamp).toLocaleString(getCurrentLocale(), { hour12: false })
 }
 
 const getPathLength = (mod) => String(mod?.path || '').length
@@ -582,14 +582,14 @@ const isWinner = (group, mod) => selections[group.key] === getItemKey(mod)
 
 const getModTooltip = (mod) => {
   return [
-    `来源：${storeLabel(mod.store)}`,
-    `模组版本：${mod.version || '-'}`,
-    `最高支持版本：${getHighestSupportedVersion(mod) || '-'}`,
-    `支持版本列表：${joinSupportedVersions(mod) || '-'}`,
-    `创建时间：${formatTime(mod.file_create_time || mod.ctime)}`,
-    `修改时间：${formatTime(mod.file_modify_time || mod.mtime)}`,
-    `工坊 ID：${mod.workshop_id || '-'}`,
-    `路径：${mod.path || '-'}`,
+    t('tooltip.conflict.mod_source', '来源：{value}', { value: storeLabel(mod.store) }),
+    t('tooltip.conflict.mod_version', '模组版本：{value}', { value: mod.version || '-' }),
+    t('tooltip.conflict.highest_supported_version', '最高支持版本：{value}', { value: getHighestSupportedVersion(mod) || '-' }),
+    t('tooltip.conflict.supported_versions', '支持版本列表：{value}', { value: joinSupportedVersions(mod) || '-' }),
+    t('tooltip.conflict.created_time', '创建时间：{value}', { value: formatTime(mod.file_create_time || mod.ctime) }),
+    t('tooltip.conflict.modified_time', '修改时间：{value}', { value: formatTime(mod.file_modify_time || mod.mtime) }),
+    t('tooltip.conflict.workshop_id', '工坊 ID：{value}', { value: mod.workshop_id || '-' }),
+    t('tooltip.conflict.path', '路径：{value}', { value: mod.path || '-' }),
   ].join('\n')
 }
 
@@ -606,7 +606,7 @@ const setItemAction = (group, mod, action) => {
 }
 
 const canLocalize = (mod) => !!mod?.path_hash && !!mod?.workshop_id && ['workshop', 'self'].includes(normalizeStore(mod.store))
-const getLocalizeLabel = (mod) => mod?.is_coexistence ? '同步本地共存' : '本地化共存'
+const getLocalizeLabel = (mod) => mod?.is_coexistence ? t('dialog.conflict.menu.sync_local_coexistence', '同步本地共存') : t('dialog.conflict.menu.localize_coexistence', '本地化共存')
 const canUnsubscribe = (mod) => !!mod?.workshop_id && !!mod?.path_hash && normalizeStore(mod.store) === 'workshop'
 const canOpenModPage = (mod) => {
   const info = normalizeModMenuSource(mod)
@@ -624,19 +624,19 @@ const openConflictItemMenu = (event, group, mod) => {
   event?.preventDefault?.()
   event?.stopPropagation?.()
   contextMenuStore.open(event, [
-    buildModInfoCopyMenuItem(mod, { label: '复制信息' }),
-    buildModExternalMenuItem(mod, appStore, { label: '访问页面' }),
+    buildModInfoCopyMenuItem(mod, { label: t('ui.mod.action.copy_info', '复制模组信息') }),
+    buildModExternalMenuItem(mod, appStore, { label: t('common.action.visit_page', '访问页面') }),
     { divider: true },
-    { label: '打开目录', icon: Folder, disabled: !mod?.path, action: () => appStore.openPath(mod.path) },
+    { label: t('dialog.conflict.menu.open_folder', '打开目录'), icon: Folder, disabled: !mod?.path, action: () => appStore.openPath(mod.path) },
     { divider: true },
     { label: getLocalizeLabel(mod), icon: FolderInput, disabled: !canLocalize(mod), action: () => handleLocalize(mod) },
-    { label: '退订并删除', icon: XCircle, level: 'danger', disabled: !canUnsubscribe(mod), action: () => handleUnsubscribe(mod) },
+    { label: t('dialog.conflict.menu.unsubscribe_delete', '退订并删除'), icon: XCircle, level: 'danger', disabled: !canUnsubscribe(mod), action: () => handleUnsubscribe(mod) },
   ], { group, mod })
 }
 
 const applyBatchRule = () => {
   if (!scopedGroups.value.length) {
-    toast.info('当前作用范围内没有可处理的冲突组')
+    toast.info(t('toast.conflict.empty_scope', '当前作用范围内没有可处理的冲突组'))
     return
   }
 
@@ -651,7 +651,7 @@ const applyBatchRule = () => {
   })
 
   submitFeedback.value = null
-  toast.success(`已按条件处理 ${scopedGroups.value.length} 组冲突`)
+  toast.success(t('toast.conflict.batch_applied', '已按条件处理 {count} 组冲突', { count: scopedGroups.value.length }))
 }
 
 const restoreRecommended = () => {
@@ -666,12 +666,12 @@ const restoreRecommended = () => {
     })
   })
   submitFeedback.value = null
-  toast.success('已恢复推荐处理方案')
+  toast.success(t('toast.conflict.recommended_restored', '已恢复推荐处理方案'))
 }
 
 const setLoserActionForScope = (action) => {
   if (!scopedGroups.value.length) {
-    toast.info('当前作用范围内没有可处理的冲突组')
+    toast.info(t('toast.conflict.empty_scope', '当前作用范围内没有可处理的冲突组'))
     return
   }
 
@@ -712,43 +712,43 @@ const submit = async () => {
 
   const operations = buildOperations()
   if (!operations.length) {
-    toast.info('当前没有需要处理的副本')
+    toast.info(t('toast.conflict.no_operations', '当前没有需要处理的副本'))
     visible.value = false
     return
   }
 
   const confirmMessage = [
-    `将处理 ${summary.value.groupCount} 组冲突中的 ${operations.length} 个未保留副本。`,
-    `禁用 ${summary.value.disableCount} 个，删除 ${summary.value.deleteCount} 个。`,
+    t('dialog.conflict.confirm.summary', '将处理 {groupCount} 组冲突中的 {operationCount} 个未保留副本。', { groupCount: summary.value.groupCount, operationCount: operations.length }),
+    t('dialog.conflict.confirm.action_counts', '禁用 {disableCount} 个，删除 {deleteCount} 个。', { disableCount: summary.value.disableCount, deleteCount: summary.value.deleteCount }),
     summary.value.workshopDeleteCount > 0
-      ? `其中 ${summary.value.workshopDeleteCount} 个工坊副本会被删除，Steam 后续可能重新下载。`
+      ? t('dialog.conflict.confirm.workshop_delete', '其中 {count} 个工坊副本会被删除，Steam 后续可能重新下载。', { count: summary.value.workshopDeleteCount })
       : null,
     summary.value.skipCount > 0
-      ? `已跳过 ${summary.value.skipCount} 个副本，本次不会处理。`
+      ? t('dialog.conflict.confirm.skip_count', '已跳过 {count} 个副本，本次不会处理。', { count: summary.value.skipCount })
       : null,
-    '提交后会立即刷新数据库并重新扫描文件系统，剩余未成功项会在新一轮扫描中重新提示。',
+    t('dialog.conflict.confirm.rescan_notice', '提交后会立即刷新数据库并重新扫描文件系统，剩余未成功项会在新一轮扫描中重新提示。'),
   ].filter(Boolean).join('\n')
 
   const deleteCount = summary.value.deleteCount || 0
   const confirmResult = deleteCount > 0
     ? await confirmStore.confirmDeleteAction(
-        '确认处理冲突',
+        t('dialog.conflict.confirm.title', '确认处理冲突'),
         confirmMessage,
         {
-          confirmText: '确认执行',
-          cancelText: '再检查一下',
-          trashOptionText: '删除副本并移入回收站',
-          forceOptionText: '强制彻底删除副本',
-          deleteOptionsHint: '该选项仅影响本次选择为“删除”的副本；禁用项仍只会调整文件状态。',
+          confirmText: t('dialog.conflict.confirm.confirm_text', '确认执行'),
+          cancelText: t('dialog.conflict.confirm.cancel_text', '再检查一下'),
+          trashOptionText: t('dialog.conflict.confirm.trash_option', '删除副本并移入回收站'),
+          forceOptionText: t('dialog.conflict.confirm.force_option', '强制彻底删除副本'),
+          deleteOptionsHint: t('dialog.conflict.confirm.delete_hint', '该选项仅影响本次选择为“删除”的副本；禁用项仍只会调整文件状态。'),
         }
       )
     : await confirmStore.confirmAction(
-        '确认处理冲突',
+        t('dialog.conflict.confirm.title', '确认处理冲突'),
         confirmMessage,
         {
           type: 'warning',
-          confirmText: '确认执行',
-          cancelText: '再检查一下',
+          confirmText: t('dialog.conflict.confirm.confirm_text', '确认执行'),
+          cancelText: t('dialog.conflict.confirm.cancel_text', '再检查一下'),
         }
       )
   if (deleteCount > 0) {
@@ -771,9 +771,9 @@ const submit = async () => {
       visible.value = false
 
       if (res.status === 'success') {
-        toast.success(`已处理 ${resultStats.success_count || operations.length} 项冲突副本，正在重新扫描。`)
+        toast.success(t('toast.conflict.resolved_success', '已处理 {count} 项冲突副本，正在重新扫描。', { count: resultStats.success_count || operations.length }))
       } else {
-        toast.warning(`已处理 ${resultStats.success_count || 0} 项，${resultStats.error_count || 0} 项失败；剩余问题会在重新扫描后重新提示。`, {
+        toast.warning(t('toast.conflict.resolved_partial', '已处理 {successCount} 项，{errorCount} 项失败；剩余问题会在重新扫描后重新提示。', { successCount: resultStats.success_count || 0, errorCount: resultStats.error_count || 0 }), {
           timeout: 9000,
         })
       }
@@ -783,17 +783,17 @@ const submit = async () => {
     }
 
     const failedPaths = Array.isArray(res?.data?.failed_paths) ? res.data.failed_paths : []
-    const userMessage = toUserMessage(res?.message, '冲突处理失败。可能是目标文件已被占用、路径权限不足或列表状态已变化，请重新扫描后再试。')
+    const userMessage = toUserMessage(res, t('toast.conflict.resolve_failed', '冲突处理失败。可能是目标文件已被占用、路径权限不足或列表状态已变化，请重新扫描后再试。'))
     submitFeedback.value = {
       kind: 'error',
       message: userMessage,
       details: failedPaths.slice(0, 3),
     }
-    toast.error(userMessage)
+    showUserErrorToast(res, userMessage)
   } catch (error) {
-    const message = toUserMessage(error?.message || error, '冲突处理请求失败。请确认后端服务仍在运行，并重新扫描后再试。')
+    const message = toUserMessage(error, t('toast.conflict.resolve_exception', '冲突处理请求失败。请确认后端服务仍在运行，并重新扫描后再试。'))
     submitFeedback.value = { kind: 'error', message, details: [] }
-    toast.error(message)
+    showUserErrorToast(error, message)
   } finally {
     processing.value = false
   }

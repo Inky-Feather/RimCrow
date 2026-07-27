@@ -2,6 +2,7 @@ import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { checkResult, normalizeText } from '../../shared/lib/common'
 import { useAiStore } from '../ai/aiStore'
+import { t } from '../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // 日志分析选择态 Store
@@ -27,12 +28,8 @@ const createEmptySourceState = () => ({
   tokenInfo: createEmptyTokenInfo(),
   selectionRequestSeq: 0,
   attachmentKey: '',
+  pendingFocusErrorId: '',
 })
-
-const LOG_SOURCE_LABELS = {
-  game: '游戏日志',
-  app: '系统日志',
-}
 
 const cloneLogSnapshot = (log = {}) => ({
   /**
@@ -91,7 +88,9 @@ export const useLogStore = defineStore('log', () => {
   }
 
   const getSourceLabel = (sourceType = 'game') => (
-    LOG_SOURCE_LABELS[normalizeText(sourceType, 'game')] || '日志'
+    normalizeText(sourceType, 'game') === 'app'
+      ? t('dialog.log_viewer.tab.app', '系统日志')
+      : t('dialog.log_viewer.tab.game', '游戏日志')
   )
 
   const getSelectedLogs = (sourceType = 'game') => {
@@ -100,6 +99,21 @@ export const useLogStore = defineStore('log', () => {
     return state.selectedIds
       .map(id => state.selectedLogSnapshotsById[id])
       .filter(Boolean)
+  }
+
+  const setPendingFocusErrorId = (sourceType = 'app', errorId = '') => {
+    /** 记录外部入口希望日志面板定位的错误 ID。 */
+    const state = getSourceState(sourceType)
+    state.pendingFocusErrorId = normalizeText(errorId)
+    return state.pendingFocusErrorId
+  }
+
+  const consumePendingFocusErrorId = (sourceType = 'app') => {
+    /** 读取并清空待定位错误，避免重复打开日志页时反复跳转。 */
+    const state = getSourceState(sourceType)
+    const errorId = normalizeText(state.pendingFocusErrorId)
+    state.pendingFocusErrorId = ''
+    return errorId
   }
 
   const selectedLogsBySource = computed(() => ({
@@ -341,7 +355,7 @@ export const useLogStore = defineStore('log', () => {
       if (requestSeq && !isCurrentSelectionRequest(normalizedSourceType, requestSeq)) {
         return null
       }
-      if (!checkResult(res, 'Token检测')) {
+      if (!checkResult(res, t('check.log_panel.token_estimate', 'Token检测'))) {
         const emptyInfo = createEmptyTokenInfo()
         setTokenInfo(normalizedSourceType, emptyInfo, { syncAttachment: true })
         return emptyInfo
@@ -357,7 +371,7 @@ export const useLogStore = defineStore('log', () => {
       setTokenInfo(normalizedSourceType, nextTokenInfo, { syncAttachment: true })
       return nextTokenInfo
     } catch (error) {
-      console.error('Token 计算失败:', error)
+      console.error('Token calculation failed:', error)
       if (requestSeq && !isCurrentSelectionRequest(normalizedSourceType, requestSeq)) {
         return null
       }
@@ -401,7 +415,7 @@ export const useLogStore = defineStore('log', () => {
       if (requestSeq && !isCurrentSelectionRequest(normalizedSourceType, requestSeq)) {
         return null
       }
-      if (!checkResult(res, '全局扫描')) {
+      if (!checkResult(res, t('check.log_panel.global_scan', '全局扫描'))) {
         clearSelection(normalizedSourceType)
         return null
       }
@@ -486,6 +500,7 @@ export const useLogStore = defineStore('log', () => {
     showSidebar, sourceStates, selectedLogsBySource, tokenInfoBySource,
     // 来源与选择读取
     getSourceState, getSourceLabel, getSelectedLogs,
+    setPendingFocusErrorId, consumePendingFocusErrorId,
     // 选择维护
     setSelectedFile, replaceSelection, clearSelection, refreshSelectedSnapshotsFromLoadedLogs,
     // Token 与附件

@@ -39,8 +39,10 @@ from backend.ai.def_output_contracts import (
     get_allowed_action_types,
 )
 from backend.ai.ai_tools import AIToolExecutor, ToolExecutionResult
+from backend.i18n.messages import tr
 from backend.settings import settings
 from backend.utils.constants import get_lang_by_code
+from backend.utils.error_contract import build_stack_detail, classify_exception
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import logger
 
@@ -839,15 +841,16 @@ class AssistantRuntime:
             }
         except Exception as exc:
             token_usage = session_request["token_usage"] if session_request else self._create_token_usage()
+            error_message = tr("api.ai.session_failed", "AI 会话执行失败。请检查模型服务、网络连接和配置后重试。")
             self.trace_store.finalize_record(
                 trace_record,
                 status="error",
                 token_usage=token_usage,
                 message_usage=self._build_message_usage_from_request(token_usage),
                 prompt_input_breakdown=session_request.get("initial_prompt_input_breakdown") if session_request else create_prompt_input_breakdown(),
-                error=str(exc),
+                error=error_message,
                 response_payload={
-                    "error": str(exc),
+                    "error": error_message,
                     "message_usage": self._build_message_usage_from_request(token_usage),
                     "prompt_input_breakdown": session_request.get("initial_prompt_input_breakdown") if session_request else create_prompt_input_breakdown(),
                     "runtime": self._build_runtime_trace_payload(session_state),
@@ -1760,13 +1763,14 @@ class AssistantRuntime:
             except AssistantRequestCancelled:
                 raise
             except Exception as exc:
+                error_id = uuid.uuid4().hex[:10]
                 logger.error(
                     "AI 会话执行失败。session_id=%s",
                     session_id,
-                    extra={"error_code": "AI.SESSION.RUN_FAILED", "extra_context": {"session_id": session_id, "original_error": str(exc)}},
+                    extra={"error_code": "AI.SESSION.RUN_FAILED", "extra_context": {"session_id": session_id, "error_id": error_id}},
                     exc_info=True,
                 )
-                return self._build_error_response(exc, token_usage)
+                return self._build_error_response(exc, token_usage, error_id=error_id, context={"session_id": session_id})
 
         return self._build_forced_summary(
             session_id,
@@ -1826,13 +1830,14 @@ class AssistantRuntime:
                     raise
                 except Exception as tool_err:
                     logger.error(f"[AI会话] 工具执行异常 tool={func_name}: {tool_err}", exc_info=True)
+                    tool_error_message = "工具执行失败，请稍后重试。"
                     tool_execution = ToolExecutionResult(
                         name=func_name,
                         ok=False,
-                        model_output=json.dumps({"error": f"工具 {func_name} 执行异常: {str(tool_err)}"}, ensure_ascii=False),
-                        data={"error": f"工具 {func_name} 执行异常: {str(tool_err)}"},
-                        summary=f"执行失败：工具 {func_name} 执行异常: {str(tool_err)}",
-                        error=str(tool_err),
+                        model_output=json.dumps({"error": tool_error_message}, ensure_ascii=False),
+                        data={"error": tool_error_message},
+                        summary=f"执行失败：{tool_error_message}",
+                        error=tool_error_message,
                     )
                 self._raise_if_cancelled(session_id)
 
@@ -2139,31 +2144,27 @@ class AssistantRuntime:
             allowed_action_types=allowed_action_types,
         )
 
-    def _build_error_response(self, error: Exception, token_usage: dict[str, Any], summary_label: str = "点击展开诊断建议") -> dict[str, Any]:
-        import traceback
-
+    def _build_error_response(self, error: Exception, token_usage: dict[str, Any], summary_label: str = "点击展开诊断建议", error_id: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
+        resolved_error_id = error_id or uuid.uuid4().hex[:10]
         token_usage["estimated_total_tokens"] = (
             token_usage["estimated_prompt_tokens"] + token_usage["estimated_completion_tokens"]
         )
-        error_trace = traceback.format_exc()
-        error_markdown = (
-            "**AI 请求没有完成。**\n\n"
-            "常见原因包括：模型服务暂时无响应、网络或代理连接中断、API Key 无效、当前模型不支持本次工具调用，"
-            "或中转服务返回了不兼容的响应。\n\n"
-            f"<details><summary>{summary_label}</summary>\n\n"
-            "请先检查 AI 设置里的模型、Base URL、API Key 和代理配置；如果刚才请求内容较大，"
-            "可以减少附件或稍后重试。详细技术错误已写入系统日志。\n"
-            "</details>"
-        )
+        classified = classify_exception(error, module="ai", action="assistant", context=context)
+        user_message = classified.user_message or tr("errors.ai.request_failed", "AI 请求没有完成。请检查模型配置、网络连接和服务状态后重试。")
+        error_markdown = f"**{user_message}**"
         return {
             "analysis": error_markdown,
             "actions": [],
             "token_usage": token_usage,
             "message_usage": self._build_message_usage_from_request(token_usage),
-            "detail": {
-                "original_error": str(error),
-                "traceback": error_trace,
-            },
+            "error_id": resolved_error_id,
+            "error_type": classified.error_type,
+            "error_code": classified.error_code,
+            "message_key": classified.message_key,
+            "message_params": dict(classified.message_params or {}),
+            "message": tr("errors.ai.assistant_failed", "AI 助手请求失败"),
+            "user_message": user_message,
+            "detail": build_stack_detail(error, context=context, error_id=resolved_error_id),
         }
 
     def _build_forced_summary(
@@ -2236,10 +2237,11 @@ class AssistantRuntime:
         except AssistantRequestCancelled:
             raise
         except Exception as exc:
+            error_id = uuid.uuid4().hex[:10]
             logger.error(
                 "AI 会话强制总结失败。session_id=%s",
                 session_id,
-                extra={"error_code": "AI.SESSION.FORCED_SUMMARY_FAILED", "extra_context": {"session_id": session_id, "original_error": str(exc)}},
+                extra={"error_code": "AI.SESSION.FORCED_SUMMARY_FAILED", "extra_context": {"session_id": session_id, "error_id": error_id}},
                 exc_info=True,
             )
-            return self._build_error_response(exc, token_usage, "点击展开诊断建议")
+            return self._build_error_response(exc, token_usage, "点击展开诊断建议", error_id=error_id, context={"session_id": session_id, "stage": "forced_summary"})

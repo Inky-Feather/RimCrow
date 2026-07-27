@@ -19,6 +19,7 @@ import { useModStore } from '../stores/modStore'
 import { useProfileStore } from '../../profiles/profileStore'
 import { useSupplementStore } from '../../supplement/supplementStore'
 import { useMissingInstallStore } from '../../supplement/missingInstallStore'
+import { t } from '../../../shared/i18n.js'
 
 const props = defineProps({
   listId: { type: String, required: true },
@@ -86,20 +87,20 @@ const hasMissingInstallAction = computed(() => (
 ) > 0)
 
 const missingInstallTooltip = computed(() => {
-  if (!hasMissingInstallAction.value) return '当前没有可处理的安装项'
+  if (!hasMissingInstallAction.value) return t('tooltip.mod_list.quick_action.missing_install.empty', '当前没有可处理的安装项')
   const lines = []
   if (missingInstallSummary.value.dangerTotal > 0) {
-    lines.push(`!!需处理 ${missingInstallSummary.value.dangerTotal} 项!!`)
+    lines.push(t('tooltip.mod_list.quick_action.missing_install.danger', '!!需处理 {count} 项!!', { count: missingInstallSummary.value.dangerTotal }))
   } else if (missingInstallSummary.value.unknownTotal > 0) {
-    lines.push(`!!未知来源 ${missingInstallSummary.value.unknownTotal} 项!!`)
+    lines.push(t('tooltip.mod_list.quick_action.missing_install.unknown', '!!未知来源 {count} 项!!', { count: missingInstallSummary.value.unknownTotal }))
   } else if (missingInstallSummary.value.warnTotal > 0) {
-    lines.push(`^^建议处理 ${missingInstallSummary.value.warnTotal} 项^^`)
+    lines.push(t('tooltip.mod_list.quick_action.missing_install.warn', '^^建议处理 {count} 项^^', { count: missingInstallSummary.value.warnTotal }))
   }
-  if (missingInstallSummary.value.dangerTotal > 0) lines.push(`• 必要处理: ${missingInstallSummary.value.dangerTotal}`)
-  if (missingInstallSummary.value.warnTotal > 0) lines.push(`• 警告项: ${missingInstallSummary.value.warnTotal}`)
-  if (missingInstallSummary.value.unknownTotal > 0) lines.push(`• 未知来源: ${missingInstallSummary.value.unknownTotal}`)
+  if (missingInstallSummary.value.dangerTotal > 0) lines.push(t('tooltip.mod_list.quick_action.missing_install.danger_item', '• 必要处理: {count}', { count: missingInstallSummary.value.dangerTotal }))
+  if (missingInstallSummary.value.warnTotal > 0) lines.push(t('tooltip.mod_list.quick_action.missing_install.warn_item', '• 警告项: {count}', { count: missingInstallSummary.value.warnTotal }))
+  if (missingInstallSummary.value.unknownTotal > 0) lines.push(t('tooltip.mod_list.quick_action.missing_install.unknown_item', '• 未知来源: {count}', { count: missingInstallSummary.value.unknownTotal }))
   lines.push('')
-  lines.push('__[[(点击打开安装处理窗口)]]__')
+  lines.push(t('tooltip.mod_list.quick_action.missing_install.open', '__[[(点击打开安装处理窗口)]]__'))
   return lines.join('\n')
 })
 
@@ -132,23 +133,23 @@ const supplementButtonClass = computed(() => {
 })
 
 const supplementTooltip = computed(() => {
-  if (!hasSupplementAction.value) return '当前没有可补齐的未启用模组'
+  if (!hasSupplementAction.value) return t('tooltip.mod_list.quick_action.supplement.empty', '当前没有可补齐的未启用模组')
   const groupLines = supplementSummary.value.groups
     .filter(group => group.severity !== 'info')
-    .map(group => `• ${group.title}: ${group.count} 项`)
+    .map(group => t('tooltip.mod_list.quick_action.supplement.group_item', '• {title}: {count} 项', { title: group.title, count: group.count }))
     .join('\n')
   const lines = []
   if (supplementSummary.value.dangerCount > 0) {
-    lines.push(`!!需处理 ${supplementSummary.value.dangerCount} 项!!`)
+    lines.push(t('tooltip.mod_list.quick_action.supplement.danger', '!!需处理 {count} 项!!', { count: supplementSummary.value.dangerCount }))
   } else if (supplementSummary.value.warnCount > 0) {
-    lines.push(`^^建议处理 ${supplementSummary.value.warnCount} 项^^`)
+    lines.push(t('tooltip.mod_list.quick_action.supplement.warn', '^^建议处理 {count} 项^^', { count: supplementSummary.value.warnCount }))
   }
-  lines.push(`发现 ${supplementSummary.value.visibleCount} 项可补齐内容`)
-  if (supplementSummary.value.dangerCount > 0) lines.push(`• 必要项: ${supplementSummary.value.dangerCount}`)
-  if (supplementSummary.value.warnCount > 0) lines.push(`• 建议项: ${supplementSummary.value.warnCount}`)
+  lines.push(t('tooltip.mod_list.quick_action.supplement.found', '发现 {count} 项可补齐内容', { count: supplementSummary.value.visibleCount }))
+  if (supplementSummary.value.dangerCount > 0) lines.push(t('tooltip.mod_list.quick_action.supplement.danger_item', '• 必要项: {count}', { count: supplementSummary.value.dangerCount }))
+  if (supplementSummary.value.warnCount > 0) lines.push(t('tooltip.mod_list.quick_action.supplement.warn_item', '• 建议项: {count}', { count: supplementSummary.value.warnCount }))
   if (groupLines) lines.push(groupLines)
   lines.push('')
-  lines.push('__[[(点击打开补齐窗口)]]__')
+  lines.push(t('tooltip.mod_list.quick_action.supplement.open', '__[[(点击打开补齐窗口)]]__'))
   return lines.join('\n')
 })
 
@@ -166,7 +167,7 @@ const openSupplementDialog = async () => {
   if (!isActiveList.value) return
   await supplementStore.openForActiveList({
     activeIds: props.modelValue,
-    message: '选择要启用的模组。',
+    message: t('ui.mod_list.quick_action.supplement.message', '选择要启用的模组。'),
   })
 }
 
@@ -175,7 +176,7 @@ const removeInvalidMod = async () => {
   if (invalidMods.length === 0) return
   await modStore.runListHistoryTransaction({
     type: 'batch-remove-list-items',
-    label: `移除 ${invalidMods.length} 个无效 Mod`,
+    label: t('history.mod_list.remove_invalid', '移除 {count} 个无效 Mod', { count: invalidMods.length }),
     trackedModIds: invalidMods
   }, async () => {
     modStore.removeUnavailableIdsCompletely(invalidMods)
@@ -204,7 +205,7 @@ const visibleQuickActions = computed(() => [
     key: 'remove-invalid',
     visible: invalidModsToRemove.value.length > 0,
     icon: Trash2,
-    tooltip: `^^一键移除共计 ${invalidModsToRemove.value.length} 个无效Mod^^`,
+    tooltip: t('tooltip.mod_list.quick_action.remove_invalid', '^^一键移除共计 {count} 个无效Mod^^', { count: invalidModsToRemove.value.length }),
     buttonClass: ACTION_BUTTON_CLASS.danger,
     onClick: removeInvalidMod,
   },

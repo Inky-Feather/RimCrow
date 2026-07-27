@@ -81,7 +81,7 @@ class PromptVariableDefinition(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     key: str
-    label: str
+    label: str = ""
     description: str = ""
     required_fields: list[str] = Field(default_factory=list)
 
@@ -157,6 +157,11 @@ class ActionDefinition(BaseModel):
     execute_label: str = ""
     unsupported_message: str = ""
     execution_failed_message: str = ""
+    missing_payload_message: str = ""
+    confirm_confirm_text: str = ""
+    post_success_title: str = ""
+    post_success_message: str = ""
+    post_success_confirm_text: str = ""
     render_config: dict[str, Any] = Field(default_factory=dict)
     execution_config: dict[str, Any] = Field(default_factory=dict)
     variants: dict[str, "ActionVariantDefinition"] = Field(default_factory=dict)

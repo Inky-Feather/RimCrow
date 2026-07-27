@@ -88,7 +88,7 @@
                 >
                 <div class="min-w-0">
                   <div class="text-sm font-semibold text-text-main">{{ confirmStore.state.trashOptionText }}</div>
-                  <div class="text-xs text-text-dim leading-relaxed">更安全，文件会进入系统回收站，可在系统中恢复。</div>
+                  <div class="text-xs text-text-dim leading-relaxed">{{ t('dialog.delete.trash_description', '更安全，文件会进入系统回收站，可在系统中恢复。') }}</div>
                 </div>
               </label>
 
@@ -102,7 +102,7 @@
                 >
                 <div class="min-w-0">
                   <div class="text-sm font-semibold text-accent-danger">{{ confirmStore.state.forceOptionText }}</div>
-                  <div class="text-xs text-text-dim leading-relaxed">直接彻底删除，不进入回收站，通常无法恢复。</div>
+                  <div class="text-xs text-text-dim leading-relaxed">{{ t('dialog.delete.force_description', '直接彻底删除，不进入回收站，通常无法恢复。') }}</div>
                 </div>
               </label>
 
@@ -228,6 +228,7 @@ import { useConfirmStore } from './confirmStore'
 import { useAppStore } from '../../../app/stores/appStore'
 import { onClickOutside, useWindowSize } from '@vueuse/core'
 import { Info, CircleAlert, CircleX, CircleCheckBig } from 'lucide-vue-next'
+import { t } from '../../i18n.js'
 
 // --- SVG 图标 (纯净无依赖) ---
 const Icons = {

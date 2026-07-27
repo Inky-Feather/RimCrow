@@ -1,14 +1,6 @@
 ·[RimModManager]
-├── ·[.claude]
-├── ·[.codegraph]
-├── ·[.cursor]
-├── ·[.history]
-├── ·[.pytest_cache]
-├── ·[.ruff_cache]
-├── ·[.worktrees]
 ├── ·[backend]
 │   ├── ·[ai]
-│   │   ├──  __init__.py
 │   │   ├──  ai_contracts.py
 │   │   ├──  ai_definitions.py
 │   │   ├──  ai_gateway.py
@@ -24,7 +16,6 @@
 │   │   └──  def_output_contracts.py
 │   │   
 │   ├── ·[database]
-│   │   ├──  __init__.py
 │   │   ├──  dao.py
 │   │   ├──  dao_ext.py
 │   │   ├──  migrator.py
@@ -36,11 +27,10 @@
 │   │   
 │   ├── ·[environment]
 │   ├── ·[i18n]
-│   │   ├──  __init__.py
-│   │   └──  language_registry.py
+│   │   ├──  language_registry.py
+│   │   └──  messages.py
 │   │   
 │   ├── ·[load_order]
-│   │   ├──  __init__.py
 │   │   ├──  detector.py
 │   │   ├──  import_check.py
 │   │   ├──  language_pack_ownership.py
@@ -50,7 +40,6 @@
 │   │   └──  share_code.py
 │   │   
 │   ├── ·[managers]
-│   │   ├──  __init__.py
 │   │   ├──  mgr_data_bundle.py
 │   │   ├──  mgr_download.py
 │   │   ├──  mgr_files.py
@@ -83,23 +72,27 @@
 │   │   ├──  app_upgrade.py
 │   │   └──  path_normalization.py
 │   │   
+│   ├── ·[paths]
+│   │   ├──  core.py
+│   │   ├──  game_locations.py
+│   │   └──  rimworld_layout.py
+│   │   
+│   ├── ·[platform]
+│   │   └──  runtime.py
+│   │   
 │   ├── ·[profile]
-│   │   ├──  __init__.py
 │   │   └──  user_data_root.py
 │   │   
 │   ├── ·[scanner]
-│   │   ├──  __init__.py
 │   │   ├──  analyzer.py
 │   │   ├──  mod_scanner.py
 │   │   ├──  parser_dlc.py
 │   │   └──  parser_xml.py
 │   │   
 │   ├── ·[startup]
-│   │   ├──  __init__.py
 │   │   └──  coordinator.py
 │   │   
 │   ├── ·[text_search]
-│   │   ├──  __init__.py
 │   │   ├──  backends.py
 │   │   ├──  effective_files.py
 │   │   ├──  manager.py
@@ -107,14 +100,13 @@
 │   │   └──  tooling.py
 │   │   
 │   ├── ·[translation]
-│   │   ├──  __init__.py
 │   │   ├──  contracts.py
 │   │   └──  service.py
 │   │   
 │   ├── ·[utils]
-│   │   ├──  __init__.py
 │   │   ├──  bundle_io.py
 │   │   ├──  constants.py
+│   │   ├──  error_contract.py
 │   │   ├──  event_bus.py
 │   │   ├──  json_io.py
 │   │   ├──  lanzou_parser.py
@@ -136,12 +128,17 @@
 │   ├──  theme_store.py
 │   └──  window_state.py
 │   
-├── ·[data]
 ├── ·[doc]
-│   └── ·[assets]
+│   ├── ·[assets]
+│   │   ├──  Preview.png
+│   │   └──  主界面.png
+│   │   
+│   └──  贴图优化说明.md
 │   
-│       ├──  Preview.png
-│       └──  主界面.png
+├── ·[docs]
+│   └── ·[superpowers]
+│   
+│       └── ·[plans]
 │       
 ├── ·[frontend]
 │   ├── ·[public]
@@ -203,6 +200,7 @@
 │   │   │   │   
 │   │   │   ├── ·[dialogs]
 │   │   │   │   ├──  ConflictResolver.vue
+│   │   │   │   ├──  SortRuleConflictResolver.vue
 │   │   │   │   └──  UpdateModal.vue
 │   │   │   │   
 │   │   │   ├── ·[file-search]
@@ -234,7 +232,8 @@
 │   │   │   │   ├──  ModDetails.vue
 │   │   │   │   ├──  ModItem.vue
 │   │   │   │   ├──  ModSettingsManagerModal.vue
-│   │   │   │   └──  RecommendationExportModal.vue
+│   │   │   │   ├──  RecommendationExportModal.vue
+│   │   │   │   └──  ResetActiveListManagerModal.vue
 │   │   │   │   
 │   │   │   ├── ·[mod-residue]
 │   │   │   │   ├──  ModResidueCleanupModal.vue
@@ -279,13 +278,20 @@
 │   │   │       ├──  WorkspaceOverlay.vue
 │   │   │       └──  workspaceStore.js
 │   │   │       
+│   │   ├── ·[locales]
+│   │   │   ├──  de.json
+│   │   │   ├──  en.json
+│   │   │   ├──  ko.json
+│   │   │   ├──  ru.json
+│   │   │   ├──  zh-CN.json
+│   │   │   └──  zh-TW.json
+│   │   │   
 │   │   └── ·[shared]
 │   │   
 │   │       ├── ·[assets]
 │   │       │   └──  vue.svg
 │   │       │   
 │   │       ├── ·[branding]
-│   │       │   ├── ·[private-assets]
 │   │       │   ├──  brandProfile.js
 │   │       │   └──  BrandSignature.vue
 │   │       │   
@@ -322,18 +328,21 @@
 │   │       │   ├──  vSelection.js
 │   │       │   └──  vTooltip.js
 │   │       │   
-│   │       └── ·[lib]
+│   │       ├── ·[lib]
+│   │       │   ├──  color.js
+│   │       │   ├──  common.js
+│   │       │   ├──  constants.js
+│   │       │   ├──  domEffects.js
+│   │       │   ├──  format.js
+│   │       │   ├──  markdown.js
+│   │       │   ├──  startupPerf.js
+│   │       │   ├──  steamUri.js
+│   │       │   ├──  text.js
+│   │       │   ├──  translationDetection.js
+│   │       │   └──  userErrorMessage.js
+│   │       │   
+│   │       └──  i18n.js
 │   │       
-│   │           ├──  color.js
-│   │           ├──  common.js
-│   │           ├──  constants.js
-│   │           ├──  domEffects.js
-│   │           ├──  format.js
-│   │           ├──  markdown.js
-│   │           ├──  startupPerf.js
-│   │           ├──  text.js
-│   │           └──  translationDetection.js
-│   │           
 │   ├──  .gitignore
 │   ├──  index.html
 │   ├──  package-lock.json
@@ -341,141 +350,17 @@
 │   ├──  README.md
 │   └──  vite.config.js
 │   
-├── ·[mods]
 ├── ·[scripts]
-│   └──  setup_steamworks_runtime.py
+│   ├──  analyze_i18n_duplicates.py
+│   ├──  create_locale.py
+│   ├──  extract_i18n_messages.py
+│   ├──  locale_workfile.py
+│   ├──  setup_steamworks_runtime.py
+│   └──  validate_locale_quality.py
 │   
-├── ·[submodules]
-│   └── ·[SteamworksPy]
-│   
-│       ├── ·[examples]
-│       │   ├── ·[achievements]
-│       │   │   └──  __init__.py
-│       │   │   
-│       │   ├── ·[basic]
-│       │   │   └──  __init__.py
-│       │   │   
-│       │   └── ·[stats]
-│       │   
-│       │       └──  __init__.py
-│       │       
-│       ├── ·[library]
-│       │   ├── ·[sdk]
-│       │   │   └── ·[redist]
-│       │   │   
-│       │   ├──  Makefile
-│       │   ├──  README.md
-│       │   └──  SteamworksPy.cpp
-│       │   
-│       ├── ·[redist]
-│       │   └── ·[windows]
-│       │   
-│       │       ├──  README.md
-│       │       └──  SteamworksPy64.dll
-│       │       
-│       ├── ·[steamworks]
-│       │   ├── ·[interfaces]
-│       │   │   ├──  __init__.py
-│       │   │   ├──  apps.py
-│       │   │   ├──  friends.py
-│       │   │   ├──  input.py
-│       │   │   ├──  matchmaking.py
-│       │   │   ├──  microtxn.py
-│       │   │   ├──  music.py
-│       │   │   ├──  screenshots.py
-│       │   │   ├──  users.py
-│       │   │   ├──  userstats.py
-│       │   │   ├──  utils.py
-│       │   │   └──  workshop.py
-│       │   │   
-│       │   ├──  __init__.py
-│       │   ├──  enums.py
-│       │   ├──  exceptions.py
-│       │   ├──  methods.py
-│       │   ├──  structs.py
-│       │   └──  util.py
-│       │   
-│       ├── ·[tests]
-│       │   ├── ·[legacy]
-│       │   │   ├──  __init__.py
-│       │   │   └──  _legacy_steamworks-test.py
-│       │   │   
-│       │   ├──  __init__.py
-│       │   ├──  steam_appid.txt
-│       │   ├──  test_base.py
-│       │   └──  test_interfaces.py
-│       │   
-│       ├──  .gitattributes
-│       ├──  .gitignore
-│       ├──  LICENSE
-│       ├──  README.md
-│       ├──  requirements.txt
-│       └──  setup.py
-│       
-├── ·[test]
-├── ·[tests]
-│   ├──  __init__.py
-│   ├──  analyze_language_packs.py
-│   ├──  esm-js-loader.mjs
-│   ├──  frontend_matrix_item_state.mjs
-│   ├──  frontend_package_scope.mjs
-│   ├──  test_ai_assistant_runtime.py
-│   ├──  test_ai_attachment_resolver.py
-│   ├──  test_ai_gateway_request_compat.py
-│   ├──  test_ai_service_helpers.py
-│   ├──  test_app_relocation.py
-│   ├──  test_browser_runtime.py
-│   ├──  test_bundle_managers.py
-│   ├──  test_database_runtime.py
-│   ├──  test_dlc_parser_cache_mode.py
-│   ├──  test_download_manager.py
-│   ├──  test_environment_runtime.py
-│   ├──  test_file_manager.py
-│   ├──  test_file_search.py
-│   ├──  test_frontend_build_config.py
-│   ├──  test_game_log_paths.py
-│   ├──  test_github_manager.py
-│   ├──  test_group_dao.py
-│   ├──  test_import_check.py
-│   ├──  test_keybinding_settings.py
-│   ├──  test_language_pack_ownership.py
-│   ├──  test_language_registry.py
-│   ├──  test_load_order_manager_import_check.py
-│   ├──  test_load_order_manager_save.py
-│   ├──  test_load_order_parsers.py
-│   ├──  test_load_order_share_code.py
-│   ├──  test_maintenance_manager.py
-│   ├──  test_mod_asset_missing_state.py
-│   ├──  test_mod_residue_manager.py
-│   ├──  test_mod_settings_manager.py
-│   ├──  test_multiplayer_compat_manager.py
-│   ├──  test_network_manager.py
-│   ├──  test_profile_and_scanner.py
-│   ├──  test_recommendation_export_dialog.py
-│   ├──  test_recommendation_export_manager.py
-│   ├──  test_rule_manager_dynamic_weights.py
-│   ├──  test_security_storage.py
-│   ├──  test_shortcuts.py
-│   ├──  test_sorter_strategies.py
-│   ├──  test_startup_coordinator.py
-│   ├──  test_steam_actions.py
-│   ├──  test_texture_opt_api.py
-│   ├──  test_texture_opt_batch_recovery.py
-│   ├──  test_texture_opt_manager.py
-│   ├──  test_update_manager.py
-│   ├──  test_user_data_root.py
-│   ├──  test_window_state.py
-│   ├──  test_workshop_db_manager.py
-│   ├──  test_workshop_search.py
-│   ├──  test_workshop_selection.py
-│   └──  test_workspace_matrix_times.py
-│   
-├── ·[toolmods]
-├── ·[tools]
 ├──  .gitignore
 ├──  .gitmodules
 ├──  .python-version
-├──  files_tree.txt
 ├──  icon.ico
 ├──  icon.svg
 ├──  LICENSE

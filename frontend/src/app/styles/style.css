@@ -254,7 +254,7 @@ body {
 
 /* 取色器样式优化（面板背景边框阴影调整） */
 .vc-colorpicker.white {
-  background-color: var(--color-glass-light) !important;
+  background-color: rgba(30, 41, 59, 0.45) !important;
   color: var(--color-text-main) !important;
   backdrop-filter: blur(12px) saturate(120%); /*模糊+饱和度增强*/
   -webkit-backdrop-filter: blur(12px) saturate(120%);

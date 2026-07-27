@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 
 from backend.managers.mgr_game import GameManager
+from backend.paths.core import canonicalize_path_text, path_key, unique_paths
+from backend.paths.game_locations import find_app_bundle_path
+from backend.paths.rimworld_layout import normalize_rimworld_install_root
 from backend.settings import BASE_RESOURCE_DIR, DATA_DIR
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR
 from backend.utils.logger import logger
@@ -33,7 +36,7 @@ def _canonicalize_path_text(path_str: str) -> str:
     try:
         return os.path.normpath(str(Path(raw_value).expanduser().resolve(strict=False)))
     except Exception:
-        return os.path.normpath(os.path.abspath(raw_value))
+        return canonicalize_path_text(raw_value)
 
 
 @dataclass(frozen=True)
@@ -91,7 +94,7 @@ class GameInstallRegistry:
         self._write_lock = threading.Lock()
 
     def _normalize_key(self, install_path: str) -> str:
-        return os.path.normcase(_canonicalize_path_text(install_path))
+        return path_key(_canonicalize_path_text(install_path), system_name=platform.system())
 
     def _load(self) -> dict[str, Any]:
         if self._cache is not None:
@@ -196,6 +199,11 @@ class GameInstallRegistry:
 
 
 class GameInstallInspector:
+    UNITY_DATA_DIR_NAMES_BY_SYSTEM = {
+        "Windows": ("RimWorldWin64_Data", "RimWorldWin_Data"),
+        "Linux": ("RimWorldLinux_Data", "RimWorldWin64_Data", "RimWorldWin_Data"),
+    }
+
     _startup_prune_lock = threading.Lock()
     _startup_pruned = False
 
@@ -212,7 +220,7 @@ class GameInstallInspector:
 
     @staticmethod
     def _normalize_install_path(install_path: str) -> str:
-        return _canonicalize_path_text(install_path)
+        return normalize_rimworld_install_root(_canonicalize_path_text(install_path), system_name=platform.system())
 
     @staticmethod
     def _read_appid(path: Path) -> str:
@@ -223,29 +231,18 @@ class GameInstallInspector:
 
     @staticmethod
     def _dedupe_paths(paths: list[Path]) -> list[Path]:
-        seen: set[str] = set()
-        result: list[Path] = []
-        for path in paths:
-            normalized = os.path.normcase(os.path.normpath(str(path)))
-            if normalized in seen:
-                continue
-            seen.add(normalized)
-            result.append(path)
-        return result
+        return [Path(value) for value in unique_paths([str(path) for path in paths], system_name=platform.system())]
 
     def _find_app_bundle_path(self, executable_path: str) -> Path | None:
-        exe_path = Path(str(executable_path or ""))
-        if exe_path.suffix.lower() == ".app":
-            return exe_path
-        for candidate in [exe_path, *exe_path.parents]:
-            if candidate.suffix.lower() == ".app":
-                return candidate
-        return None
+        resolved = find_app_bundle_path(executable_path)
+        return Path(resolved) if resolved else None
 
     def _unity_data_dir_candidates(self, root: Path, executable_path: str) -> list[Path]:
         exe_path = Path(str(executable_path or ""))
-        names = {name for name in (exe_path.stem, "RimWorldWin64", "RimWorldWin", "RimWorldLinux") if name}
-        return self._dedupe_paths([root / f"{name}_Data" for name in names])
+        names = list(self.UNITY_DATA_DIR_NAMES_BY_SYSTEM.get(platform.system(), ()))
+        if exe_path.stem:
+            names.append(f"{exe_path.stem}_Data")
+        return self._dedupe_paths([root / name for name in names])
 
     def _candidate_appid_paths(self, install_path: str, executable_path: str = "") -> list[Path]:
         """

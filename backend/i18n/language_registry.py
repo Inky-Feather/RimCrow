@@ -232,7 +232,7 @@ def get_language_options(*, include_follow: bool = True, steam_only: bool = Fals
         for spec in specs
     ]
     if include_follow:
-        return [{"label": "跟随界面语言", "value": "", "code": "", "name": "Auto"}, *options]
+        return [{"label": "跟随界面语言", "label_key": "ui.workspace.translation.follow_ui", "default_label": "跟随界面语言", "value": "", "code": "", "name": "Auto"}, *options]
     return options
 
 

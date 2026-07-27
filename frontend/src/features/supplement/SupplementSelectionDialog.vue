@@ -1,7 +1,7 @@
 <template>
   <CommonModalShell :show="supplementStore.isVisible" :show-header="false" size="custom" :z-index="9999" accent="tip" panel-class="w-[62rem] max-h-[86vh] max-w-[94vw]" content-class="h-full flex flex-col"
     @close="supplementStore.cancel()" >
-          <div class="absolute inset-x-0 top-0 h-[0.0625rem] bg-linear-to-r from-transparent via-accent-tip to-transparent opacity-80"></div>
+          <div class="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-accent-tip to-transparent opacity-80"></div>
           <div class="absolute -top-20 right-10 h-44 w-44 rounded-full bg-accent-tip/10 blur-[4.5rem] pointer-events-none"></div>
 
           <div class="relative z-10 flex items-start justify-between gap-3 border-b border-border-base/5 px-5 py-4">
@@ -11,7 +11,7 @@
                 {{ supplementStore.state.message }}
               </p>
             </div>
-            <button class="modal-close-button" aria-label="关闭" @click="supplementStore.cancel()" >
+            <button class="modal-close-button" :aria-label="t('common.action.close', '关闭')" @click="supplementStore.cancel()" >
               <X class="size-4" />
             </button>
           </div>
@@ -19,30 +19,30 @@
           <div class="toolbar-surface relative z-10 flex flex-wrap items-center justify-between gap-2 px-5 py-2.5">
             <div class="flex flex-wrap items-center gap-1.5 text-[0.6875rem] text-text-dim">
               <span class="rounded-full border border-accent-tip/25 bg-accent-tip/12 px-3 py-1 font-bold text-accent-tip">
-                {{ supplementStore.selectedCount }} / {{ supplementStore.totalCount }} 已选
+                {{ t('dialog.supplement.selected_count', '{selected} / {total} 已选', { selected: supplementStore.selectedCount, total: supplementStore.totalCount }) }}
               </span>
               <span v-if="supplementStore.state.summary.dangerCount > 0" class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger" >
-                {{ supplementStore.state.summary.dangerCount }} 项必要
+                {{ t('dialog.supplement.required_count', '{count} 项必要', { count: supplementStore.state.summary.dangerCount }) }}
               </span>
               <span v-if="supplementStore.state.summary.warnCount > 0" class="rounded-full border border-accent-warn/25 bg-accent-warn/12 px-3 py-1 font-bold text-accent-warn" >
-                {{ supplementStore.state.summary.warnCount }} 项建议
+                {{ t('dialog.supplement.suggested_count', '{count} 项建议', { count: supplementStore.state.summary.warnCount }) }}
               </span>
               <span v-if="supplementStore.state.summary.infoCount > 0" class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-3 py-1 font-bold text-text-dim" >
-                {{ supplementStore.state.summary.infoCount }} 项可选
+                {{ t('dialog.supplement.optional_count', '{count} 项可选', { count: supplementStore.state.summary.infoCount }) }}
               </span>
             </div>
             <div class="flex flex-wrap items-center gap-1.5">
               <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-bg-overlay/10 hover:text-text-main"
                 @click="supplementStore.selectAll()" >
-                全选
+                {{ t('common.action.select_all', '全选') }}
               </button>
               <button class="rounded-lg border border-accent-danger/18 bg-accent-danger/10 px-2.5 py-1.5 text-[0.6875rem] font-bold text-accent-danger transition-all hover:bg-accent-danger/16"
                 @click="supplementStore.selectRequiredOnly()" >
-                仅选必要
+                {{ t('dialog.supplement.select_required_only', '仅选必要') }}
               </button>
               <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-bg-overlay/10 hover:text-text-main"
                 @click="supplementStore.clearSelection()" >
-                全部清空
+                {{ t('common.action.clear_all', '全部清空') }}
               </button>
             </div>
           </div>
@@ -59,7 +59,7 @@
                         {{ severityLabel(group.severity) }}
                       </span>
                       <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-[0.625rem] font-bold text-text-dim">
-                        {{ group.rows.length }} 项
+                        {{ t('common.count.items', '{count} 项', { count: group.rows.length }) }}
                       </span>
                     </div>
                     <p v-if="group.description" class="mt-1 text-[0.625rem] leading-4 text-text-dim">{{ group.description }}</p>
@@ -91,8 +91,8 @@
                           <input type="radio" :name="row.id" class="mt-0.5 h-3.5 w-3.5 accent-text-dim"
                             :checked="supplementStore.getChoiceSelection(row.id) === ''" @change="supplementStore.chooseRootOption(row.id, '')" >
                           <div class="min-w-0 flex-1">
-                            <div class="text-[0.75rem] font-bold text-text-main">暂不启用</div>
-                            <p class="mt-0.5 text-[0.625rem] leading-4 text-text-dim">保持当前状态。</p>
+                            <div class="text-[0.75rem] font-bold text-text-main">{{ t('dialog.supplement.skip_enable', '暂不启用') }}</div>
+                            <p class="mt-0.5 text-[0.625rem] leading-4 text-text-dim">{{ t('dialog.supplement.keep_current_state', '保持当前状态。') }}</p>
                           </div>
                         </label>
 
@@ -167,12 +167,15 @@
 import { X } from 'lucide-vue-next'
 import { useSupplementStore } from './supplementStore'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
+import { t } from '../../shared/i18n.js'
 
 const supplementStore = useSupplementStore()
 
-const severityLabel = (severity = 'info') => (
-  supplementStore.severityMeta[severity]?.label || '可选'
-)
+const severityLabel = (severity = 'info') => ({
+  danger: t('dialog.supplement.severity.danger', '必要'),
+  warn: t('dialog.supplement.severity.warn', '建议'),
+  info: t('dialog.supplement.severity.info', '可选'),
+}[severity] || t('dialog.supplement.severity.info', '可选'))
 
 const severityClass = (severity = 'info') => {
   if (severity === 'danger') {

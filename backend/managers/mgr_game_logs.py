@@ -11,8 +11,28 @@ from backend.load_order.package_tokens import parse_package_token
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_profile import ProfileContext
+from backend.i18n.messages import localized_key, tr
 from backend.utils.event_bus import EventBus
 from backend.utils.logger import BaseLogReader, generate_log_id, logger
+
+
+INFERRED_TYPE_LABELS = {
+    'XMLSyntaxError': tr('game_log.inferred_type.xml_syntax_error', 'XML 语法错误'),
+    'DefConfigError': tr('game_log.inferred_type.def_config_error', '定义配置错误'),
+    'CrossRefError': tr('game_log.inferred_type.cross_ref_error', '引用缺失'),
+    'AssemblyConflict': tr('game_log.inferred_type.assembly_conflict', '程序集冲突'),
+    'TickException': tr('game_log.inferred_type.tick_exception', 'Tick 异常'),
+    'DrawException': tr('game_log.inferred_type.draw_exception', '绘制异常'),
+    'NullReference': tr('game_log.inferred_type.null_reference', '空引用异常'),
+    'OutOfMemory': tr('game_log.inferred_type.out_of_memory', '内存不足'),
+    'MissingTexture': tr('game_log.inferred_type.missing_texture', '贴图缺失'),
+    'MissingDef': tr('game_log.inferred_type.missing_def', '定义缺失'),
+    'XMLFieldError': tr('game_log.inferred_type.xml_field_error', 'XML 字段错误'),
+    'MissingReference': tr('game_log.inferred_type.missing_reference', '引用加载失败'),
+    'TranslationError': tr('game_log.inferred_type.translation_error', '翻译数据错误'),
+    'PackageIdError': tr('game_log.inferred_type.package_id_error', '包名格式错误'),
+    'PatchWarning': tr('game_log.inferred_type.patch_warning', '补丁警告'),
+}
 
 
 class LogAnalyzer:
@@ -23,67 +43,67 @@ class LogAnalyzer:
                 'id': 'missing_def',
                 'type': 'MissingDef',
                 'pattern': re.compile(r'\b\S+\s+\S+\s+is not defined in any loaded mods\.', re.IGNORECASE),
-                'explanation': '有 Mod 正在引用不存在的定义，通常是缺少前置、版本不匹配或旧存档残留引用。'
+                'explanation': tr('game_log.diagnosis.missing_def', '有 Mod 正在引用不存在的定义，通常是缺少前置、版本不匹配或旧存档残留引用。')
             },
             {
                 'id': 'xml_unknown_field',
                 'type': 'XMLFieldError',
                 'pattern': re.compile(r"XML error:\s+.+?\s+doesn't correspond to any field in type\s+.+?\.", re.IGNORECASE),
-                'explanation': '某个 XML 字段不被当前游戏或目标类型识别，常见原因是 Mod 版本过旧、游戏版本不匹配或配置写错。'
+                'explanation': tr('game_log.diagnosis.xml_unknown_field', '某个 XML 字段不被当前游戏或目标类型识别，常见原因是 Mod 版本过旧、游戏版本不匹配或配置写错。')
             },
             {
                 'id': 'config_error',
                 'type': 'DefConfigError',
                 'pattern': re.compile(r'Config error in', re.IGNORECASE),
-                'explanation': '某个定义配置不符合游戏要求，通常需要检查日志提到的对象和对应 Mod。'
+                'explanation': tr('game_log.diagnosis.config_error', '某个定义配置不符合游戏要求，通常需要检查日志提到的对象和对应 Mod。')
             },
             {
                 'id': 'cross_reference_missing',
                 'type': 'CrossRefError',
                 'pattern': re.compile(r'Could not resolve cross-reference|Could not resolve reference to object with loadID', re.IGNORECASE),
-                'explanation': '游戏无法找到被引用的对象，常见原因是缺少依赖、加载顺序不对或存档里引用了已移除内容。'
+                'explanation': tr('game_log.diagnosis.cross_reference_missing', '游戏无法找到被引用的对象，常见原因是缺少依赖、加载顺序不对或存档里引用了已移除内容。')
             },
             {
                 'id': 'could_not_load_reference',
                 'type': 'MissingReference',
                 'pattern': re.compile(r'Could not load reference to\s+.+?\s+named\s+.+', re.IGNORECASE),
-                'explanation': '日志中的对象引用没有加载成功，优先检查相关 Mod 是否启用、依赖是否齐全。'
+                'explanation': tr('game_log.diagnosis.could_not_load_reference', '日志中的对象引用没有加载成功，优先检查相关 Mod 是否启用、依赖是否齐全。')
             },
             {
                 'id': 'missing_texture',
                 'type': 'MissingTexture',
                 'pattern': re.compile(r'Failed to find any texture|Could not load UnityEngine\.Texture2D', re.IGNORECASE),
-                'explanation': '游戏找不到贴图资源，通常是资源路径写错、Mod 文件缺失或版本包不完整。'
+                'explanation': tr('game_log.diagnosis.missing_texture', '游戏找不到贴图资源，通常是资源路径写错、Mod 文件缺失或版本包不完整。')
             },
             {
                 'id': 'null_reference_exception',
                 'type': 'NullReference',
                 'pattern': re.compile(r'NullReferenceException', re.IGNORECASE),
-                'explanation': '有代码访问了不存在的对象。单独看这类错误信息量有限，需要结合错误堆栈里的来源继续判断。'
+                'explanation': tr('game_log.diagnosis.null_reference_exception', '有代码访问了不存在的对象。单独看这类错误信息量有限，需要结合错误堆栈里的来源继续判断。')
             },
             {
                 'id': 'type_load_exception',
                 'type': 'AssemblyConflict',
                 'pattern': re.compile(r'ReflectionTypeLoadException|MissingMethodException|TypeLoadException|MissingFieldException', re.IGNORECASE),
-                'explanation': '程序集或方法字段不匹配，常见原因是 Mod 版本不兼容、依赖库版本冲突或游戏更新后旧 DLL 未适配。'
+                'explanation': tr('game_log.diagnosis.type_load_exception', '程序集或方法字段不匹配，常见原因是 Mod 版本不兼容、依赖库版本冲突或游戏更新后旧 DLL 未适配。')
             },
             {
                 'id': 'translation_data_error',
                 'type': 'TranslationError',
                 'pattern': re.compile(r'Translation data .*? has errors|translation data has errors', re.IGNORECASE),
-                'explanation': '翻译文件存在格式或字段问题，通常不一定导致崩溃，但会影响文本显示。'
+                'explanation': tr('game_log.diagnosis.translation_data_error', '翻译文件存在格式或字段问题，通常不一定导致崩溃，但会影响文本显示。')
             },
             {
                 'id': 'package_id_format',
                 'type': 'PackageIdError',
                 'pattern': re.compile(r'PackageId .*? is not in valid format', re.IGNORECASE),
-                'explanation': 'Mod 的 packageId 格式不规范，可能影响依赖识别、加载顺序和管理器匹配。'
+                'explanation': tr('game_log.diagnosis.package_id_format', 'Mod 的 packageId 格式不规范，可能影响依赖识别、加载顺序和管理器匹配。')
             },
             {
                 'id': 'patch_obsolete_method',
                 'type': 'PatchWarning',
                 'pattern': re.compile(r'patch(?:es)? on obsolete method|patched jump instruction', re.IGNORECASE),
-                'explanation': '有补丁作用在过时或不稳定的方法上，通常说明相关 Mod 需要更新。'
+                'explanation': tr('game_log.diagnosis.patch_obsolete_method', '有补丁作用在过时或不稳定的方法上，通常说明相关 Mod 需要更新。')
             },
         ]
         # 常见错误特征匹配
@@ -107,6 +127,9 @@ class LogAnalyzer:
             'system', 'microsoft', 'mono', 'mscorlib', 'unityengine',
             'verse', 'rimworld', 'harmonylib', 'runtime',
         }
+        self.ignored_namespace_prefixes = (
+            'rimcrowcompanion.rimcrowcompanionmod',
+        )
 
     def analyze(self, block, is_realtime_json=False, active_mods=None):
         """
@@ -134,7 +157,7 @@ class LogAnalyzer:
                 self._fill_known_diagnosis(context, full_text)
                 self._fill_type_fallback(context, full_text)
                 self._fill_related_namespaces(context, full_text)
-                        
+            self._fill_inferred_type_meta(context)
             return block
         # 2. 原版 Player.log 的降级正则提取逻辑 (低可信度，兜底用)，安全获取 details，防止 KeyError
         details = block.get('details', '')
@@ -195,6 +218,7 @@ class LogAnalyzer:
             or context.get('relatedNamespaces')
             or context.get('knownPattern')
         ):
+            self._fill_inferred_type_meta(context)
             block['context'] = context
             
         return block
@@ -215,7 +239,8 @@ class LogAnalyzer:
             if not context.get('inferredType'):
                 context['inferredType'] = rule['type']
             context['knownPattern'] = rule['id']
-            context['diagnosisExplanation'] = rule['explanation']
+            context['diagnosisKey'] = localized_key(rule['explanation'])
+            context['diagnosisExplanation'] = str(rule['explanation'])
             return
 
     def _fill_type_fallback(self, context, full_text):
@@ -226,11 +251,19 @@ class LogAnalyzer:
                 context['inferredType'] = err_type
                 return
 
+    def _fill_inferred_type_meta(self, context):
+        label = INFERRED_TYPE_LABELS.get(context.get('inferredType'))
+        if not label:
+            return
+        context['inferredTypeKey'] = localized_key(label)
+        context['inferredTypeLabel'] = str(label)
+
     def _fill_related_namespaces(self, context, full_text):
         namespaces = []
         for match in self.namespace_pattern.findall(full_text or ''):
             root = match.split('.', 1)[0].lower()
-            if root in self.ignored_namespaces:
+            normalized = match.lower()
+            if root in self.ignored_namespaces or normalized.startswith(self.ignored_namespace_prefixes):
                 continue
             namespaces.append(match)
         if namespaces and not context.get('relatedNamespaces'):
