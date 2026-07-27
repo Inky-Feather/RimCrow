@@ -8,20 +8,15 @@
     -->
     <Motion v-if="shouldRender" ref="panelRef"
       class="gpu-text-fix fixed top-0 left-0 z-9999 pointer-events-none will-change-transform"
-      :class="containerClasses" :initial="{ opacity: 0, scale: 0.9 }"
+      :class="containerClasses" :initial="{ opacity: 0, scale: 1, rotate: 0 }"
       :animate="{
         x: safeX,
         y: safeY,
-        rotate: rotation, // 文本模式下可以减小旋转幅度，或者直接设为0
+        rotate: rotation,
         opacity: isVisible ? 1 : 0,
-        scale: isVisible ? 1 : 0.9
+        scale: 1
       }"
-      :transition="{
-        type: 'spring',
-        damping: hoverStore.type === 'text' ? 20 : 30, // 阻尼，文本提示可以更灵敏一点
-        stiffness: 350,  // 刚度：控制回弹力度 (参考代码值)
-        mass: 1          // 质量：控制惯性
-      }"
+      :transition="motionTransition"
     >
       <!-- 模式 A: 复杂预览卡片 (data 是对象) -->
       <div v-if="hoverStore.type === 'preview'"
@@ -64,7 +59,7 @@
               <span v-if="hoverStore.data.version" class="text-accent-primary">v{{ hoverStore.data.version }}</span>
               <!-- Mod类型徽章 -->
               <span class="px-1.5 rounded-sm bg-bg-overlay/5 border border-border-base/10 text-text-soft">
-                {{ MOD_TYPE_MAP[modStore.displayModType(hoverStore.data)] || 'MOD' }}
+                {{ MOD_TYPE_SHORT_LABELS[modStore.displayModType(hoverStore.data)] || 'MOD' }}
               </span>
             </div>
           </div>
@@ -86,19 +81,19 @@
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xs text-text-dim flex items-center gap-1">
                 <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                {{ hoverStore.data.author?.join(', ') || 'Unknown' }}
+                {{ hoverStore.data.author?.join(', ') || t('common.status.unknown', '未知') }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xs text-text-dim flex items-center gap-1">
                 <svg class="size-3.5" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M28.2857 37H39.7143M42 42L39.7143 37L42 42ZM26 42L28.2857 37L26 42ZM28.2857 37L34 24L39.7143 37H28.2857Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6L17 9" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11H28" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 16C10 16 11.7895 22.2609 16.2632 25.7391C20.7368 29.2174 28 32 28 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 11C24 11 22.2105 19.2174 17.7368 23.7826C13.2632 28.3478 6 32 6 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                {{ hoverStore.data.supported_languages?.join(', ') || 'Unknown' }}
+                {{ hoverStore.data.supported_languages?.join(', ') || t('common.status.unknown', '未知') }}
               </span>
             </div>
             <div class="flex items-center gap-2 mt-0.5">
               <span class="text-xs text-text-dim flex items-center gap-1">
                 <Milestone class="size-3.5"/>
-                {{ hoverStore.data.supported_versions?.join(', ') || 'Unknown' }}
+                {{ hoverStore.data.supported_versions?.join(', ') || t('common.status.unknown', '未知') }}
               </span>
             </div>
           </div>
@@ -149,6 +144,7 @@ import { useAppStore } from '../../../app/stores/appStore'
 import { useModStore } from '../../../features/mod/stores/modStore'
 import { useGroupStore } from '../../../features/mod/stores/groupStore';
 import { DEFAULT_ACCENT_HEX, hexToRgbComponents } from '../../lib/color'
+import { t } from '../../i18n.js'
 
 const appStore = useAppStore()
 const hoverStore = useHoverStore()
@@ -189,14 +185,34 @@ watch(() => hoverStore.isHovering, (hovering) => {
 const containerClasses = computed(() => {
   if (hoverStore.type === 'text') {
     // Tooltip 样式：紧凑、黑底白字、圆角小
-    return 'max-h-[calc(100vh-2rem)] max-w-[30dvw] overflow-y-auto overscroll-contain rounded-md border border-border-base/18 bg-glass-heavy px-2 py-1.5 text-pretty break-all whitespace-normal shadow-lg backdrop-blur-sm custom-scrollbar'
+    return ' max-h-[calc(100vh-2rem)] max-w-[40vw] overflow-x-hidden overflow-y-auto overscroll-contain rounded-md border border-border-base/18 bg-glass-heavy px-2 py-1.5 text-pretty break-words whitespace-normal shadow-lg backdrop-blur-sm custom-scrollbar'
   }
   // 让组件自己决定长什么样
   if (hoverStore.type === 'component') {
     return 'shadow-2xl' // 可能只留个阴影，或者连阴影都不要，完全由组件内部控制
   }
   // Preview 样式：宽大、有背景、圆角大
-  return 'w-[21.25rem] max-h-[min(15rem,calc(100vh-2rem))] rounded-xl shadow-2xl overflow-hidden'
+  return 'w-100 max-h-[min(15rem,calc(100vh-2rem))] rounded-xl shadow-2xl overflow-hidden'
+})
+const followSpring = computed(() => ({ type: 'spring', damping: hoverStore.type === 'text' ? 20 : 30, stiffness: 350, mass: 1 }))
+const motionTransition = computed(() => {
+  // 未显现前坐标立即到位，避免短停留时从旧位置滑入；显现后仍保留原来的鼠标跟随手感。
+  if (!isVisible.value) {
+    return {
+      opacity: { duration: 0.22, ease: 'easeOut' },
+      x: { duration: 0 },
+      y: { duration: 0 },
+      scale: { duration: 0 },
+      rotate: { duration: 0 },
+    }
+  }
+  return {
+    opacity: { duration: 0.22, ease: 'easeOut' },
+    x: followSpring.value,
+    y: followSpring.value,
+    rotate: followSpring.value,
+    scale: { duration: 0 },
+  }
 })
 // --- 2. 窗口尺寸监听 ---
 const winWidth = ref(window.innerWidth)
@@ -443,8 +459,8 @@ const saveBreakingIcon = computed(() => {
   return IconUnknown
 })
 
-// Mod 类型简写映射
-const MOD_TYPE_MAP = {
+// Mod 类型简写映射：预览卡片空间有限，保留稳定英文缩写，不走全局完整标签。
+const MOD_TYPE_SHORT_LABELS = {
   'LanguagePack': 'LANG',
   'XML': 'XML',
   'Assembly': 'DLL',
@@ -456,7 +472,7 @@ const MOD_TYPE_MAP = {
 
 // 清理描述文本 (移除 HTML 标签，只留纯文本做预览)
 const cleanDescription = computed(() => {
-  const desc = hoverStore.data?.description || 'No description available.'
+  const desc = hoverStore.data?.description || t('ui.hover.preview.no_description', '暂无介绍')
   return desc.replace(/<[^>]+>/g, '') // 简单移除 HTML 标签
 })
 

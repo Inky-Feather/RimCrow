@@ -1,3 +1,5 @@
+import { t, translateMessagePayload } from '../../shared/i18n.js'
+
 const HEARTBEAT_INTERVAL_MS = 5000
 
 let heartbeatTimer = null
@@ -29,17 +31,23 @@ const callBridgeEndpoint = async (baseUrl, path, payload = null, options = {}) =
   try {
     response = await fetch(`${baseUrl}${path}`, requestInit)
   } catch (error) {
-    throw new Error('无法连接软件后端服务。可能是后端进程已退出、浏览器桥接端口不可用或本机安全软件拦截，请重启软件后重试。')
+    throw new Error(t('bridge.browser.connect_failed', '无法连接软件后端服务。可能是后端进程已退出、浏览器桥接端口不可用或本机安全软件拦截，请重启软件后重试。'))
   }
   if (!response.ok) {
-    let message = `浏览器桥接请求失败，状态码：${response.status}。请确认后端服务仍在运行，或重启软件后重试。`
+    let message = t('bridge.browser.request_failed_with_status', '浏览器桥接请求失败，状态码：{status}。请确认后端服务仍在运行，或重启软件后重试。', { status: response.status })
+    let errorPayload = null
     try {
       const payload = await response.json()
-      if (payload?.message) message = payload.message
+      if (payload && typeof payload === 'object') {
+        errorPayload = payload
+        message = translateMessagePayload(payload, message)
+      }
     } catch {
       // 响应体不是 JSON 时保留状态码提示即可。
     }
-    throw new Error(message)
+    const error = new Error(message)
+    if (errorPayload) Object.assign(error, errorPayload, { message, http_status: response.status })
+    throw error
   }
   return response.json()
 }
@@ -157,7 +165,7 @@ export const setupPywebviewBridge = async () => {
   const session = await callBridgeEndpoint(baseUrl, '/api/session/open', {})
   const clientId = session?.data?.client_id
   if (!clientId) {
-    throw new Error('浏览器桥接会话创建失败，请重启软件后重试。')
+    throw new Error(t('bridge.browser.session_create_failed', '浏览器桥接会话创建失败，请重启软件后重试。'))
   }
 
   window.pywebview = {

@@ -1,5 +1,4 @@
 import shutil
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,7 +44,7 @@ class TestTextureOptBatchRecovery(unittest.TestCase):
             status="running",
         )
 
-    def test_optimize_retries_group_once_after_batch_error(self):
+    def test_optimize_keeps_written_outputs_after_batch_error_and_retries_only_missing_items(self):
         good = self._write_png("Textures/good.png")
         bad = self._write_png("Textures/bad.png")
         task = self._make_task()
@@ -58,6 +57,7 @@ class TestTextureOptBatchRecovery(unittest.TestCase):
             calls.append(paths)
             if first_batch:
                 first_batch = False
+                good.with_suffix(".dds").write_bytes(b"good-dds")
                 raise TextureOptError("todds 执行失败: batch contains invalid source")
             for source_path in paths:
                 Path(source_path).with_suffix(".dds").write_bytes(b"dds")
@@ -67,13 +67,37 @@ class TestTextureOptBatchRecovery(unittest.TestCase):
 
         self.assertEqual(result["optimized"], 2)
         self.assertEqual(result["failed"], 0)
-        self.assertTrue(good.with_suffix(".dds").exists())
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(sorted(calls[0]), [str(bad), str(good)])
+        self.assertEqual(calls[1], [str(bad)])
+        self.assertEqual(good.with_suffix(".dds").read_bytes(), b"good-dds")
         self.assertTrue(bad.with_suffix(".dds").exists())
-        self.assertEqual(result["final_summary"]["current_output_count"], 2)
-        self.assertEqual(result["final_summary"]["generate_required_count"], 0)
-        self.assertEqual(result["failed_items"], [])
-        self.assertTrue(any(len(item) > 1 for item in calls))
-        self.assertEqual([sorted(item) for item in calls], [[str(bad), str(good)], [str(bad), str(good)]])
+
+    def test_optimize_records_missing_output_after_successful_todds_return(self):
+        good = self._write_png("Textures/good.png")
+        bad = self._write_png("Textures/bad.png")
+        task = self._make_task()
+        calls: list[list[str]] = []
+
+        def fake_encode_batch(_cancel_event, *, source_paths, overwrite_existing, scale_percent, max_size=None, output_callback=None):
+            paths = list(source_paths or [])
+            calls.append(paths)
+            for source_path in paths:
+                if Path(source_path) == good:
+                    Path(source_path).with_suffix(".dds").write_bytes(b"dds")
+
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch):
+            result = self.manager._optimize(task)
+
+        self.assertEqual(result["optimized"], 1)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["final_status"], "failed")
+        self.assertEqual(sorted(calls[0]), [str(bad), str(good)])
+        self.assertEqual(calls[1], [str(bad)])
+        self.assertTrue(good.with_suffix(".dds").exists())
+        self.assertFalse(bad.with_suffix(".dds").exists())
+        self.assertEqual(result["failed_items"][0]["rel_path"], "Textures/bad.png")
+        self.assertIn("生成结果未写出", result["failed_items"][0]["error"])
 
     def test_run_task_marks_group_retry_success_as_success(self):
         good = self._write_png("Textures/good.png")
@@ -100,6 +124,43 @@ class TestTextureOptBatchRecovery(unittest.TestCase):
         self.assertNotIn("失败", task.message)
         self.assertTrue(good.with_suffix(".dds").exists())
         self.assertTrue(bad.with_suffix(".dds").exists())
+
+    def test_run_task_keeps_success_when_result_file_write_fails(self):
+        source = self._write_png("Textures/result-write.png")
+        task = self._make_task()
+
+        def fake_encode_batch(_cancel_event, *, source_paths, overwrite_existing, scale_percent, max_size=None, output_callback=None):
+            for source_path in source_paths or []:
+                Path(source_path).with_suffix(".dds").write_bytes(b"dds")
+
+        with patch.object(ToddsEncoder, "encode_batch", side_effect=fake_encode_batch), \
+             patch.object(self.manager, "_write_task_result_file", side_effect=OSError("disk full")):
+            self.manager._run_task(task)
+
+        self.assertEqual(task.status, "success")
+        self.assertEqual(task.metrics["optimized"], 1)
+        self.assertEqual(task.metrics["failed"], 0)
+        self.assertNotIn("result_path", task.metrics)
+        self.assertTrue(task.metrics["result_write_failed"])
+        self.assertIn("结果记录写入失败", task.message)
+        self.assertTrue(source.with_suffix(".dds").exists())
+
+    def test_verify_generated_entries_accepts_existing_nonempty_output(self):
+        source = self._write_png("Textures/existing.png")
+        output = source.with_suffix(".dds")
+        output.write_bytes(b"same-size")
+        output_stat = output.stat()
+        entry = {
+            "output_path": str(output),
+            "output_exists": True,
+            "output_size": output_stat.st_size,
+            "output_mtime_ns": output_stat.st_mtime_ns,
+        }
+
+        successful, failed = self.manager._verify_generated_entries([entry])
+
+        self.assertEqual(successful, [entry])
+        self.assertEqual(failed, [])
 
     def test_optimize_keeps_nonrecoverable_errors_fatal(self):
         self._write_png("Textures/good.png")

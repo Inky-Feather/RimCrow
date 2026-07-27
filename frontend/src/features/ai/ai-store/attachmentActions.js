@@ -1,5 +1,6 @@
 import { normalizeText } from '../../../shared/lib/common'
 import { cleanRichText } from '../../../shared/lib/text'
+import { t } from '../../../shared/i18n.js'
 import { buildAttachmentDisplayMeta, buildDiagnosisContextAttachmentDraft } from './runtime/aiAttachmentRuntime'
 import { createAttachmentDraft, normalizeTimestamp } from './factories'
 
@@ -100,7 +101,7 @@ export const useAttachmentActions = ({
     const summaryText = normalizeText(summary) || (
       normalizedMods.length <= 1
         ? firstName
-        : `已选 ${normalizedMods.length} 个模组`
+        : t('ai.attachments.mod_selection.count_summary', '已选 {count} 个模组', { count: normalizedMods.length })
     )
     return createAttachmentDraft({
       kind: 'mod_selection',

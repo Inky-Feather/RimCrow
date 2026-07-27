@@ -41,6 +41,7 @@ from backend.ai.def_model_capabilities import (
     normalize_reasoning_mode as _normalize_reasoning_mode,
 )
 from backend.settings import settings
+from backend.i18n.messages import tr
 from backend.managers.mgr_network import network_mgr
 from backend.utils.logger import logger
 from backend.utils.redaction import fingerprint_secret, redact_sensitive_data
@@ -125,10 +126,10 @@ def validate_ai_connection_config(config: Any) -> tuple[bool, str]:
     api_key = str(getter("api_key", "") or "").strip()
 
     if not provider or not base_url or not model:
-        return False, "AI 配置不完整，请检查配置"
+        return False, tr("errors.ai.config_incomplete", "AI 配置不完整，请检查配置")
 
     if ai_provider_requires_api_key(provider, base_url) and not api_key:
-        return False, "当前协议要求填写 API Key。"
+        return False, tr("errors.ai.api_key_required", "当前协议要求填写 API Key。")
 
     return True, ""
 
@@ -261,6 +262,18 @@ class LiteLLMGateway:
 
     def _build_reasoning_mode_meta(self, provider: str, policy: ModelCapabilityPolicy | None) -> dict[str, Any]:
         """把后端内部能力策略规整成前端可直接消费的统一元数据。"""
+        reasoning_option_meta = {
+            "off": {"value": "off", "label_key": "ai.reasoning.off", "default_label": "关闭", "label": tr("ai.reasoning.off", "关闭")},
+            "auto": {"value": "auto", "label_key": "ai.reasoning.auto", "default_label": "自动", "label": tr("ai.reasoning.auto", "自动")},
+            "low": {"value": "low", "label_key": "ai.reasoning.low", "default_label": "低", "label": tr("ai.reasoning.low", "低")},
+            "medium": {"value": "medium", "label_key": "ai.reasoning.medium", "default_label": "中", "label": tr("ai.reasoning.medium", "中")},
+            "high": {"value": "high", "label_key": "ai.reasoning.high", "default_label": "高", "label": tr("ai.reasoning.high", "高")},
+            "xhigh": {"value": "xhigh", "label_key": "ai.reasoning.xhigh", "default_label": "极高", "label": tr("ai.reasoning.xhigh", "极高")},
+        }
+
+        def reasoning_option(value: str) -> dict[str, Any]:
+            return dict(reasoning_option_meta[value])
+
         supports_reasoning = bool(provider == "openai_compatible" and policy and policy.supports_reasoning)
         supports_reasoning_effort = bool(
             policy and policy.supports_reasoning and (
@@ -270,24 +283,24 @@ class LiteLLMGateway:
         )
         if supports_reasoning_effort:
             reasoning_options = [
-                {"value": "off", "label": "关闭"},
-                {"value": "auto", "label": "自动"},
-                {"value": "high", "label": "高"},
-                {"value": "xhigh", "label": "极高"},
+                reasoning_option("off"),
+                reasoning_option("auto"),
+                reasoning_option("high"),
+                reasoning_option("xhigh"),
             ]
             if policy and policy.name != "deepseek-thinking":
-                reasoning_options.insert(2, {"value": "low", "label": "低"})
-                reasoning_options.insert(3, {"value": "medium", "label": "中"})
+                reasoning_options.insert(2, reasoning_option("low"))
+                reasoning_options.insert(3, reasoning_option("medium"))
             reasoning_mode_kind = "leveled"
         elif supports_reasoning:
             reasoning_options = [
-                {"value": "off", "label": "关闭"},
-                {"value": "auto", "label": "自动"},
+                reasoning_option("off"),
+                reasoning_option("auto"),
             ]
             reasoning_mode_kind = "toggle"
         else:
             reasoning_options = [
-                {"value": "off", "label": "关闭"},
+                reasoning_option("off"),
             ]
             reasoning_mode_kind = "unsupported"
 
@@ -406,11 +419,11 @@ class LiteLLMGateway:
                 if attempt >= num_retries or not self._is_retryable_error(e):
                     raise
                 sleep_s = self._retry_sleep_seconds(attempt)
-                logger.warning(
+                logger.debug(
                     "[AI请求] OpenAI 兼容同步请求失败，%.1f 秒后重试。attempt=%s",
                     sleep_s,
                     attempt + 1,
-                    extra={"error_code": "AI.REQUEST.RETRY_SYNC", "extra_context": {"attempt": attempt + 1, "retry_after_seconds": sleep_s, "original_error": str(e)}},
+                    extra={"error_code": "AI.REQUEST.RETRY_SYNC", "extra_context": {"attempt": attempt + 1, "retry_after_seconds": sleep_s, "exception": e.__class__.__name__}},
                 )
                 time.sleep(sleep_s)
         raise last_error  # type: ignore
@@ -425,11 +438,11 @@ class LiteLLMGateway:
                 if attempt >= num_retries or not self._is_retryable_error(e):
                     raise
                 sleep_s = self._retry_sleep_seconds(attempt)
-                logger.warning(
+                logger.debug(
                     "[AI请求] OpenAI 兼容异步请求失败，%.1f 秒后重试。attempt=%s",
                     sleep_s,
                     attempt + 1,
-                    extra={"error_code": "AI.REQUEST.RETRY_ASYNC", "extra_context": {"attempt": attempt + 1, "retry_after_seconds": sleep_s, "original_error": str(e)}},
+                    extra={"error_code": "AI.REQUEST.RETRY_ASYNC", "extra_context": {"attempt": attempt + 1, "retry_after_seconds": sleep_s, "exception": e.__class__.__name__}},
                 )
                 await asyncio.sleep(sleep_s)
         raise last_error  # type: ignore
@@ -449,10 +462,10 @@ class LiteLLMGateway:
     def get_providers(self) -> List[Dict[str, str]]:
         """返回前端设置页使用的协议类型列表。"""
         return [
-            {"value": "openai_compatible", "label": "OpenAI 兼容协议（含 OpenAI 官方 / 中转 / 本地服务）"},
-            {"value": "anthropic", "label": "Anthropic 原生协议"},
-            {"value": "gemini", "label": "Google Gemini 原生协议"},
-            {"value": "ollama", "label": "Ollama 原生协议"},
+            {"value": "openai_compatible", "label_key": "ai.providers.openai_compatible", "default_label": "OpenAI 兼容协议（含 OpenAI 官方 / 中转 / 本地服务）", "label": tr("ai.providers.openai_compatible", "OpenAI 兼容协议（含 OpenAI 官方 / 中转 / 本地服务）")},
+            {"value": "anthropic", "label_key": "ai.providers.anthropic", "default_label": "Anthropic 原生协议", "label": tr("ai.providers.anthropic", "Anthropic 原生协议")},
+            {"value": "gemini", "label_key": "ai.providers.gemini", "default_label": "Google Gemini 原生协议", "label": tr("ai.providers.gemini", "Google Gemini 原生协议")},
+            {"value": "ollama", "label_key": "ai.providers.ollama", "default_label": "Ollama 原生协议", "label": tr("ai.providers.ollama", "Ollama 原生协议")},
         ]
 
     # =========================================================================
@@ -496,7 +509,7 @@ class LiteLLMGateway:
                     logger.warning(
                         "[AI模型列表] Ollama 未连接或不可用，base_url=%s",
                         base_url,
-                        extra={"error_code": "AI.MODELS.OLLAMA_UNAVAILABLE", "extra_context": {"base_url": base_url, "original_error": str(exc)}},
+                        extra={"error_code": "AI.MODELS.OLLAMA_UNAVAILABLE", "extra_context": {"base_url": base_url, "exception": exc.__class__.__name__}},
                     )
                 return []
 
@@ -524,7 +537,7 @@ class LiteLLMGateway:
                             endpoint,
                             extra={
                                 "error_code": "AI.MODELS.GEMINI_ENDPOINT_FAILED",
-                                "extra_context": {"base_url": base_url, "endpoint": endpoint, "original_error": str(exc)},
+                                "extra_context": {"base_url": base_url, "endpoint": endpoint, "exception": exc.__class__.__name__},
                             },
                         )
                         continue
@@ -570,7 +583,7 @@ class LiteLLMGateway:
                             endpoint,
                             extra={
                                 "error_code": "AI.MODELS.OPENAI_COMPATIBLE_ENDPOINT_FAILED",
-                                "extra_context": {"base_url": base_url, "endpoint": endpoint, "original_error": str(exc)},
+                                "extra_context": {"base_url": base_url, "endpoint": endpoint, "exception": exc.__class__.__name__},
                             },
                         )
                         continue
@@ -581,7 +594,7 @@ class LiteLLMGateway:
                 "[AI模型列表] 获取模型列表失败，provider=%s base_url=%s",
                 provider,
                 base_url,
-                extra={"error_code": "AI.MODELS.FETCH_FAILED", "extra_context": {"provider": provider, "base_url": base_url, "original_error": str(e)}},
+                extra={"error_code": "AI.MODELS.FETCH_FAILED", "extra_context": {"provider": provider, "base_url": base_url, "exception": e.__class__.__name__}},
             )
 
         return []
@@ -846,7 +859,7 @@ class LiteLLMGateway:
                 logger.warning(
                     "[AI请求] 模型思考参数不兼容，正在尝试降级请求参数。note=%s",
                     note,
-                    extra={"error_code": "AI.REQUEST.REASONING_FALLBACK", "extra_context": {"note": note, "original_error": str(last_error)}},
+                    extra={"error_code": "AI.REQUEST.REASONING_FALLBACK", "extra_context": {"note": note, "exception": last_error.__class__.__name__ if last_error else ""}},
                 )
                 try:
                     return runner(dict(fallback_kwargs))
@@ -868,7 +881,7 @@ class LiteLLMGateway:
                 logger.warning(
                     "[AI请求] 模型思考参数不兼容，正在尝试降级异步请求参数。note=%s",
                     note,
-                    extra={"error_code": "AI.REQUEST.REASONING_FALLBACK_ASYNC", "extra_context": {"note": note, "original_error": str(last_error)}},
+                    extra={"error_code": "AI.REQUEST.REASONING_FALLBACK_ASYNC", "extra_context": {"note": note, "exception": last_error.__class__.__name__ if last_error else ""}},
                 )
                 try:
                     return await runner(dict(fallback_kwargs))
@@ -983,11 +996,11 @@ class LiteLLMGateway:
             return self._call_with_retries_sync(primary_call, num_retries)
         except Exception as e:
             if self._should_fallback_openai_endpoint(messages=messages, stream=stream, tools=tools, error=e):
-                logger.warning(
+                logger.debug(
                     "[AI请求] 当前 endpoint 不可用，已自动回退。primary=%s fallback=%s",
                     primary_label,
                     fallback_label,
-                    extra={"error_code": "AI.REQUEST.ENDPOINT_FALLBACK", "extra_context": {"primary": primary_label, "fallback": fallback_label, "original_error": str(e)}},
+                    extra={"error_code": "AI.REQUEST.ENDPOINT_FALLBACK", "extra_context": {"primary": primary_label, "fallback": fallback_label, "exception": e.__class__.__name__}},
                 )
                 return self._call_with_retries_sync(fallback_call, num_retries)
             raise
@@ -1008,11 +1021,11 @@ class LiteLLMGateway:
             return await self._call_with_retries_async(primary_call, num_retries)
         except Exception as e:
             if self._should_fallback_openai_endpoint(messages=messages, stream=stream, tools=tools, error=e):
-                logger.warning(
+                logger.debug(
                     "[AI请求] 当前异步 endpoint 不可用，已自动回退。primary=%s fallback=%s",
                     primary_label,
                     fallback_label,
-                    extra={"error_code": "AI.REQUEST.ENDPOINT_FALLBACK_ASYNC", "extra_context": {"primary": primary_label, "fallback": fallback_label, "original_error": str(e)}},
+                    extra={"error_code": "AI.REQUEST.ENDPOINT_FALLBACK_ASYNC", "extra_context": {"primary": primary_label, "fallback": fallback_label, "exception": e.__class__.__name__}},
                 )
                 return await self._call_with_retries_async(fallback_call, num_retries)
             raise
@@ -1049,12 +1062,12 @@ class LiteLLMGateway:
         except RuntimeError as exc:
             logger.warning(
                 "[AI请求] 关闭异步客户端时事件循环已结束。",
-                extra={"error_code": "AI.CLIENT.CLOSE_LOOP_CLOSED", "extra_context": {"original_error": str(exc)}},
+                extra={"error_code": "AI.CLIENT.CLOSE_LOOP_CLOSED", "extra_context": {"exception": exc.__class__.__name__}},
             )
         except Exception as exc:
             logger.warning(
                 "[AI请求] 关闭异步客户端失败。",
-                extra={"error_code": "AI.CLIENT.CLOSE_FAILED", "extra_context": {"original_error": str(exc)}},
+                extra={"error_code": "AI.CLIENT.CLOSE_FAILED", "extra_context": {"exception": exc.__class__.__name__}},
             )
 
     def _message_text(self, content: Any) -> str:

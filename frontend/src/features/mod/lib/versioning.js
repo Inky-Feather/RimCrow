@@ -1,17 +1,4 @@
-const VERSION_META = {
-  supported: {
-    tone: 'success',
-    label: '支持当前版本',
-  },
-  unknown: {
-    tone: 'muted',
-    label: '版本未注明',
-  },
-  unsupported: {
-    tone: 'danger',
-    label: '可能不支持当前版本',
-  },
-}
+import { t } from '../../../shared/i18n.js'
 
 // 版本号统一截断到 `主版本.次版本`，避免比较时掺入补丁号噪音。
 export const normalizeVersion = (value = '') => String(value || '').trim().slice(0, 3).toLowerCase()
@@ -70,11 +57,11 @@ export const getVersionSortMeta = (currentVersion = '', versions = []) => {
 export const getVersionInfo = (currentVersion = '', versions = []) => {
   const normalizedVersions = normalizeVersions(versions)
   if (!normalizeVersion(currentVersion) || normalizedVersions.length === 0) {
-    return { ...VERSION_META.unknown, versions: normalizedVersions }
+    return { tone: 'muted', label: t('ui.version.unknown', '版本未注明'), versions: normalizedVersions }
   }
   return normalizedVersions.includes(normalizeVersion(currentVersion))
-    ? { ...VERSION_META.supported, versions: normalizedVersions }
-    : { ...VERSION_META.unsupported, versions: normalizedVersions }
+    ? { tone: 'success', label: t('ui.version.supported', '支持当前版本'), versions: normalizedVersions }
+    : { tone: 'danger', label: t('ui.version.unsupported', '可能不支持当前版本'), versions: normalizedVersions }
 }
 
 export const buildVersionPreferenceScore = (

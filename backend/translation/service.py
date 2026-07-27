@@ -5,12 +5,14 @@ import json
 import time
 from typing import Any, Protocol
 
+from backend.i18n.messages import tr
 from backend.i18n.language_registry import get_language_label, normalize_language_code
 from backend.translation.contracts import TranslationDocument, TranslationResult, TranslationSegment
 
 
 TRANSLATION_SOURCE_HASH_PREFIX = "translation_document"
 DEFAULT_TRANSLATION_PROVIDER = "ai.default"
+TRANSLATION_AUTO_CHUNK_ITEM_BUDGET_TOKENS = 6000
 
 
 class TranslationProvider(Protocol):
@@ -49,7 +51,7 @@ class AITranslationProvider:
 
     def _parse_segments(self, raw_segments: Any, document: TranslationDocument) -> tuple[list[TranslationSegment], list[str]]:
         if not isinstance(raw_segments, list):
-            raise ValueError("翻译器返回格式无效")
+            raise ValueError(tr("translation.errors.invalid_provider_response", "翻译器返回格式无效"))
         source_roles = {segment.key: segment.role for segment in document.segments}
         source_keys = set(source_roles)
         translated: list[TranslationSegment] = []
@@ -68,28 +70,42 @@ class AITranslationProvider:
         missing = [segment.key for segment in document.segments if not translated_text.get(segment.key, "").strip()]
         return translated, missing
 
+    def _split_segments(self, document: TranslationDocument) -> list[list[TranslationSegment]]:
+        chunker = getattr(self.ai_mgr, "build_token_limited_chunks", None)
+        if not callable(chunker):
+            return [document.segments]
+        return chunker(
+            document.segments,
+            chunk_token_budget=TRANSLATION_AUTO_CHUNK_ITEM_BUDGET_TOKENS,
+            item_to_token_text=lambda segment: json.dumps(segment.to_dict(), ensure_ascii=False),
+        )
+
     def translate(self, document: TranslationDocument, target_language: str) -> list[TranslationSegment]:
         target_label = get_language_label(target_language, default=target_language)
-        required_keys = [segment.key for segment in document.segments]
         glossary_lines = [
             f"- {term.source} => {term.target or '(按上下文处理)'}{f'；{term.note}' if term.note else ''}"
             for term in document.glossary
         ]
-        parsed = self._request_translation(document, target_label, glossary_lines, required_keys)
-        if not isinstance(parsed, dict):
-            raise ValueError("翻译器返回格式无效")
-
-        translated, missing = self._parse_segments(parsed.get("segments"), document)
-        if missing:
-            # ponytail: 只对缺字段重试一次，避免为偶发模型漏 key 引入复杂修复流程。
-            retry_note = f"上次输出缺少这些 key 或译文为空：{', '.join(missing)}。这次必须返回所有 required keys。"
-            parsed = self._request_translation(document, target_label, glossary_lines, required_keys, retry_note=retry_note)
+        translated_all: list[TranslationSegment] = []
+        for segments in self._split_segments(document):
+            chunk_document = TranslationDocument(segments=list(segments), format=document.format, context=document.context, glossary=document.glossary)
+            required_keys = [segment.key for segment in chunk_document.segments]
+            parsed = self._request_translation(chunk_document, target_label, glossary_lines, required_keys)
             if not isinstance(parsed, dict):
-                raise ValueError("翻译器返回格式无效")
-            translated, missing = self._parse_segments(parsed.get("segments"), document)
-        if missing:
-            raise ValueError(f"翻译器未返回完整译文: {', '.join(missing)}")
-        return translated
+                raise ValueError(tr("translation.errors.invalid_provider_response", "翻译器返回格式无效"))
+
+            translated, missing = self._parse_segments(parsed.get("segments"), chunk_document)
+            if missing:
+                # ponytail: 只对缺字段重试一次，避免为偶发模型漏 key 引入复杂修复流程。
+                retry_note = f"上次输出缺少这些 key 或译文为空：{', '.join(missing)}。这次必须返回所有 required keys。"
+                parsed = self._request_translation(chunk_document, target_label, glossary_lines, required_keys, retry_note=retry_note)
+                if not isinstance(parsed, dict):
+                    raise ValueError(tr("translation.errors.invalid_provider_response", "翻译器返回格式无效"))
+                translated, missing = self._parse_segments(parsed.get("segments"), chunk_document)
+            if missing:
+                raise ValueError(tr("translation.errors.missing_segments", "翻译器未返回完整译文: {keys}", keys=", ".join(missing)))
+            translated_all.extend(translated)
+        return translated_all
 
 
 class TranslationManager:
@@ -102,7 +118,13 @@ class TranslationManager:
 
     def list_providers(self) -> list[dict[str, str]]:
         return [
-            {"id": provider.id, "label": provider.label, "type": provider.type}
+            {
+                "id": provider.id,
+                "label": provider.label,
+                "label_key": "ui.translation.provider.ai_default" if provider.id == DEFAULT_TRANSLATION_PROVIDER else "",
+                "default_label": "AI 翻译" if provider.id == DEFAULT_TRANSLATION_PROVIDER else provider.label,
+                "type": provider.type,
+            }
             for provider in self.providers.values()
         ]
 
@@ -128,13 +150,13 @@ class TranslationManager:
     def translate_document(self, document: TranslationDocument, target_language: Any, *, provider_id: str = DEFAULT_TRANSLATION_PROVIDER) -> TranslationResult:
         language_code = normalize_language_code(target_language)
         if not language_code:
-            raise ValueError("目标语言不能为空")
+            raise ValueError(tr("translation.errors.target_language_required", "目标语言不能为空"))
         if not document.segments:
-            raise ValueError("没有可翻译的文本")
+            raise ValueError(tr("translation.errors.empty_document", "没有可翻译的文本"))
         provider_key = str(provider_id or "").strip() or DEFAULT_TRANSLATION_PROVIDER
         provider = self.providers.get(provider_key)
         if not provider:
-            raise ValueError("当前翻译器不可用")
+            raise ValueError(tr("translation.errors.provider_unavailable", "当前翻译器不可用"))
 
         source_hash = self.build_source_hash(document)
         segments = provider.translate(document, language_code)

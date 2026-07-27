@@ -1,12 +1,14 @@
 import os
 import time
 import threading
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 import ctypes
 import psutil
+from backend.platform.runtime import monitoring_mode, supports_win32_ctypes
 from backend.settings import DATA_DIR
 from backend.settings import settings
+from backend.managers.mgr_game import GameManager
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
 from backend.static_page import build_idle_home_html, build_idle_logs_html
@@ -20,6 +22,7 @@ class RuntimeSession:
     state: str = "idle"
     source: str = "manager"
     launch_mode: str = "unknown"
+    has_launch_args: bool = False
     requested_at: int | None = None
     deadline_at: int | None = None
     started_at: int | None = None
@@ -27,7 +30,18 @@ class RuntimeSession:
     message: str = ""
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {
+            "profile_id": str(self.profile_id or ""),
+            "state": str(self.state or ""),
+            "source": str(self.source or ""),
+            "launch_mode": str(self.launch_mode or ""),
+            "has_launch_args": bool(self.has_launch_args),
+            "requested_at": self.requested_at,
+            "deadline_at": self.deadline_at,
+            "started_at": self.started_at,
+            "failure_reason": str(self.failure_reason or ""),
+            "message": str(self.message or ""),
+        }
 
 
 class GameMonitor:
@@ -36,15 +50,19 @@ class GameMonitor:
     def __init__(self, api):
         self.api = api
         self.running = False
-        self.game_process_name = "RimWorldWin64.exe" 
+        self.game_process_names = self._build_game_process_names()
         self.is_game_running = False
+        self.monitoring_mode = monitoring_mode()
         self.runtime_session = RuntimeSession()
         self.resume_url = None
         # 手动覆写标志，True 表示玩家强制要求唤醒，即使游戏在运行
         self.manual_override_idle = False 
-        # Windows API
-        self.psapi = ctypes.windll.psapi
-        self.kernel32 = ctypes.windll.kernel32
+        self.psapi = None
+        self.kernel32 = None
+        if supports_win32_ctypes():
+            # Windows API
+            self.psapi = ctypes.windll.psapi
+            self.kernel32 = ctypes.windll.kernel32
 
         # 准备静默页面的路径 (生成真实 html 文件，避免长字符串常驻内存)
         self.idle_home_page_path = str(DATA_DIR / 'idle.html')
@@ -65,6 +83,27 @@ class GameMonitor:
             self.idle_logs_page_path,
             build_idle_logs_html(),
         )
+
+    @staticmethod
+    def _build_game_process_names() -> set[str]:
+        names: set[str] = set()
+        for values in GameManager.PROCESS_NAMES_BY_SYSTEM.values():
+            names.update(str(name or "").strip().lower() for name in values if str(name or "").strip())
+        return names
+
+    def _is_target_process(self, process_name: str | None) -> bool:
+        names = getattr(self, "game_process_names", None) or self._build_game_process_names()
+        return str(process_name or "").strip().lower() in names
+
+    def _detect_game_process(self, processes=None) -> bool:
+        process_source = processes if processes is not None else psutil.process_iter(['name'])
+        for proc in process_source:
+            try:
+                if self._is_target_process(proc.info.get('name')):
+                    return True
+            except Exception:
+                continue
+        return False
 
     def _get_default_idle_page_path(self) -> str:
         if str(settings.config.silent_mode_default_view).strip().lower() == 'logs':
@@ -99,13 +138,14 @@ class GameMonitor:
     def get_runtime_session_data(self) -> dict:
         return self.runtime_session.to_dict()
 
-    def begin_launch(self, profile_id: str, launch_mode: str, *, message: str = "") -> RuntimeSession:
+    def begin_launch(self, profile_id: str, launch_mode: str, *, message: str = "", has_launch_args: bool = False) -> RuntimeSession:
         now_ms = int(time.time() * 1000)
         self.runtime_session = RuntimeSession(
             profile_id=str(profile_id or "").strip(),
             state="launching",
             source="manager",
             launch_mode=str(launch_mode or "unknown").strip() or "unknown",
+            has_launch_args=bool(has_launch_args),
             requested_at=now_ms,
             deadline_at=now_ms + self.LAUNCH_TIMEOUT_SECONDS * 1000,
             message=message,
@@ -113,8 +153,17 @@ class GameMonitor:
         return self.runtime_session
 
     def mark_launch_failed(self, reason: str, message: str = "") -> RuntimeSession:
+        session = self.runtime_session
+        if session.state != "launching":
+            session = RuntimeSession()
         self.runtime_session = RuntimeSession(
+            profile_id=str(session.profile_id or ""),
             state="idle",
+            source=str(session.source or "manager"),
+            launch_mode=str(session.launch_mode or "unknown"),
+            has_launch_args=bool(session.has_launch_args),
+            requested_at=session.requested_at,
+            deadline_at=session.deadline_at,
             failure_reason=str(reason or "").strip(),
             message=message,
         )
@@ -184,6 +233,10 @@ class GameMonitor:
         return self.runtime_session, {"running": False, "runtime_session": self.runtime_session.to_dict()}
 
     def start(self):
+        if self.monitoring_mode == "disabled":
+            logger.info("[Monitor] 当前平台未启用游戏进程监控，跳过后台监控线程")
+            self.running = False
+            return
         self.running = True
         EventBus.resume()   # 恢复事件总线
         self.thread = threading.Thread(target=self._monitor_loop, daemon=True)
@@ -192,7 +245,8 @@ class GameMonitor:
     def _monitor_loop(self):
         while self.running:
             try:
-                expired_session = self.expire_launch_if_needed()
+                game_found = self._detect_game_process()
+                expired_session = None if game_found else self.expire_launch_if_needed()
                 if expired_session:
                     EventBus.emit(
                         'game-status-changed',
@@ -204,13 +258,6 @@ class GameMonitor:
                         },
                     )
 
-                game_found = False
-                # 优化：使用 process_iter 的过滤器减少性能消耗
-                for proc in psutil.process_iter(['name']):
-                    if proc.info['name'] == self.game_process_name:
-                        game_found = True
-                        break
-                
                 # 状态机跃迁逻辑更新
                 if game_found and not self.is_game_running:
                     self.is_game_running = True
@@ -269,9 +316,13 @@ class GameMonitor:
             
             if hasattr(self.api, 'scanner'): self.api.scanner.stop_scan() 
             
-            window.load_url(f"file://{self._get_default_idle_page_path()}")
-            time.sleep(0.5) 
-            self._trim_memory()
+            if hasattr(self.api, 'wait_for_api_idle'):
+                self.api.wait_for_api_idle(timeout=2.0, exclude_current_thread=True)
+            self._load_url_deferred(f"file://{self._get_default_idle_page_path()}")
+            def _trim_later():
+                time.sleep(0.6)
+                self._trim_memory()
+            threading.Thread(target=_trim_later, daemon=True).start()
         except Exception as e:
             logger.error(f"[Monitor] 进入静默模式失败：{e}")
             EventBus.resume()
@@ -309,7 +360,11 @@ class GameMonitor:
             EventBus.resume()
 
     def _trim_memory(self):
+        if not self.kernel32 or not self.psapi:
+            return
         try:
+            if not self.psapi or not self.kernel32:
+                return
             pid = os.getpid()
             handle = self.kernel32.OpenProcess(0x001F0FFF, False, pid)
             if handle:
@@ -341,5 +396,3 @@ class GameMonitor:
         """静默模式下打开日志页。"""
         self._create_idle_pages()
         self._load_url_deferred(f"file://{self.idle_logs_page_path}")
-
-

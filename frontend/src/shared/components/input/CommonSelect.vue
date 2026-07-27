@@ -34,6 +34,7 @@
     <FixedPopover
       :trigger-ref="inputRef" :is-open="isOpen"
       :placement="menuPlacement"
+      :z-index="popoverZIndex"
       close-on-other-popover
       @request-close="handlePopoverRequestClose"
     >
@@ -44,7 +45,7 @@
           class="w-full flex items-center px-2 py-1.5 rounded-lg text-xs text-left bg-bg-overlay/5 border border-dashed border-border-base/18 text-accent-primary mb-1 hover:bg-accent-primary/10 transition-colors"
           :class="{'ring-1 ring-accent-primary/50': highlightedIndex === -1}" >
           <span class="mr-1.5 opacity-70">↵</span>
-          使用 "<span class="font-bold">{{ internalSearch }}</span>"
+          {{ customHintParts[0] }}<span class="font-bold">{{ internalSearch }}</span>{{ customHintParts[1] || '' }}
         </button>
         <template v-if="filteredOptions.length > 0">
           <button v-for="(opt, index) in filteredOptions" :key="opt.value" :ref="(el) => setOptionRef(el, index)" type="button" @click="selectOption(opt)"
@@ -68,7 +69,7 @@
         </template>
 
         <div v-else-if="!showCustomHint" class="py-3 text-center text-xs text-text-dim italic">
-          暂无选项
+          {{ t('ui.select.empty', '暂无选项') }}
         </div>
       </div>
     </FixedPopover>
@@ -78,15 +79,17 @@
 <script setup>
 import { ref, computed, nextTick, onBeforeUpdate } from 'vue'
 import FixedPopover from '../popover/FixedPopover.vue'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,
-  placeholder: { type: String, default: '请选择...' },
+  placeholder: { type: String, default: () => t('ui.select.placeholder', '请选择...') },
   description: String,
   modelValue: [String, Number, Boolean],
   options: { type: Array, default: () => [] }, // { label, value, ... }
   mini: { type: Boolean, default: false },
   showBottom: { type: Boolean, default: false }, // 默认向下展开
+  popoverZIndex: { type: [Number, String], default: 8000 }, // 特殊高层浮窗可抬高下拉层级，普通场景保持默认。
   editable: { type: Boolean, default: false }, // 是否可输入
   disabled: { type: Boolean, default: false },
 })
@@ -162,6 +165,7 @@ const showCustomHint = computed(() => {
   // 如果已完全匹配列表中的某一项，则不显示自定义提示
   return !props.options.some(o => String(o.label) === query || String(o.value) === query)
 })
+const customHintParts = computed(() => t('ui.select.use_custom_value', '使用 "{value}"', { value: '{value}' }).split('{value}'))
 // --- 方法 ---
 // 用于在模板中判断当前项是否匹配搜索词（用于控制高亮/置灰样式）
 const isMatch = (opt) => {

@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import zipfile
 from contextlib import suppress
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import List
 
@@ -21,6 +22,14 @@ def _append_pythonpath(env: dict[str, str], *paths: Path) -> None:
     existing_paths = [item for item in env.get("PYTHONPATH", "").split(os.pathsep) if item]
     extra_paths = [str(path.resolve()) for path in paths if path.exists()]
     env["PYTHONPATH"] = os.pathsep.join([*extra_paths, *existing_paths])
+
+
+def _prepare_pyinstaller_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
+    env = dict(base_env or os.environ)
+    # uv 自带的 CPython 3.11.15 上，setuptools 69.x 的本地 distutils 接管会触发断言；
+    # 打包阶段强制退回 stdlib distutils，避免 PyInstaller 启动前就崩溃。
+    env["SETUPTOOLS_USE_DISTUTILS"] = "stdlib"
+    return env
 
 
 def _resolve_steamworkspy_source_dir(project_root: Path) -> Path:
@@ -70,8 +79,75 @@ def _release_zip_name(app_name: str, version: str) -> str:
     return f"{app_name}-v{version_text}-{_platform_tag()}.zip"
 
 
+def _is_windows() -> bool:
+    return sys.platform.startswith(("win32", "cygwin", "msys"))
+
+
+def _is_macos() -> bool:
+    return sys.platform == "darwin"
+
+
 def _pyinstaller_add_data_arg(source: str, target: str) -> str:
     return f"{source}{os.pathsep}{target}"
+
+
+def _pyinstaller_output_candidates(dist_dir: Path, app_name: str) -> list[Path]:
+    candidates = []
+    if _is_macos():
+        candidates.extend([
+            dist_dir / f"{app_name}.app",
+            dist_dir / app_name / f"{app_name}.app",
+            dist_dir / app_name,
+        ])
+    elif _is_windows():
+        candidates.extend([
+            dist_dir / f"{app_name}.exe",
+            dist_dir / app_name / f"{app_name}.exe",
+        ])
+    else:
+        candidates.extend([
+            dist_dir / app_name,
+            dist_dir / app_name / app_name,
+        ])
+    return candidates
+
+
+def _resolve_pyinstaller_output(dist_dir: Path, app_name: str) -> Path:
+    for candidate in _pyinstaller_output_candidates(dist_dir, app_name):
+        if candidate.exists():
+            return candidate
+    searched = "\n - ".join(str(path) for path in _pyinstaller_output_candidates(dist_dir, app_name))
+    raise FileNotFoundError(f"未找到打包产物，已检查:\n - {searched}")
+
+
+def _iter_release_output_files(output_path: Path):
+    if output_path.is_file():
+        yield output_path, Path(output_path.name)
+        return
+
+    if output_path.is_dir():
+        root_parent = output_path.parent
+        for file_path in output_path.rglob("*"):
+            if file_path.is_file():
+                yield file_path, file_path.relative_to(root_parent)
+        return
+
+    raise FileNotFoundError(f"未找到打包产物: {output_path}")
+
+
+def _steamworks_runtime_files(project_root: Path) -> list[Path]:
+    names_by_platform = {
+        "win32": ["SteamworksPy64.dll", "steam_api64.dll"],
+        "darwin": ["SteamworksPy.dylib", "libsteam_api.dylib"],
+        "linux": ["SteamworksPy.so", "libsteam_api.so"],
+    }
+    platform_key = "win32" if sys.platform.startswith(("win32", "cygwin", "msys")) else "darwin" if sys.platform == "darwin" else "linux"
+    runtime_dir = project_root / "tools" / "steamworks"
+    files = [runtime_dir / name for name in names_by_platform[platform_key]]
+    missing = [path for path in files if not path.is_file()]
+    if missing:
+        raise FileNotFoundError("缺少当前平台 Steamworks 运行库: " + ", ".join(str(path) for path in missing))
+    return files
 
 
 def create_pyinstaller_hook_dir():
@@ -187,19 +263,22 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         steamworkspy_source_dir = _resolve_steamworkspy_source_dir(project_root)
         if not os.path.exists(main_file): raise FileNotFoundError(f"主程序文件 '{main_file}' 不存在")
         
-        # 1. 生成版本信息文件
         print("正在生成版本信息...")
-        version_file_path = create_version_file(
-            version=version,
-            company_name=company,
-            file_description=f"{name} 模组管理器",
-            internal_name=name,
-            legal_copyright=f"Copyright (C) {company}",
-            product_name=name
-        )
+        # Windows 才需要版本资源；macOS/Linux 传入该参数没有收益，反而容易造成打包失败。
+        if _is_windows():
+            version_file_path = create_version_file(
+                version=version,
+                company_name=company,
+                file_description=f"{name} 模组管理器",
+                internal_name=name,
+                legal_copyright=f"Copyright (C) {company}",
+                product_name=name
+            )
         hook_dir_path = create_pyinstaller_hook_dir()
-        upx_dir_path = resolve_upx_dir(upx_dir)
-
+        upx_dir_path = resolve_upx_dir(upx_dir) if _is_windows() else ""
+        steamworks_data_args = []
+        for runtime_file in _steamworks_runtime_files(project_root):
+            steamworks_data_args.extend(["--add-data", _pyinstaller_add_data_arg(str(runtime_file), "tools/steamworks")])
         # 2. 构建命令
         # 这些模块在源码运行时可以被 Python 正常动态发现，
         # 但在 PyInstaller 单文件模式下，命名空间插件和动态加载模块经常会漏收。
@@ -207,13 +286,12 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         # Unknown encoding cl100k_base / Plugins found: []
         pyinstaller_args = [
             "uv", "run", "pyinstaller", # 使用uv运行pyinstaller
-            "-F",  # 打包成单个文件
-            # "-D",  # 打包成目录
             "-w",  # 无控制台窗口
             "--noconfirm",  # 跳过确认提示
             "--paths", str(steamworkspy_source_dir),
             "--additional-hooks-dir", hook_dir_path,
             "--add-data", _pyinstaller_add_data_arg("frontend/dist", "frontend/dist"),
+            *steamworks_data_args,
             "--collect-binaries", "tiktoken",
             "--collect-data", "tiktoken",
             "--collect-submodules", "steamworks",
@@ -231,17 +309,26 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "-n", name,  # 指定名称
             main_file  # 主程序文件
         ]
+        if _is_macos():
+            pyinstaller_args.insert(3, "-D")
+        else:
+            pyinstaller_args.insert(3, "-F")
         cmd = pyinstaller_args
-        if upx_dir_path:
+        if upx_dir_path and _is_windows():
             cmd.extend(["--upx-dir", upx_dir_path])
         if icon_path and os.path.exists(icon_path):
-            cmd.extend(["-i", icon_path])
-        if splash_path and os.path.exists(splash_path):
+            if not _is_macos() or Path(icon_path).suffix.lower() == ".icns":
+                cmd.extend(["-i", icon_path])
+            else:
+                print(f"提示: macOS 打包已跳过非 .icns 图标: {icon_path}")
+        if splash_path and os.path.exists(splash_path) and _is_windows():
             cmd.extend(["--splash", splash_path])
         if version_file_path:
             cmd.extend(["--version-file", version_file_path])
+        if _is_macos():
+            cmd.extend(["--osx-bundle-identifier", "com.inkyfeather.rimcrow"])
         
-        env = os.environ.copy()
+        env = _prepare_pyinstaller_env()
         _append_pythonpath(env, steamworkspy_source_dir)
 
         print(f"执行命令: {' '.join(cmd)}")
@@ -249,9 +336,10 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         build_log_path = Path("dist") / "pyinstaller-build.log"
         returncode = _run_command_with_log(cmd, build_log_path, env=env)
         if returncode == 0:
+            output_path = _resolve_pyinstaller_output(Path("dist"), name)
             print("\n" + "="*30)
             print("★ 打包成功！")
-            print(f"★ 输出文件: dist/{name}.exe")
+            print(f"★ 输出产物: {output_path}")
             print(f"★ 构建日志: {build_log_path.resolve()}")
             print("="*30 + "\n")
             return True
@@ -295,7 +383,7 @@ def _iter_tools_files(tools_dir: Path):
     """遍历 tools 发布文件，只保留发布包运行需要的工具资源。"""
     if not tools_dir.exists():
         return
-    allowed_tool_dirs = {"ripgrep", "steamcmd", "steamworks", "texture_tools"}
+    allowed_tool_dirs = {"ripgrep", "steamcmd", "texture_tools"}
     for file_path in tools_dir.rglob("*"):
         if not file_path.is_file():
             continue
@@ -328,17 +416,14 @@ def _iter_data_files(data_dir: Path):
             print(f"警告: 发布数据文件缺失，已跳过 {file_path}")
 
 def create_release_zip(app_name: str, version: str):
-    """基于 dist 中的 exe 生成发布压缩包，并附带运行所需的外部资源。"""
+    """基于 dist 中的平台产物生成发布压缩包，并附带运行所需的外部资源。"""
     project_root = Path(__file__).resolve().parent
     dist_dir = project_root / "dist"
-    exe_path = dist_dir / f"{app_name}.exe"
+    output_path = _resolve_pyinstaller_output(dist_dir, app_name)
     zip_path = dist_dir / _release_zip_name(app_name, version)
     archive_root = Path(app_name)
 
-    if not exe_path.exists():
-        raise FileNotFoundError(f"未找到打包产物: {exe_path}")
-
-    release_items = [(exe_path, Path(exe_path.name))]
+    release_items = list(_iter_release_output_files(output_path))
     release_items.extend(_iter_toolmods_files(project_root / "toolmods" / "RimCrowCompanion") or [])
     release_items.extend(_iter_tools_files(project_root / "tools") or [])
     release_items.extend(_iter_data_files(project_root / "data") or [])
@@ -385,6 +470,7 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max
         use_gitignore: 是否读取 .gitignore 进行过滤
     """
     if exclude_dirs is None: exclude_dirs = []
+    exclude_patterns = [pattern.replace(os.sep, '/') for pattern in exclude_dirs]
     output_lines = []
     # 准备 gitignore spec
     spec = get_gitignore_spec(start_path) if use_gitignore else None
@@ -405,9 +491,12 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max
             if entry in exclude_dirs: continue
             full_path = os.path.join(current_path, entry)
             rel_path = os.path.relpath(full_path, start_path)
+            rel_match_path = rel_path.replace(os.sep, '/')
+            is_dir = os.path.isdir(full_path)
             # 2. .gitignore 过滤
-            # 注意：pathspec 需要 unix 风格的路径分隔符
-            if spec and spec.match_file(rel_path.replace(os.sep, '/')): continue
+            # pathspec 的目录规则（如 .*/）需要尾部斜杠才能命中。
+            if spec and (spec.match_file(rel_match_path) or (is_dir and spec.match_file(f"{rel_match_path}/"))): continue
+            if exclude_patterns and any(fnmatch(rel_match_path, pattern) or (is_dir and fnmatch(f"{rel_match_path}/", pattern)) for pattern in exclude_patterns): continue
             items.append(entry)
 
         # 3. 排序：文件夹在前，然后按字母顺序
@@ -440,11 +529,11 @@ if __name__ == "__main__":
     # 配置
     APP_MAIN = 'main.py'
     APP_NAME = 'RimCrow'
-    APP_VERSION = __version__  # 在这里修改版本号
+    APP_VERSION = __version__
     APP_COMPANY = 'Inky Feather'
     ICON_PATH = 'icon.ico'
     SPLASH_PATH = 'splash.png'
-    DEFAULT_UPX_DIR = ''
+    DEFAULT_UPX_DIR = r'D:\Environment\upx-5.0.0-win64'
     os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
     
     # 0. 构建前端项目
@@ -472,9 +561,7 @@ if __name__ == "__main__":
     
     # 强制排除的系统/构建目录
     excludes = [
-        '__pycache__', '.git', '.venv', '.idea', '.vscode', 
-        'build', 'dist', 'node_modules', 
-        'cache', 'temp', 'backups','Downloads','updates'
+        '__init__.py', 'tests', 'Downloads', 'submodules'
     ]
     
     tree_text = filestree(

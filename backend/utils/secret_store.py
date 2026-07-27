@@ -32,6 +32,13 @@ SECRET_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _tr(key: str, default_text: str, **kwargs: Any) -> str:
+    # 避免 settings 初始化时经由 secret_store 顶层反向导入 messages，再回到 settings。
+    from backend.i18n.messages import tr
+
+    return tr(key, default_text, **kwargs)
+
+
 class SecretStoreError(RuntimeError):
     pass
 
@@ -82,14 +89,14 @@ class SecretStore:
     def validate_key(self, key: str) -> str:
         normalized = str(key or "").strip()
         if normalized not in SECRET_FIELDS:
-            raise SecretStoreError("不支持的密钥项")
+            raise SecretStoreError(_tr("secret.errors.unsupported_key", "不支持的密钥项"))
         return normalized
 
     def get_secret(self, key: str) -> str:
         normalized = self.validate_key(key)
         backend = self.backend
         if backend is None:
-            self.last_error = "系统凭据库不可用"
+            self.last_error = _tr("secret.errors.backend_unavailable", "系统凭据库不可用")
             return ""
         try:
             value = backend.get_password(self.service_name, normalized)
@@ -98,7 +105,7 @@ class SecretStore:
             self.last_error = ""
             return str(value or "")
         except Exception as exc:
-            self.last_error = str(exc) or "系统凭据库读取失败"
+            self.last_error = str(exc) or _tr("secret.errors.read_failed", "系统凭据库读取失败")
             logger.warning("读取系统凭据失败: %s", normalized, exc_info=True)
             return ""
 
@@ -122,10 +129,10 @@ class SecretStore:
 
     def set_secret(self, key: str, value: str) -> None:
         normalized = self.validate_key(key)
-        text = str(value or "")
+        text = str(value or "").strip()
         backend = self.backend
         if backend is None:
-            raise self._fail("本机安全存储不可用，请检查系统凭据服务后重试")
+            raise self._fail(_tr("secret.errors.local_store_unavailable", "本机安全存储不可用，请检查系统凭据服务后重试"))
         try:
             if text:
                 backend.set_password(self.service_name, normalized, text)
@@ -135,13 +142,13 @@ class SecretStore:
             self.fallback_errors.pop(normalized, None)
             self.last_error = ""
         except Exception as exc:
-            raise self._fail("无法保存密钥，请确认本机安全存储可用后重试", exc) from exc
+            raise self._fail(_tr("secret.errors.save_failed", "无法保存密钥，请确认本机安全存储可用后重试"), exc) from exc
 
     def delete_secret(self, key: str) -> None:
         normalized = self.validate_key(key)
         backend = self.backend
         if backend is None:
-            raise self._fail("本机安全存储不可用，请检查系统凭据服务后重试")
+            raise self._fail(_tr("secret.errors.local_store_unavailable", "本机安全存储不可用，请检查系统凭据服务后重试"))
         try:
             removed = False
             for service_name in (self.service_name, *self.legacy_service_names):
@@ -157,7 +164,7 @@ class SecretStore:
             if self._is_missing_secret_error(exc):
                 self.last_error = ""
                 return
-            raise self._fail("无法删除已保存密钥，请确认本机安全存储可用后重试", exc) from exc
+            raise self._fail(_tr("secret.errors.delete_failed", "无法删除已保存密钥，请确认本机安全存储可用后重试"), exc) from exc
 
     def status(self, key: str, fallback_value: str = "") -> SecretStatus:
         normalized = self.validate_key(key)
@@ -196,33 +203,42 @@ class SecretStore:
                 except SecretStoreError:
                     # 写入失败时保留旧配置明文；下次启动会继续尝试迁移，避免静默丢失。
                     self.fallback_keys.add(key)
-                    self.fallback_errors[key] = "本机安全存储不可用，密钥暂时保留在配置文件中"
+                    self.fallback_errors[key] = _tr("secret.errors.fallback_plaintext_kept", "本机安全存储不可用，密钥暂时保留在配置文件中")
                     stored = plaintext
             if stored:
                 _set_nested_value(runtime_config, path, stored)
         return changed
 
     def apply_secret_inputs(self, runtime_config: Any, data: dict[str, Any]) -> bool:
-        """保存设置表单中的密钥：有值则更新，空值则删除；读取失败的字段由前端显式标记保留。"""
+        """应用设置中的密钥输入：未提交或普通空值保持不变，显式清除才删除。"""
+        data.pop("_preserve_secret_keys", None)
+        raw_clear_keys = data.pop("_clear_secret_keys", []) or []
+        if isinstance(raw_clear_keys, str):
+            raw_clear_keys = [raw_clear_keys]
+        if not isinstance(raw_clear_keys, (list, tuple, set)):
+            raw_clear_keys = []
+        clear_keys = {
+            self.validate_key(key)
+            for key in raw_clear_keys
+            if str(key or "").strip()
+        }
         changed = False
-        preserve_keys = {self.validate_key(key) for key in (data.pop("_preserve_secret_keys", []) or [])}
         for key, path in SECRET_FIELDS.items():
             present, value = _pop_nested_value(data, path)
-            if not present:
+            if not present and key not in clear_keys:
                 continue
-            text = str(value or "")
+            text = str(value or "").strip()
             if text:
+                clear_keys.discard(key)
                 self.set_secret(key, text)
                 _set_nested_value(runtime_config, path, text)
                 changed = True
-            elif key in preserve_keys:
                 continue
-            elif not str(_get_nested_value(runtime_config, path) or ""):
+            if key not in clear_keys:
                 continue
-            else:
-                self.delete_secret(key)
-                _set_nested_value(runtime_config, path, "")
-                changed = True
+            self.delete_secret(key)
+            _set_nested_value(runtime_config, path, "")
+            changed = True
         return changed
 
     def clear_runtime_secret(self, runtime_config: Any, key: str) -> None:

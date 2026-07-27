@@ -11,7 +11,7 @@
           <span class="text-accent-primary animate-breathe ">RIM</span> CROW
         </h1>
       </div>
-      <span class="px-2 py-0.5 rounded text-xs bg-bg-overlay/5 text-text-dim border border-border-base/5 ">v {{ appStore.appVersion }}</span>
+      <span class="px-2 py-0.5 rounded text-xs bg-bg-overlay/5 text-text-dim border border-border-base/5 ">v {{ appStore.appVersion || t('common.status.unknown_version', '版本未知') }}</span>
       <!-- 环境切换器 -->
       <div data-tour="profile-switcher">
         <ProfileSwitcher />
@@ -19,44 +19,44 @@
     </div>
 
     <div class="flex items-center gap-3">
-      <button v-if="appStore.settings.debug_mode" @click="appStore.toggleUiState('showTestDrawer')" v-tooltip="`测试页面`"
+      <!-- 测试 -->
+      <button v-if="appStore.settings.debug_mode" @click="appStore.toggleUiState('showTestDrawer')" v-tooltip="t('tooltip.header.debug_page', '测试页面')"
           class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
-        测试
+        {{ t('ui.header.debug_page', '测试') }}
       </button>
-
-      <button data-tour="workspace-btn" @click="appStore.uiState.showWorkspace = true" v-tooltip="`库存管理中枢`"
+      <!-- 库存枢纽 -->
+      <button data-tour="workspace-btn" @click="appStore.uiState.showWorkspace = true" v-tooltip="t('tooltip.header.workspace_hub', '库存管理中枢')"
           class="px-4 py-1.5 rounded-xl bg-accent-special/10 hover:bg-accent-special/20 border border-accent-special/30 text-accent-special text-sm font-bold shadow-[0_0_10px_rgba(var(--rgb-accent-special),0.2)] transition-all flex items-center gap-2">
         <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-        库存枢纽
+        {{ t('ui.header.workspace_hub', '库存枢纽') }}
       </button>
-
       <!-- 贴图优化入口 -->
-      <button data-tour="texture-opt-entry" @click="appStore.toggleUiState('showTextureOptModal')" v-tooltip="`贴图优化`"
+      <button data-tour="texture-opt-entry" @click="appStore.toggleUiState('showTextureOptModal')" v-tooltip="t('tooltip.header.texture_opt', '贴图优化')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <Images class="size-6" />
       </button>
-
-      <button data-tour="file-search-entry" @click="appStore.toggleUiState('showFileSearchWorkbench')" v-tooltip="`文件内容搜索`"
+      <!-- 文件搜索 -->
+      <button data-tour="file-search-entry" @click="appStore.toggleUiState('showFileSearchWorkbench')" v-tooltip="t('tooltip.header.file_search', '文件内容搜索')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <FileSearch2 class="size-6" />
       </button>
-
-      <button @click="appStore.toggleUiState('showModSettingsManager')" v-tooltip="`查看模组配置`"
+      <!-- 模组设置 -->
+      <button @click="appStore.toggleUiState('showModSettingsManager')" v-tooltip="t('tooltip.header.mod_settings', '查看模组设置文件')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <FileSliders class="size-6" />
       </button>
-
-      <button @click="openModResidueCleanup" v-tooltip="`查看和清理卸载残留`"
+      <!-- 残留文件管理 -->
+      <button @click="openModResidueCleanup" v-tooltip="t('tooltip.header.mod_residue_cleanup', '查看和清理卸载残留')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <BrushCleaning class="size-6" />
       </button>
-
-      <button data-tour="log-viewer-entry" @click="appStore.toggleUiState('showLogDrawer')" v-tooltip="`日志页面`"
+      <!-- 日志查看 -->
+      <button data-tour="log-viewer-entry" @click="appStore.toggleUiState('showLogDrawer')" v-tooltip="t('tooltip.header.log_viewer', '日志页面')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M16 14v2.2l1.6 1"/><path d="M16 4h2a2 2 0 0 1 2 2v.832"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><circle cx="16" cy="16" r="6"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
       </button>
-
-      <button data-tour="ai-review-entry" @click="appStore.toggleUiState('showModAliasReviewModal')" v-tooltip="`AI生成管理`" :class="{'opacity-30 pointer-events-none': !aiStore.modAliasReviewItemCount}"
+      <!-- AI生成 -->
+      <button data-tour="ai-review-entry" @click="appStore.toggleUiState('showModAliasReviewModal')" v-tooltip="t('tooltip.header.ai_generation_manager', 'AI生成管理')" :class="{'opacity-30 pointer-events-none': !aiStore.modAliasReviewItemCount}"
         class="p-2 rounded-full relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent cursor-pointer">
         <BotMessageSquare class="size-6" />
         <span v-show="aiStore.modAliasReviewItemCount > 0" class="absolute top-0 right-0 p-0.5 leading-none text-xs text-text-main font-bold rounded-full bg-accent-secondary/70 animate-pulse">
@@ -64,67 +64,68 @@
         </span>
       </button>
 
-
-      <div v-tooltip="`加载序列`" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
+      <!-- 导入导出菜单 -->
+      <div v-tooltip="t('tooltip.header.load_order.menu', '加载序列')" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <ClipboardList class="size-6" />
-        <div class="absolute top-full right-0 w-35 overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-border-base/10 shadow-2xl backdrop-blur-lg opacity-0
+        <div class="absolute top-full right-0 w-fit overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-border-base/10 shadow-2xl backdrop-blur-lg opacity-0
           invisible transform origin-top-right group-hover/folder:opacity-100 group-hover/folder:visible transition-all duration-300">
           <button @click="runHeaderAction('import-file', () => loadOrder('0'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('import-file') ? '正在导入加载序列' : '导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）'" >
+            v-tooltip="isHeaderActionPending('import-file') ? t('tooltip.header.load_order.importing', '正在导入加载序列') : t('tooltip.header.load_order.import', '导入加载序列（支持 ModsConfig.xml / ModList.xml / .rml / 存档.rws / RimPy XML / RimSort JSON / 文本列表 / Workshop ID 列表）')" >
             <LoaderCircle v-if="isHeaderActionPending('import-file')" class="size-3 animate-spin" />
-            {{ isHeaderActionPending('import-file') ? '导入中' : '导入加载序列' }}
+            {{ isHeaderActionPending('import-file') ? t('ui.header.load_order.importing', '导入中') : t('ui.header.load_order.import', '导入加载序列') }}
           </button>
           <button @click="runHeaderAction('export-modsconfig', () => exportOrder())" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('export-modsconfig') ? '正在导出 ModsConfig' : '导出为 ModsConfig.xml（仅含包名）'">
+            v-tooltip="isHeaderActionPending('export-modsconfig') ? t('tooltip.header.load_order.exporting_modsconfig', '正在导出 ModsConfig') : t('tooltip.header.load_order.export_modsconfig', '导出为 ModsConfig.xml（仅含包名）')">
             <LoaderCircle v-if="isHeaderActionPending('export-modsconfig')" class="size-3 animate-spin" />
-            {{ isHeaderActionPending('export-modsconfig') ? '导出中' : '导出加载序列' }}
+            {{ isHeaderActionPending('export-modsconfig') ? t('ui.header.load_order.exporting', '导出中') : t('ui.header.load_order.export_modsconfig', '导出加载序列') }}
           </button>
           <button @click="runHeaderAction('export-modlist', () => exportOrder(null,'modlist'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('export-modlist') ? '正在导出 ModList' : '导出为 ModList.xml（含包名和工坊ID）'" >
+            v-tooltip="isHeaderActionPending('export-modlist') ? t('tooltip.header.load_order.exporting_modlist', '正在导出 ModList') : t('tooltip.header.load_order.export_modlist', '导出为 ModList.xml（含包名和工坊ID）')" >
             <LoaderCircle v-if="isHeaderActionPending('export-modlist')" class="size-3 animate-spin" />
-            {{ isHeaderActionPending('export-modlist') ? '导出中' : '导出分享列表' }}
+            {{ isHeaderActionPending('export-modlist') ? t('ui.header.load_order.exporting', '导出中') : t('ui.header.load_order.export_modlist', '导出分享列表') }}
           </button>
           <button @click="runHeaderAction('export-rml', () => exportOrder(null,'rml'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('export-rml') ? '正在导出 RML' : '导出为 RML（游戏原生导出格式）'" >
+            v-tooltip="isHeaderActionPending('export-rml') ? t('tooltip.header.load_order.exporting_rml', '正在导出 RML') : t('tooltip.header.load_order.export_rml', '导出为 RML（游戏原生导出格式）')" >
             <LoaderCircle v-if="isHeaderActionPending('export-rml')" class="size-3 animate-spin" />
-            {{ isHeaderActionPending('export-rml') ? '导出中' : '导出原生分享' }}
+            {{ isHeaderActionPending('export-rml') ? t('ui.header.load_order.exporting', '导出中') : t('ui.header.load_order.export_rml', '导出原生分享') }}
           </button>
           <button @click="runHeaderAction('import-share-code', importShareCode)" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('import-share-code') ? '正在导入分享码' : '粘贴 RC- 分享码并导入到对比视图'" >
+            v-tooltip="isHeaderActionPending('import-share-code') ? t('tooltip.header.load_order.importing_share_code', '正在导入分享码') : t('tooltip.header.load_order.import_share_code', '粘贴 RC- 分享码并导入到对比视图')" >
             <LoaderCircle v-if="isHeaderActionPending('import-share-code')" class="size-3 animate-spin" />
-            {{ isHeaderActionPending('import-share-code') ? '导入中' : '导入分享码' }}
+            {{ isHeaderActionPending('import-share-code') ? t('ui.header.load_order.importing', '导入中') : t('ui.header.load_order.import_share_code', '导入分享码') }}
           </button>
           <button @click="runHeaderAction('export-share-code', exportShareCode)" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('export-share-code') ? '正在生成分享码' : '生成 RC- 分享码并复制到剪贴板'" >
+            v-tooltip="isHeaderActionPending('export-share-code') ? t('tooltip.header.load_order.generating_share_code', '正在生成分享码') : t('tooltip.header.load_order.export_share_code', '生成 RC- 分享码并复制到剪贴板')" >
             <LoaderCircle v-if="isHeaderActionPending('export-share-code')" class="size-3 animate-spin" />
-            {{ isHeaderActionPending('export-share-code') ? '生成中' : '复制分享码' }}
+            {{ isHeaderActionPending('export-share-code') ? t('ui.header.load_order.generating', '生成中') : t('ui.header.load_order.export_share_code', '复制分享码') }}
           </button>
         </div>
       </div>
-
-      <div v-tooltip="`打开文件夹`" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
+      
+      <!-- 文件路径菜单 -->
+      <div v-tooltip="t('common.action.open_folder', '打开文件夹')" class="p-2 rounded-full group/folder relative hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
-        <div class="absolute top-full right-0 w-35 overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-border-base/10 shadow-2xl backdrop-blur-sm opacity-0
-          invisible transform origin-top-right group-hover/folder:opacity-100 group-hover/folder:visible transition-all duration-300">
-          <button @click="appStore.openPath(profileStore.activeContext.user_data_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">用户数据目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.game_saves_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏存档目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.game_config_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏配置目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.game_install_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏安装目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.game_dlc_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">游戏DLC目录</button>
-          <button @click="appStore.openPath(profileStore.activeContext.local_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent" >本地Mod目录</button>
-          <button v-if="appStore.settings.workshop_mods_path" @click="appStore.openPath(appStore.settings.workshop_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">工坊Mod目录</button>
-          <button @click="appStore.openPath(appStore.settings.self_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">管理器Mod目录</button>
+        <div class="absolute top-full right-0 w-fit overflow-hidden rounded-md flex flex-col items-center justify-center bg-glass-medium border border-border-base/10 shadow-2xl backdrop-blur-sm opacity-0
+          invisible transform origin-top-right group-hover/folder:opacity-100 group-hover/folder:visible transition-all duration-300 whitespace-nowrap">
+          <button @click="appStore.openPath(profileStore.activeContext.user_data_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('ui.header.folder.user_data', '用户数据目录') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.game_saves_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('ui.header.folder.game_saves', '游戏存档目录') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.game_config_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('ui.header.folder.game_config', '游戏配置目录') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.game_install_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('ui.header.folder.game_install', '游戏安装目录') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.game_dlc_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('ui.header.folder.game_dlc', '游戏DLC目录') }}</button>
+          <button @click="appStore.openPath(profileStore.activeContext.local_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent" >{{ t('ui.header.folder.local_mods', '本地Mod目录') }}</button>
+          <button v-if="appStore.settings.workshop_mods_path" @click="appStore.openPath(appStore.settings.workshop_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('ui.header.folder.workshop_mods', '工坊Mod目录') }}</button>
+          <button @click="appStore.openPath(appStore.settings.self_mods_path)" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent">{{ t('ui.header.folder.manager_mods', '管理器Mod目录') }}</button>
         </div>
       </div>
 
-
-      <button data-tour="rulePanel-btn" @click="appStore.toggleUiState('showRuleDrawer')" v-tooltip="`规则页面`"
+      <!-- 规则管理 -->
+      <button data-tour="rulePanel-btn" @click="appStore.toggleUiState('showRuleDrawer')" v-tooltip="t('tooltip.header.rules', '规则页面')"
         class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m18 16 2-2"/><path d="m17 11 4.3 4.3c.94.94.94 2.46 0 3.4l-2.6 2.6c-.94.94-2.46.94-3.4 0L11 17"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
       </button>
 
       <!-- 设置按钮 -->
-      <button data-tour="settings-button" @click="appStore.openSettingsPanel()" v-tooltip="`设置`"
+      <button data-tour="settings-button" @click="appStore.openSettingsPanel()" v-tooltip="t('tooltip.header.settings', '设置')"
           class="p-2 rounded-full hover:bg-glow text-text-dim hover:text-text-main transition bg-transparent">
         <svg class="size-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
@@ -147,6 +148,7 @@ import { IconSelfOriginal } from '../../shared/lib/constants'
 import { useProfileStore } from '../../features/profiles/profileStore.js';
 import { useOrderStore } from '../../features/load-order/orderStore.js';
 import { useModResidueStore } from '../../features/mod-residue/modResidueStore.js';
+import { t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
 const aiStore = useAiStore()

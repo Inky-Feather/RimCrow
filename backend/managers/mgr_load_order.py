@@ -1,8 +1,8 @@
 import os
 import shutil
-import glob
 import datetime
 import hashlib
+import threading
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -24,7 +24,12 @@ from backend.load_order import (
 from backend.load_order.package_tokens import parse_package_token
 from backend.database.models_ext import ModReplacement
 from backend.managers.mgr_profile import ProfileContext
+from backend.i18n.messages import tr
 from backend.utils.logger import logger
+
+_BACKUP_LOCK = threading.RLock()
+_BACKUP_PROTECTION_HOURS = 6
+_BACKUP_FILE_SUFFIXES = {".xml", ".rml"}
 
 # --- 模块测试准备 ---
 if __name__ == "__main__":
@@ -70,19 +75,21 @@ class LoadOrderManager:
     4. 兜底：永远保留最新的一份备份。
     """
     
-    def __init__(self, context: ProfileContext):
+    def __init__(self, context: ProfileContext, rotate_backups: bool = False):
         # 从全局配置获取路径
         self.context = context
-        self._ensure_dirs()
+        # 备份是保存排序时的附带保护；失败要反馈给 API，但不能伪装成主文件保存失败。
+        self.last_backup_error = ""
+        self._ensure_dirs(rotate_backups=rotate_backups)
 
-    def _ensure_dirs(self):
+    def _ensure_dirs(self, *, rotate_backups: bool = False):
         # 当前环境健康时才触碰游戏配置目录；只读查看其它环境备份时不应顺手重建失效路径。
         if self.context.is_healthy:
             os.makedirs(self.context.game_config_path, exist_ok=True)
         os.makedirs(self.context.backup_dir, exist_ok=True)
-        self._init_backup_dirs()
+        self._init_backup_dirs(rotate_backups=rotate_backups)
 
-    def _init_backup_dirs(self):
+    def _init_backup_dirs(self, *, rotate_backups: bool = False):
         """初始化备份目录结构"""
         # 在软件目录下用 backups 文件夹存储备份
         self.backup_root = str(Path(self.context.backup_dir))
@@ -95,8 +102,9 @@ class LoadOrderManager:
         os.makedirs(self.earlier_dir, exist_ok=True)
         os.makedirs(self.other_dir, exist_ok=True)
         
-        # 每次初始化（应用启动）时执行一次轮换检查
-        self._rotate_backups()
+        # 备份流转只属于备份目录维护；单纯读取列表和保存排序都不顺手改备份目录。
+        if rotate_backups:
+            self._rotate_backups()
 
     def _normalize_workshop_id(self, workshop_id: Any) -> str | None:
         # 0 和空值都视为“没有可用工坊ID”，前端不应把它当成可订阅项目。
@@ -231,6 +239,15 @@ class LoadOrderManager:
         except Exception as e:
             logger.warning(f"读取包名补全详情失败: {e}")
 
+        install_sources_by_package_id = {}
+        try:
+            install_sources_by_package_id = ExtDAO.get_install_sources_by_package_ids(
+                parsed.package_ids,
+                current_game_version=self.context.game_version if self.context else "",
+            )
+        except Exception as e:
+            logger.warning(f"读取包名安装来源失败: {e}")
+
         details_by_workshop_id = {}
         try:
             details_by_workshop_id = ExtDAO.get_workshop_details_by_workshop_ids(parsed.workshop_ids)
@@ -242,6 +259,7 @@ class LoadOrderManager:
             parsed,
             installed_mods=installed_mods,
             details_by_package_id=details_by_package_id,
+            install_sources_by_package_id=install_sources_by_package_id,
             details_by_workshop_id=details_by_workshop_id,
             replacements_by_old_workshop_id=replacements_by_workshop_id,
             game_version=self.context.game_version,
@@ -265,6 +283,16 @@ class LoadOrderManager:
                     package_id = normalize_package_id(mod.get("package_id"))
                     if not package_id or package_id in visible_map:
                         continue
+                    workshop_variant = mod.get("coexist_workshop_variant")
+                    workshop_variant_meta = {}
+                    if isinstance(workshop_variant, dict) and workshop_variant:
+                        workshop_variant_meta = {
+                            "package_id_raw": workshop_variant.get("package_id_raw") or workshop_variant.get("package_id") or package_id,
+                            "name": workshop_variant.get("name") or workshop_variant.get("display_name") or workshop_variant.get("alias_name") or package_id,
+                            "alias_name": workshop_variant.get("alias_name") or workshop_variant.get("display_name") or workshop_variant.get("name") or package_id,
+                            "workshop_id": self._normalize_workshop_id(workshop_variant.get("workshop_id")),
+                            "source_url": self._normalize_source_url(workshop_variant.get("url")),
+                        }
                     visible_map[package_id] = {
                         "package_id_raw": mod.get("package_id_raw") or mod.get("package_id") or package_id,
                         "name": mod.get("name") or package_id,
@@ -272,7 +300,8 @@ class LoadOrderManager:
                         "workshop_id": self._normalize_workshop_id(mod.get("workshop_id")),
                         "source_url": self._normalize_source_url(mod.get("url")),
                         # 仅当当前环境里仍然存在可切换的 workshop 共存副本时，才继续保留 `_steam` token。
-                        "has_coexist_workshop_variant": bool(mod.get("coexist_workshop_variant")),
+                        "has_coexist_workshop_variant": bool(workshop_variant_meta),
+                        "coexist_workshop_variant": workshop_variant_meta,
                     }
         except Exception as e:
             logger.warning(f"补全排序文件 Mod 可见元数据失败: {e}")
@@ -326,12 +355,17 @@ class LoadOrderManager:
             # 这里采用“文件原值 > 当前环境 > 扩展库 > 兜底包名”的顺序。
             # 这样既能尊重导入文件的原始信息，又能在信息不完整时尽量补齐。
             package_id = entry.get("package_id", "")
-            visible_meta = visible_map.get(package_id, {})
+            base_visible_meta = visible_map.get(package_id, {})
+            token_info = parse_package_token(entry.get("package_token_raw") or entry.get("package_token") or package_id)
+            visible_meta = base_visible_meta
+            if token_info.source_preference == "steam":
+                visible_meta = base_visible_meta.get("coexist_workshop_variant") or base_visible_meta
             asset_meta = asset_map.get(package_id, {})
             workshop_meta = meta_map.get(package_id, {})
 
             entry["package_id_raw"] = (
-                entry.get("package_id_raw")
+                (visible_meta.get("package_id_raw") if token_info.source_preference == "steam" else None)
+                or entry.get("package_id_raw")
                 or visible_meta.get("package_id_raw")
                 or asset_meta.get("package_id_raw")
                 or package_id
@@ -359,11 +393,10 @@ class LoadOrderManager:
             )
             entry["source_url_raw"] = entry.get("source_url_raw") or ""
 
-            token_info = parse_package_token(entry.get("package_token_raw") or entry.get("package_token") or entry.get("package_id"))
             if (
                 token_info.source_preference == "steam"
                 and package_id in visible_map
-                and not visible_meta.get("has_coexist_workshop_variant")
+                and not base_visible_meta.get("has_coexist_workshop_variant")
             ):
                 # stale `_steam` 只在 workshop 共存副本实际可用时才保留；
                 # 否则回落到裸包名，避免前端显示本地版但保存时仍写回 `_steam`。
@@ -425,7 +458,13 @@ class LoadOrderManager:
             'version_token': self._build_version_token(source_path, parsed_result.get('active_mods', []), modify_time=modify_time),
         }
 
-    def _build_export_entries(self, active_ids, export_format: str = EXPORT_FORMAT_MODSCONFIG):
+    def _build_export_entries(
+        self,
+        active_ids,
+        export_format: str = EXPORT_FORMAT_MODSCONFIG,
+        *,
+        preserve_package_tokens: bool = True,
+    ):
         # 导出前统一生成结构化条目，避免两个导出分支重复查库和补名。
         normalized_ids = []
         normalized_tokens = []
@@ -445,11 +484,13 @@ class LoadOrderManager:
 
         entries = self._enrich_mod_entries(self._build_mod_entries(normalized_ids, normalized_tokens))
         for entry in entries:
-            # 除 ModsConfig.xml 外，其它导出都统一回落到裸 package_id。
-            entry["package_id_raw"] = entry["package_id"]
-            if export_format != EXPORT_FORMAT_MODSCONFIG:
-                entry["package_token"] = entry["package_id"]
-                entry["package_token_raw"] = entry["package_id"]
+            # 来源后缀是共存模组的实例选择信息，不能因导出格式不同而丢失。
+            # 只有调用方明确要求“原始包名”时，才回落到不带后缀的规范包名。
+            entry["export_package_id"] = (
+                entry.get("package_token") or entry.get("package_id")
+                if preserve_package_tokens
+                else entry.get("package_id")
+            )
         return entries
 
     def _build_active_ids_hash(self, active_ids: list[str] | None = None) -> str:
@@ -553,12 +594,13 @@ class LoadOrderManager:
         workshop_ids_node = etree.SubElement(root, "modSteamWorkshopIds")
 
         for entry in entries:
-            etree.SubElement(mod_ids_node, "li").text = entry.get("package_id_raw") or entry.get("package_id")
-            etree.SubElement(mod_names_node, "li").text = entry.get("name") or entry.get("package_id_raw") or entry.get("package_id")
+            package_id = entry.get("export_package_id") or entry.get("package_token") or entry.get("package_id_raw") or entry.get("package_id")
+            etree.SubElement(mod_ids_node, "li").text = package_id
+            etree.SubElement(mod_names_node, "li").text = entry.get("name") or package_id
             etree.SubElement(workshop_ids_node, "li").text = entry.get("workshop_id") or "0"
 
         tree = etree.ElementTree(root)
-        tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
+        self._write_xml_tree_atomically(tree, write_path)
 
     def _write_rml_file(self, write_path: str, entries: list[dict]):
         """
@@ -586,7 +628,7 @@ class LoadOrderManager:
         names_node = etree.SubElement(mod_list_node, "names")
 
         for entry in entries:
-            package_id = entry.get("package_id_raw") or entry.get("package_id") or ""
+            package_id = entry.get("export_package_id") or entry.get("package_token") or entry.get("package_id_raw") or entry.get("package_id") or ""
             display_name = entry.get("name") or package_id
             workshop_id = entry.get("workshop_id") or "0"
 
@@ -597,7 +639,7 @@ class LoadOrderManager:
             etree.SubElement(names_node, "li").text = display_name
 
         tree = etree.ElementTree(root)
-        tree.write(write_path, pretty_print=True, xml_declaration=True, encoding="utf-8")
+        self._write_xml_tree_atomically(tree, write_path)
 
     def read_active_mods(self, mods_config_file_path=None):
         """
@@ -636,6 +678,7 @@ class LoadOrderManager:
         except Exception as e:
             logger.error(f"读取排序文件时出错: {e}")
             # 解析失败时返回空结果而不是抛异常，由 API 层决定对前端提示“解析失败”。
+            error_message = tr("errors.load_order.parse_failed", "排序文件解析失败，请检查文件格式是否正确。")
             return {
                 'active_mods': [],
                 'modify_time': modify_time,
@@ -647,7 +690,9 @@ class LoadOrderManager:
                 "source_urls": [],
                 "workshop_ids": [],
                 "warnings": [],
-                "errors": [str(e)],
+                "errors": [str(error_message)],
+                "message_key": error_message.message_key,
+                "message_params": error_message.message_params,
                 'import_check': {"summary": {}, "items": []},
                 'version_token': self._build_version_token(mods_config_file_path, [], modify_time=modify_time),
             }
@@ -662,12 +707,21 @@ class LoadOrderManager:
 
     def _backup_broken_modsconfig(self, source_path: str):
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 同一秒重复触发时直接覆盖同名备份。
         dest_path = os.path.join(self.other_dir, f"ModsConfig_broken_{timestamp}.xml")
         try:
             shutil.copy2(source_path, dest_path)
-            logger.warning(f"已备份损坏的 ModsConfig.xml 到: {dest_path}")
+            logger.warning(
+                f"已备份损坏的 ModsConfig.xml：profile_id={self.context.profile_id}, "
+                f"path={dest_path}"
+            )
+            return True
         except Exception as backup_error:
-            logger.warning(f"备份损坏的 ModsConfig.xml 失败，将继续覆盖保存: {backup_error}")
+            self._record_backup_error(
+                f"备份损坏的 ModsConfig.xml 失败：profile_id={self.context.profile_id}, "
+                f"source={source_path}, error={backup_error}"
+            )
+            return False
 
     def _load_modsconfig_tree_for_save(self, current_version: str):
         parser = etree.XMLParser(remove_blank_text=True)
@@ -677,7 +731,13 @@ class LoadOrderManager:
         try:
             return etree.parse(source_path, parser)
         except Exception as e:
-            self._backup_broken_modsconfig(source_path)
+            try:
+                self._backup_broken_modsconfig(source_path)
+            except Exception as backup_error:
+                self._record_backup_error(
+                    f"备份损坏的 ModsConfig.xml 失败：profile_id={self.context.profile_id}, "
+                    f"source={source_path}, error={backup_error}"
+                )
             logger.warning(f"ModsConfig.xml 无法解析，保存时将重建并覆盖: {source_path}, error={e}")
             return self._build_empty_modsconfig_tree(current_version)
 
@@ -701,7 +761,21 @@ class LoadOrderManager:
                 pass
             raise
 
-    def save_active_mods(self, active_ids, target_path=None, trigger_dialog=False, is_dirty=True, export_format: str = EXPORT_FORMAT_MODSCONFIG, list_name: str | None = None):
+    def save_active_mods(self, *args, **kwargs):
+        """在同一把锁内完成保存、备份和轮换，避免并发操作同一个文件。"""
+        with _BACKUP_LOCK:
+            return self._save_active_mods(*args, **kwargs)
+
+    def _save_active_mods(
+        self,
+        active_ids,
+        target_path=None,
+        trigger_dialog=False,
+        is_dirty=True,
+        export_format: str = EXPORT_FORMAT_MODSCONFIG,
+        list_name: str | None = None,
+        preserve_package_tokens: bool = True,
+    ):
         """
         保存加载顺序。
         :param active_ids: Mod ID 列表
@@ -709,16 +783,20 @@ class LoadOrderManager:
         :param trigger_dialog: 是否触发系统弹窗让用户选择保存位置。
         :param export_format: 导出格式，支持 ModsConfig.xml / ModList.xml / RML
         :param list_name: 导出 ModList.xml 时写入的 Name
+        :param preserve_package_tokens: 是否保留 `_steam` 等来源后缀；自动保存和自动备份默认保留。
         """
+        self.last_backup_error = ""
         export_format = str(export_format or EXPORT_FORMAT_MODSCONFIG).strip().lower()
         if export_format not in {EXPORT_FORMAT_MODSCONFIG, EXPORT_FORMAT_MODLIST, EXPORT_FORMAT_RML}:
             raise ValueError(f"不支持的导出格式: {export_format}")
         # 先统一整理一份可导出的结构化条目，避免不同导出分支重复查库补名。
-        entries = self._build_export_entries(active_ids, export_format=export_format)
+        entries = self._build_export_entries(
+            active_ids,
+            export_format=export_format,
+            preserve_package_tokens=preserve_package_tokens,
+        )
         final_ids = [
-            (entry.get("package_token") or entry.get("package_id") or "")
-            if export_format == EXPORT_FORMAT_MODSCONFIG
-            else (entry.get("package_id") or "")
+            entry.get("export_package_id") or entry.get("package_id") or ""
             for entry in entries
         ]
         default_name = self._default_export_name(export_format)
@@ -753,8 +831,19 @@ class LoadOrderManager:
         resolved_list_name = (list_name or Path(write_path).stem or default_name).strip()
         # 2. 只有在覆盖默认配置时并且 is_dirty 为 True 时，才需要自动备份旧文件
         # 如果是另存为，没必要备份目标文件（通常目标文件不存在）
-        if export_format == EXPORT_FORMAT_MODSCONFIG and write_path == self.context.mods_config_file and is_dirty:
-            self._create_backup()
+        is_main_config_save = (
+            export_format == EXPORT_FORMAT_MODSCONFIG
+            and write_path == self.context.mods_config_file
+        )
+        if is_main_config_save and is_dirty:
+            # 自动备份失败只影响备份提示，不阻止用户当前这次排序保存。
+            try:
+                self._create_backup()
+            except Exception as backup_error:
+                self._record_backup_error(
+                    f"创建自动备份失败：profile_id={self.context.profile_id}, "
+                    f"source={self.context.mods_config_file}, error={backup_error}"
+                )
         # 3. 准备 XML 结构 (逻辑保持不变)
         current_version = self.context.game_version
         try:
@@ -783,13 +872,46 @@ class LoadOrderManager:
                 # 4. 用临时文件原子替换，避免中途失败留下空文件。
                 self._write_xml_tree_atomically(tree, write_path)
                 # 同步一份最近备份，改用 RML 格式，方便后续完整恢复和识别。
-                self._write_rml_file(os.path.join(self.backup_root, "Latest_ModList.rml"), entries)
+                latest_path = os.path.join(self.backup_root, "Latest_ModList.rml")
+                try:
+                    self._write_rml_file(latest_path, entries)
+                except Exception as latest_error:
+                    # Latest 是辅助副本，失败只提示备份异常，不能把排序文件保存结果改成失败。
+                    self._record_backup_error(
+                        f"更新最近备份失败，排序文件已保存：profile_id={self.context.profile_id}, "
+                        f"path={latest_path}, error={latest_error}"
+                    )
                 logger.info(f"成功保存 {len(active_ids)} 个模组到: {write_path}")
             return True
             
         except Exception as e:
             logger.error(f"保存排序文件时出错：{e}")
             raise Exception(f"保存排序文件时出错：{e}")
+
+    def _record_backup_error(self, message: str):
+        self.last_backup_error = message
+        logger.error(message)
+
+    @staticmethod
+    def _backup_files(directory: str) -> list[Path]:
+        root = Path(directory)
+        return sorted(
+            (
+                item for item in root.iterdir()
+                if item.is_file() and not item.is_symlink() and item.suffix.lower() in _BACKUP_FILE_SUFFIXES
+            ),
+            key=lambda item: item.name.lower(),
+        )
+
+    def _backup_created_at(self, path: Path) -> datetime.datetime:
+        return datetime.datetime.fromtimestamp(path.stat().st_mtime)
+
+    def _verify_backup_readable(self, path: str):
+        with open(path, "rb") as handle:
+            handle.read(1)
+        parsed = parse_load_order_file(path)
+        if parsed.errors:
+            raise ValueError("备份文件解析失败：" + "; ".join(parsed.errors))
 
     def _create_backup(self):
         """
@@ -798,100 +920,207 @@ class LoadOrderManager:
         2. 解析并利用数据库补全元数据（Name, WorkshopID）。
         3. 以 RML 格式存入备份目录。
         """
-        # 只有当旧文件存在时才有备份价值
         old_file_path = self.context.mods_config_file
-        if not old_file_path or not os.path.exists(old_file_path): return
-        try:
-            # 1. 读取并解析当前磁盘上的旧文件
-            # 利用现有的 read_active_mods 逻辑，它已经包含了从 DB 补全信息的能力
-            old_data = self.read_active_mods(old_file_path)
-            old_active_ids = old_data.get('active_mods', [])
-            if not old_active_ids: return
-            # 2. 生成备份文件名（使用旧文件的最后修改时间，这样备份更精准）
-            mtime = os.path.getmtime(old_file_path)
-            dt = datetime.datetime.fromtimestamp(mtime)
-            timestamp = dt.strftime("%Y%m%d_%H%M%S")
-            filename = f"ModList_{timestamp}.rml"
-            dest_path = os.path.join(self.today_dir, filename)
-            # 3. 如果已经存在同时间戳的备份，说明文件没变动，跳过
-            if os.path.exists(dest_path): return
-            # 4. 准备全量元数据条目 (利用 old_data 中已经补全好的 mods 列表)
-            entries = old_data.get('mods', [])
-            # 5. 写入 RML 格式
-            self._write_rml_file(dest_path, entries)
-            logger.info(f"已将上一次状态备份为 RML 格式：{filename}")
-        except Exception as e:
-            logger.error(f"创建保存前备份失败：{e}")
+        if not old_file_path or not os.path.isfile(old_file_path):
+            return False
+        with _BACKUP_LOCK:
+            dest_path = ""
+            try:
+                old_data = self.read_active_mods(old_file_path)
+                errors = list(old_data.get("errors") or [])
+                if errors:
+                    raise ValueError("旧 ModsConfig.xml 解析失败：" + "; ".join(map(str, errors)))
+                if not old_data.get("mods") and not old_data.get("active_mods"):
+                    return False
 
-    def _rotate_backups(self):
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                # 自动备份同名时覆盖最新快照。
+                dest_path = os.path.join(self.today_dir, f"ModList_{timestamp}.rml")
+                self._write_rml_file(dest_path, old_data.get("mods", []) or [])
+                self._verify_backup_readable(dest_path)
+                logger.info(
+                    f"已创建自动备份：profile_id={self.context.profile_id}, path={dest_path}"
+                )
+                return True
+            except Exception as backup_error:
+                self._record_backup_error(
+                    f"创建自动备份失败：profile_id={self.context.profile_id}, "
+                    f"source={old_file_path}, path={dest_path or self.today_dir}, error={backup_error}"
+                )
+                return False
+
+    def _remove_backup_file(self, path: Path) -> bool:
+        try:
+            path.unlink()
+            logger.info(
+                f"已清理自动备份：profile_id={self.context.profile_id}, path={path}"
+            )
+            return True
+        except Exception as error:
+            logger.error(
+                f"清理自动备份失败：profile_id={self.context.profile_id}, path={path}, error={error}"
+            )
+            return False
+
+    def _archive_backup_file(self, path: Path, created_at: datetime.datetime) -> bool:
+        """把一个到期短期备份并入同日长期备份，并保留较新的快照。"""
+        try:
+            earlier_files = self._backup_files(self.earlier_dir)
+            same_day = []
+            for item in earlier_files:
+                try:
+                    item_time = self._backup_created_at(item)
+                except OSError as error:
+                    logger.error(
+                        f"读取长期备份时间失败：profile_id={self.context.profile_id}, "
+                        f"path={item}, error={error}"
+                    )
+                    continue
+                if item_time.date() == created_at.date():
+                    same_day.append((item, item_time))
+
+            target = Path(self.earlier_dir) / path.name
+            os.replace(path, target)
+            logger.info(
+                f"已转存自动备份：profile_id={self.context.profile_id}, "
+                f"source={path}, target={target}"
+            )
+            result = True
+            for existing_path, _existing_time in same_day:
+                if existing_path != target:
+                    result = self._remove_backup_file(existing_path) and result
+            return result
+        except Exception as error:
+            logger.error(
+                f"转存自动备份失败：profile_id={self.context.profile_id}, path={path}, error={error}"
+            )
+            return False
+
+    def _rotate_backups(self, now: datetime.datetime | None = None):
         """
         备份轮换策略：
         - today 文件夹只保留"今天"的文件，过期的移入 earlier。
         - earlier 文件夹里，每一天只保留最后一份备份。
         - 清理超过 retention_days 的备份。
         """
-        today_str = datetime.date.today().strftime("%Y%m%d")
-        # 1. 移动过期的 today -> earlier
-        files = glob.glob(os.path.join(self.today_dir, "*.xml")) + glob.glob(os.path.join(self.today_dir, "*.rml"))
-        # 按日期分组文件的辅助字典 { "20231101": ["path1", "path2"] }
-        files_by_date = {}
-        for f in files:
-            basename = os.path.basename(f)
-            # 解析文件名中的日期 ModsConfig_YYYYMMDD_HHMMSS.xml
+        current_time = now or datetime.datetime.now()
+        rotation_ok = True
+        with _BACKUP_LOCK:
+            files_by_date: dict[datetime.date, list[tuple[Path, datetime.datetime]]] = {}
             try:
-                # 提取 YYYYMMDD (索引 11到19)
-                parts = basename.split('_')
-                if len(parts) >= 2:
-                    date_part = parts[1] # YYYYMMDD
-                    if date_part != today_str: # 只处理旧文件
-                        if date_part not in files_by_date:
-                            files_by_date[date_part] = []
-                        files_by_date[date_part].append(f)
-            except: continue
-        # 处理非今天的旧文件
-        for date_str, file_list in files_by_date.items():
-            # 按文件名排序（包含时间，所以最后面的就是最晚的）
-            file_list.sort()
-            # 保留最后一个，移入 earlier
-            last_file = file_list[-1]
+                today_files = self._backup_files(self.today_dir)
+            except OSError as error:
+                logger.error(
+                    f"读取短期备份目录失败：profile_id={self.context.profile_id}, "
+                    f"path={self.today_dir}, error={error}"
+                )
+                return False
+
+            for path in today_files:
+                try:
+                    created_at = self._backup_created_at(path)
+                except OSError as error:
+                    rotation_ok = False
+                    logger.error(
+                        f"读取短期备份时间失败：profile_id={self.context.profile_id}, "
+                        f"path={path}, error={error}"
+                    )
+                    continue
+                if created_at.date() >= current_time.date():
+                    continue
+                if current_time - created_at < datetime.timedelta(hours=_BACKUP_PROTECTION_HOURS):
+                    continue
+                files_by_date.setdefault(created_at.date(), []).append((path, created_at))
+
+            for _date, candidates in files_by_date.items():
+                candidates.sort(key=lambda item: item[1])
+                for stale_path, _stale_time in candidates[:-1]:
+                    rotation_ok = self._remove_backup_file(stale_path) and rotation_ok
+                candidate_path, candidate_time = candidates[-1]
+                rotation_ok = self._archive_backup_file(candidate_path, candidate_time) and rotation_ok
+
             try:
-                shutil.move(last_file, os.path.join(self.earlier_dir, os.path.basename(last_file)))
-            except: pass
-            # 删除其余
-            for f in file_list[:-1]:
-                try: os.remove(f)
-                except: pass
-        # 2. 清理 earlier 中超过保留天数的文件
-        # 假设保留天数在 settings 中
-        retention_days = settings.config.backup_retention_days
-        earlier_files = glob.glob(os.path.join(self.earlier_dir, "*.xml")) + glob.glob(os.path.join(self.earlier_dir, "*.rml"))
-        cutoff_date = datetime.date.today() - datetime.timedelta(days=retention_days)
-        cutoff_str = cutoff_date.strftime("%Y%m%d")
-        for f in earlier_files:
-            basename = os.path.basename(f)
+                earlier_files = self._backup_files(self.earlier_dir)
+            except OSError as error:
+                logger.error(
+                    f"读取长期备份目录失败：profile_id={self.context.profile_id}, "
+                    f"path={self.earlier_dir}, error={error}"
+                )
+                return False
+
+            earlier_by_date: dict[datetime.date, list[tuple[Path, datetime.datetime]]] = {}
+            for path in earlier_files:
+                try:
+                    created_at = self._backup_created_at(path)
+                except OSError as error:
+                    rotation_ok = False
+                    logger.error(
+                        f"读取长期备份时间失败：profile_id={self.context.profile_id}, "
+                        f"path={path}, error={error}"
+                    )
+                    continue
+                earlier_by_date.setdefault(created_at.date(), []).append((path, created_at))
+
+            for _date, files in earlier_by_date.items():
+                files.sort(key=lambda item: item[1], reverse=True)
+                for stale_path, _stale_time in files[1:]:
+                    rotation_ok = self._remove_backup_file(stale_path) and rotation_ok
+
             try:
-                parts = basename.split('_')
-                if len(parts) >= 2:
-                    date_part = parts[1]
-                    if date_part < cutoff_str:
-                        os.remove(f) # 过期删除
-            except: pass
+                retention_days = max(0, int(settings.config.backup_retention_days or 0))
+            except (TypeError, ValueError) as error:
+                logger.error(
+                    f"备份保留天数配置无效：profile_id={self.context.profile_id}, "
+                    f"value={settings.config.backup_retention_days}, error={error}"
+                )
+                return False
+            cutoff_date = current_time.date() - datetime.timedelta(days=retention_days)
+            try:
+                retained_files = self._backup_files(self.earlier_dir)
+            except OSError as error:
+                logger.error(
+                    f"读取长期备份目录失败：profile_id={self.context.profile_id}, "
+                    f"path={self.earlier_dir}, error={error}"
+                )
+                return False
+            for path in retained_files:
+                try:
+                    if self._backup_created_at(path).date() < cutoff_date:
+                        rotation_ok = self._remove_backup_file(path) and rotation_ok
+                except OSError as error:
+                    rotation_ok = False
+                    logger.error(
+                        f"读取长期备份时间失败：profile_id={self.context.profile_id}, "
+                        f"path={path}, error={error}"
+                    )
+        return rotation_ok
 
     def get_all_backups(self):
         """获取所有备份文件路径"""
-        today_files = glob.glob(os.path.join(self.today_dir, "*.xml")) + glob.glob(os.path.join(self.today_dir, "*.rml"))
-        earlier_files = glob.glob(os.path.join(self.earlier_dir, "*.xml")) + glob.glob(os.path.join(self.earlier_dir, "*.rml"))
-        other_files = glob.glob(os.path.join(self.other_dir, "*.xml")) + glob.glob(os.path.join(self.other_dir, "*.rml"))
+        with _BACKUP_LOCK:
+            today_files = self._backup_files(self.today_dir)
+            earlier_files = self._backup_files(self.earlier_dir)
+            other_files = self._backup_files(self.other_dir)
         last_backup_file = Path(self.backup_root) / "Latest_ModList.rml"
         if not last_backup_file.is_file():
             last_backup_file = ''
         
         def build_items(files):
-            return [{
-                'path': f,
-                'modify_time': int(os.path.getmtime(f)*1000),
-                'source_profile_id': self.context.profile_id,
-            } for f in files]
+            items = []
+            for raw_path in files:
+                path = Path(raw_path)
+                try:
+                    items.append({
+                        'path': str(path),
+                        'modify_time': int(path.stat().st_mtime * 1000),
+                        'source_profile_id': self.context.profile_id,
+                    })
+                except OSError as error:
+                    logger.error(
+                        f"读取备份信息失败：profile_id={self.context.profile_id}, "
+                        f"path={path}, error={error}"
+                    )
+            return items
         result = {
             "today": build_items(today_files),
             "earlier": build_items(earlier_files),

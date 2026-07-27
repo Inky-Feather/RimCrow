@@ -1,6 +1,16 @@
 import html
 import json
 
+from backend.i18n.messages import tr
+
+
+def _html_text(key: str, default: str, **params) -> str:
+    return html.escape(str(tr(key, default, **params)))
+
+
+def _plain_text(key: str, default: str, **params) -> str:
+    return str(tr(key, default, **params))
+
 
 # backend/static_page.py
 # 定义缓冲页面的 HTML (磨砂质感 + 呼吸灯动画)
@@ -51,12 +61,22 @@ def build_idle_home_html() -> str:
     """
     静默主页保持接近原样，只增加一个查看日志按钮。
     """
+    title = _html_text("static.idle_home.title", "RimCrow - 挂起中")
+    running = _html_text("static.idle_home.running", "RimWorld 正在运行")
+    suspended = _html_text("static.idle_home.suspended", "管理器已释放内存并进入静默休眠状态。")
+    view_logs = _html_text("static.idle_home.view_logs", "查看游戏日志")
+    wake = _html_text("static.idle_home.wake", "退出静默")
+    js_messages = json.dumps({
+        "connecting": _plain_text("static.idle_home.connecting", "正在建立连接..."),
+        "wake": _plain_text("static.idle_home.wake", "退出静默"),
+        "retry": _plain_text("static.idle_home.retry", "请稍后重试"),
+    }, ensure_ascii=False)
     return """
 <!DOCTYPE html>
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>RimCrow - 挂起中</title>
+    <title>{title}</title>
     <style>
         body {
             background-color: #0f172a; color: #475569; font-family: sans-serif;
@@ -95,43 +115,49 @@ def build_idle_home_html() -> str:
 <body>
     <div style="display: flex; align-items: center; margin: 10px;">
         <span class="dot"></span>
-        <h1 class="status">RimWorld 正在运行</h1>
+        <h1 class="status">{running}</h1>
     </div>
-    <h3 style="margin-top: 10px; opacity: 0.6; font-weight: normal;">管理器已释放内存并进入静默休眠状态。</h3>
+    <h3 style="margin-top: 10px; opacity: 0.6; font-weight: normal;">{suspended}</h3>
 
     <div class="actions">
-        <button class="action-btn" onclick="openLogPage()">查看游戏日志</button>
-        <button class="action-btn" id="wake-btn" onclick="forceWake()">退出静默</button>
+        <button class="action-btn" onclick="openLogPage()">{view_logs}</button>
+        <button class="action-btn" id="wake-btn" onclick="forceWake()">{wake}</button>
     </div>
 
     <script>
+        const I18N = {js_messages};
         function forceWake() {
             if (window.pywebview && window.pywebview.api) {
                 const button = document.getElementById('wake-btn');
-                button.innerText = '正在建立连接...';
+                button.innerText = I18N.connecting;
                 button.disabled = true;
                 window.pywebview.api.monitor_force_wake().catch(() => {
-                    button.innerText = '退出静默';
+                    button.innerText = I18N.wake;
                     button.disabled = false;
-                    alert('请稍后重试');
+                    alert(I18N.retry);
                 });
             } else {
-                alert('请稍后重试');
+                alert(I18N.retry);
             }
         }
         function openLogPage() {
             if (window.pywebview && window.pywebview.api) {
                 window.pywebview.api.monitor_open_silent_logs().catch(() => {
-                    alert('请稍后重试');
+                    alert(I18N.retry);
                 });
             } else {
-                alert('请稍后重试');
+                alert(I18N.retry);
             }
         }
     </script>
 </body>
 </html>
-"""
+""".replace("{title}", title) \
+        .replace("{running}", running) \
+        .replace("{suspended}", suspended) \
+        .replace("{view_logs}", view_logs) \
+        .replace("{wake}", wake) \
+        .replace("{js_messages}", js_messages)
 
 
 def build_idle_logs_html(refresh_seconds: int = 2) -> str:
@@ -139,13 +165,48 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
     静默日志页使用紧凑布局，不引入无意义卡片和重装饰。
     """
     safe_refresh = max(1, int(refresh_seconds or 2))
+    title = _html_text("static.idle_logs.title", "RimCrow - 游戏日志")
+    page_title = _html_text("static.idle_logs.page_title", "游戏日志")
+    search_placeholder = _html_text("static.idle_logs.search_placeholder", "搜索日志内容")
+    refresh_seconds_label = _html_text("static.idle_logs.refresh_seconds", "刷新秒数")
+    auto_refresh = _html_text("static.idle_logs.auto_refresh", "自动刷新")
+    copy_selected = _html_text("static.idle_logs.copy_selected", "复制选中")
+    back = _html_text("common.action.back", "返回")
+    wake = _html_text("static.idle_home.wake", "退出静默")
+    ready = _html_text("common.status.ready", "准备就绪")
+    js_messages = json.dumps({
+        "apiNotReady": _plain_text("static.idle_logs.api_not_ready", "接口尚未准备好"),
+        "autoRefresh": _plain_text("static.idle_logs.auto_refresh", "自动刷新"),
+        "paused": _plain_text("static.idle_logs.paused", "已暂停"),
+        "emptyLogs": _plain_text("static.idle_logs.empty_logs", "当前没有可显示的日志。"),
+        "collapseDetails": _plain_text("static.idle_logs.collapse_details", "收起详情"),
+        "expandDetails": _plain_text("static.idle_logs.expand_details", "展开详情"),
+        "copy": _plain_text("common.action.copy", "复制"),
+        "copyCurrentSuccess": _plain_text("static.idle_logs.copy_current_success", "已复制当前日志"),
+        "copyFailed": _plain_text("toast.common.copy_failed", "复制失败"),
+        "loadFilesFailed": _plain_text("static.idle_logs.load_files_failed", "获取日志文件失败"),
+        "noGameLogFiles": _plain_text("static.idle_logs.no_game_log_files", "当前未检测到游戏日志文件。"),
+        "readingLogs": _plain_text("static.idle_logs.reading_logs", "正在读取日志..."),
+        "readLogsFailed": _plain_text("static.idle_logs.read_logs_failed", "读取日志失败"),
+        "refreshed": _plain_text("static.idle_logs.refreshed", "已刷新 {file}"),
+        "backFailed": _plain_text("static.idle_logs.back_failed", "返回失败"),
+        "connecting": _plain_text("static.idle_home.connecting", "正在建立连接..."),
+        "wake": _plain_text("static.idle_home.wake", "退出静默"),
+        "wakeFailed": _plain_text("static.idle_logs.wake_failed", "唤醒失败"),
+        "refreshIntervalChanged": _plain_text("static.idle_logs.refresh_interval_changed", "刷新间隔已调整为 {seconds} 秒"),
+        "autoRefreshResumed": _plain_text("static.idle_logs.auto_refresh_resumed", "已恢复自动刷新"),
+        "autoRefreshPaused": _plain_text("static.idle_logs.auto_refresh_paused", "已暂停自动刷新"),
+        "selectLogsFirst": _plain_text("static.idle_logs.select_logs_first", "请先选择日志"),
+        "copyLogsSuccess": _plain_text("static.idle_logs.copy_logs_success", "已复制 {count} 条日志"),
+        "loadFailed": _plain_text("static.idle_logs.load_failed", "加载失败"),
+    }, ensure_ascii=False)
     return f"""
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RimCrow - 游戏日志</title>
+    <title>{title}</title>
     <style>
         :root {{
             --bg: #0f172a;
@@ -331,26 +392,28 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
         <div>
             <div class="toolbar">
                 <div class="toolbar-left">
-                    <span class="title">游戏日志</span>
+                    <span class="title">{page_title}</span>
                     <select id="file-select"></select>
                     <span class="meta" id="file-meta"></span>
-                    <input id="search-input" type="text" placeholder="搜索日志内容">
+                    <input id="search-input" type="text" placeholder="{search_placeholder}">
                 </div>
                 <div class="toolbar-right">
-                    <span class="meta">刷新秒数</span>
+                    <span class="meta">{refresh_seconds_label}</span>
                     <input id="refresh-seconds" type="number" min="1" max="60" value="{safe_refresh}">
-                    <button id="toggle-refresh" class="tool-btn active" type="button">自动刷新</button>
-                    <button id="copy-selected" class="tool-btn primary" type="button">复制选中</button>
-                    <button id="back-home" class="tool-btn" type="button">返回</button>
-                    <button id="wake-btn" class="tool-btn" type="button">退出静默</button>
+                    <button id="toggle-refresh" class="tool-btn active" type="button">{auto_refresh}</button>
+                    <button id="copy-selected" class="tool-btn primary" type="button">{copy_selected}</button>
+                    <button id="back-home" class="tool-btn" type="button">{back}</button>
+                    <button id="wake-btn" class="tool-btn" type="button">{wake}</button>
                 </div>
             </div>
-            <div class="status" id="status-text">准备就绪</div>
+            <div class="status" id="status-text">{ready}</div>
         </div>
         <div id="log-list" class="content"></div>
     </div>
 
     <script>
+        const I18N = {js_messages};
+        const formatMessage = (template, params = {{}}) => String(template || '').replace(/\\{{(\\w+)\\}}/g, (_, key) => params[key] ?? '');
         const REFRESH_DEFAULT = {safe_refresh};
         const state = {{
             files: [],
@@ -381,6 +444,18 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
 
         function setStatus(text) {{
             statusText.textContent = text;
+        }}
+
+        function buildBridgeError(payload, fallback) {{
+            const message = payload?.user_message || payload?.message || fallback;
+            const error = new Error(message);
+            if (payload && typeof payload === 'object') {{
+                error.error_id = payload.error_id || '';
+                error.message_key = payload.message_key || '';
+                error.message_params = payload.message_params || {{}};
+                error.detail = payload.detail || null;
+            }}
+            return error;
         }}
 
         function formatFileSize(bytes) {{
@@ -422,7 +497,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
         async function waitForApi() {{
             if (window.pywebview && window.pywebview.api) return window.pywebview.api;
             return new Promise((resolve, reject) => {{
-                const timer = setTimeout(() => reject(new Error('接口尚未准备好')), 15000);
+                const timer = setTimeout(() => reject(new Error(I18N.apiNotReady)), 15000);
                 window.addEventListener('pywebviewready', () => {{
                     clearTimeout(timer);
                     resolve(window.pywebview.api);
@@ -432,7 +507,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
 
         function updateRefreshUi() {{
             toggleRefresh.classList.toggle('active', state.autoRefresh);
-            toggleRefresh.textContent = state.autoRefresh ? '自动刷新' : '已暂停';
+            toggleRefresh.textContent = state.autoRefresh ? I18N.autoRefresh : I18N.paused;
             refreshInput.value = String(state.refreshSeconds);
         }}
 
@@ -533,7 +608,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
             logList.innerHTML = '';
             const visibleLogs = getVisibleLogs();
             if (!visibleLogs.length) {{
-                logList.innerHTML = '<div style="color:#94a3b8;padding:8px 0;">当前没有可显示的日志。</div>';
+                logList.innerHTML = `<div style="color:#94a3b8;padding:8px 0;">${{escapeHtml(I18N.emptyLogs)}}</div>`;
                 return;
             }}
 
@@ -571,7 +646,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
                     const detailBtn = document.createElement('button');
                     detailBtn.type = 'button';
                     detailBtn.className = 'inline-btn';
-                    detailBtn.textContent = state.expandedIds.has(block.id) ? '收起详情' : '展开详情';
+                    detailBtn.textContent = state.expandedIds.has(block.id) ? I18N.collapseDetails : I18N.expandDetails;
                     detailBtn.addEventListener('click', (event) => {{
                         event.stopPropagation();
                         toggleDetails(block.id);
@@ -582,11 +657,11 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
                 const copyOneBtn = document.createElement('button');
                 copyOneBtn.type = 'button';
                 copyOneBtn.className = 'inline-btn';
-                copyOneBtn.textContent = '复制';
+                copyOneBtn.textContent = I18N.copy;
                 copyOneBtn.addEventListener('click', async (event) => {{
                     event.stopPropagation();
                     const ok = await copyText(composeLogText([block]));
-                    setStatus(ok ? '已复制当前日志' : '复制失败');
+                    setStatus(ok ? I18N.copyCurrentSuccess : I18N.copyFailed);
                 }});
                 actions.appendChild(copyOneBtn);
 
@@ -661,7 +736,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
             const api = await waitForApi();
             const res = await api.get_log_files('game', 'runtime');
             if (!res || res.status !== 'success') {{
-                throw new Error(res?.message || '获取日志文件失败');
+                throw buildBridgeError(res, I18N.loadFilesFailed);
             }}
             const rawFiles = Array.isArray(res.data) ? res.data : [];
             const preferredOrder = ['RimCrow_Realtime.log', 'Player.log'];
@@ -672,7 +747,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
                 state.selectedFile = '';
                 renderFiles();
                 renderLogs();
-                setStatus('当前未检测到游戏日志文件。');
+                setStatus(I18N.noGameLogFiles);
                 return;
             }}
             if (!state.selectedFile || !state.files.some((file) => file.name === state.selectedFile)) {{
@@ -684,11 +759,11 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
 
         async function loadLogs(forceStatus = true) {{
             if (!state.selectedFile) return;
-            if (forceStatus) setStatus('正在读取日志...');
+            if (forceStatus) setStatus(I18N.readingLogs);
             const api = await waitForApi();
             const res = await api.read_log_page('game', state.selectedFile, 1, 500, 'runtime');
             if (!res || res.status !== 'success') {{
-                throw new Error(res?.message || '读取日志失败');
+                throw buildBridgeError(res, I18N.readLogsFailed);
             }}
             const blocks = Array.isArray(res.data?.blocks) ? res.data.blocks : [];
             const signature = getSignature(blocks);
@@ -705,7 +780,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
                 state.expandedIds = nextExpanded;
                 renderLogs(shouldStick);
             }}
-            setStatus(`已刷新 ${{state.selectedFile}}`);
+            setStatus(formatMessage(I18N.refreshed, {{ file: state.selectedFile }}));
         }}
 
         async function reloadAll() {{
@@ -721,20 +796,20 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
                 await api.monitor_open_silent_home();
             }} catch (error) {{
                 backHome.disabled = false;
-                setStatus(error.message || '返回失败');
+                setStatus(error.message || I18N.backFailed);
             }}
         }}
 
         async function wakeMainUi() {{
             const api = await waitForApi();
-            wakeBtn.textContent = '正在建立连接...';
+            wakeBtn.textContent = I18N.connecting;
             wakeBtn.disabled = true;
             try {{
                 await api.monitor_force_wake();
             }} catch (error) {{
-                wakeBtn.textContent = '退出静默';
+                wakeBtn.textContent = I18N.wake;
                 wakeBtn.disabled = false;
-                setStatus(error.message || '唤醒失败');
+                setStatus(error.message || I18N.wakeFailed);
             }}
         }}
 
@@ -757,24 +832,24 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
             state.refreshSeconds = Math.max(1, Math.min(60, Number(refreshInput.value || REFRESH_DEFAULT)));
             updateRefreshUi();
             startTimer();
-            setStatus(`刷新间隔已调整为 ${{state.refreshSeconds}} 秒`);
+            setStatus(formatMessage(I18N.refreshIntervalChanged, {{ seconds: state.refreshSeconds }}));
         }});
 
         toggleRefresh.addEventListener('click', () => {{
             state.autoRefresh = !state.autoRefresh;
             updateRefreshUi();
             startTimer();
-            setStatus(state.autoRefresh ? '已恢复自动刷新' : '已暂停自动刷新');
+            setStatus(state.autoRefresh ? I18N.autoRefreshResumed : I18N.autoRefreshPaused);
         }});
 
         copySelected.addEventListener('click', async () => {{
             const blocks = state.logs.filter((block) => state.selectedIds.has(block.id));
             if (!blocks.length) {{
-                setStatus('请先选择日志');
+                setStatus(I18N.selectLogsFirst);
                 return;
             }}
             const ok = await copyText(composeLogText(blocks));
-            setStatus(ok ? `已复制 ${{blocks.length}} 条日志` : '复制失败');
+            setStatus(ok ? formatMessage(I18N.copyLogsSuccess, {{ count: blocks.length }}) : I18N.copyFailed);
         }});
 
         backHome.addEventListener('click', () => {{
@@ -804,7 +879,7 @@ def build_idle_logs_html(refresh_seconds: int = 2) -> str:
 
         updateRefreshUi();
         reloadAll().catch((error) => {{
-            setStatus(error.message || '加载失败');
+            setStatus(error.message || I18N.loadFailed);
         }});
     </script>
 </body>
@@ -988,8 +1063,11 @@ def build_workshop_page_html(page_title: str, target_url: str, head_html: str, b
 
 
 def build_workshop_error_html(message: str, target_url: str) -> str:
-    safe_message = html.escape(message or "加载失败")
+    safe_message = html.escape(message or _plain_text("browser.workshop.error.load_failed_short", "加载失败"))
     safe_url = html.escape(target_url or "")
+    fallback_url = _html_text("browser.workshop.error.missing_target_url", "未提供目标地址")
+    original_tip = _html_text("browser.workshop.error.open_original_tip", "如果原网页能正常访问，可以直接打开原地址继续浏览。")
+    open_original = _html_text("browser.workshop.toolbar.open_original", "打开原网页")
     js_target_url = json.dumps(target_url or "", ensure_ascii=False)
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -1043,9 +1121,9 @@ def build_workshop_error_html(message: str, target_url: str) -> str:
   <section class="panel">
     <h1>Workshop Browser</h1>
     <p>{safe_message}</p>
-    <p>如果原网页能正常访问，可以直接打开原地址继续浏览。</p>
-    <code>{safe_url or "未提供目标地址"}</code>
-    <button id="open-original">打开原网页</button>
+    <p>{original_tip}</p>
+    <code>{safe_url or fallback_url}</code>
+    <button id="open-original">{open_original}</button>
   </section>
   <script>
     const targetUrl = {js_target_url};
@@ -1063,6 +1141,25 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
     safe_url = html.escape(target_url or "")
     js_target_url = json.dumps(target_url or "", ensure_ascii=False)
     js_title = json.dumps(title or "RimCrow", ensure_ascii=False)
+    fallback_url = _html_text("browser.helper.missing_target_url", "未提供目标 URL")
+    open_original = _html_text("browser.helper.open_original", "打开原页面")
+    open_in_steam = _html_text("browser.workshop.toolbar.open_in_steam", "在 Steam 打开")
+    subscribe = _html_text("browser.workshop.toolbar.subscribe", "订阅")
+    unsubscribe = _html_text("browser.workshop.toolbar.unsubscribe", "取消订阅")
+    download = _html_text("browser.workshop.toolbar.download", "SteamCMD 下载")
+    footnote = _html_text("browser.helper.iframe_footnote", "如果目标站点禁止 iframe 预览，下面区域会空白，但操作按钮仍可正常工作。")
+    js_messages = json.dumps({
+        "requestUnfinished": _plain_text("browser.helper.request_unfinished", "请求未完成，状态码：{status}。请检查后端服务是否仍在运行。"),
+        "actionDone": _plain_text("browser.workshop.script.action_done", "操作已完成"),
+        "actionFailed": _plain_text("browser.workshop.script.action_failed", "操作失败"),
+        "missingPage": _plain_text("browser.helper.missing_page", "未提供可打开的页面"),
+        "idMissingWithUrl": _plain_text("browser.helper.id_missing_with_url", "未识别到 Workshop ID，仅保留打开页面。"),
+        "idMissing": _plain_text("browser.helper.id_missing", "未识别到可操作内容。"),
+        "openingSteam": _plain_text("browser.workshop.script.opening_steam", "正在尝试在 Steam 中打开当前页面..."),
+        "subscribing": _plain_text("browser.workshop.script.subscribing", "正在发送订阅请求..."),
+        "unsubscribing": _plain_text("browser.workshop.script.unsubscribing", "正在发送取消订阅请求..."),
+        "downloading": _plain_text("browser.workshop.script.downloading", "正在启动 SteamCMD 下载..."),
+    }, ensure_ascii=False)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -1198,22 +1295,24 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
     <section class="panel header">
       <div class="eyebrow">Browser Helper</div>
       <h1>{safe_title}</h1>
-      <div class="url">{safe_url or "未提供目标 URL"}</div>
+      <div class="url">{safe_url or fallback_url}</div>
       <div class="actions">
-        <button id="open-original">打开原页面</button>
-        <button id="open-in-steam" class="ghost">在Steam打开</button>
-        <button id="subscribe" class="secondary">订阅</button>
-        <button id="unsubscribe" class="warn">取消订阅</button>
-        <button id="download" class="secondary">SteamCMD 下载</button>
+        <button id="open-original">{open_original}</button>
+        <button id="open-in-steam" class="ghost">{open_in_steam}</button>
+        <button id="subscribe" class="secondary">{subscribe}</button>
+        <button id="unsubscribe" class="warn">{unsubscribe}</button>
+        <button id="download" class="secondary">{download}</button>
       </div>
       <div id="status" class="status"></div>
-      <div class="footnote">如果目标站点禁止 iframe 预览，下面区域会空白，但操作按钮仍可正常工作。</div>
+      <div class="footnote">{footnote}</div>
     </section>
     <section class="panel preview">
       <iframe id="preview" referrerpolicy="no-referrer"></iframe>
     </section>
   </main>
   <script>
+    const I18N = {js_messages};
+    const formatMessage = (template, params = {{}}) => String(template || '').replace(/\{{(\w+)\}}/g, (_, key) => params[key] ?? '');
     const targetUrl = {js_target_url};
     const title = {js_title};
     const workshopMatch = targetUrl.match(/[?&]id=(\\d+)/);
@@ -1231,6 +1330,18 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
       statusEl.style.color = isError ? 'var(--danger)' : 'var(--muted)';
     }};
 
+    const buildBridgeError = (payload, fallback) => {{
+      const message = payload?.user_message || payload?.message || fallback;
+      const error = new Error(message);
+      if (payload && typeof payload === 'object') {{
+        error.error_id = payload.error_id || '';
+        error.message_key = payload.message_key || '';
+        error.message_params = payload.message_params || {{}};
+        error.detail = payload.detail || null;
+      }}
+      return error;
+    }};
+
     const callApi = async (method, args = []) => {{
       const response = await fetch(`/api/call/${{encodeURIComponent(method)}}`, {{
         method: 'POST',
@@ -1239,7 +1350,7 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
       }});
       const payload = await response.json();
       if (!response.ok || payload?.status === 'error') {{
-        throw new Error(payload?.message || `请求未完成，状态码：${{response.status}}。请检查后端服务是否仍在运行。`);
+        throw buildBridgeError(payload, formatMessage(I18N.requestUnfinished, {{ status: response.status }}));
       }}
       return payload;
     }};
@@ -1248,9 +1359,9 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
       try {{
         setStatus(message);
         const payload = await action();
-        setStatus(payload?.message || '操作已完成');
+        setStatus(payload?.user_message || payload?.message || I18N.actionDone);
       }} catch (error) {{
-        setStatus(error?.message || '操作失败', true);
+        setStatus(error?.message || error?.user_message || I18N.actionFailed, true);
       }}
     }};
 
@@ -1258,7 +1369,7 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
       document.title = title;
       previewEl.src = targetUrl;
     }} else {{
-      setStatus('未提供可打开的页面', true);
+      setStatus(I18N.missingPage, true);
       openOriginalBtn.disabled = true;
     }}
 
@@ -1267,17 +1378,17 @@ def build_sub_browser_helper_html(target_url: str, title: str) -> str:
       unsubscribeBtn.disabled = true;
       downloadBtn.disabled = true;
       openInSteamBtn.disabled = true;
-      setStatus(targetUrl ? '未识别到 Workshop ID，仅保留打开页面。' : '未识别到可操作内容。');
+      setStatus(targetUrl ? I18N.idMissingWithUrl : I18N.idMissing);
     }}
 
     openOriginalBtn.addEventListener('click', () => {{
       if (!targetUrl) return;
       window.open(targetUrl, '_blank', 'noopener,noreferrer');
     }});
-    openInSteamBtn.addEventListener('click', () => withAction('正在尝试在 Steam 中打开当前页面...', () => callApi('workshop_browser_action', ['open_in_steam', workshopId, targetUrl])));
-    subscribeBtn.addEventListener('click', () => withAction('正在发送订阅请求...', () => callApi('workshop_browser_action', ['subscribe', workshopId, targetUrl])));
-    unsubscribeBtn.addEventListener('click', () => withAction('正在发送取消订阅请求...', () => callApi('workshop_browser_action', ['unsubscribe', workshopId, targetUrl])));
-    downloadBtn.addEventListener('click', () => withAction('正在启动 SteamCMD 下载...', () => callApi('workshop_browser_action', ['download', workshopId, targetUrl])));
+    openInSteamBtn.addEventListener('click', () => withAction(I18N.openingSteam, () => callApi('workshop_browser_action', ['open_in_steam', workshopId, targetUrl])));
+    subscribeBtn.addEventListener('click', () => withAction(I18N.subscribing, () => callApi('workshop_browser_action', ['subscribe', workshopId, targetUrl])));
+    unsubscribeBtn.addEventListener('click', () => withAction(I18N.unsubscribing, () => callApi('workshop_browser_action', ['unsubscribe', workshopId, targetUrl])));
+    downloadBtn.addEventListener('click', () => withAction(I18N.downloading, () => callApi('workshop_browser_action', ['download', workshopId, targetUrl])));
   </script>
 </body>
 </html>"""

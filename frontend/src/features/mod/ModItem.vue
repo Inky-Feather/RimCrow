@@ -8,7 +8,7 @@
       class="swipe-trigger w-6 h-6 flex items-center justify-center rounded transition-all"
       :class="[ props.isSelected ? `text-text-main bg-accent-${listColor}/50` : `text-accent-${listColor}/50 bg-accent-${listColor}/10 hover:text-text-main hover:bg-accent-${listColor}/50`, !sectionHeader ? `digits-${(index+1).toString().length}` : '', isInSearch ? ' ring-2 ring-accent-highlight' : '', sectionHeader && !sectionCollapsed ? 'rotate-180' : '']"
       :style="{ width: appStore.scalePx(25) + 'px', height: appStore.scalePx(25) + 'px'}"
-      :title="sectionHeader ? (sectionCollapsed ? '展开分割组' : '折叠分割组') : null"
+      :title="sectionHeader ? (sectionCollapsed ? t('tooltip.mod_item.section.expand', '展开分割组') : t('tooltip.mod_item.section.collapse', '折叠分割组')) : null"
       @click.stop="sectionHeader ? emit('toggle-section', item_id) : null">
       <!-- 分割线项复用普通序号列，只把数字替换为折叠图标，避免额外引入新布局。 -->
       <svg v-if="sectionHeader" class="size-4 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -40,7 +40,7 @@
           <!-- 图标 -->
           <div v-if="showTypeIcon && !sectionHeader" class="flex items-center justify-center -mr-1">
             <!-- 类型图标 -->
-            <span class="flex items-center justify-center hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="`类型：${MOD_TYPE_MAP[modType] || modType || '未知'}`">
+            <span class="flex items-center justify-center hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="modTypeTooltip">
               <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="w-4 h-4" />
             </span>
             <!-- 来源图标 -->
@@ -74,7 +74,7 @@
 
           <div class="absolute -top-2 -left-1 flex items-center justify-center ">
             <!-- 类型图标 -->
-            <span class="flex items-center justify-center bg-glass-medium/60 rounded-sm mr-0.5 hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="`类型：${modType}`">
+            <span class="flex items-center justify-center bg-glass-medium/60 rounded-sm mr-0.5 hover:scale-120 transition-transform duration-200" tabindex="0" v-tooltip="modTypeTooltip">
               <component :is="MOD_TYPE_ICON_MAP[modType] || MOD_TYPE_ICON_MAP.Unknown" class="w-4 h-4" />
             </span>
             <!-- 来源图标 -->
@@ -116,7 +116,7 @@
             <div :class="`h-1 flex-1 min-w-0 bg-text-main`"></div>
           </div>
           <div v-if="!simple" class="text-[0.68rem] text-center text-text-dim truncate font-mono mt-0.5">
-            {{ sectionCollapsed ? '拖动分割线模组将整组移动，插入时默认落在组尾' : '当前为展开状态，拖动分割线模组仅移动该项' }}
+            {{ sectionCollapsed ? t('ui.mod_item.section.collapsed_hint', '拖动分割线模组将整组移动，插入时默认落在组尾') : t('ui.mod_item.section.expanded_hint', '当前为展开状态，拖动分割线模组仅移动该项') }}
           </div>
         </template>
         <template v-else>
@@ -174,12 +174,15 @@
           <!-- 悬浮显示分组信息 -->
           <div v-for="(g, index) in modGroups" :key="g.group_id || g.id" @click.prevent.stop="focusGroupPanel(g)"
             :class="[`w-full flex-1 cursor-pointer hover:scale-120 transition-all hover:border hover:border-border-base/18`,index===modGroups.length-1?'rounded-br-lg':'',index===0?'rounded-tr-lg':'']"
-            :style="{'backgroundColor': g.color}" v-tooltip="`分组：${g.name}\n点击打开分组页`">
+            :style="{'backgroundColor': g.color}" v-tooltip="t('tooltip.mod_item.group.open', '分组：{name}\n点击打开分组页', { name: g.name })">
             <!-- v-preview="{component: GroupItem, props: {id: g.group_id, index: 0, groupData: g, expanded: true}}"> -->
           </div>
         </div>
       </div>
       <div class="absolute top-0 left-0 -z-100 w-full rounded-lg h-full group-hover:bg-bg-overlay/10"></div>
+      <div v-if="selectionOrder > 0" class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-accent-special text-text-main text-[0.65rem] leading-4 text-center font-bold shadow-md shadow-black/30 pointer-events-none">
+        {{ selectionOrder }}
+      </div>
 
     </div>
 
@@ -199,7 +202,7 @@
 <script setup>
 import { computed, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { MOD_SIGN_COLOR_MAP, ISSUE_TYPE, MOD_TYPE_MAP, ISSUE_TITLE_MAP, MOD_TYPE_ICON_MAP, SOURCE_TYPE_MAP, IconSteam, IconSelf } from '../../shared/lib/constants'
+import { MOD_SIGN_COLORS, ISSUE_TYPE, MOD_TYPE_ICON_MAP, IconSteam, IconSelf, getIssueTitle, getModSignColorLabel, getModTypeLabel, getStoreTypeLabel } from '../../shared/lib/constants'
 import { useAppStore } from '../../app/stores/appStore'
 import { useAiStore } from '../ai/aiStore'
 import { useModStore } from './stores/modStore'
@@ -211,6 +214,7 @@ import { extractSectionHeaderTitle, isSectionHeaderTitle, sortByDisplayName, sor
 import { normalizePackageId, normalizePackageToken } from './lib/modIdentity'
 import { isOfficialMod } from './lib/packageScope'
 import { X, FolderInput, Tag, Group, Palette, BetweenHorizontalStart, Redo2, ChevronDown, ChevronsDown, ChevronUp, ChevronsUp, ChessPawn, MessageSquareHeart, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, RefreshCw, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, Lock, SquaresExclude, Package, ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next';
+import { t } from '../../shared/i18n.js'
 
 
 const props = defineProps({
@@ -226,6 +230,7 @@ const props = defineProps({
   isDragging: { type: Boolean, default: false }, // 用于外部控制样式
   isInSearch: { type: Boolean, default: false }, // 是否在搜索结果中
   searchMatch: { type: Boolean, default: false }, // 是否是当前搜索焦点
+  selectionOrder: { type: Number, default: 0 },
   moveMenu: { type: Object, default: null },
   currentSplitGroup: { type: Object, default: null },
   // 仅用于在右键菜单中判断“当前选中项里是否包含分割线模组”，不参与普通模组逻辑。
@@ -247,6 +252,8 @@ const commandStore = useCommandStore()
 const queueSetModsColor = useDebounceFn((modIds, color) => {
   modStore.setModsColor(modIds, color)
 }, 120)
+const countSuffix = (count) => Number(count) > 1 ? t('common.count.suffix', ' ({count}项)', { count }) : ''
+const countSuffixWithUnit = (count) => t('common.count.suffix_unit', ' ({count}个)', { count })
 
 // 使用 computed 缓存，只有当 id 变化时才重新获取对象
 // 极大地减少了父组件重绘时的计算量
@@ -306,20 +313,23 @@ const multiplayerCompatBadgeClass = computed(() => {
 const multiplayerCompatTooltip = computed(() => {
   const info = multiplayerCompat.value || {}
   if (!info.enabled) return ''
-  const parts = [`联机兼容性：${info.effective_label || '未知'}`]
-  if (info.status_source === 'official') parts.push(info.status_description || '来自 Multiplayer 官方兼容表。')
-  else if (info.status_source === 'xml_only') parts.push('未检测到程序集，按 Multiplayer 的 XML-only 规则视为完全可用。')
-  else parts.push('官方兼容表暂无明确结论。')
+  const parts = [t('tooltip.mod_item.mp_compat.title', '联机兼容性：{status}', { status: info.effective_label || t('common.status.unknown', '未知') })]
+  if (info.status_source === 'official') parts.push(info.status_description || t('tooltip.mod_item.mp_compat.official', '来自 Multiplayer 官方兼容表。'))
+  else if (info.status_source === 'xml_only') parts.push(t('tooltip.mod_item.mp_compat.xml_only', '未检测到程序集，按 Multiplayer 的 XML-only 规则视为完全可用。'))
+  else parts.push(t('tooltip.mod_item.mp_compat.no_conclusion', '官方兼容表暂无明确结论。'))
   if (info.has_mp_compat_patch) {
     parts.push(multiplayerCompatEffective.value
-      ? 'Multiplayer Compatibility 中存在对应修正，当前已随该模组启用生效。'
-      : 'Multiplayer Compatibility 中存在对应修正，启用该模组后可生效。')
+      ? t('tooltip.mod_item.mp_compat.patch_active', 'Multiplayer Compatibility 中存在对应修正，当前已随该模组启用生效。')
+      : t('tooltip.mod_item.mp_compat.patch_available', 'Multiplayer Compatibility 中存在对应修正，启用该模组后可生效。'))
   }
-  if (info.notes) parts.push(`备注：${info.notes}`)
+  if (info.notes) parts.push(t('tooltip.mod_item.mp_compat.notes', '备注：{notes}', { notes: info.notes }))
   return parts.join('\n')
 })
 
 const modType = computed(() => modStore.displayModType(modData.value))
+const modTypeTooltip = computed(() => t('tooltip.mod_item.type', '类型：{type}', {
+  type: getModTypeLabel(modType.value),
+}))
 
 // 可替换版本是否已经安装
 const replacementInstalled = computed(() => {
@@ -330,26 +340,32 @@ const replacementInstalled = computed(() => {
 const replacementTooltip = computed(() => {
     if (!modData.value?.replacement) return null
     if (replacementInstalled.value) {
-      return `已安装可替换版本：##${modData.value.replacement.new_name}##（${modData.value.replacement.new_workshop_id}）`
+      return t('tooltip.mod_item.replacement.installed', '已安装可替换版本：##{name}##（{workshopId}）', {
+        name: modData.value.replacement.new_name,
+        workshopId: modData.value.replacement.new_workshop_id,
+      })
     }
-    return `存在可替换版本：##${modData.value.replacement.new_name}##（${modData.value.replacement.new_workshop_id}）\n可在右键菜单中订阅`
+    return t('tooltip.mod_item.replacement.available', '存在可替换版本：##{name}##（{workshopId}）\n可在右键菜单中订阅', {
+      name: modData.value.replacement.new_name,
+      workshopId: modData.value.replacement.new_workshop_id,
+    })
 })
 const canToggleCoexistSource = computed(() => !props.sectionHeader && modStore.canSwitchCoexistenceSource(props.item_id))
 const isWorkshopCoexistSource = computed(() => modData.value?.source_preference === 'steam' || props.item_id.endsWith('_steam'))
 const sourceToggleTooltip = computed(() => {
-  const sourceLabel = SOURCE_TYPE_MAP[modData.value?.store] || modData.value?.store || '未知'
+  const sourceLabel = getStoreTypeLabel(modData.value?.store)
   if (!canToggleCoexistSource.value) {
-    return `储存位置：${sourceLabel}`
+    return t('tooltip.mod_item.store.title', '储存位置：{source}', { source: sourceLabel })
   }
   return isWorkshopCoexistSource.value
-    ? `储存位置：${sourceLabel}\n点击切换到本地版`
-    : `储存位置：${sourceLabel}\n点击切换到工坊版`
+    ? t('tooltip.mod_item.store.switch_local', '储存位置：{source}\n点击切换到本地版', { source: sourceLabel })
+    : t('tooltip.mod_item.store.switch_workshop', '储存位置：{source}\n点击切换到工坊版', { source: sourceLabel })
 })
 const coexistSyncOutdated = computed(() => modData.value?.coexist_sync_state === 'outdated')
 const coexistSyncTooltip = computed(() => (
   coexistSyncOutdated.value
-    ? '工坊版本已更新，可右键同步本地共存模组'
-    : '本地共存副本与工坊版本一致'
+    ? t('tooltip.mod_item.coexist.outdated', '工坊文件与本地共存不一致，可右键同步')
+    : t('tooltip.mod_item.coexist.synced', '工坊文件与本地共存一致')
 ))
 const modNoticeTooltip = computed(() => {
   const parts = []
@@ -515,11 +531,11 @@ const generateAliasNotes = async () => {
     : selectedMods
   const skippedCount = selectedMods.length - targetMods.length
   if (targetMods.length === 0) {
-    toast.info('已跳过语言包，没有需要批量生成别名备注的模组')
+    toast.info(t('toast.mod_item.alias.skip_all_language_packs', '已跳过语言包，没有需要批量生成别名备注的模组'))
     return
   }
   if (skippedCount > 0) {
-    toast.info(`已跳过 ${skippedCount} 个语言包模组`)
+    toast.info(t('toast.mod_item.alias.skipped_language_packs', '已跳过 {count} 个语言包模组', { count: skippedCount }))
   }
   if (targetMods.length === 1) {
     const mod = targetMods[0]
@@ -545,12 +561,12 @@ const generateAliasNotes = async () => {
     needsReview: true,
   })
 }
-const COPY_INFO_FIELDS = [
-  { key: 'name', label: '名称' },
-  { key: 'package_id', label: '包名' },
-  { key: 'workshop_id', label: '工坊ID' },
-  { key: 'url', label: '网址' },
-  { key: 'path', label: '路径' },
+const getCopyInfoFields = () => [
+  { key: 'name', label: t('common.field.name', '名称') },
+  { key: 'package_id', label: t('common.field.package_id', '包名') },
+  { key: 'workshop_id', label: t('common.field.workshop_id', '工坊 ID') },
+  { key: 'url', label: t('common.field.url', '网址') },
+  { key: 'path', label: t('common.field.path', '路径') },
 ]
 const normalizeCopyInfoValue = (value) => String(value ?? '').trim()
 const getModCopyInfoValue = (mod, fieldKey) => {
@@ -564,12 +580,12 @@ const getModCopyInfoValue = (mod, fieldKey) => {
 }
 const copyTextToClipboard = async (text, label) => {
   try {
-    if (!navigator?.clipboard?.writeText) throw new Error('当前环境不支持剪贴板')
+    if (!navigator?.clipboard?.writeText) throw new Error(t('errors.clipboard.text_unsupported', '当前环境不支持复制文本到剪贴板'))
     await navigator.clipboard.writeText(text)
-    toast.success(`已复制${label}`, { timeout: 600 })
+    toast.success(t('toast.copy.success', '已复制{label}', { label }), { timeout: 600 })
   } catch (error) {
-    console.warn(`复制${label}失败:`, error)
-    toast.error(toUserMessage(error?.message || error, `复制${label}失败。请检查剪贴板权限，或手动选中文本复制。`))
+    console.warn(`Copy ${label} failed:`, error)
+    toast.error(toUserMessage(error, t('toast.copy.failed_with_label', '复制{label}失败。请检查剪贴板权限，或手动选中文本复制。', { label })))
   }
 }
 const copySelectedModInfo = async (fieldKey, label, selectedIds = []) => {
@@ -587,11 +603,11 @@ const handleContextMenu = async (event) => {
   }
   await ensureInterlockDetails()
   const selectedIds = modStore.selectedIds;
-  const selectedCountStr = selectedIds.length>1?` (${selectedIds.length}项)`:''
+  const selectedCountStr = countSuffix(selectedIds.length)
   const nonOfficialSelectedIds = selectedIds.filter(id => !isOfficialMod(modStore.takeModById(id)))
-  const nonOfficialSelectedCountStr = nonOfficialSelectedIds.length>1?` (${nonOfficialSelectedIds.length}项)`:''
+  const nonOfficialSelectedCountStr = countSuffix(nonOfficialSelectedIds.length)
   const singleSelectedMod = selectedIds.length === 1 ? modStore.takeModById(selectedIds[0]) : null
-  const copyInfoMenuItems = COPY_INFO_FIELDS.map(field => ({
+  const copyInfoMenuItems = getCopyInfoFields().map(field => ({
     label: field.label + selectedCountStr,
     icon: Copy,
     disabled: selectedIds.length === 1 && !getModCopyInfoValue(singleSelectedMod, field.key),
@@ -603,9 +619,9 @@ const handleContextMenu = async (event) => {
   const selectedCoexistWorkshopCount = localizeSummary.existingCount
   const localizeMenuLabel = localizeSummary.actionTitle
   const localizeMenuIcon = selectedCoexistWorkshopCount > 0 ? RefreshCw : Copy
-  const localizeCandidateCountStr = selectedLocalizeCandidates.length>1?` (${selectedLocalizeCandidates.length}项)`:''
+  const localizeCandidateCountStr = countSuffix(selectedLocalizeCandidates.length)
   const coexistSelectedIds = selectedIds.filter(id => modStore.canSwitchCoexistenceSource(id))
-  const coexistSelectedCountStr = coexistSelectedIds.length>1?` (${coexistSelectedIds.length}项)`:''
+  const coexistSelectedCountStr = countSuffix(coexistSelectedIds.length)
   modStore.lastSelectedMod=modStore.takeModById(props.item_id)  // 记录最后选中的模组
   // 获取统计信息
   const stats = modStore.selectedStats
@@ -621,123 +637,125 @@ const handleContextMenu = async (event) => {
   const moveMenuEnabled = !!moveMenu?.enabled
   const moveableWithinSplitGroup = !!moveMenu?.canMoveWithinSplitGroup
   const moveMenuItems = [
-    { label: '列表顶部', icon: ChevronsUp, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'list-top' }) },
-    { label: '列表底部', icon: ChevronsDown, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'list-bottom' }) },
-    { label: '组内顶部', icon: ChevronUp, hidden: !moveableWithinSplitGroup, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'group-top' }) },
-    { label: '组内底部', icon: ChevronDown, hidden: !moveableWithinSplitGroup, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'group-bottom' }) },
+    { label: t('menu.mod_item.move.list_top', '列表顶部'), icon: ChevronsUp, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'list-top' }) },
+    { label: t('menu.mod_item.move.list_bottom', '列表底部'), icon: ChevronsDown, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'list-bottom' }) },
+    { label: t('menu.mod_item.move.group_top', '组内顶部'), icon: ChevronUp, hidden: !moveableWithinSplitGroup, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'group-top' }) },
+    { label: t('menu.mod_item.move.group_bottom', '组内底部'), icon: ChevronDown, hidden: !moveableWithinSplitGroup, disabled: !moveMenuEnabled, action: () => emit('move-selected', { action: 'group-bottom' }) },
     ...splitGroupTargets.map(target => ({
-      label: target.label || '其它分割组...',
+      label: target.label || t('menu.mod_item.move.other_section_group', '其它分割组...'),
       icon: BetweenHorizontalStart,
       hidden: !target.groups?.length,
       disabled: !moveMenuEnabled,
       children: (target.groups || []).map(group => ({
-        label: `${group.label}${Number.isInteger(group.count) ? ` (${group.count}项)` : ''}`,
+        label: `${group.label}${Number.isInteger(group.count) ? countSuffix(group.count) : ''}`,
         action: () => emit('move-selected', { action: 'split-group', targetGroupId: group.groupId, targetListId: target.listId })
       }))
     }))
   ]
   // 通用菜单
   const commnMenuItems = [
-    { commandId: 'mods.toggleSelectedActive', args: { modIds: [...selectedIds] }, labelOverride: (isActive.value?'停用':'启用') + selectedCountStr, icon: isActive.value? CircleSlash2:CircleCheckBig },
-    { label: '标签管理'+ selectedCountStr , icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: '批量分配标签',
+    { commandId: 'mods.toggleSelectedActive', args: { modIds: [...selectedIds] }, labelOverride: (isActive.value ? t('menu.mod_item.deactivate', '停用') : t('menu.mod_item.activate', '启用')) + selectedCountStr, icon: isActive.value? CircleSlash2:CircleCheckBig },
+    { label: t('menu.mod_item.tags.title', '标签管理') + selectedCountStr , icon: Tag, disabled: !modStore.allModTags?.length, children: [{type: 'grid', columns: 5, label: t('menu.mod_item.tags.batch_assign', '批量分配标签'),
       children: sortedTagNames.map(tag => ({ state: stats.tags[tag] || null,
         label: '#'+tag, action: () => modStore.selectModsTag(tag)
       }))}]
     },
-    { label: '分组管理'+ selectedCountStr, icon: Group, disabled: !groupStore.groupList?.length, children: [{type: 'grid', columns: 4, label: '批量加入分组',
+    { label: t('menu.mod_item.groups.title', '分组管理') + selectedCountStr, icon: Group, disabled: !groupStore.groupList?.length, children: [{type: 'grid', columns: 4, label: t('menu.mod_item.groups.batch_join', '批量加入分组'),
       children: sortedGroups.map(group => ({ state: stats.groups[group.group_id] || null,
         label: group.name, color: group.color, bgColor: hexToRgba(group.color, 0.1), action: () => modStore.selectModsGroup(group.group_id)
       }))}]
     },
-    { label: '标记颜色'+ selectedCountStr, icon: Palette, children: [{ type: 'grid', columns: 5, label: '批量设置颜色',
-        children:[...Object.entries(MOD_SIGN_COLOR_MAP).map(([c, name]) => ({ tooltip: name, color: c,
+    { label: t('menu.mod_item.color.title', '标记颜色') + selectedCountStr, icon: Palette, children: [{ type: 'grid', columns: 5, label: t('menu.mod_item.color.batch_set', '批量设置颜色'),
+        children:[...MOD_SIGN_COLORS.map(c => ({ tooltip: getModSignColorLabel(c), color: c,
             active: stats.color === c, action: () => modStore.setModsColor(selectedIds, c)
-          })), { type: 'color-picker', color: pickerColor, tooltip: stats.color === 'mixed' ? '为当前多选项设置统一自定义颜色' : '自定义颜色',
+          })), { type: 'color-picker', color: pickerColor, tooltip: stats.color === 'mixed' ? t('menu.mod_item.color.custom_for_selection', '为当前多选项设置统一自定义颜色') : t('menu.mod_item.color.custom', '自定义颜色'),
             action: (color) => queueSetModsColor(selectedIds, normalizeHexColor(color, DEFAULT_ACCENT_HEX))
-          }, { icon: X, color: 'transparent', tooltip: '清除', action: () => modStore.setModsColor(selectedIds, null) }
+          }, { icon: X, color: 'transparent', tooltip: t('tooltip.mod_item.color.clear', '清除'), action: () => modStore.setModsColor(selectedIds, null) }
         ]
       }]
     },
-    { label: '修改类型'+ selectedCountStr, icon: ChessPawn,
-      children: [...Object.entries(MOD_TYPE_MAP).map(([key, value]) => ({
-        icon: MOD_TYPE_ICON_MAP[key],
-        label: value, action: () => modStore.setModsType(selectedIds, key)
-      })),{ label: '恢复默认', icon: SquareX, level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
+    { label: t('menu.mod_item.type', '修改类型') + selectedCountStr, icon: ChessPawn,
+      children: [...Object.entries(MOD_TYPE_ICON_MAP).map(([key, icon]) => ({
+        icon,
+        label: getModTypeLabel(key), action: () => modStore.setModsType(selectedIds, key)
+      })),{ label: t('common.action.restore_default', '恢复默认'), icon: SquareX, level: 'warn', action: () => modStore.setModsType(selectedIds, null) }]
     },
-    { label: '复制信息' + selectedCountStr, icon: Copy, children: copyInfoMenuItems },
-    ...(moveMenu ? [{ label: '移动到' + selectedCountStr, icon: Redo2, children: moveMenuItems }] : []),
+    { label: t('menu.mod_item.copy_info', '复制信息') + selectedCountStr, icon: Copy, children: copyInfoMenuItems },
+    ...(moveMenu ? [{ label: t('menu.mod_item.move_to', '移动到') + selectedCountStr, icon: Redo2, children: moveMenuItems }] : []),
   ]
   
   // 单选菜单
   const singleMenuItems = [
     { divider: true },
-    { commandId: 'mods.editSelectedRule', args: { modId: props.item_id }, labelOverride: '编辑规则', icon: PencilRuler, gesture: 'Alt+左键' },
-    { commandId: 'mods.openSelectedUrl', args: { modId: props.item_id }, labelOverride: '访问网页', icon: ExternalLink },
-    { label: 'Steam操作', icon: IconSteam, disabled: !modData.value.workshop_id, children: [
-      { commandId: 'mods.openSelectedWorkshopPage', args: { modId: props.item_id }, labelOverride: '访问创意工坊', icon: IconSteam },
-      { label: '订阅模组', disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeWorkshopIds([modData.value.workshop_id]) },
-      { commandId: 'mods.unsubscribeSelectedWorkshop', args: { modIds: [...selectedIds] }, labelOverride: '取消订阅'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: FlagOff },
-      { commandId: 'mods.unsubscribeAndDeleteSelectedWorkshop', args: { modIds: [...selectedIds] }, labelOverride: '取订并删除'+ selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2 },
+    { commandId: 'mods.editSelectedRule', args: { modId: props.item_id }, labelOverride: t('menu.mod_item.edit_rule', '编辑规则'), icon: PencilRuler, gesture: 'Alt+左键' },
+    { commandId: 'mods.openSelectedUrl', args: { modId: props.item_id }, labelOverride: t('menu.mod_item.open_url', '访问网页'), icon: ExternalLink },
+    { label: t('menu.mod_item.steam', 'Steam操作'), icon: IconSteam, disabled: !modData.value.workshop_id, children: [
+      { commandId: 'mods.openSelectedWorkshopPage', args: { modId: props.item_id }, labelOverride: t('menu.mod_item.open_workshop', '访问创意工坊'), icon: IconSteam },
+      { label: t('menu.mod_item.subscribe', '订阅模组'), disabled: (!!modData.value.workshop_id && !!modData.value.path), icon: Flag, action: () => appStore.subscribeWorkshopIds([modData.value.workshop_id]) },
+      { commandId: 'mods.unsubscribeSelectedWorkshop', args: { modIds: [...selectedIds] }, labelOverride: t('menu.mod_item.unsubscribe', '取消订阅') + selectedCountStr, disabled: modData.value.store!=='workshop', icon: FlagOff },
+      { commandId: 'mods.unsubscribeAndDeleteSelectedWorkshop', args: { modIds: [...selectedIds] }, labelOverride: t('menu.mod_item.unsubscribe_delete', '取订并删除') + selectedCountStr, disabled: modData.value.store!=='workshop', icon: Trash2 },
     ]},
   ]
   if (modStore.selectedMods.some(m => !!m.replacement)) {
     const workshop_ids = modStore.selectedMods.filter(m => !!m.replacement).map(m => m.replacement.new_workshop_id)
-    const _selectedCountStr = workshop_ids.length>1?` (${workshop_ids.length}项)`:''
+    const _selectedCountStr = countSuffix(workshop_ids.length)
     singleMenuItems.push(
-      { label: '替代版本', icon: Cable, children:[
-        { label: '访问创意工坊', icon: IconSteam, action: () => appStore.openSteamWorkshopById(modData.value.replacement.new_workshop_id) },
-        { label: '跳转到替代模组',disabled: !replacementInstalled.value, icon: CornerUpRight, action: () => modStore.currentTargetId=modData.value.replacement.new_package_id },
-        { label: '订阅替代版本'+ _selectedCountStr, icon: Flag, action: () => appStore.subscribeWorkshopIds(workshop_ids) },
-        { label: '下载替代版本'+ _selectedCountStr, icon: Download, action: () => appStore.downloadWorkshopItems(workshop_ids) },
+      { label: t('menu.mod_item.replacement.title', '替代版本'), icon: Cable, children:[
+        { label: t('menu.mod_item.open_workshop', '访问创意工坊'), icon: IconSteam, action: () => appStore.openSteamWorkshopById(modData.value.replacement.new_workshop_id) },
+        { label: t('menu.mod_item.replacement.jump', '跳转到替代模组'),disabled: !replacementInstalled.value, icon: CornerUpRight, action: () => modStore.currentTargetId=modData.value.replacement.new_package_id },
+        { label: t('menu.mod_item.replacement.subscribe', '订阅替代版本') + _selectedCountStr, icon: Flag, action: () => appStore.subscribeWorkshopIds(workshop_ids) },
+        { label: t('menu.mod_item.replacement.download', '下载替代版本') + _selectedCountStr, icon: Download, action: () => appStore.downloadWorkshopItems(workshop_ids) },
       ]}
     )
   }
   if (modStore.selectedMods.some(m => (m.isMissing || !m.path))) {
     const package_ids = modStore.selectedMods.filter(m => (m.isMissing || !m.path)).map(m => m.package_id)
     const workshop_ids = modStore.selectedMods.filter(m => (m.isMissing || !m.path)&&!!m.workshop_id).map(m => m.workshop_id)
-    const _selectedCountStr = package_ids.length>1?` (${package_ids.length}项)`:''
-    const _selectedCountStr2 = workshop_ids.length>1?` (${workshop_ids.length}项)`:''
+    const _selectedCountStr = countSuffix(package_ids.length)
+    const _selectedCountStr2 = countSuffix(workshop_ids.length)
     singleMenuItems.push(
-      { label: '缺失处理', icon: CircleFadingPlus, children:[
-        { label: '移除缺失项'+ _selectedCountStr, icon: Eraser, action: () => modStore.runListHistoryTransaction({ type: 'remove-missing-items', label: `移除 ${package_ids.length} 个缺失项`, trackedModIds: package_ids }, async () => modStore.removeUnavailableIdsCompletely(package_ids)) },
-        { label: '订阅缺失项'+ _selectedCountStr2, disabled: workshop_ids.length === 0, icon: Flag, action: () => appStore.subscribeWorkshopIds(workshop_ids) },
-        { label: '下载缺失项'+ _selectedCountStr2, disabled: workshop_ids.length === 0, icon: Download, action: () => appStore.downloadWorkshopItems(workshop_ids) },
+      { label: t('menu.mod_item.missing.title', '缺失处理'), icon: CircleFadingPlus, children:[
+        { label: t('menu.mod_item.missing.remove', '移除缺失项') + _selectedCountStr, icon: Eraser, action: () => modStore.runListHistoryTransaction({ type: 'remove-missing-items', label: t('history.mod_item.remove_missing', '移除 {count} 个缺失项', { count: package_ids.length }), trackedModIds: package_ids }, async () => modStore.removeUnavailableIdsCompletely(package_ids)) },
+        { label: t('menu.mod_item.missing.subscribe', '订阅缺失项') + _selectedCountStr2, disabled: workshop_ids.length === 0, icon: Flag, action: () => appStore.subscribeWorkshopIds(workshop_ids) },
+        { label: t('menu.mod_item.missing.download', '下载缺失项') + _selectedCountStr2, disabled: workshop_ids.length === 0, icon: Download, action: () => appStore.downloadWorkshopItems(workshop_ids) },
       ]}
     )
   }
   // 文件处理菜单
   const fileMenuItems = [
     { divider: true },
-    { commandId: 'mods.openSelectedFolder', args: { modId: props.item_id }, labelOverride: '打开文件夹', icon: FolderInput },
-    { label: localizeMenuLabel + localizeCandidateCountStr, icon: localizeMenuIcon, disabled: !selectedLocalizeCandidates.length,
-      action: () => modStore.localizeMods(localizeSummary.pathHashes, 'workshop', { existingCount: selectedCoexistWorkshopCount }) },
-    { label: '切换共存版本', icon: SquaresExclude, disabled: !coexistSelectedIds.length,
+    { commandId: 'mods.openSelectedFolder', args: { modId: props.item_id }, labelOverride: t('common.action.open_folder', '打开文件夹'), icon: FolderInput },
+    selectedIds.length > 1
+      ? { commandId: 'mods.localizeSelectedWorkshop', args: { modIds: [...selectedIds] }, labelOverride: localizeMenuLabel + localizeCandidateCountStr, icon: localizeMenuIcon, disabled: !selectedLocalizeCandidates.length }
+      : { label: localizeMenuLabel + localizeCandidateCountStr, icon: localizeMenuIcon, disabled: !selectedLocalizeCandidates.length,
+        action: () => modStore.localizeMods(localizeSummary.pathHashes, 'workshop', { existingCount: selectedCoexistWorkshopCount }) },
+    { label: t('menu.mod_item.coexist.switch', '切换共存版本'), icon: SquaresExclude, disabled: !coexistSelectedIds.length,
       children: [
-        { label: '切换为工坊版' + coexistSelectedCountStr, icon: IconSteam, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'steam') },
-        { label: '切换为本地版' + coexistSelectedCountStr, icon: FolderMinus, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'local') },
+        { label: t('menu.mod_item.coexist.switch_workshop', '切换为工坊版') + coexistSelectedCountStr, icon: IconSteam, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'steam') },
+        { label: t('menu.mod_item.coexist.switch_local', '切换为本地版') + coexistSelectedCountStr, icon: FolderMinus, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'local') },
       ]
     },
-    { commandId: 'mods.disableSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: '禁用'+ selectedCountStr, icon: Lock, level: 'warn', disabled: !selectedHasPathHash },
-    { commandId: 'mods.deleteSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: '删除'+ selectedCountStr, disabled: !modData.value.path, icon: Trash2 },
+    { commandId: 'mods.disableSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: t('menu.mod_item.disable_files', '禁用') + selectedCountStr, icon: Lock, level: 'warn', disabled: !selectedHasPathHash },
+    { commandId: 'mods.deleteSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: t('common.action.delete', '删除') + selectedCountStr, disabled: !modData.value.path, icon: Trash2 },
   ]
 
   // 多选菜单
   const selectedMenuItems = [
     { divider: true },
-    { label: '生成别名备注'+ nonOfficialSelectedCountStr, icon: BotMessageSquare, disabled: !nonOfficialSelectedIds.length, action: () => generateAliasNotes() },
-    { label: '打包导出模组' + nonOfficialSelectedCountStr, icon: Package, disabled: !nonOfficialSelectedIds.length,
+    { label: t('menu.mod_item.generate_alias_notes', '生成别名备注') + nonOfficialSelectedCountStr, icon: BotMessageSquare, disabled: !nonOfficialSelectedIds.length, action: () => generateAliasNotes() },
+    { label: t('menu.mod_item.export_package', '打包导出模组') + nonOfficialSelectedCountStr, icon: Package, disabled: !nonOfficialSelectedIds.length,
       action: () => appStore.openCustomModExportDialog({
-        title: `打包导出已选模组${nonOfficialSelectedCountStr}`,
-        description: '可按需附带依赖、联锁项和语言包。缺失磁盘文件的项会自动跳过并给出提示。',
+        title: t('dialog.mod_item.export_package.title', '打包导出已选模组{count}', { count: nonOfficialSelectedCountStr }),
+        description: t('dialog.mod_item.export_package.description', '可按需附带依赖、联锁项和语言包。缺失磁盘文件的项会自动跳过并给出提示。'),
         modIds: [...nonOfficialSelectedIds],
-        summary: `已选 ${nonOfficialSelectedIds.length} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。`,
+        summary: t('dialog.mod_item.export_package.summary', '已选 {count} 个模组，导出时会自动按当前激活版本或最新版本解析共存项。', { count: nonOfficialSelectedIds.length }),
       })
     },
     // 推荐导出只面向当前多选模组的介绍信息，不处理模组文件和依赖打包。
-    { label: '导出推荐' + nonOfficialSelectedCountStr, icon: MessageSquareHeart, disabled: nonOfficialSelectedIds.length === 0,
+    { label: t('menu.mod_item.export_recommendation', '导出推荐') + nonOfficialSelectedCountStr, icon: MessageSquareHeart, disabled: nonOfficialSelectedIds.length === 0,
       action: () => appStore.openRecommendationExportDialog({
-        title: `推荐导出已选模组${nonOfficialSelectedCountStr}`,
-        sourceName: '已选模组',
+        title: t('dialog.mod_item.export_recommendation.title', '推荐导出已选模组{count}', { count: nonOfficialSelectedCountStr }),
+        sourceName: t('dialog.mod_item.export_recommendation.source', '已选模组'),
         modIds: [...nonOfficialSelectedIds],
       })
     },
@@ -754,40 +772,44 @@ const handleContextMenu = async (event) => {
     { divider: true, hidden: !showCurrentSplitGroupMenu && !showSelectedSplitGroupMenu },
     currentSplitGroup?.collapsed
       ? {
-          label: `展开本分割组${currentSplitGroup?.label ? `：${currentSplitGroup.label}` : ''}`,
+          label: currentSplitGroup?.label
+            ? t('menu.mod_item.section.expand_current_with_name', '展开本分割组：{name}', { name: currentSplitGroup.label })
+            : t('menu.mod_item.section.expand_current', '展开本分割组'),
           icon: ChevronsUpDown,
           hidden: !showCurrentSplitGroupMenu,
           action: () => emit('expand-selected-sections', [currentSplitGroup.headerId]),
         }
       : {
-          label: `折叠本分割组${currentSplitGroup?.label ? `：${currentSplitGroup.label}` : ''}`,
+          label: currentSplitGroup?.label
+            ? t('menu.mod_item.section.collapse_current_with_name', '折叠本分割组：{name}', { name: currentSplitGroup.label })
+            : t('menu.mod_item.section.collapse_current', '折叠本分割组'),
           icon: ChevronsDownUp,
           hidden: !showCurrentSplitGroupMenu,
           action: () => emit('collapse-selected-sections', [currentSplitGroup?.headerId]),
         },
-    { label: '展开选中分割组' + ` (${selectedSectionHeaderIds.value.length}个)`, icon: ChevronsUpDown, hidden: !showSelectedSplitGroupMenu, action: () => emit('expand-selected-sections', selectedSectionHeaderIds.value) },
-    { label: '折叠选中分割组' + ` (${selectedSectionHeaderIds.value.length}个)`, icon: ChevronsDownUp, hidden: !showSelectedSplitGroupMenu, action: () => emit('collapse-selected-sections', selectedSectionHeaderIds.value) },
-    { label: `展开全部分割组${sectionGroupCount > 0 ? ` (${collapsedSectionGroupCount}个已折叠)` : ''}`, icon: ChevronsUpDown,
+    { label: t('menu.mod_item.section.expand_selected', '展开选中分割组') + countSuffixWithUnit(selectedSectionHeaderIds.value.length), icon: ChevronsUpDown, hidden: !showSelectedSplitGroupMenu, action: () => emit('expand-selected-sections', selectedSectionHeaderIds.value) },
+    { label: t('menu.mod_item.section.collapse_selected', '折叠选中分割组') + countSuffixWithUnit(selectedSectionHeaderIds.value.length), icon: ChevronsDownUp, hidden: !showSelectedSplitGroupMenu, action: () => emit('collapse-selected-sections', selectedSectionHeaderIds.value) },
+    { label: t('menu.mod_item.section.expand_all', '展开全部分割组') + (sectionGroupCount > 0 ? t('menu.mod_item.section.collapsed_count', ' ({count}个已折叠)', { count: collapsedSectionGroupCount }) : ''), icon: ChevronsUpDown,
       hidden: !props.sectionFeatureEnabled || collapsedSectionGroupCount === 0, action: () => emit('expand-all-sections') },
-    { label: `折叠全部分割组${sectionGroupCount > 0 ? ` (${expandedSectionGroupCount}个已展开)` : ''}`, icon: ChevronsDownUp,
+    { label: t('menu.mod_item.section.collapse_all', '折叠全部分割组') + (sectionGroupCount > 0 ? t('menu.mod_item.section.expanded_count', ' ({count}个已展开)', { count: expandedSectionGroupCount }) : ''), icon: ChevronsDownUp,
       hidden: !props.sectionFeatureEnabled || expandedSectionGroupCount === 0, action: () => emit('collapse-all-sections') },
   ]
   const allInterlocked = modStore.selectedMods.every(m => m && m.interlock_id)
   if (!allInterlocked) {
-    selectedMenuItems.push({ label: '创建联锁'+ selectedCountStr, icon: Link2, action: () => modStore.linkMods(selectedIds) })
+    selectedMenuItems.push({ commandId: 'mods.linkSelectedInterlock', args: { modIds: [...selectedIds] }, labelOverride: t('menu.mod_item.interlock.create', '创建联锁') + selectedCountStr, icon: Link2 })
   }
   const anyInterlocked = modStore.selectedMods.some(m => !!m.interlock_id)
   if (anyInterlocked) {
-    selectedMenuItems.push({ label: '解除联锁'+ selectedCountStr, icon: Link2Off, action: () => modStore.unlinkMods(selectedIds) })
+    selectedMenuItems.push({ commandId: 'mods.unlinkSelectedInterlock', args: { modIds: [...selectedIds] }, labelOverride: t('menu.mod_item.interlock.unlink', '解除联锁') + selectedCountStr, icon: Link2Off })
     const disabledIds = linkIssueDetails.value.filter(d => d.reason === 'disabled').map(d => d.package_id)
     const missingPackageIds = linkIssueDetails.value.filter(d => d.reason === 'missing' && d.package_id).map(d => d.package_id)
     if (missingPackageIds.length > 0) {
       selectedMenuItems.push({
-        label: '缺失联锁项处理', icon: CircleFadingPlus, children:[
+        label: t('menu.mod_item.interlock.missing', '缺失联锁项处理'), icon: CircleFadingPlus, children:[
           // { label: '解除禁用联锁项', icon: LockOpen, level: 'warn',action: async () => modStore.healInterlock(modData.value.interlock_id) },
-          { label: '剔除失效联锁项', icon: Eraser, level: 'warn',action: async () => modStore.healInterlock(modData.value.interlock_id) },
-          { label: '订阅失效联锁项', icon: Flag, action: async () => appStore.subscribePackageIds(missingPackageIds) },
-          { label: '下载失效联锁项', icon: Download, action: async () => appStore.downloadPackageIds(missingPackageIds) }
+          { label: t('menu.mod_item.interlock.remove_invalid', '剔除失效联锁项'), icon: Eraser, level: 'warn',action: async () => modStore.healInterlock(modData.value.interlock_id) },
+          { label: t('menu.mod_item.interlock.subscribe_invalid', '订阅失效联锁项'), icon: Flag, action: async () => appStore.subscribePackageIds(missingPackageIds) },
+          { label: t('menu.mod_item.interlock.download_invalid', '下载失效联锁项'), icon: Download, action: async () => appStore.downloadPackageIds(missingPackageIds) }
         ]
       })
     }
@@ -808,10 +830,12 @@ const handleContextMenu = async (event) => {
   if (uniqueIssueTypes.length > 0) {
     issueManagementItems.push({ divider: true });
     issueManagementItems.push({
-      label: selectedIds.length > 1 ? `批量忽略问题 (${uniqueIssueTypes.length})...` : '忽略问题...',
+      label: selectedIds.length > 1
+        ? t('menu.mod_item.issue.batch_ignore', '批量忽略问题 ({count})...', { count: uniqueIssueTypes.length })
+        : t('menu.mod_item.issue.ignore', '忽略问题...'),
       icon: MegaphoneOff,
       children: uniqueIssueTypes.map(type => ({
-        label: `忽略：${ISSUE_TITLE_MAP[type] || type}`,
+        label: t('menu.mod_item.issue.ignore_one', '忽略：{type}', { type: getIssueTitle(type) }),
         // 这里的 level 可以取该类型在所有 Mod 中的最高级别
         level: allSelectedIssues.find(i => i.type === type)?.level || 'warn',
         action: () => modStore.batchIgnoreIssues(selectedIds, type)
@@ -823,7 +847,7 @@ const handleContextMenu = async (event) => {
     // 如果之前没加 divider，补一个
     if (issueManagementItems.length === 0) issueManagementItems.push({ divider: true });
     issueManagementItems.push({
-      label: selectedIds.length > 1 ? '恢复所有选中项警告' : '恢复警告',
+      label: selectedIds.length > 1 ? t('menu.mod_item.issue.restore_selected', '恢复所有选中项警告') : t('menu.mod_item.issue.restore', '恢复警告'),
       icon: Megaphone,
       level: 'warn',
       action: () => modStore.batchIgnoreIssues(selectedIds, null)

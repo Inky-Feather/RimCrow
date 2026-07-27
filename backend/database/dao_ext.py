@@ -6,7 +6,7 @@ from typing import Any
 from peewee import JOIN, fn
 from playhouse.shortcuts import model_to_dict
 
-from backend.database.models import ModAsset
+from backend.database.models import MOD_ASSET_STATE_DELETED, MOD_ASSET_STATE_MISSING, ModAsset
 from backend.database.models_ext import ModReplacement, WorkshopAuthorCache, WorkshopManifest, WorkshopOnlineCache
 from backend.database.workshop_selection import (
     build_install_source,
@@ -466,6 +466,7 @@ def _load_asset_source_candidates_by_package_ids(normalized_package_ids: list[st
             ModAsset.name,
             ModAsset.supported_versions,
             ModAsset.file_modify_time,
+            ModAsset.state,
         )
         .where(fn.LOWER(ModAsset.package_id).in_(normalized_package_ids))
         .dicts()
@@ -476,8 +477,21 @@ def _load_asset_source_candidates_by_package_ids(normalized_package_ids: list[st
         package_id = normalize_package_id(asset.get("package_id"))
         if not package_id:
             continue
+        state = str(asset.get("state") or "").strip().lower()
+        has_source = bool(asset.get("workshop_id") or asset.get("url"))
+        if state in {MOD_ASSET_STATE_MISSING, MOD_ASSET_STATE_DELETED} or not has_source:
+            continue
         asset_map.setdefault(package_id, []).append(asset)
     return asset_map
+
+
+def _load_git_catalog_source_candidates_by_package_ids(normalized_package_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """只从本地 Git 推荐清单缓存读取兜底来源，失败时静默降级为空。"""
+    try:
+        from backend.managers.mgr_github import GithubManager
+        return GithubManager().get_cached_provider_catalog_install_sources_by_package_ids(normalized_package_ids)
+    except Exception:
+        return {}
 
 
 def _build_replacement_install_source(
@@ -862,6 +876,7 @@ class WorkshopCacheDAO:
 
         asset_map = _load_asset_source_candidates_by_package_ids(normalized_package_ids)
         meta_map = _load_manifest_candidates_by_package_ids(normalized_package_ids)
+        git_catalog_map = _load_git_catalog_source_candidates_by_package_ids(normalized_package_ids)
         replacement_map = _load_replacement_candidates_by_package_ids(normalized_package_ids)
         replacement_meta_map = _load_workshop_meta_map(
             [
@@ -896,42 +911,42 @@ class WorkshopCacheDAO:
                 if source.get("kind") == "url" and source.get("url")
             }
 
-            original_sources = dedupe_install_sources(
-                [
-                    *[
-                        {
-                            "package_id": package_id,
-                            "workshop_id": replacement.get("old_workshop_id"),
-                            "name": replacement.get("old_name") or replacement.get("old_package_id") or package_id,
-                            "supported_versions": replacement.get("old_versions") or [],
-                            "source_origin": "replacement_old",
-                        }
-                        for replacement in replacement_map.get(package_id, [])
-                        if replacement.get("old_workshop_id")
-                    ],
-                    *[
-                        {
-                            "package_id": package_id,
-                            "workshop_id": asset.get("workshop_id"),
-                            "url": asset.get("url"),
-                            "name": asset.get("name"),
-                            "supported_versions": asset.get("supported_versions") or [],
-                            "source_origin": "asset",
-                        }
-                        for asset in asset_map.get(package_id, [])
-                    ],
-                    *[
-                        {
-                            "package_id": package_id,
-                            "workshop_id": meta.get("workshop_id"),
-                            "name": meta.get("title") or meta.get("name"),
-                            "supported_versions": meta.get("game_versions") or [],
-                            "source_origin": "meta",
-                        }
-                        for meta in meta_map.get(package_id, [])
-                    ],
-                ]
-            )
+            asset_sources = dedupe_install_sources([
+                {
+                    "package_id": package_id,
+                    "workshop_id": asset.get("workshop_id"),
+                    "url": asset.get("url"),
+                    "name": asset.get("name"),
+                    "supported_versions": asset.get("supported_versions") or [],
+                    "source_origin": "asset",
+                }
+                for asset in asset_map.get(package_id, [])
+            ])
+            workshop_sources = dedupe_install_sources([
+                *[
+                    {
+                        "package_id": package_id,
+                        "workshop_id": replacement.get("old_workshop_id"),
+                        "name": replacement.get("old_name") or replacement.get("old_package_id") or package_id,
+                        "supported_versions": replacement.get("old_versions") or [],
+                        "source_origin": "replacement_old",
+                    }
+                    for replacement in replacement_map.get(package_id, [])
+                    if replacement.get("old_workshop_id")
+                ],
+                *[
+                    {
+                        "package_id": package_id,
+                        "workshop_id": meta.get("workshop_id"),
+                        "name": meta.get("title") or meta.get("name"),
+                        "supported_versions": meta.get("game_versions") or [],
+                        "source_origin": "meta",
+                    }
+                    for meta in meta_map.get(package_id, [])
+                ],
+            ])
+            git_catalog_sources = dedupe_install_sources(git_catalog_map.get(package_id, []))
+            original_sources = asset_sources or workshop_sources or git_catalog_sources
             original_sources = [
                 source
                 for source in original_sources

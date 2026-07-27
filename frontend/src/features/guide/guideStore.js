@@ -13,6 +13,7 @@ import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import {
   GUIDE_VERSION,
+  localizeGuideSteps,
   mainGuideSteps,
   workflowGuideSteps,
   modListGuideSteps,
@@ -31,6 +32,7 @@ import {
   logAnalysisGuideSteps,
 } from './guideConfig'
 import { useToast } from 'vue-toastification'
+import { t } from '../../shared/i18n.js'
 
 // -----------------------------------------------------------------
 // 引导定义 (Guide Definitions)
@@ -146,7 +148,7 @@ export const allGuides = [
       if (!hasMinimalAiConfig) {
         return {
           blocked: true,
-          message: '请先在“设置 -> AI 集成”中启用并配置好 AI，建议完成一次连通性测试后再继续日志分析教程。'
+          message: t('guide.blocked.log_analysis_ai_required', '请先在“设置 -> AI 集成”中启用并配置好 AI，建议完成一次连通性测试后再继续日志分析教程。')
         };
       }
       appStore.uiState.showLogDrawer = false;
@@ -209,6 +211,14 @@ export const allGuides = [
   },
 ]
 
+const localizeGuideEntry = (guide) => ({
+  ...guide,
+  title: t(`guide.entries.${guide.key}.title`, guide.title),
+  description: t(`guide.entries.${guide.key}.description`, guide.description),
+})
+
+export const getAllGuides = () => allGuides.map(localizeGuideEntry)
+
 export const useGuideStore = defineStore('guide', () => {
 
   // -----------------------------------------------------------------
@@ -242,11 +252,11 @@ export const useGuideStore = defineStore('guide', () => {
         return
       }
       if (canStart && typeof canStart === 'object' && canStart.blocked) {
-        toast.info(canStart.message || '当前教程需要先满足前置条件后才能开始')
+        toast.info(canStart.message || t('guide.blocked.default', '当前教程需要先满足前置条件后才能开始'))
         return
       }
       if (canStart === false) {
-        toast.info('当前教程需要先进入对应场景后才能开始')
+        toast.info(t('guide.blocked.scene_required', '当前教程需要先进入对应场景后才能开始'))
         return
       }
       // 等待弹窗动画
@@ -257,10 +267,10 @@ export const useGuideStore = defineStore('guide', () => {
       showProgress: true,
       animate: true,
       allowClose: false,
-      doneBtnText: '我知道了',
-      closeBtnText: '跳过',
-      nextBtnText: '下一步',
-      prevBtnText: '上一步',
+      doneBtnText: t('guide.driver.done', '我知道了'),
+      closeBtnText: t('guide.driver.skip', '跳过'),
+      nextBtnText: t('guide.driver.next', '下一步'),
+      prevBtnText: t('guide.driver.prev', '上一步'),
       // 【关键配置】针对高 z-index 的弹窗，如果不加这个，遮罩可能会被你的弹窗盖住！
       // 我们的弹窗通常 z-index 是 100 左右，这里设个大的
     //   popoverClass: 'driver-popover',
@@ -268,7 +278,7 @@ export const useGuideStore = defineStore('guide', () => {
         markAsDone(uniqueKey) // 调用统一的标记函数
         driverObj.destroy()
       },
-      steps: stepsConfig.map(step => ({
+      steps: localizeGuideSteps(guideKey, stepsConfig).map(step => ({
         ...step,
         popover: {
           ...step.popover,
@@ -305,7 +315,7 @@ export const useGuideStore = defineStore('guide', () => {
 
   // 根据 key 动态启动引导
   const startGuideByKey = (guideKey, force = false) => {
-    const guide = allGuides.find(g => g.key === guideKey)
+    const guide = getAllGuides().find(g => g.key === guideKey)
     if (guide) {
       runGuide(guide.key, guide.steps, force, guide.beforeStart)
     }
@@ -321,7 +331,7 @@ export const useGuideStore = defineStore('guide', () => {
     allGuides.forEach(guide => {
       skipGuideByKey(guide.key)
     })
-    toast.info("所有教程引导已跳过！可以随时在界面设置中重置引导。")
+    toast.info(t('guide.toast.skipped_all', '所有教程引导已跳过！可以随时在界面设置中重置引导。'))
   }
 
    // 重置所有引导状态
@@ -330,7 +340,7 @@ export const useGuideStore = defineStore('guide', () => {
       appStore.closeSettingsPanel()
       await window.pywebview.api.guide_reset_all()
       appStore.settings.completed_guides = {}
-      toast.success("所有教程引导已重置！")
+      toast.success(t('guide.toast.reset_all', '所有教程引导已重置！'))
     }
   }
 

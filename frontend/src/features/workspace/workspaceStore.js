@@ -2,14 +2,17 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { checkResult, toast, toUserMessage } from '../../shared/lib/common'
+import { checkResult, showUserErrorToast, toast, toUserMessage } from '../../shared/lib/common'
+import { buildWorkshopSteamUri, buildWorkshopWebUrl, dispatchSteamUri } from '../../shared/lib/steamUri'
 import { startupPerfMark, startupPerfMeasure } from '../../shared/lib/startupPerf'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
-import { RIMWORLD_STEAM_APP_ID, SOURCE_TYPE_MAP } from '../../shared/lib/constants'
+import { getSourceTypeLabel, RIMWORLD_STEAM_APP_ID } from '../../shared/lib/constants'
+import { t } from '../../shared/i18n.js'
 import { matchesTranslationSourceDetection } from '../../shared/lib/translationDetection'
+import { openWorkshopPage } from '../../shared/lib/steamUri'
 import {
   dedupeNormalizedPackageIds, normalizeInstallSources,
-  normalizePackageId, normalizeUrl, normalizeWorkshopId,
+  normalizePackageId, normalizeUrl, normalizeWorkshopId, extractWorkshopId,
 } from '../mod/lib/modIdentity'
 import { hasWorkshopSearchText, resolveWorkshopDays, resolveWorkshopSort } from './workshopSearchOptions'
 import { isMatrixModAvailable } from './lib/matrixItemState'
@@ -153,7 +156,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     language: '',
     days: 7,
     searchTextTarget: 0,
-    languageOptions: [{ label: '跟随界面语言', value: '', code: '', name: 'Auto' }],
+    languageOptions: [{ label: t('ui.workspace.translation.follow_ui', '跟随界面语言'), value: '', code: '', name: 'Auto' }],
     isLanguageOptionsLoaded: false,
     dlcOptions: [],
     isDlcOptionsLoaded: false,
@@ -348,28 +351,37 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const status = getGithubRepoStatus(repo)
     return status.key === 'upgrade'
   }
+  const getGithubStatusLabel = (key) => {
+    if (key === 'missing') return t('ui.workspace.github.status.missing', '本地文件缺失')
+    if (key === 'not_deployed') return t('ui.workspace.github.status.not_deployed', '未部署')
+    if (key === 'installed') return t('ui.workspace.github.status.installed', '已安装')
+    if (key === 'branch_changed') return t('ui.workspace.github.status.branch_changed', '跟踪分支不同')
+    if (key === 'upgrade') return t('ui.workspace.github.status.upgrade', '可升级')
+    if (key === 'current') return t('ui.workspace.github.status.current', '已是最新')
+    return t('ui.workspace.github.status.unknown', '状态未知')
+  }
   const getGithubRepoStatus = (repo) => {
-    if (!repo) return { key: 'unknown', label: '状态未知', tone: 'text-text-dim', version: '' }
+    if (!repo) return { key: 'unknown', label: getGithubStatusLabel('unknown'), tone: 'text-text-dim', version: '' }
     const localVersion = String(repo?.installed_version || '').trim()
     const onlineVersion = getGithubOnlineVersion(repo)
     if (repo.local_folder && repo.local_exists === false) {
-      return { key: 'missing', label: '本地文件缺失', tone: 'text-accent-danger', version: localVersion }
+      return { key: 'missing', label: getGithubStatusLabel('missing'), tone: 'text-accent-danger', version: localVersion }
     }
-    if (!localVersion) return { key: 'not_deployed', label: '未部署', tone: 'text-text-dim', version: onlineVersion }
-    if (!onlineVersion) return { key: 'installed', label: '已安装', tone: 'text-accent-success', version: localVersion }
+    if (!localVersion) return { key: 'not_deployed', label: getGithubStatusLabel('not_deployed'), tone: 'text-text-dim', version: onlineVersion }
+    if (!onlineVersion) return { key: 'installed', label: getGithubStatusLabel('installed'), tone: 'text-accent-success', version: localVersion }
     if (repo?.install_type === 'source') {
       const localSource = parseGithubSourceVersion(localVersion)
       const onlineSource = parseGithubSourceVersion(onlineVersion)
       if (localSource.branch && onlineSource.branch && localSource.branch !== onlineSource.branch) {
-        return { key: 'branch_changed', label: '跟踪分支不同', tone: 'text-accent-warn', version: onlineVersion }
+        return { key: 'branch_changed', label: getGithubStatusLabel('branch_changed'), tone: 'text-accent-warn', version: onlineVersion }
       }
       if (localSource.time && onlineSource.time) {
-        if (onlineSource.time > localSource.time) return { key: 'upgrade', label: '可升级', tone: 'text-accent-warn', version: onlineVersion }
-        return { key: 'current', label: '已是最新', tone: 'text-accent-success', version: onlineVersion }
+        if (onlineSource.time > localSource.time) return { key: 'upgrade', label: getGithubStatusLabel('upgrade'), tone: 'text-accent-warn', version: onlineVersion }
+        return { key: 'current', label: getGithubStatusLabel('current'), tone: 'text-accent-success', version: onlineVersion }
       }
     }
-    if (localVersion !== onlineVersion) return { key: 'upgrade', label: '可升级', tone: 'text-accent-warn', version: onlineVersion }
-    return { key: 'current', label: '已是最新', tone: 'text-accent-success', version: onlineVersion }
+    if (localVersion !== onlineVersion) return { key: 'upgrade', label: getGithubStatusLabel('upgrade'), tone: 'text-accent-warn', version: onlineVersion }
+    return { key: 'current', label: getGithubStatusLabel('current'), tone: 'text-accent-success', version: onlineVersion }
   }
   const applyGithubRepoComputedState = (repo) => {
     if (!repo) return repo
@@ -392,7 +404,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const fetchGithubTimeline = async (url) => {
     if (!window.pywebview || !url) return
     const res = await window.pywebview.api.github_get_timeline(url)
-    if (checkResult(res, '获取 Git 仓库模组时间线')) {
+    if (checkResult(res, t('check.workspace.github_timeline', '获取 Git 仓库模组时间线'))) {
       if (github.activeRepo?.repo_url !== url) return
       github.repoTimelines = res.data
     }
@@ -459,29 +471,53 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     startupWorkshopChangeState.changes = Array.isArray(summary?.events) ? summary.events : []
     return startupWorkshopChangeState.changes
   }
-  const STARTUP_EVENT_GROUPS = [
-    ['deleted', '已删除模组', '库存记录还在，但本地文件夹已不存在。确认无误后可清理残留记录。'],
-    ['missing', '缺失模组', '仍在工坊订阅列表中，但本地文件不完整或不存在。订阅内容很多时，Steam 同步队列可能漏掉少量项目导致文件缺失；工坊订阅超过 1000 项时更容易遇到。可重新下载补齐。'],
-    ['changed', '已变更模组', '工坊内容已被作者更新。建议重新扫描，刷新大小、时间和状态。'],
-  ]
+  const STARTUP_EVENT_STATUSES = ['deleted', 'missing', 'update', 'changed']
   const STARTUP_EVENT_FILTER_MAP = {
     deleted: 'deleted',
     missing: 'missing',
     changed: 'change',
+    update: 'update',
   }
   const formatStartupEventNames = (changes = [], status = '', limit = 8) => {
     const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.status === status)
-    const shown = targets.slice(0, limit).map(item => `· ${item.name}`).join('\n')
-    const more = targets.length > limit ? `\n等 ${targets.length} 个模组。` : ''
+    const shown = targets.slice(0, limit).map((item) => {
+      const workshopId = normalizeWorkshopId(item?.workshopId)
+      return `· ${item?.name || workshopId || t('common.entity.unknown_mod', '未知模组')}`
+    }).join('\n')
+    const more = targets.length > limit ? t('ui.workspace.startup.more_items', '\n等 {count} 个模组。', { count: targets.length }) : ''
     return shown ? `${shown}${more}` : ''
   }
   const formatStartupWorkshopChangeNames = (changes = [], limit = 8) => formatStartupEventNames(changes, 'changed', limit)
+  const getStartupEventGroupConfig = (status = '') => {
+    if (status === 'deleted') return {
+      id: 'deleted',
+      title: t('ui.workspace.startup.group.deleted.title', '已删除模组'),
+      description: t('ui.workspace.startup.group.deleted.description', '库存记录还在，但本地文件夹已不存在。确认无误后可清理残留记录。')
+    }
+    if (status === 'missing') return {
+      id: 'missing',
+      title: t('ui.workspace.startup.group.missing.title', '缺失模组'),
+      description: t('ui.workspace.startup.group.missing.description', '仍在工坊订阅列表中，但本地文件不完整或不存在。订阅内容很多时，Steam 同步队列可能漏掉少量项目导致文件缺失；工坊订阅超过 1000 项时更容易遇到。可重新下载补齐。')
+    }
+    if (status === 'changed') return {
+      id: 'changed',
+      title: t('ui.workspace.startup.group.changed.title', '已变更模组'),
+      description: t('ui.workspace.startup.group.changed.description', '工坊内容已被作者更新。建议重新扫描，刷新大小、时间和状态。')
+    }
+    if (status === 'update') return {
+      id: 'update',
+      title: t('ui.workspace.startup.group.update.title', '可更新模组'),
+      description: t('ui.workspace.startup.group.update.description', 'Steam 已检测到这些工坊项有新版本。可请求 Steam 重新下载或校验，让本地内容更新到最新版本。')
+    }
+    return null
+  }
   const formatStartupInventorySummary = (changes = [], beforeScan = false) => {
-    const prefix = beforeScan ? '检测到库存可能有变化。' : '库存检测完成。'
-    const counts = STARTUP_EVENT_GROUPS
-      .map(([status, title]) => {
+    const prefix = beforeScan ? t('ui.workspace.startup.summary.before_scan', '检测到库存可能有变化。') : t('ui.workspace.startup.summary.after_scan', '库存检测完成。')
+    const counts = STARTUP_EVENT_STATUSES
+      .map((status) => {
+        const title = getStartupEventGroupConfig(status)?.title || status
         const count = (Array.isArray(changes) ? changes : []).filter(item => item?.status === status).length
-        return count ? `${title} ${count} 项` : ''
+        return count ? t('ui.workspace.startup.summary.group_count', '{title} {count} 项', { title, count }) : ''
       })
       .filter(Boolean)
     return counts.length ? `${prefix}\n${counts.join('，')}。` : prefix
@@ -490,30 +526,34 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     .filter(item => item?.status === 'missing')
     .map(item => normalizeWorkshopId(item?.workshopId))
     .filter(Boolean))]
-  const getStartupEventGroupConfig = (status = '') => STARTUP_EVENT_GROUPS.find(([key]) => key === status)
-  const getStartupEventGroupLabel = (status = '') => getStartupEventGroupConfig(status)?.[1] || '库存状态'
+  const resolveStartupUpdateWorkshopIds = (changes = []) => [...new Set((Array.isArray(changes) ? changes : [])
+    .filter(item => item?.status === 'update')
+    .map(item => normalizeWorkshopId(item?.workshopId))
+    .filter(Boolean))]
+  const getStartupEventGroupLabel = (status = '') => getStartupEventGroupConfig(status)?.title || t('ui.workspace.startup.group.default', '库存状态')
   const buildStartupInventoryDialogItems = (changes = []) => (Array.isArray(changes) ? changes : []).map((item, index) => {
     const workshopId = normalizeWorkshopId(item?.workshopId)
     const status = String(item?.status || '').trim()
     return {
       id: `${status}:${item?.pathHash || workshopId || index}`,
-      title: item?.name || workshopId || '未知模组',
-      description: item?.path || (workshopId ? `Workshop ID: ${workshopId}` : ''),
-      meta: [getStartupEventGroupLabel(status), workshopId ? `Workshop ID: ${workshopId}` : ''].filter(Boolean),
+      title: item?.name || workshopId || t('common.entity.unknown_mod', '未知模组'),
+      description: item?.path || (workshopId ? t('common.field.workshop_id_prefix', '工坊 ID：{value}', { value: workshopId }) : ''),
+      meta: [getStartupEventGroupLabel(status), workshopId ? t('common.field.workshop_id_prefix', '工坊 ID：{value}', { value: workshopId }) : ''].filter(Boolean),
       status,
       workshopId,
       raw: item,
     }
   })
-  const buildStartupInventoryDialogGroups = (items = []) => STARTUP_EVENT_GROUPS
-    .map(([status, title, description]) => {
+  const buildStartupInventoryDialogGroups = (items = []) => STARTUP_EVENT_STATUSES
+    .map((status) => {
+      const { title, description } = getStartupEventGroupConfig(status) || {}
       const groupItems = items.filter(item => item?.status === status)
       return groupItems.length ? { id: status, title, description, items: groupItems } : null
     })
     .filter(Boolean)
   const resolveStartupInventoryFilterState = (changes = []) => {
     const statuses = new Set((Array.isArray(changes) ? changes : []).map(item => item?.status).filter(Boolean))
-    const status = STARTUP_EVENT_GROUPS.find(([key]) => statuses.has(key))?.[0]
+    const status = STARTUP_EVENT_STATUSES.find(key => statuses.has(key))
     return STARTUP_EVENT_FILTER_MAP[status] || 'default'
   }
   const resolveStartupWorkshopChangePathHashes = (changes = []) => {
@@ -558,6 +598,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     item.pathHash || '',
     normalizeSizeRefreshPathKey(item.path),
     item.downloadTime || 0,
+    item.latestTime || 0,
+    item.remoteManifest || '',
   ].join('|')
   const loadStartupPromptAck = () => {
     try {
@@ -578,7 +620,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
   const getPromptableStartupEvents = (changes = []) => {
     const targets = (Array.isArray(changes) ? changes : []).filter(item => item?.status)
-    if (!appStore.settings?.startup_inventory_prompt_new_only) return targets
+    if (!appStore.settings?.startup_inventory_first_seen_mod_changes) return targets
     const ack = loadStartupPromptAck()
     return targets.filter(item => !ack.has(getStartupEventFingerprint(item)))
   }
@@ -591,18 +633,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     if (options.confirm !== false) {
       const check = await confirmStore.confirmAction(
-        '清理已删除记录',
-        `确定要清理这些已删除/失效的库存记录吗？（${deletedHashes.length} 项）\n这不会删除任何文件，也不会清理用户标签、笔记和分组。`,
+        t('dialog.workspace.cleanup_deleted.title', '清理已删除记录'),
+        t('dialog.workspace.cleanup_deleted.message', '确定要清理这些已删除/失效的库存记录吗？（{count} 项）\n这不会删除任何文件，也不会清理用户标签、笔记和分组。', { count: deletedHashes.length }),
         { type: 'warning' }
       )
       if (!check) return false
     }
 
     const res = await window.pywebview.api.mods_delete(deletedHashes, false, false)
-    if (!checkResult(res, '清理已删除记录')) return false
-    toast.success(`已清理 ${res.data?.success_count || deletedHashes.length} 条已删除记录`)
+    if (!checkResult(res, t('check.workspace.cleanup_deleted', '清理已删除记录'))) return false
+    toast.success(t('toast.workspace.cleanup_deleted_done', '已清理 {count} 条已删除记录', { count: res.data?.success_count || deletedHashes.length }))
     await fetchLibrariesMods()
-    await appStore.refreshModCoreData('清理库存记录后同步模组数据', {
+    await appStore.refreshModCoreData(t('messages.app.action.sync_after_inventory_cleanup', '清理库存记录后同步模组数据'), {
       preserveListState: true,
       refreshRules: false,
       refreshBackups: false,
@@ -616,11 +658,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       group.items = group.items.filter(item => !ids.has(item.id))
     })
     startupInventoryDialog.groups = startupInventoryDialog.groups.filter(group => group.items.length > 0)
+    startupInventoryDialog.targets = startupInventoryDialog.groups
+      .flatMap(group => group.items.map(item => item?.raw).filter(Boolean))
     if (startupInventoryDialog.groups.length === 0) closeStartupInventoryDialog()
   }
-  const closeStartupInventoryDialog = () => {
+  const closeStartupInventoryDialog = (options = {}) => {
     startupInventoryDialog.visible = false
-    saveStartupPromptAck(startupInventoryDialog.targets)
+    if (options.saveAck !== false) {
+      const ackItems = Array.isArray(options.ackItems) ? options.ackItems : startupInventoryDialog.targets
+      saveStartupPromptAck(ackItems)
+    }
     if (typeof startupInventoryDialog.resolve === 'function') {
       startupInventoryDialog.resolve(true)
       startupInventoryDialog.resolve = null
@@ -635,18 +682,29 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     startupInventoryDialog.pendingActions = [...startupInventoryDialog.pendingActions, pendingKey]
     try {
       let ok = false
+      const steamDownloadOptions = { highPriority: true, waitSeconds: 30, waitForCompletion: options.closeAfterSubmit ? false : undefined }
       if (actionId === 'download_missing') {
         const workshopIds = resolveStartupMissingWorkshopIds(targets)
         if (!workshopIds.length) {
-          toast.warning('没有可下载的工坊缺失项')
+          toast.warning(t('toast.workspace.no_missing_workshop_downloads', '没有可下载的工坊缺失项'))
           return false
         }
-        ok = await appStore.downloadWorkshopItemsViaSteam(workshopIds, { highPriority: true, waitSeconds: 30 })
+        ok = await appStore.downloadWorkshopItemsViaSteam(workshopIds, steamDownloadOptions)
+      } else if (actionId === 'download_update') {
+        const workshopIds = resolveStartupUpdateWorkshopIds(targets)
+        if (!workshopIds.length) {
+          toast.warning(t('toast.workspace.no_update_workshop_downloads', '没有需要更新的工坊项'))
+          return false
+        }
+        ok = await appStore.downloadWorkshopItemsViaSteam(workshopIds, steamDownloadOptions)
       } else if (actionId === 'cleanup_deleted') {
         ok = await cleanupDeletedStartupRecords(targets, { confirm: false })
       }
       if (ok) {
-        const handledIds = (Array.isArray(items) ? items : []).map(item => item?.id).filter(Boolean)
+        const handledItems = Array.isArray(items) ? items : []
+        const handledTargets = handledItems.map(item => item?.raw || item).filter(Boolean)
+        saveStartupPromptAck(handledTargets)
+        const handledIds = handledItems.map(item => item?.id).filter(Boolean)
         removeStartupInventoryDialogItems(handledIds)
       }
       return ok
@@ -664,7 +722,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!targets.length || startupWorkshopChangeState.prompted) return false
     startupWorkshopChangeState.prompted = true
     const items = buildStartupInventoryDialogItems(targets)
-    startupInventoryDialog.title = options?.beforeScan ? '检测到库存状态变化' : '库存状态已刷新'
+    startupInventoryDialog.title = options?.beforeScan ? t('dialog.workspace.startup_inventory.before_scan_title', '检测到库存状态变化') : t('dialog.workspace.startup_inventory.after_scan_title', '库存状态已刷新')
     startupInventoryDialog.message = formatStartupInventorySummary(targets, !!options?.beforeScan)
     startupInventoryDialog.targets = targets
     startupInventoryDialog.groups = buildStartupInventoryDialogGroups(items)
@@ -715,7 +773,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const refreshLifecycleUpdateStates = async () => {
     if (!window.pywebview) return true
     const res = await startupPerfMeasure('workspace.lifecycle_check_updates', () => window.pywebview.api.lifecycle_check_updates())
-    if (checkResult(res, '检查库内模组更新状态')) {
+    if (checkResult(res, t('check.workspace.lifecycle_updates', '检查库内模组更新状态'))) {
       startupPerfMark('workspace.lifecycle_updates_received', { updates: res.data?.updates?.length || 0 })
       applyLifecycleUpdateState(res.data?.updates || [])
       return true
@@ -885,7 +943,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     try {
       // 这个 API 现在只负责去读本地 SQLite 和内存缓存，响应时间应该 < 50ms
       const res = await startupPerfMeasure('workspace.get_all_domains', () => window.pywebview.api.workspace_get_all_domains())
-      if (checkResult(res, '获取所有库数据')) {
+      if (checkResult(res, t('check.workspace.all_libraries', '获取所有库数据'))) {
         // 直接替换数组引用
         librariesMods.local = res.data.local || []
         librariesMods.workshop = res.data.workshop || []
@@ -922,6 +980,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   const normalizeWorkshopQueryValue = (value = '') => String(value ?? '').trim()
+  const WORKSHOP_ID_TOKEN_PATTERN = /^\d{6,20}$/
+  const normalizeWorkshopIdForLookup = (value = '') => {
+    const workshopId = normalizeWorkshopId(extractWorkshopId(value) || value)
+    return WORKSHOP_ID_TOKEN_PATTERN.test(workshopId) ? workshopId : ''
+  }
   const mergeUniqueWorkshopTerms = (...groups) => {
     const seen = new Set()
     return groups.flat().map(normalizeWorkshopQueryValue).filter(value => {
@@ -1022,6 +1085,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       excludedDlcAppids: [],
       dependencyWorkshopIds: [],
       excludedDependencyWorkshopIds: [],
+      workshopIds: [],
+      excludedWorkshopIds: [],
       author: '',
     }
 
@@ -1040,6 +1105,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         ;(token.exclude ? compiled.excludedDlcAppids : compiled.requiredDlcAppids).push(value)
       } else if (token.key === 'dependency') {
         ;(token.exclude ? compiled.excludedDependencyWorkshopIds : compiled.dependencyWorkshopIds).push(value)
+      } else if (token.key === 'workshop_id') {
+        const workshopId = normalizeWorkshopIdForLookup(value)
+        if (workshopId) {
+          ;(token.exclude ? compiled.excludedWorkshopIds : compiled.workshopIds).push(workshopId)
+        }
       } else if (token.key === 'author' && !token.exclude) {
         compiled.author = value
       }
@@ -1054,6 +1124,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       excludedDlcAppids: mergeUniqueWorkshopTerms(compiled.excludedDlcAppids),
       dependencyWorkshopIds: mergeUniqueWorkshopTerms(compiled.dependencyWorkshopIds),
       excludedDependencyWorkshopIds: mergeUniqueWorkshopTerms(compiled.excludedDependencyWorkshopIds),
+      workshopIds: mergeUniqueWorkshopTerms(compiled.workshopIds),
+      excludedWorkshopIds: mergeUniqueWorkshopTerms(compiled.excludedWorkshopIds),
     }
   }
 
@@ -1274,9 +1346,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
   const getTranslationLanguageLabel = (language = '') => {
     const code = normalizeDetailTranslationLanguage(language)
-    if (!code) return '原文'
-    if (code === 'follow_ui') return `跟随界面语言（${getTranslationLanguageLabel(getUiTranslationLanguage())}）`
-    const option = workshopSearch.languageOptions.find(item => item.code === code || item.value === code)
+    if (!code) return t('ui.workspace.translation.original', '原文')
+    if (code === 'follow_ui') return t('ui.workspace.translation.follow_ui_with_language', '跟随界面语言（{language}）', { language: getTranslationLanguageLabel(getUiTranslationLanguage()) })
+    const option = appStore.translationLanguageOptions.find(item => item.code === code || item.value === code)
     return option?.label || code
   }
   const getWorkshopTranslationEntry = (translations = {}, language = '') => {
@@ -1377,7 +1449,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       ...item,
       workshop_id: workshopId,
       title: rawTitle,
-      name: String(item.name || rawTitle || '未知模组').trim(),
+      name: String(item.name || rawTitle || t('common.entity.unknown_mod', '未知模组')).trim(),
       original_title: rawTitle,
       package_id: String(item.package_id || '').trim(),
       author,
@@ -1419,6 +1491,79 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       seenIds.add(workshopId)
       return true
     })
+  }
+
+  const mergeWorkshopSearchResultsWithPatches = (currentItems = [], patchItems = []) => {
+    const mergedItems = mergeWorkshopSearchResults([], currentItems)
+    const indexByWorkshopId = new Map()
+    mergedItems.forEach((item, index) => {
+      const workshopId = String(item?.workshop_id || '').trim()
+      if (workshopId) indexByWorkshopId.set(workshopId, index)
+    })
+    for (const patch of patchItems || []) {
+      const workshopId = String(patch?.workshop_id || '').trim()
+      if (!workshopId) continue
+      const currentIndex = indexByWorkshopId.get(workshopId)
+      if (currentIndex === undefined) {
+        indexByWorkshopId.set(workshopId, mergedItems.length)
+        mergedItems.push(patch)
+      } else {
+        mergedItems[currentIndex] = mergeWorkshopItemPatch(mergedItems[currentIndex], patch)
+      }
+    }
+    return mergedItems
+  }
+
+  const hasWorkshopMainSearchTerms = (compiledTokens = {}) => (
+    !!compiledTokens.query
+    || !!compiledTokens.author
+    || [
+      'requiredTags', 'excludedTags',
+      'requiredDlcAppids', 'excludedDlcAppids',
+      'dependencyWorkshopIds', 'excludedDependencyWorkshopIds',
+    ].some(key => (compiledTokens[key] || []).length > 0)
+  )
+
+  const filterWorkshopSearchResultsByExcludedIds = (items = [], excludedIds = []) => {
+    const excludedIdSet = new Set((excludedIds || []).map(normalizeWorkshopIdForLookup).filter(Boolean))
+    if (!excludedIdSet.size) return items
+    return (items || []).filter(item => !excludedIdSet.has(String(item?.workshop_id || '').trim()))
+  }
+
+  const lookupWorkshopIdsForSearch = async (workshopIds = []) => {
+    const ids = mergeUniqueWorkshopTerms(workshopIds).map(normalizeWorkshopIdForLookup).filter(Boolean)
+    if (!ids.length) return { items: [], missingIds: [], request: null, response: null }
+    if (!workshopSearch.isEnhancedMode) {
+      const request = { api: 'workshop_preheat_public_details', args: [ids, true] }
+      const response = await window.pywebview.api.workshop_preheat_public_details(...request.args)
+      if (!checkResult(response, t('check.workspace.workshop_id_lookup', '工坊 ID 查询'))) {
+        return { items: [], missingIds: [], request, response }
+      }
+      const items = (response.data?.items || []).map(normalizeWorkshopSearchItem)
+      const missingIds = Array.isArray(response.data?.missing_ids)
+        ? response.data.missing_ids.map(normalizeWorkshopIdForLookup).filter(Boolean)
+        : ids.filter(id => !items.some(item => item.workshop_id === id))
+      if (missingIds.length) {
+        toast.warning(t('toast.workspace.workshop_id_lookup_missing', '未找到工坊 ID：{ids}', { ids: missingIds.join(', ') }))
+      }
+      return { items, missingIds, request, response }
+    }
+
+    const request = { api: 'workshop_get_enhanced_details', args: ids.map(id => [id, null]) }
+    const responses = await Promise.all(ids.map(id => window.pywebview.api.workshop_get_enhanced_details(id, null)))
+    const items = []
+    const missingIds = []
+    responses.forEach((response, index) => {
+      if (checkResult(response, t('check.workspace.workshop_id_lookup', '工坊 ID 查询'), false, { silent: true }) && response.data) {
+        items.push(normalizeWorkshopSearchItem(response.data))
+      } else {
+        missingIds.push(ids[index])
+      }
+    })
+    if (missingIds.length) {
+      toast.warning(t('toast.workspace.workshop_id_lookup_missing', '未找到工坊 ID：{ids}', { ids: missingIds.join(', ') }))
+    }
+    return { items, missingIds, request, response: responses }
   }
 
   const findWorkshopListItem = (workshopId) => {
@@ -1484,9 +1629,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   })
 
   const getWorkshopRelationLabel = (kind) => ({
-    dependencies: '依赖项目',
-    dependents: '生态关联',
-    same_author: '同作者作品',
+    dependencies: t('ui.workspace.workshop.relation.dependencies', '依赖项目'),
+    dependents: t('ui.workspace.workshop.relation.dependents', '生态关联'),
+    same_author: t('ui.workspace.workshop.relation.same_author', '同作者作品'),
   }[kind] || '')
 
   const getWorkshopTransientListTitle = (kind, sourceItem = {}) => {
@@ -1496,10 +1641,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const authorName = String(
         sourceItem.author || sourceItem.author_profile?.name || workshopSearch.detailData?.author || workshopSearch.detailData?.author_profile?.name || ''
       ).trim()
-      return `${kindLabel}: ${authorName || '未知作者'}`
+      return t('ui.workspace.workshop.relation.title_with_author', '{kind}: {author}', { kind: kindLabel, author: authorName || t('ui.workspace.common.unknown_author', '未知作者') })
     }
     const title = String(sourceItem.title || sourceItem.name || workshopSearch.detailData?.title || sourceItem.workshop_id || workshopSearch.selectedId || '').trim()
-    return `${kindLabel}: ${title}`
+    return t('ui.workspace.workshop.relation.title_with_item', '{kind}: {title}', { kind: kindLabel, title })
   }
 
   const mergeAuthorProfilesIntoWorkshopItems = (items = [], authorMap = {}) => (
@@ -1525,7 +1670,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     )]
     if (!authorIds.length) return {}
     const res = await window.pywebview.api.workshop_get_author_profiles(authorIds)
-    return checkResult(res, '获取作者信息', false, { silent: true }) ? (res.data || {}) : {}
+    return checkResult(res, t('check.workspace.workshop_author_profiles', '获取作者信息'), false, { silent: true }) ? (res.data || {}) : {}
   }
 
   const syncWorkshopRelatedAuthorProfiles = async (workshopId) => {
@@ -1560,7 +1705,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const relationJobs = [
       {
         key: 'dependencies',
-        label: currentDetail.item_type === 'collection' ? '合集子项' : getWorkshopRelationLabel('dependencies'),
+        label: currentDetail.item_type === 'collection' ? t('ui.workspace.workshop.relation.collection_children', '合集子项') : getWorkshopRelationLabel('dependencies'),
         run: () => isEnhancedMode
           ? window.pywebview.api.workshop_get_dependencies_enhanced(workshopId, currentDetail)
           : window.pywebview.api.workshop_get_dependencies(workshopId),
@@ -1590,15 +1735,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       try {
         const res = await job.run()
         if (workshopSearch.selectedId !== workshopId) return
-        if (checkResult(res, `获取${job.label}`, false, { silent: true })) {
+        if (checkResult(res, t('check.workspace.workshop_relation', '获取{label}', { label: job.label }), false, { silent: true })) {
           applyWorkshopRelatedItems(job.key, res.data || {})
         } else {
-          workshopSearch.relatedErrors[job.key] = toUserMessage(res?.message, `${job.label}加载失败。请检查网络连接、Steam 服务状态或稍后重试。`)
+          workshopSearch.relatedErrors[job.key] = toUserMessage(res, t('toast.workspace.workshop_relation_failed', '{label}加载失败。请检查网络连接、Steam 服务状态或稍后重试。', { label: job.label }))
         }
       } catch (error) {
         if (workshopSearch.selectedId === workshopId) {
           console.warn(`获取${job.label}失败:`, error)
-          workshopSearch.relatedErrors[job.key] = toUserMessage(error?.message || error, `${job.label}加载失败。请检查网络连接、Steam 服务状态或稍后重试。`)
+          workshopSearch.relatedErrors[job.key] = toUserMessage(error, t('toast.workspace.workshop_relation_failed', '{label}加载失败。请检查网络连接、Steam 服务状态或稍后重试。', { label: job.label }))
         }
       } finally {
         if (workshopSearch.selectedId === workshopId) {
@@ -1729,6 +1874,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         await loadSteamLanguageOptions()
       }
       const filters = buildWorkshopSearchFilters(compiledTokens)
+      const lookupIds = !isAppend ? compiledTokens.workshopIds : []
+      const shouldLookupIds = lookupIds.length > 0
+      const shouldRunMainSearch = isAppend || !shouldLookupIds || hasWorkshopMainSearchTerms(compiledTokens) || !!normalizeWorkshopQueryValue(queryStr)
       // 主搜索的请求层分界：普通模式不读 API Key，只查缓存库；增强模式才调用 QueryFiles。
       const request = isEnhancedMode
         ? {
@@ -1739,38 +1887,67 @@ export const useWorkspaceStore = defineStore('workspace', () => {
             api: 'workshop_search',
             args: [normalizedQuery, workshopSearch.page, filters],
           }
-      const res = isEnhancedMode
-        ? await window.pywebview.api.workshop_search_enhanced(...request.args)
-        : await window.pywebview.api.workshop_search(...request.args)
-      if (checkResult(res, '工坊检索')) {
-        const newItems = (res.data.items || []).map(normalizeWorkshopSearchItem)
-        if (isAppend) {
-          workshopSearch.results = mergeWorkshopSearchResults(workshopSearch.results, newItems)
-        } else {
-          workshopSearch.results = mergeWorkshopSearchResults([], newItems)
-          workshopSearch.total = res.data.total
+      let res = null
+      let newItems = []
+      if (shouldRunMainSearch) {
+        res = isEnhancedMode
+          ? await window.pywebview.api.workshop_search_enhanced(...request.args)
+          : await window.pywebview.api.workshop_search(...request.args)
+        if (checkResult(res, t('check.workspace.workshop_search', '工坊检索'))) {
+          newItems = (res.data.items || []).map(normalizeWorkshopSearchItem)
+          if (isAppend) {
+            workshopSearch.results = mergeWorkshopSearchResults(workshopSearch.results, newItems)
+          } else {
+            workshopSearch.results = mergeWorkshopSearchResults([], newItems)
+            workshopSearch.total = Number(res.data.total || newItems.length)
+          }
+          if (isEnhancedMode) {
+            workshopSearch.cursor = String(res.data.cursor || workshopSearch.cursor || '*')
+            workshopSearch.nextCursor = String(res.data.next_cursor || '')
+            workshopSearch.hasMore = !!res.data.has_more
+          } else {
+            workshopSearch.hasMore = workshopSearch.results.length < Number(res.data.total || 0)
+          }
         }
-        if (isEnhancedMode) {
-          workshopSearch.cursor = String(res.data.cursor || workshopSearch.cursor || '*')
-          workshopSearch.nextCursor = String(res.data.next_cursor || '')
-          workshopSearch.hasMore = !!res.data.has_more
-        } else {
-          workshopSearch.hasMore = workshopSearch.results.length < res.data.total
-        }
-        logWorkshopSearchDebug({
-          isEnhancedMode,
-          isAppend,
-          request,
-          response: res,
-          items: newItems,
-        })
       } else {
+        workshopSearch.total = 0
+        workshopSearch.hasMore = false
+        workshopSearch.cursor = '*'
+        workshopSearch.nextCursor = ''
+      }
+
+      let idLookup = { items: [], missingIds: [], request: null, response: null }
+      if (shouldLookupIds) {
+        const beforeCount = workshopSearch.results.length
+        idLookup = await lookupWorkshopIdsForSearch(lookupIds)
+        workshopSearch.results = mergeWorkshopSearchResultsWithPatches(workshopSearch.results, idLookup.items)
+        const addedCount = Math.max(workshopSearch.results.length - beforeCount, 0)
+        workshopSearch.total = shouldRunMainSearch
+          ? Number(workshopSearch.total || 0) + addedCount
+          : workshopSearch.results.length
+        if (!shouldRunMainSearch || !isEnhancedMode) {
+          workshopSearch.hasMore = shouldRunMainSearch
+            ? workshopSearch.results.length < Number(workshopSearch.total || 0)
+            : false
+        }
+      }
+
+      if (compiledTokens.excludedWorkshopIds.length) {
+        const beforeCount = workshopSearch.results.length
+        workshopSearch.results = filterWorkshopSearchResultsByExcludedIds(workshopSearch.results, compiledTokens.excludedWorkshopIds)
+        const removedCount = beforeCount - workshopSearch.results.length
+        if (removedCount > 0 && !isAppend) {
+          workshopSearch.total = Math.max(0, Number(workshopSearch.total || 0) - removedCount)
+        }
+      }
+
+      if (shouldRunMainSearch || shouldLookupIds) {
         logWorkshopSearchDebug({
           isEnhancedMode,
           isAppend,
-          request,
+          request: shouldLookupIds ? { main: shouldRunMainSearch ? request : null, idLookup: idLookup.request } : request,
           response: res,
-          items: [],
+          items: shouldLookupIds ? workshopSearch.results : newItems,
         })
       }
     } finally {
@@ -1784,7 +1961,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (workshopSearch.isModeReady && workshopSearch.isEnhancedMode === isEnhancedMode) return true
     // 增强模式依赖用户本地保存的 Key，没有 Key 时直接阻止切换，避免进入空状态。
     if (isEnhancedMode && !isEnhancedWorkshopSearchEnabled()) {
-      toast.warning('请先在设置中启用工坊增强信息并填写 Steam Web API Key')
+      toast.warning(t('toast.workspace.enable_workshop_enhanced_first', '请先在设置中启用工坊增强信息并填写 Steam Web API Key'))
       return false
     }
     if (!options.auto) workshopSearchModeTouched.value = true
@@ -1844,8 +2021,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const loadSteamLanguageOptions = async () => {
     if (!window.pywebview || workshopSearch.isLanguageOptionsLoaded) return
     const res = await window.pywebview.api.workshop_get_language_options()
-    if (checkResult(res, '获取 Steam 语言列表')) {
-      workshopSearch.languageOptions = Array.isArray(res.data) && res.data.length ? res.data : workshopSearch.languageOptions
+    if (checkResult(res, t('check.workspace.steam_languages', '获取 Steam 语言列表'))) {
+      workshopSearch.languageOptions = Array.isArray(res.data) && res.data.length
+        ? res.data.map(item => ({ ...item, label: t(item?.label_key || '', item?.default_label || item?.label || item?.name || item?.code || item?.value || '') }))
+        : workshopSearch.languageOptions
       workshopSearch.isLanguageOptionsLoaded = true
     }
   }
@@ -1857,7 +2036,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const loadWorkshopDlcOptions = async () => {
     if (!window.pywebview || workshopSearch.isDlcOptionsLoaded) return
     const res = await window.pywebview.api.workshop_get_dlc_options()
-    if (checkResult(res, '获取 DLC 选项')) {
+    if (checkResult(res, t('check.workspace.dlc_options', '获取 DLC 选项'))) {
       workshopSearch.dlcOptions = Array.isArray(res.data) ? res.data : []
       workshopSearch.isDlcOptionsLoaded = true
     }
@@ -1891,7 +2070,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         !!force,
         provider,
       )
-      if (!checkResult(res, '翻译工坊说明')) return null
+      if (!checkResult(res, t('check.workspace.translate_workshop_detail', '翻译工坊说明'))) return null
       const payload = res.data || {}
       const responseWorkshopId = String(payload.workshop_id || requestWorkshopId).trim()
       if (responseWorkshopId !== requestWorkshopId) return null
@@ -1908,7 +2087,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
       workshopSearch.detailTranslationLanguage = normalizeDetailTranslationLanguage(displayLanguage === undefined ? language || getDefaultTranslationSelection() : displayLanguage)
       const normalized = mergeWorkshopDetailData(patch)
-      toast.success(force ? '已重新翻译说明' : '已翻译说明', { timeout: 1500 })
+      toast.success(force ? t('toast.workspace.workshop_retranslated', '已重新翻译说明') : t('toast.workspace.workshop_translated', '已翻译说明'), { timeout: 1500 })
       return normalized
     } finally {
       delete workshopSearch.translatingByWorkshopId[requestWorkshopId]
@@ -1926,7 +2105,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       requestWorkshopId,
       targetLanguage,
     )
-    if (!checkResult(res, '清理工坊翻译')) return null
+    if (!checkResult(res, t('check.workspace.clear_workshop_translation', '清理工坊翻译'))) return null
     const payload = res.data || {}
     const responseWorkshopId = String(payload.workshop_id || requestWorkshopId).trim()
     if (responseWorkshopId !== requestWorkshopId) return null
@@ -1942,7 +2121,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!getWorkshopTranslationEntry(normalized.translations, targetLanguage)) {
       workshopSearch.detailTranslationLanguage = ''
     }
-    toast.success('已清理翻译', { timeout: 1500 })
+    toast.success(t('toast.workspace.workshop_translation_cleared', '已清理翻译'), { timeout: 1500 })
     return normalized
   }
 
@@ -1986,7 +2165,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         ? await window.pywebview.api.workshop_get_enhanced_details(workshop_id, currentDetail || null)
         : await window.pywebview.api.workshop_get_details(workshop_id)
       if (workshopSearch.selectedId !== workshop_id) return
-      if (checkResult(res, '获取云端详情')) {
+      if (checkResult(res, t('check.workspace.workshop_details', '获取云端详情'))) {
         mergeWorkshopDetailData(res.data)
         const displayLanguage = normalizeDetailTranslationLanguage(workshopSearch.detailTranslationLanguage)
         const targetLanguage = getResolvedTranslationLanguage(displayLanguage)
@@ -2062,7 +2241,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       } else {
         return false
       }
-      if (checkResult(res, `加载${kindLabel}`)) {
+      if (checkResult(res, t('check.workspace.load_workshop_relation', '加载{label}', { label: kindLabel }))) {
         const items = (res.data.items || []).map(normalizeWorkshopSearchItem)
         let nextItems = isAppend ? mergeWorkshopSearchResults(state.items, items) : mergeWorkshopSearchResults([], items)
         if (isEnhancedMode) {
@@ -2130,7 +2309,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     timeline.logs = []
     try {
       const res = await window.pywebview.api.workspace_get_mod_timeline(workshopId, is_steamcmd)
-      if (checkResult(res, '获取模组变更时间线')) {
+      if (checkResult(res, t('check.workspace.mod_timeline', '获取模组变更时间线'))) {
         timeline.logs = res.data
       }
     } finally {
@@ -2145,11 +2324,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       repo = findGithubRepoForTimelineTarget(target)
     }
     if (!repo) {
-      toast.warning('未找到该订阅')
+      toast.warning(t('toast.workspace.github_subscription_not_found', '未找到该订阅'))
       return
     }
     if (!repo.repo_url) {
-      toast.warning('订阅记录缺少仓库地址，无法获取时间线')
+      toast.warning(t('toast.workspace.github_subscription_missing_url', '订阅记录缺少仓库地址，无法获取时间线'))
       return
     }
     timeline.isOpen = true
@@ -2159,7 +2338,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     timeline.logs = []
     try {
       const res = await window.pywebview.api.github_get_timeline(repo.repo_url)
-      if (checkResult(res, '获取 Git 仓库模组时间线')) {
+      if (checkResult(res, t('check.workspace.github_timeline', '获取 Git 仓库模组时间线'))) {
         timeline.logs = res.data
       }
     } finally {
@@ -2176,7 +2355,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const activeRepoUrl = github.activeRepo?.repo_url || ''
       // 瞬间返回带缓存的数据
       const res = await window.pywebview.api.github_get_subscribed()
-      if (checkResult(res, '获取 Git 仓库订阅')) {
+      if (checkResult(res, t('check.workspace.github_subscriptions', '获取 Git 仓库订阅'))) {
         github.subscribedRepos = (res.data || []).map(repo => applyGithubRepoComputedState(repo))
         github.activeRepo = activeRepoUrl
           ? github.subscribedRepos.find(repo => repo.repo_url === activeRepoUrl) || null
@@ -2202,7 +2381,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     github.catalogError = ''
     try {
       const res = await window.pywebview.api.github_get_provider_catalog(url, !!force)
-      if (checkResult(res, '获取 Git 仓库推荐列表')) {
+      if (checkResult(res, t('check.workspace.github_catalog', '获取 Git 仓库推荐列表'))) {
         github.recommendedRepos = Array.isArray(res.data?.items) ? res.data.items : []
         github.catalogMeta = {
           source_url: res.data?.source_url || '',
@@ -2215,10 +2394,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         github.catalogLoaded = true
         return true
       }
-      github.catalogError = toUserMessage(res?.message, '获取推荐列表失败。请检查网络连接、代理设置和推荐源地址。')
+      github.catalogError = toUserMessage(res, t('toast.workspace.github_catalog_failed', '获取推荐列表失败。请检查网络连接、代理设置和推荐源地址。'))
     } catch (error) {
       console.warn('获取 Git 推荐列表失败:', error)
-      github.catalogError = toUserMessage(error?.message || error, '获取推荐列表失败。请检查网络连接、代理设置和推荐源地址。')
+      github.catalogError = toUserMessage(error, t('toast.workspace.github_catalog_failed', '获取推荐列表失败。请检查网络连接、代理设置和推荐源地址。'))
       throw error
     } finally {
       github.isCatalogLoading = false
@@ -2234,7 +2413,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     try {
       // 假设你后端新增了获取列表的 API
       const res = await window.pywebview.api.collection_get_all()
-      if (checkResult(res, '获取合集记录')) {
+      if (checkResult(res, t('check.workspace.collections', '获取合集记录'))) {
         collections.savedList = res.data || []
         loadState.collectionsLoaded = true
         return true
@@ -2252,19 +2431,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const match = inputUrl.match(/id=(\d+)/) || inputUrl.match(/(\d+)/)
     const collId = match ? match[1] : inputUrl.trim()
     if (!/^\d+$/.test(collId)) {
-      toast.error("合集 ID 或链接无效，请输入纯数字 ID，或粘贴包含 id=xxx 的 Steam 合集链接。")
+      toast.error(t('toast.workspace.collection_invalid_id', '合集 ID 或链接无效，请输入纯数字 ID，或粘贴包含 id=xxx 的 Steam 合集链接。'))
       return false
     }
     if (collections.savedList.some(c => c.id === collId)) {
-      toast.warning("该合集已在你的记录中。")
+      toast.warning(t('toast.workspace.collection_duplicate', '该合集已在你的记录中。'))
       return false
     }
     collections.isParsing = true
-    toast.info("正在解析并接入合集数据。")
+    toast.info(t('toast.workspace.collection_parsing', '正在解析并接入合集数据。'))
     try {
       // 调用专门的同步接口
       const res = await window.pywebview.api.collection_add(collId)
-      if (checkResult(res, '解析并接入合集',true)) {
+      if (checkResult(res, t('check.workspace.collection_add', '解析并接入合集'), true)) {
         collections.savedList.unshift(res.data)
         // 立刻自动选中
         await selectCollection(res.data)
@@ -2281,17 +2460,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.collection_remove(collId)
-      if (checkResult(res, '移除合集')) {
+      if (checkResult(res, t('check.workspace.collection_remove', '移除合集'))) {
         collections.savedList = collections.savedList.filter(c => c.id !== collId)
         if (collections.activeId === collId) {
           collections.activeId = null
           collections.activeDetails = null
           collections.activeChildren = []
         }
-        toast.success("已从记录中移除该合集")
+        toast.success(t('toast.workspace.collection_removed', '已从记录中移除该合集'))
       }
     } catch (e) {
-      toast.error(toUserMessage(e?.message || e, '移除合集失败。可能是后端服务暂时不可用或本地记录无法写入，详细原因已写入系统日志。'))
+      showUserErrorToast(e, t('toast.workspace.collection_remove_failed', '移除合集失败。可能是后端服务暂时不可用或本地记录无法写入。'))
     }
   }
 
@@ -2320,7 +2499,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
     } catch (e) {
       collections.isChildrenLoading = false
-      toast.error(toUserMessage(e?.message || e, '加载合集失败。可能是网络连接、Steam 服务或本地缓存暂时不可用，请稍后重试。'))
+      showUserErrorToast(e, t('toast.workspace.collection_load_failed', '加载合集失败。可能是网络连接、Steam 服务或本地缓存暂时不可用，请稍后重试。'))
     }
     // 如果没有缓存，loading 继续保持 true，等待 EventBus 触发
   }
@@ -2353,7 +2532,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const normalizedPackageIds = dedupeNormalizedPackageIds(packageIds)
     if (normalizedPackageIds.length === 0) return {}
     const res = await window.pywebview.api.get_workshop_details_by_package_ids(normalizedPackageIds)
-    if (checkResult(res, '根据包名获取工坊详情')) {
+    if (checkResult(res, t('check.workspace.workshop_details_by_package', '根据包名获取工坊详情'))) {
       return Object.fromEntries(
         Object.entries(res.data || {})
           .map(([packageId, detail]) => [normalizePackageId(packageId), normalizeWorkshopLookupDisplay(detail)])
@@ -2368,7 +2547,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const normalizedPackageIds = dedupeNormalizedPackageIds(packageIds)
     if (normalizedPackageIds.length === 0) return {}
     const res = await window.pywebview.api.get_install_sources_by_package_ids(normalizedPackageIds)
-    if (checkResult(res, '根据包名获取安装来源')) {
+    if (checkResult(res, t('check.workspace.install_sources_by_package', '根据包名获取安装来源'))) {
       return Object.fromEntries(
         Object.entries(res.data || {}).map(([packageId, payload]) => {
           const normalizedPackageId = normalizePackageId(packageId)
@@ -2405,15 +2584,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const modTransfer = async (path_hashs, target_store, mode) => {
     const check = await confirmStore.confirmAction(
-      '确认转移',
-      (`确定要将选中的模组 ${mode === 'move' ? '移动' : '复制'} 到 [${SOURCE_TYPE_MAP[target_store]}] 库吗？`+ (target_store=='workshop'?'\n注意：转移到创意工坊目录后可能会被Steam再次改变':'')),
+      t('dialog.workspace.transfer.title', '确认转移'),
+      t('dialog.workspace.transfer.message', '确定要将选中的模组 {action} 到 [{target}] 库吗？{warning}', {
+        action: mode === 'move' ? t('common.action.move', '移动') : t('common.action.copy', '复制'),
+        target: getSourceTypeLabel(target_store),
+        warning: target_store === 'workshop' ? t('dialog.workspace.transfer.workshop_warning', '\n注意：转移到创意工坊目录后可能会被 Steam 再次改变') : '',
+      }),
       { type: 'info' }
     )
     if(check) {
       appStore.isLoading = true
       try {
         const res = await window.pywebview.api.workspace_transfer_mods(path_hashs, target_store, mode)
-        if(checkResult(res, "库间转移")) {
+        if(checkResult(res, t('check.workspace.transfer_mods', '库间转移'))) {
           await appStore.requestModScan({ preserveListState: true, forceCoreRefresh: true })
         }
       } finally {
@@ -2425,14 +2608,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // 打开Steam创意工坊
   const openSteamWorkshopUrl = (workshop_id, on_steam=true) => {
     if(!workshop_id) return
-    const steamUrl = on_steam ? `steam://url/CommunityFilePage/${workshop_id}` : `https://steamcommunity.com/sharedfiles/filedetails/?id=${workshop_id}`
-    window.open(steamUrl, '_blank')
+    void openWorkshopPage(workshop_id, on_steam)
   }
 
   const searchCollectionsOnline = async (queryStr = '', isAppend = false) => {
     // 合集搜索当前只提供增强模式入口；没有 Key 时不退回普通物品搜索，避免类型语义混淆。
     if (!canUseCollectionOnlineSearch()) {
-      toast.warning('合集搜索需要填写 Steam Web API Key')
+      toast.warning(t('toast.workspace.collection_search_need_key', '合集搜索需要填写 Steam Web API Key'))
       return false
     }
     if (collections.isSearchLoading || collections.isSearchLoadMore) return false
@@ -2464,7 +2646,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const cursor = isAppend ? collections.searchNextCursor || collections.searchCursor || '*' : '*'
       const requestSort = resolveWorkshopSort(collections.searchSort, collectionHasText)
       const res = await window.pywebview.api.workshop_search_collections_enhanced(normalizedQuery, cursor, 50, requestSort, filters)
-      if (checkResult(res, '在线合集搜索')) {
+      if (checkResult(res, t('check.workspace.collection_online_search', '在线合集搜索'))) {
         const items = (res.data.items || []).map(normalizeWorkshopSearchItem)
         collections.searchResults = isAppend ? mergeWorkshopSearchResults(collections.searchResults, items) : items
         collections.searchTotal = res.data.total || 0
@@ -2482,7 +2664,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const activateCollectionSearchView = async () => {
     if (!canUseCollectionOnlineSearch()) {
-      toast.warning('合集搜索需要填写 Steam Web API Key')
+      toast.warning(t('toast.workspace.collection_search_need_key', '合集搜索需要填写 Steam Web API Key'))
       return false
     }
     collections.activeView = 'search'

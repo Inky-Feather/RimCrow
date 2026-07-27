@@ -11,11 +11,20 @@ from unittest.mock import patch
 from PIL import Image
 from webview.util import parse_file_type
 
-from backend.managers.mgr_files import FileManager, LocalAssetHandler
+from backend.managers.mgr_files import FileManager, LocalAssetHandler, PathChecker
+from backend.settings import settings
 from backend.utils.tools import normalize_path_for_storage
 
 
 class TestFileManager(unittest.TestCase):
+    def _write_mod_about(self, mod_path: Path, package_id: str, name: str = "Test Mod"):
+        about_dir = mod_path / "About"
+        about_dir.mkdir(parents=True, exist_ok=True)
+        (about_dir / "About.xml").write_text(
+            f"<ModMetaData><name>{name}</name><packageId>{package_id}</packageId></ModMetaData>",
+            encoding="utf-8",
+        )
+
     def _write_png_with_bad_iccp_crc(self, path):
         buffer = BytesIO()
         Image.new("RGBA", (8, 8), (255, 0, 0, 255)).save(buffer, "PNG")
@@ -120,8 +129,7 @@ class TestFileManager(unittest.TestCase):
             dst = temp_path / "dst"
             src.mkdir()
             dst.mkdir()
-            (src / "About").mkdir()
-            (src / "About" / "About.xml").write_text("<ModMetaData />", encoding="utf-8")
+            self._write_mod_about(src, "test.mod")
             (dst / "old.txt").write_text("old", encoding="utf-8")
 
             real_move = shutil.move
@@ -176,12 +184,306 @@ class TestFileManager(unittest.TestCase):
             complete_payloads = [payload for name, payload in events if name == "localize-complete"]
             self.assertEqual(len(complete_payloads), 1)
             payload = complete_payloads[0]
-            expected_dst = local_root / "_123456_"
+            expected_dst = local_root / "123456"
             expected_source = normalize_path_for_storage(str(src))
             expected_success = normalize_path_for_storage(str(expected_dst))
             self.assertEqual(payload["source_paths"], [expected_source])
             self.assertEqual(payload["success_paths"], [expected_success])
             self.assertEqual(payload["size_check_paths"], [expected_source, expected_success])
+
+    def test_localize_syncs_existing_legacy_underscore_folder_for_same_package(self):
+        class ImmediateThread:
+            def __init__(self, target, *args, **kwargs):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            src = temp_path / "src"
+            local_root = temp_path / "local"
+            legacy_dst = local_root / "_123456_"
+            src.mkdir()
+            local_root.mkdir()
+            self._write_mod_about(src, "test.mod")
+            self._write_mod_about(legacy_dst, "test.mod")
+
+            events = []
+            with patch("backend.managers.mgr_files.threading.Thread", ImmediateThread), \
+                 patch("backend.managers.mgr_files.EventBus.emit", side_effect=lambda name, data=None: events.append((name, data))), \
+                 patch("backend.managers.mgr_files.EventBus.emit_progress"), \
+                 patch("backend.managers.mgr_files.EventBus.resume"):
+                FileManager.localize_workshop_mods([
+                    {
+                        "path": str(src),
+                        "workshop_id": "123456",
+                        "name": "Test Mod",
+                        "package_id": "test.mod",
+                    }
+                ], str(local_root))
+
+            complete_payloads = [payload for name, payload in events if name == "localize-complete"]
+            self.assertEqual(len(complete_payloads), 1)
+            self.assertEqual(complete_payloads[0]["success_paths"], [normalize_path_for_storage(str(legacy_dst))])
+
+    def test_localize_reports_same_folder_different_package_conflict(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            src = temp_path / "src"
+            local_root = temp_path / "local"
+            existing_dst = local_root / "123456"
+            src.mkdir()
+            local_root.mkdir()
+            self._write_mod_about(src, "target.mod")
+            self._write_mod_about(existing_dst, "other.mod")
+
+            result = FileManager.localize_workshop_mods([
+                {
+                    "path": str(src),
+                    "path_hash": "hash-1",
+                    "workshop_id": "123456",
+                    "name": "Target Mod",
+                    "package_id": "target.mod",
+                }
+            ], str(local_root))
+
+            self.assertTrue(result["requires_conflict_action"])
+            self.assertEqual(result["conflicts"][0]["target_folder"], "123456")
+            self.assertEqual(result["conflicts"][0]["package_id"], "target.mod")
+            self.assertEqual(result["conflicts"][0]["existing_package_id"], "other.mod")
+
+    def test_localize_save_as_overwrites_legacy_underscore_folder_for_conflict(self):
+        class ImmediateThread:
+            def __init__(self, target, *args, **kwargs):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            src = temp_path / "src"
+            local_root = temp_path / "local"
+            existing_dst = local_root / "123456"
+            save_as_dst = local_root / "_123456_"
+            src.mkdir()
+            local_root.mkdir()
+            self._write_mod_about(src, "target.mod")
+            self._write_mod_about(existing_dst, "other.mod")
+            self._write_mod_about(save_as_dst, "legacy.other")
+
+            events = []
+            with patch("backend.managers.mgr_files.threading.Thread", ImmediateThread), \
+                 patch("backend.managers.mgr_files.EventBus.emit", side_effect=lambda name, data=None: events.append((name, data))), \
+                 patch("backend.managers.mgr_files.EventBus.emit_progress"), \
+                 patch("backend.managers.mgr_files.EventBus.resume"):
+                FileManager.localize_workshop_mods([
+                    {
+                        "path": str(src),
+                        "workshop_id": "123456",
+                        "name": "Target Mod",
+                        "package_id": "target.mod",
+                    }
+                ], str(local_root), conflict_action="save_as")
+
+            complete_payloads = [payload for name, payload in events if name == "localize-complete"]
+            self.assertEqual(len(complete_payloads), 1)
+            self.assertEqual(complete_payloads[0]["success_paths"], [normalize_path_for_storage(str(save_as_dst))])
+            self.assertIn("<packageId>target.mod</packageId>", (save_as_dst / "About" / "About.xml").read_text(encoding="utf-8"))
+
+    def test_check_steam_path_accepts_macos_steam_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steam_root = Path(temp_dir) / "Steam"
+            steam_exe = steam_root / "Steam.app" / "Contents" / "MacOS" / "steam_osx"
+            steam_exe.parent.mkdir(parents=True, exist_ok=True)
+            steam_exe.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_files.platform.system", return_value="Darwin"):
+                result = PathChecker.check_steam_path(str(steam_root))
+
+            self.assertTrue(result["pass"])
+            self.assertIn("steam_osx", result["msg"])
+            self.assertEqual(result["data"], str(steam_root))
+
+    def test_check_steam_path_accepts_macos_app_bundle(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steam_root = Path(temp_dir) / "Steam"
+            steam_app = steam_root / "Steam.app"
+            steam_exe = steam_app / "Contents" / "MacOS" / "steam_osx"
+            steam_exe.parent.mkdir(parents=True, exist_ok=True)
+            steam_exe.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_files.platform.system", return_value="Darwin"):
+                result = PathChecker.check_steam_path(str(steam_app))
+
+            self.assertTrue(result["pass"])
+            self.assertEqual(result["data"], str(steam_root))
+
+    def test_check_steam_path_accepts_macos_steam_osx(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steam_root = Path(temp_dir) / "Steam"
+            steam_exe = steam_root / "Steam.app" / "Contents" / "MacOS" / "steam_osx"
+            steam_exe.parent.mkdir(parents=True, exist_ok=True)
+            steam_exe.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_files.platform.system", return_value="Darwin"):
+                result = PathChecker.check_steam_path(str(steam_exe))
+
+            self.assertTrue(result["pass"])
+            self.assertEqual(result["data"], str(steam_root))
+
+    def test_check_steamcmd_path_accepts_unix_shell_entry(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steamcmd_root = Path(temp_dir) / "steamcmd"
+            steamcmd_exe = steamcmd_root / "steamcmd.sh"
+            steamcmd_root.mkdir(parents=True, exist_ok=True)
+            steamcmd_exe.write_text("#!/bin/sh\n", encoding="utf-8")
+
+            with patch("backend.managers.mgr_files.platform.system", return_value="Darwin"):
+                result = PathChecker.check_steamcmd_path(str(steamcmd_root))
+
+            self.assertTrue(result["pass"])
+            self.assertIn("steamcmd.sh", result["msg"])
+
+    def test_windows_junction_support_rejects_fat_file_systems(self):
+        with (
+            patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+            patch.object(FileManager, "_get_windows_filesystem_type", return_value="exFAT"),
+        ):
+            self.assertFalse(FileManager._is_junction_supported(r"E:\steamcmd"))
+
+        with (
+            patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+            patch.object(FileManager, "_get_windows_filesystem_type", return_value=""),
+        ):
+            self.assertTrue(FileManager._is_junction_supported(r"E:\steamcmd"))
+
+    def test_sync_managed_links_stops_before_deleting_on_unsupported_filesystem(self):
+        with (
+            patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+            patch.object(FileManager, "_get_windows_filesystem_type", return_value="exFAT"),
+            patch.object(FileManager, "sync_links") as sync_links,
+        ):
+            success, failure_message = FileManager.sync_managed_links(r"E:\Profile\Mods", [])
+
+        self.assertFalse(success)
+        self.assertIn("NTFS", failure_message)
+        sync_links.assert_not_called()
+
+    def test_check_steamcmd_path_warns_when_windows_junction_is_unsupported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steamcmd_root = Path(temp_dir) / "steamcmd"
+            steamcmd_exe = steamcmd_root / "steamcmd.exe"
+            steamcmd_root.mkdir(parents=True)
+            steamcmd_exe.write_text("", encoding="utf-8")
+
+            with (
+                patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+                patch.object(FileManager, "_get_windows_filesystem_type", return_value="exFAT"),
+            ):
+                result = PathChecker.check_steamcmd_path(str(steamcmd_root))
+
+            self.assertTrue(result["pass"])
+            self.assertEqual(result["type"], "warn")
+            self.assertIn("NTFS", result["msg"])
+
+    def test_check_steamcmd_path_checks_download_directory_filesystem(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            steamcmd_root = Path(temp_dir) / "steamcmd"
+            steamcmd_exe = steamcmd_root / "steamcmd.exe"
+            steamcmd_root.mkdir(parents=True)
+            steamcmd_exe.write_text("", encoding="utf-8")
+
+            def filesystem_type(path):
+                return "exFAT" if str(path).endswith(os.path.join("content", "294100")) else "NTFS"
+
+            with (
+                patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+                patch.object(FileManager, "_get_windows_filesystem_type", side_effect=filesystem_type),
+            ):
+                result = PathChecker.check_steamcmd_path(str(steamcmd_root))
+
+            self.assertTrue(result["pass"])
+            self.assertEqual(result["type"], "warn")
+            self.assertIn(str(steamcmd_root / "steamapps" / "workshop" / "content" / "294100"), result["msg"])
+
+    def test_settings_update_warns_when_steamcmd_link_sync_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            original_self_mods = settings.config.self_mods_path
+            original_steamcmd_path = settings.config.steamcmd_path
+            original_steamcmd_mods = settings.config.steamcmd_mods_path
+            custom_mods = str(Path(temp_dir) / "custom-mods")
+            self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods)
+            self.addCleanup(setattr, settings.config, "steamcmd_path", original_steamcmd_path)
+            self.addCleanup(setattr, settings.config, "steamcmd_mods_path", original_steamcmd_mods)
+
+            with (
+                patch("backend.managers.mgr_files.FileManager.sync_steamcmd_root_link", return_value=False),
+                patch.object(settings, "save") as save,
+            ):
+                warnings = settings.update_from_dict({"self_mods_path": custom_mods})
+
+            self.assertIn("steamcmd_junction_sync_failed", warnings)
+            save.assert_called_once()
+
+    def test_sync_steamcmd_root_link_uses_steamcmd_directory_when_default_storage_is_empty(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            default_mods = temp_root / "mods"
+            steamcmd_mods = temp_root / "steamcmd" / "steamapps" / "workshop" / "content" / "294100"
+            original_self_mods = settings.config.self_mods_path
+            original_steamcmd_mods = settings.config.steamcmd_mods_path
+            self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods)
+            self.addCleanup(setattr, settings.config, "steamcmd_mods_path", original_steamcmd_mods)
+            settings.config.self_mods_path = str(default_mods)
+            settings.config.steamcmd_mods_path = str(steamcmd_mods)
+
+            with (
+                patch("backend.managers.mgr_files.MODS_DIR", default_mods),
+                patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+                patch.object(FileManager, "_get_windows_filesystem_type", return_value="FAT32"),
+                patch.object(settings, "save") as save,
+                patch("backend.managers.mgr_files.subprocess.run") as run,
+            ):
+                self.assertTrue(FileManager.sync_steamcmd_root_link())
+
+            self.assertEqual(settings.config.self_mods_path, str(steamcmd_mods))
+            self.assertFalse(default_mods.exists())
+            self.assertTrue(steamcmd_mods.is_dir())
+            save.assert_called_once()
+            run.assert_not_called()
+
+    def test_sync_steamcmd_root_link_does_not_replace_nonempty_or_custom_storage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            default_mods = temp_root / "mods"
+            steamcmd_mods = temp_root / "steamcmd" / "steamapps" / "workshop" / "content" / "294100"
+            original_self_mods = settings.config.self_mods_path
+            original_steamcmd_mods = settings.config.steamcmd_mods_path
+            self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods)
+            self.addCleanup(setattr, settings.config, "steamcmd_mods_path", original_steamcmd_mods)
+
+            for storage, should_create_file in ((default_mods, True), (temp_root / "custom-mods", False)):
+                with self.subTest(storage=storage):
+                    if should_create_file:
+                        storage.mkdir()
+                        (storage / "existing-mod").mkdir()
+                    settings.config.self_mods_path = str(storage)
+                    settings.config.steamcmd_mods_path = str(steamcmd_mods)
+
+                    with (
+                        patch("backend.managers.mgr_files.MODS_DIR", default_mods),
+                        patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
+                        patch.object(FileManager, "_get_windows_filesystem_type", return_value="FAT"),
+                        patch.object(settings, "save") as save,
+                        patch("backend.managers.mgr_files.subprocess.run") as run,
+                    ):
+                        self.assertFalse(FileManager.sync_steamcmd_root_link())
+
+                    self.assertEqual(settings.config.self_mods_path, str(storage))
+                    save.assert_not_called()
+                    run.assert_not_called()
 
 
 if __name__ == "__main__":

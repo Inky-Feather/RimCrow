@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import re
 import time
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any
 from backend.managers.mgr_mod_settings import ModSettingsManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.managers.mgr_steam_api import SteamWebAPI
+from backend.paths.core import path_key
 from backend.settings import DATA_DIR
 from backend.utils.logger import logger
 from backend.utils.tools import normalize_package_id, normalize_workshop_id
@@ -506,10 +508,7 @@ class ModResidueManager:
 
     @staticmethod
     def _path_key(path: Any) -> str:
-        value = str(path or "").strip()
-        if not value:
-            return ""
-        return os.path.normcase(os.path.abspath(value))
+        return path_key(os.path.abspath(str(path or "").strip()) if str(path or "").strip() else "", system_name=platform.system())
 
     @staticmethod
     def _resolve_path_type(path: Any, fallback: Any = "") -> str:

@@ -13,6 +13,8 @@ from enum import Enum
 from typing import Dict, Optional, Callable, Any
 from urllib.parse import urlparse, unquote
 
+from backend.i18n.messages import tr
+from backend.utils.error_contract import classify_exception
 from backend.utils.logger import logger
 from backend.utils.event_bus import EventBus
 from backend.managers.mgr_network import build_retry_session, merge_headers
@@ -36,6 +38,12 @@ class DownloadTask:
     downloaded_size: int = 0
     status: TaskStatus = TaskStatus.PENDING
     error_msg: str = ""
+    user_message: str = ""
+    error_type: str = ""
+    error_code: str = ""
+    error_id: str = ""
+    message_key: str = ""
+    message_params: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=time.time)
     speed: str = "0 B/s"
     # 校验相关
@@ -79,7 +87,7 @@ class DownloadManager:
         # 输出: https://raw.githubusercontent.com/user/repo/main/file.json
         if "github.com" in url and "/blob/" in url:
             new_url = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
-            logger.debug(f"已将 GitHub 页面链接转换为原始文件链接: {url} -> {new_url}")
+            logger.debug("已将 GitHub 页面链接转换为原始文件链接: %s -> %s", self._safe_url_marker(url), self._safe_url_marker(new_url))
             return new_url
         return url
 
@@ -171,7 +179,7 @@ class DownloadManager:
                 # 如果 HEAD 请求没拿到结果，尝试从路径名判断
                 if path_filename: return self._clean_filename(path_filename)
         except Exception as e:
-            logger.warning(f"无法通过网络预检获取文件名: {e}")
+            logger.debug("下载文件名网络预检失败，将使用 URL 路径或兜底文件名。url=%s error=%s", self._safe_url_marker(url), e.__class__.__name__)
 
         # --- 策略 D: 兜底逻辑 ---
         if path_filename: return self._clean_filename(path_filename)
@@ -182,6 +190,28 @@ class DownloadManager:
         """清理文件名中的非法字符，防止系统报错"""
         # 移除 Windows 下非法的路径字符 \ / : * ? " < > |
         return re.sub(r'[\\/:*?"<>|]', '_', filename).strip()
+
+    @staticmethod
+    def _safe_url_marker(url: str) -> str:
+        parsed = urlparse(str(url or "").strip())
+        if not parsed.scheme or not parsed.netloc:
+            return ""
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path or ''}"
+
+    @classmethod
+    def _task_log_context(cls, task: DownloadTask) -> dict[str, Any]:
+        context = {
+            "task_id": task.task_id,
+            "url": cls._safe_url_marker(task.url),
+            "filename": task.filename,
+            "dest_name": os.path.basename(task.dest_path or ""),
+            "phase": str((task.metadata or {}).get("phase") or ""),
+        }
+        metadata = dict(task.metadata or {})
+        for key in ("external_data_type", "version", "source_name", "source_key", "attempted_source_keys", "has_fallback_source", "ready_to_install"):
+            if key in metadata:
+                context[key] = metadata[key]
+        return context
 
     @staticmethod
     def _parse_size_header(value: Any) -> int:
@@ -261,13 +291,13 @@ class DownloadManager:
                     if total > 0:
                         logger.debug(
                             "下载文件大小预探测成功（HEAD）: url=%s final_url=%s total=%s",
-                            url,
-                            probe.url,
+                            self._safe_url_marker(url),
+                            self._safe_url_marker(probe.url),
                             total,
                         )
                         return total
             except Exception as e:
-                logger.debug(f"下载文件大小 HEAD 预探测失败: url={url}, error={e}")
+                logger.debug("下载文件大小 HEAD 预探测失败: url=%s error=%s", self._safe_url_marker(url), e.__class__.__name__)
 
             try:
                 with session.get(url, stream=True, timeout=(15, 60), headers=range_headers) as probe:
@@ -279,13 +309,13 @@ class DownloadManager:
                     if total > 0:
                         logger.debug(
                             "下载文件大小预探测成功（Range）: url=%s final_url=%s total=%s",
-                            url,
-                            probe.url,
+                            self._safe_url_marker(url),
+                            self._safe_url_marker(probe.url),
                             total,
                         )
                         return total
             except Exception as e:
-                logger.debug(f"下载文件大小 Range 预探测失败: url={url}, error={e}")
+                logger.debug("下载文件大小 Range 预探测失败: url=%s error=%s", self._safe_url_marker(url), e.__class__.__name__)
         return 0
 
     @staticmethod
@@ -320,10 +350,16 @@ class DownloadManager:
             {
                 "id": t.task_id,
                 "filename": t.filename,
-                "status": t.status.value,
+                "status": EventBus._normalize_progress_status(t.status.value),
                 "progress": self._calc_percent(t),
                 "speed": t.speed,
-                "error": t.error_msg
+                "error": t.error_msg,
+                "user_message": t.user_message,
+                "error_type": t.error_type,
+                "error_code": t.error_code,
+                "error_id": t.error_id,
+                "message_key": t.message_key,
+                "message_params": dict(t.message_params or {}),
             }
             for t in self.tasks.values()
         ]
@@ -367,7 +403,7 @@ class DownloadManager:
                 uses_encoded_transfer = self._uses_encoded_transfer(response.headers)
                 logger.debug(
                     "下载响应信息: final_url=%s content_length=%s content_range=%s transfer_encoding=%s content_encoding=%s stored_length=%s",
-                    response.url,
+                    self._safe_url_marker(response.url),
                     response.headers.get('content-length'),
                     response.headers.get('content-range'),
                     response.headers.get('transfer-encoding'),
@@ -382,10 +418,10 @@ class DownloadManager:
                 if task.total_size <= 0:
                     task.total_size = self._probe_total_size(session, [response.url, task.url], headers)
                 if uses_encoded_transfer and task.total_size <= 0:
-                    logger.warning(
+                    logger.debug(
                         "下载总大小不可用，响应启用了内容编码: url=%s final_url=%s content_encoding=%s",
-                        task.url,
-                        response.url,
+                        self._safe_url_marker(task.url),
+                        self._safe_url_marker(response.url),
                         response.headers.get('content-encoding'),
                     )
                 
@@ -405,9 +441,9 @@ class DownloadManager:
                                 overflow = task.downloaded_size - task.total_size
                                 overflow_tolerance = max(chunk_size, int(task.total_size * 0.02))
                                 if overflow > overflow_tolerance:
-                                    logger.warning(
+                                    logger.debug(
                                     "下载字节数超过服务器报告大小，已清空总大小用于继续显示进度: url=%s filename=%s current=%s total=%s",
-                                        task.url,
+                                        self._safe_url_marker(task.url),
                                         task.filename,
                                         task.downloaded_size,
                                         task.total_size,
@@ -434,9 +470,9 @@ class DownloadManager:
                 if remaining <= chunk_size:
                     task.downloaded_size = task.total_size
             elif task.downloaded_size > task.total_size:
-                logger.warning(
+                logger.debug(
                     "下载完成后发现实际大小大于服务器报告大小，已修正总大小: url=%s filename=%s current=%s total=%s",
-                    task.url,
+                    self._safe_url_marker(task.url),
                     task.filename,
                     task.downloaded_size,
                     task.total_size,
@@ -481,9 +517,45 @@ class DownloadManager:
             self._set_task_phase(task, None)
             task.status = TaskStatus.ERROR
             task.error_msg = str(e)
+            diagnostic_context = self._task_log_context(task)
+            classified = classify_exception(
+                e,
+                module="download",
+                action=task.task_type,
+                context=diagnostic_context,
+            )
+            task.user_message = classified.user_message or tr("errors.download.failed", "下载失败。请检查网络连接、代理设置、下载源可用性和目标目录权限。")
+            task.error_type = classified.error_type
+            task.error_code = classified.error_code
+            task.error_id = uuid.uuid4().hex[:10]
+            task.message_key = classified.message_key or "errors.download.failed"
+            task.message_params = dict(classified.message_params or {})
+            task.metadata = {
+                **dict(task.metadata or {}),
+                "error_type": task.error_type,
+                "error_code": task.error_code,
+                "error_id": task.error_id,
+                "message_key": task.message_key,
+                "message_params": dict(task.message_params or {}),
+                "user_message": task.user_message,
+            }
             self._cleanup(temp_path)
             self._emit_progress(task)
-            logger.error(f"下载任务失败: url={task.url}, filename={task.filename}, error={e}")
+            logger.error(
+                "下载任务失败: task_id=%s filename=%s",
+                task.task_id,
+                task.filename,
+                exc_info=True,
+                extra={
+                    "error_type": task.error_type,
+                    "error_code": task.error_code,
+                    "error_id": task.error_id,
+                    "user_message": task.user_message,
+                    "message_key": task.message_key,
+                    "message_params": dict(task.message_params or {}),
+                    "extra_context": diagnostic_context,
+                },
+            )
             # 执行失败回调
             if task.on_error:
                 try:
@@ -515,35 +587,35 @@ class DownloadManager:
     def _emit_progress(self, task: DownloadTask):
         """发送事件到前端"""
         progress = self._calc_percent(task)
-        status_map = {
-            TaskStatus.PENDING: "pending",
-            TaskStatus.RUNNING: "running",
-            TaskStatus.PAUSED: "pending",
-            TaskStatus.VERIFYING: "running",
-            TaskStatus.COMPLETED: "success",
-            TaskStatus.ERROR: "failed",
-            TaskStatus.CANCELLED: "cancelled",
-        }
         metrics = {
             "filename": task.filename,
-            "file_path": task.dest_path,
             "total": task.total_size,
             "current": task.downloaded_size,
             "speed": task.speed,
-            "error": task.error_msg,
             "title": task.title or task.filename,
-            "source_url": task.url,
             **dict(task.metadata or {}),
         }
+        if task.status == TaskStatus.COMPLETED:
+            metrics["file_path"] = task.dest_path
+        if task.status == TaskStatus.ERROR:
+            metrics["error"] = task.user_message or task.error_msg
         if task.status == TaskStatus.VERIFYING:
             metrics["phase"] = "verifying"
+        extra_context = self._task_log_context(task) if task.status == TaskStatus.ERROR else None
         EventBus.emit_progress(
             task.task_id,
             task.task_type,
-            status=status_map.get(task.status, "running"),
+            status=EventBus._normalize_progress_status(task.status.value),
             progress=progress,
-            message=task.filename or task.title or "下载中...",
+            message=task.user_message or task.filename or task.title or tr("tasks.download.running", "下载中..."),
             metrics=metrics,
+            message_key=task.message_key,
+            message_params=task.message_params,
+            error_type=task.error_type,
+            error_code=task.error_code,
+            error_id=task.error_id,
+            user_message=task.user_message,
+            extra_context=extra_context,
         )
 
     def _calc_percent(self, task) -> int:

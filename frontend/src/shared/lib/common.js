@@ -1,4 +1,7 @@
+import { h } from 'vue'
 import { createToastInterface, globalEventBus } from 'vue-toastification'
+import { t } from '../i18n.js'
+import { buildUserErrorMessage, stripLogHint } from './userErrorMessage.js'
 
 // -----------------------------------------------------------------
 // 文本与列表工具 (Text / Collection Utils)
@@ -69,6 +72,39 @@ export const sortByDisplayName = (items = [], getName = item => item?.name ?? it
 
 // 全局 Toast 实例
 export const toast = createToastInterface(globalEventBus)
+
+const OPEN_SYSTEM_LOG_EVENT = 'rimcrow-open-system-log-target'
+
+export const requestOpenSystemLog = (errorId = '') => {
+  if (typeof window === 'undefined') return
+  const normalizedErrorId = normalizeText(errorId)
+  const detail = { sourceType: 'app', errorId: normalizedErrorId, live: true }
+  window.__RIMCROW_PENDING_LOG_TARGET__ = detail
+  window.dispatchEvent(new CustomEvent(OPEN_SYSTEM_LOG_EVENT, { detail }))
+}
+
+const UserErrorToast = {
+  props: {
+    message: { type: String, required: true },
+    errorId: { type: String, default: '' },
+  },
+  emits: ['close-toast'],
+  setup(props, { emit }) {
+    return () => h('div', { class: 'max-w-[24rem] space-y-2 text-sm leading-5' }, [
+      h('div', { class: 'whitespace-pre-wrap' }, props.message),
+      props.errorId
+        ? h('button', {
+          type: 'button',
+          class: 'rounded bg-bg-overlay/10 px-2 py-1 text-xs font-bold hover:bg-bg-overlay/20',
+          onClick: () => {
+            requestOpenSystemLog(props.errorId)
+            emit('close-toast')
+          },
+        }, t('toast.api.open_corresponding_log', '查看对应系统日志'))
+        : null,
+    ])
+  },
+}
 
 // -----------------------------------------------------------------
 // 深拷贝工具 (Clone Utils)
@@ -147,32 +183,27 @@ export const deepClone = (value) => {
 // -----------------------------------------------------------------
 // API 结果提示 (Result Helpers)
 // -----------------------------------------------------------------
-const TECHNICAL_ERROR_PATTERNS = [
-  /\b[A-Za-z]+Error\b/,
-  /\b(Traceback|WinError|Errno|ENOENT|EACCES|ECONNREFUSED|ETIMEDOUT)\b/i,
-  /\b(HTTPConnectionPool|HTTPSConnectionPool|ConnectionError|ReadTimeout|Timeout|timeout)\b/i,
-  /\b(Bridge request failed|Request failed|Failed to fetch|status code|response status)\b/i,
-]
-
-export const isTechnicalErrorMessage = (value = '') => {
-  const text = normalizeText(value)
-  if (!text) return false
-  if (TECHNICAL_ERROR_PATTERNS.some(pattern => pattern.test(text))) return true
-  const chars = [...text]
-  const asciiCount = chars.filter(char => char.charCodeAt(0) < 128).length
-  const chineseCount = chars.filter(char => /[\u4e00-\u9fff]/.test(char)).length
-  return chars.length >= 18 && chineseCount === 0 && asciiCount / Math.max(chars.length, 1) > 0.85
-}
-
-export const toUserMessage = (value = '', fallback = '操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。') => {
-  const text = normalizeText(value)
-  if (!text || isTechnicalErrorMessage(text)) return fallback
-  return text
+export const toUserMessage = (value = '', fallback = t('errors.fallback.operation_unfinished', '操作未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用。')) => {
+  return buildUserErrorMessage(value && typeof value === 'object' ? value : String(value || ''), fallback, t)
 }
 
 export const getApiResponseMessage = (res, fallback = '') => {
-  const candidate = normalizeText(res?.user_message) || normalizeText(res?.message)
-  return toUserMessage(candidate, fallback)
+  return stripLogHint(buildUserErrorMessage(res && typeof res === 'object' ? res : {}, fallback, t) || fallback)
+}
+
+export const showUserErrorToast = (payload = {}, fallback = '', options = {}) => {
+  const data = payload && typeof payload === 'object' ? payload : { message: payload }
+  const { variant = 'error', ...toastOptions } = options || {}
+  const message = buildUserErrorMessage(data, fallback, t)
+  const errorId = normalizeText(
+    data.error_id
+    || data.errorId
+  )
+  if (errorId) {
+    toast[variant]({ component: UserErrorToast, props: { message, errorId } }, toastOptions)
+    return
+  }
+  toast[variant](stripLogHint(message), toastOptions)
 }
 
 export const checkResult = (res, workname, showSuccess = false, options = {}) => {
@@ -182,16 +213,16 @@ export const checkResult = (res, workname, showSuccess = false, options = {}) =>
   const silent = !!options?.silent
   if (debugMode) console.debug('API 结果检查:', workname, res)
   if (res?.status === 'success') {
-    if (showSuccess && !silent) toast.success(`${workname}已完成`, { timeout: 1000 })
+    if (showSuccess && !silent) toast.success(t('toast.api.success', '{workname}已完成', { workname }), { timeout: 1000 })
     return true
   }
   if (silent) return false
   if (res?.status === 'warning') {
-    const message = getApiResponseMessage(res, '操作已完成，但有部分情况需要确认。详细原因已写入系统日志。')
-    toast.warning(`${workname}需要确认：\n${message}`)
+    const message = getApiResponseMessage(res, t('errors.fallback.operation_warning', '操作已完成，但有部分情况需要确认。'))
+    showUserErrorToast({ ...(res || {}), user_message: t('toast.api.warning', '{workname}需要确认：\n{message}', { workname, message }) }, message, { variant: 'warning' })
   } else {
-    const message = getApiResponseMessage(res, `${workname}未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用，详细原因已写入系统日志。`)
-    toast.error(`${workname}失败：\n${message}`)
+    const message = getApiResponseMessage(res, t('errors.fallback.work_failed', '{workname}未完成。可能是网络连接、路径权限、配置或运行环境暂时不可用。', { workname }))
+    showUserErrorToast({ ...(res || {}), user_message: t('toast.api.error', '{workname}失败：\n{message}', { workname, message }) }, message)
   }
   return false
 }

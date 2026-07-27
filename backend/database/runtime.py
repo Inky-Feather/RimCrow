@@ -8,6 +8,7 @@ from peewee import DatabaseError
 
 from backend._version import __db_version__, __version__
 from backend.database.models import SystemInfo, all_models, db
+from backend.i18n.messages import tr
 from backend.utils.logger import logger
 from backend.utils.tools import current_ms
 
@@ -175,14 +176,18 @@ def clear_db():
 
 def validate_database_file(db_path, require_tables=True):
     """使用原生 sqlite3 对数据库文件做基础有效性校验。"""
-    if not db_path or not os.path.exists(db_path): return False, f"数据库文件不存在: {db_path}"
+    if not db_path or not os.path.exists(db_path):
+        logger.warning("数据库文件不存在: path=%s", db_path)
+        return False, tr("errors.database.file_missing", "数据库文件不存在，请尝试重启软件或重置数据库。")
 
     conn = None
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         row = cursor.execute('PRAGMA integrity_check(1);').fetchone()
-        if not row or str(row[0]).lower() != 'ok': return False, f"integrity_check 失败: {row[0] if row else '无返回结果'}"
+        if not row or str(row[0]).lower() != 'ok':
+            logger.warning("数据库完整性检查失败: path=%s result=%s", db_path, row[0] if row else "无返回结果")
+            return False, tr("errors.database.integrity_failed", "数据库完整性检查失败，请尝试修复或重置数据库。")
 
         if require_tables:
             existing_tables = {
@@ -191,11 +196,14 @@ def validate_database_file(db_path, require_tables=True):
             }
             required_tables = {m._meta.table_name.lower() for m in all_models}
             missing_tables = sorted(required_tables - existing_tables)
-            if missing_tables: return False, f"缺少必要数据表: {', '.join(missing_tables)}"
+            if missing_tables:
+                logger.warning("数据库缺少必要数据表: path=%s tables=%s", db_path, missing_tables)
+                return False, tr("errors.database.schema_incomplete", "数据库结构不完整，请尝试修复或重置数据库。")
 
         return True, "ok"
     except Exception as e:
-        return False, str(e)
+        logger.error("数据库文件校验失败: path=%s error=%s", db_path, e, exc_info=True)
+        return False, tr("errors.database.validation_failed", "数据库文件校验失败，请检查文件是否损坏或权限是否不足。")
     finally:
         if conn: conn.close()
 

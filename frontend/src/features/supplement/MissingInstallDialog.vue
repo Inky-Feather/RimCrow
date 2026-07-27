@@ -11,7 +11,7 @@
           {{ missingInstallStore.state.message }}
         </p>
       </div>
-      <button class="modal-close-button" aria-label="关闭" @click="missingInstallStore.close(false)" >
+      <button class="modal-close-button" :aria-label="t('common.action.close', '关闭')" @click="missingInstallStore.close(false)" >
         <X class="size-4" />
       </button>
     </div>
@@ -19,29 +19,29 @@
     <div class="toolbar-surface relative z-10 flex flex-wrap items-center justify-between gap-2 px-5 py-2.5">
       <div class="flex flex-wrap items-center gap-1.5 text-[0.6875rem] text-text-dim">
         <span v-if="hasActionableRows" class="rounded-full border border-accent-primary/25 bg-accent-primary/12 px-3 py-1 font-bold text-accent-primary">
-          {{ missingInstallStore.selectedCount }} / {{ missingInstallStore.totalCount }} 已选
+          {{ t('dialog.missing_install.selected_count', '{selected} / {total} 已选', { selected: missingInstallStore.selectedCount, total: missingInstallStore.totalCount }) }}
         </span>
         <span v-if="missingInstallStore.state.summary.dangerTotal > 0" class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger">
-          必要 {{ missingInstallStore.state.summary.dangerTotal }}
+          {{ t('dialog.missing_install.required_count', '必要 {count}', { count: missingInstallStore.state.summary.dangerTotal }) }}
         </span>
         <span v-if="missingInstallStore.state.summary.warnTotal > 0" class="rounded-full border border-accent-warn/25 bg-accent-warn/12 px-3 py-1 font-bold text-accent-warn">
-          建议 {{ missingInstallStore.state.summary.warnTotal }}
+          {{ t('dialog.missing_install.suggested_count', '建议 {count}', { count: missingInstallStore.state.summary.warnTotal }) }}
         </span>
         <span v-if="missingInstallStore.state.summary.infoTotal > 0" class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-3 py-1 font-bold text-text-dim">
-          可选 {{ missingInstallStore.state.summary.infoTotal }}
+          {{ t('dialog.missing_install.optional_count', '可选 {count}', { count: missingInstallStore.state.summary.infoTotal }) }}
         </span>
         <span v-if="missingInstallStore.state.summary.unknownTotal > 0" class="rounded-full border border-accent-danger/25 bg-accent-danger/12 px-3 py-1 font-bold text-accent-danger">
-          未知 {{ missingInstallStore.state.summary.unknownTotal }}
+          {{ t('dialog.missing_install.unknown_count', '未知 {count}', { count: missingInstallStore.state.summary.unknownTotal }) }}
         </span>
       </div>
       <div v-if="hasActionableRows" class="flex flex-wrap items-center gap-1.5">
         <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-bg-overlay/10 hover:text-text-main"
           :disabled="missingInstallStore.isActionPending" @click="missingInstallStore.selectAll()" >
-          全选
+          {{ t('common.action.select_all', '全选') }}
         </button>
         <button class="rounded-lg border border-border-base/10 bg-bg-overlay/5 px-2.5 py-1.5 text-[0.6875rem] font-bold text-text-dim transition-all hover:bg-bg-overlay/10 hover:text-text-main"
           :disabled="missingInstallStore.isActionPending" @click="missingInstallStore.clearSelection()" >
-          清空
+          {{ t('common.action.clear', '清空') }}
         </button>
       </div>
     </div>
@@ -49,19 +49,19 @@
     <div class="relative z-10 flex-1 overflow-y-auto px-5 py-4">
       <div class="space-y-3.5">
         <section v-if="isUnknownOnlyMode" class="modal-section px-4 py-4" >
-          <h4 class="text-sm font-black tracking-wide text-text-main">只有未知项</h4>
-          <p class="mt-1.5 text-[0.6875rem] leading-5 text-text-dim">这些项目暂时无法直接处理。</p>
+          <h4 class="text-sm font-black tracking-wide text-text-main">{{ t('dialog.missing_install.unknown_only_title', '只有未知项') }}</h4>
+          <p class="mt-1.5 text-[0.6875rem] leading-5 text-text-dim">{{ t('dialog.missing_install.unknown_only_desc', '这些项目暂时无法直接处理。') }}</p>
         </section>
         <section v-if="hasUnknownItems" class="rounded-2xl border border-accent-danger/18 bg-accent-danger/4" >
           <div class="flex flex-wrap items-start justify-between gap-2 border-b border-accent-danger/12 px-4 py-3">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-1.5">
-                <h4 class="text-sm font-black tracking-wide text-text-main">未知项</h4>
+                <h4 class="text-sm font-black tracking-wide text-text-main">{{ t('dialog.missing_install.unknown_items', '未知项') }}</h4>
                 <span class="rounded-full border border-accent-danger/20 bg-accent-danger/12 px-2 py-0.5 text-[0.625rem] font-bold text-accent-danger">
-                  {{ missingInstallStore.state.unknownItems.length }} 项
+                  {{ t('common.count.items', '{count} 项', { count: missingInstallStore.state.unknownItems.length }) }}
                 </span>
               </div>
-              <p class="mt-1 text-[0.625rem] leading-4 text-text-dim">这些项目暂时找不到可用来源或依赖目标。</p>
+              <p class="mt-1 text-[0.625rem] leading-4 text-text-dim">{{ t('dialog.missing_install.unknown_items_desc', '这些项目暂时找不到可用来源或依赖目标。') }}</p>
             </div>
           </div>
 
@@ -77,14 +77,16 @@
                     {{ reasonLabel }}
                   </span>
                   <span v-if="item.canCleanup" class="rounded-full border border-accent-danger/20 bg-accent-danger/10 px-2 py-0.5 text-[0.625rem] font-bold text-accent-danger" >
-                    可清理
+                    {{ t('dialog.missing_install.can_cleanup', '可清理') }}
                   </span>
                   <span v-if="item.unknownDependencyCount > 0" class="rounded-full border border-accent-danger/20 bg-accent-danger/10 px-2 py-0.5 text-[0.625rem] font-bold text-accent-danger" >
-                    未知依赖 {{ item.unknownDependencyCount }}
+                    {{ t('dialog.missing_install.unknown_dependency_count', '未知依赖 {count}', { count: item.unknownDependencyCount }) }}
                   </span>
                 </div>
                 <p v-if="item.detailLines?.length" class="mt-1 text-[0.625rem] leading-4 text-text-dim" >
-                  {{ item.canCleanup ? '无效项' : '未知依赖' }}：{{ item.detailLines.join('、') }}
+                  {{ item.canCleanup
+                    ? t('dialog.missing_install.invalid_item_details', '无效项：{items}', { items: item.detailLines.join('、') })
+                    : t('dialog.missing_install.unknown_dependency_details', '未知依赖：{items}', { items: item.detailLines.join('、') }) }}
                 </p>
               </div>
             </article>
@@ -96,10 +98,10 @@
               <div class="flex flex-wrap items-center gap-1.5">
                 <h4 class="text-sm font-black tracking-wide text-text-main">{{ group.title }}</h4>
                 <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-[0.625rem] font-bold text-text-dim">
-                  {{ group.rows.length }} 项
+                  {{ t('common.count.items', '{count} 项', { count: group.rows.length }) }}
                 </span>
                 <span v-if="group.key === 'missing_with_installed_replacement'" class="rounded-full border border-accent-primary/20 bg-accent-primary/10 px-2 py-0.5 text-[0.625rem] font-bold text-accent-primary" >
-                  点击订阅或下载时会自动切换
+                  {{ t('dialog.missing_install.auto_switch_badge', '点击订阅或下载时会自动切换') }}
                 </span>
               </div>
               <p v-if="group.description" class="mt-1 text-[0.625rem] leading-4 text-text-dim">{{ group.description }}</p>
@@ -130,7 +132,7 @@
                 </div>
                 <div v-if="row.choiceOptions?.length > 1" class="mt-2 space-y-2">
                   <p v-if="row.groupKey === 'missing_with_installed_replacement'" class="text-[0.625rem] leading-4 text-accent-primary/88" >
-                    选中已安装替代后，点击订阅或下载时会自动替换当前缺失项。
+                    {{ t('dialog.missing_install.installed_replacement_tip', '选中已安装替代后，点击订阅或下载时会自动替换当前缺失项。') }}
                   </p>
                   <div v-for="choice in row.choiceOptions" :key="`${row.id}:${choice.id}`" class="flex w-full items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-all"
                     :class="missingInstallStore.getSelectedChoice(row)?.id === choice.id ? 'border-accent-primary/40 bg-accent-primary/3' : 'border-border-base/10 bg-bg-inset/55'" >
@@ -160,7 +162,7 @@
 
                     <button class="shrink-0 rounded-xl border border-accent-primary/35 bg-accent-primary/10 px-3 py-1.5 text-[0.6875rem] font-black text-accent-primary transition-all hover:bg-accent-primary/18 hover:text-accent-cool"
                       @click.stop="missingInstallStore.openSource(choice.source)" >
-                      访问来源
+                      {{ t('dialog.missing_install.open_source', '访问来源') }}
                     </button>
                   </div>
                 </div>
@@ -169,7 +171,7 @@
               <button v-if="row.choiceOptions?.length === 1 && missingInstallStore.getSelectedSource(row)"
                 class="shrink-0 rounded-xl border border-accent-primary/35 bg-accent-primary/10 px-3 py-1.5 text-[0.6875rem] font-black text-accent-primary transition-all hover:bg-accent-primary/18 hover:text-accent-cool"
                 @click="missingInstallStore.openSource(missingInstallStore.getSelectedSource(row))" >
-                访问来源
+                {{ t('dialog.missing_install.open_source', '访问来源') }}
               </button>
             </article>
           </div>
@@ -200,12 +202,12 @@
       <button v-if="missingInstallStore.state.summary.actionableTotal > 0" :disabled="missingInstallStore.selectedCount === 0 || missingInstallStore.isActionPending"
         class="rounded-lg bg-accent-primary px-5 py-2 text-[0.6875rem] font-black text-on-accent-primary shadow-[0_0.625rem_1.875rem_rgba(var(--rgb-accent-primary),0.28)] transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:brightness-100 disabled:active:scale-100"
         @click="missingInstallStore.subscribeSelected()" >
-        {{ missingInstallStore.pendingAction === 'subscribe' ? '订阅中...' : '订阅选中项' }}
+        {{ missingInstallStore.pendingAction === 'subscribe' ? t('dialog.missing_install.subscribing', '订阅中...') : t('dialog.missing_install.subscribe_selected', '订阅选中项') }}
       </button>
       <button v-if="missingInstallStore.state.summary.actionableTotal > 0" @click="missingInstallStore.downloadSelected()"
         class="rounded-lg bg-accent-tip px-5 py-2 text-[0.6875rem] font-black text-on-accent-tip shadow-[0_0.625rem_1.875rem_rgba(var(--rgb-accent-warn),0.28)] transition-all hover:brightness-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:brightness-100 disabled:active:scale-100"
         :disabled="missingInstallStore.selectedCount === 0 || missingInstallStore.isActionPending" >
-        {{ missingInstallStore.pendingAction === 'download' ? '下载中...' : '下载选中项' }}
+        {{ missingInstallStore.pendingAction === 'download' ? t('dialog.missing_install.downloading', '下载中...') : t('dialog.missing_install.download_selected', '下载选中项') }}
       </button>
     </div>
   </CommonModalShell>
@@ -216,6 +218,7 @@ import { computed } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useMissingInstallStore } from './missingInstallStore.js'
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
+import { t } from '../../shared/i18n.js'
 
 const missingInstallStore = useMissingInstallStore()
 const hasActionableRows = computed(() => missingInstallStore.state.summary.actionableTotal > 0)
@@ -233,7 +236,7 @@ const versionBadgeClass = (versionInfo = {}) => {
 }
 
 const sourceLabel = (source = null) => {
-  if (!source) return '未知'
+  if (!source) return t('common.status.unknown', '未知')
   if (source.kind === 'workshop') {
     return source.workshopId || 'Workshop'
   }

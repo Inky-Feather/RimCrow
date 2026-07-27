@@ -1,6 +1,6 @@
 <!-- components/common/input/CommonInput.vue -->
 <template>
-  <div class=" w-full">
+  <div class=" w-full" :class="{'opacity-85':readonly}">
     <div v-if="label" class="flex justify-between items-center  px-1 mb-1">
       <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
@@ -21,6 +21,7 @@
           :placeholder="placeholder"
           :readonly="readonly"
           class="w-full bg-transparent px-3 py-2 text-sm text-text-main focus:outline-none font-mono"
+          :class="{'cursor-default':readonly}"
         />
 
         <!-- 密码切换按钮 -->
@@ -33,7 +34,7 @@
       <!-- 路径浏览按钮 -->
       <button v-if="isPath" @click="$emit('browse')"
         class="input-addon-button rounded-lg p-2.5 active:scale-95"
-        v-tooltip="'浏览路径'">
+        v-tooltip="t('tooltip.path.browse', '浏览路径')">
         <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2-2z" />
         </svg>
@@ -45,6 +46,7 @@
 <script setup>
 import { onUnmounted, ref, watch } from 'vue'
 import { Eye, EyeOff } from 'lucide-vue-next'
+import { t } from '../../i18n.js'
 
 const props = defineProps({
   label: String,

@@ -1,3 +1,5 @@
+import { t } from '../i18n.js'
+
 const MODIFIER_ORDER = ['Ctrl', 'Meta', 'Alt', 'Shift']
 
 // 统一把用户输入、浏览器事件和展示文案收口到同一种键名，避免配置文件出现多套写法。
@@ -29,16 +31,19 @@ const MODIFIER_ALIASES = {
   shift: 'Shift',
 }
 
-const DISPLAY_MODIFIERS = {
-  Ctrl: 'Ctrl',
-  Meta: 'Meta',
-  Alt: 'Alt',
-  Shift: 'Shift',
-  MouseLeft: '左键',
-  MouseMiddle: '中键',
-  MouseRight: '右键',
-  MouseBack: '后退键',
-  MouseForward: '前进键',
+const getDisplayKeyLabel = (part) => {
+  const labels = {
+    Ctrl: 'Ctrl',
+    Meta: 'Meta',
+    Alt: 'Alt',
+    Shift: 'Shift',
+    MouseLeft: t('keybinding.mouse.left', '左键'),
+    MouseMiddle: t('keybinding.mouse.middle', '中键'),
+    MouseRight: t('keybinding.mouse.right', '右键'),
+    MouseBack: t('keybinding.mouse.back', '后退键'),
+    MouseForward: t('keybinding.mouse.forward', '前进键'),
+  }
+  return labels[part] || part
 }
 
 const normalizeMainKey = (value = '') => {
@@ -136,7 +141,7 @@ export const formatKeybindingLabel = (value = '') => {
   if (!normalized) return ''
   return normalized
     .split('+')
-    .map(part => DISPLAY_MODIFIERS[part] || part)
+    .map(part => getDisplayKeyLabel(part))
     .join('+')
 }
 

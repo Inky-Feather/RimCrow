@@ -25,18 +25,18 @@
             <div class="flex items-center gap-4 text-xs font-mono select-none">
               <!-- 游戏日志，或（软件日志 + Debug模式）才允许使用 AI -->
               <template v-if="currentTab === 'game' || appStore.settings.debug_mode">
-                <CommonSwitch class="col-span-1" label="使用辅助工具模组" v-model="enable_tool_mods" mini description="开启后，将在保存或自动排序时自动启用辅助工具模组，提供为软件提供更加详细的游戏日志获取功能。" />
+                <CommonSwitch class="col-span-1" :label="t('dialog.log_viewer.use_tool_mods', '使用辅助工具模组')" v-model="enable_tool_mods" mini :description="t('dialog.log_viewer.use_tool_mods_desc', '开启后，将在保存或自动排序时自动启用辅助工具模组，为软件提供更加详细的游戏日志获取功能。')" />
                 <!-- 一键分析 -->
                 <button data-tour="log-viewer-auto-analyze" @click="autoAnalyzeGlobalErrors" class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border bg-accent-danger/10 border-accent-danger/30 text-accent-danger hover:bg-accent-danger hover:text-on-accent-danger shadow-[0_0_10px_rgba(var(--rgb-accent-danger),0.1)]">
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  <span class="font-bold">一键分析</span>
+                  <span class="font-bold">{{ t('dialog.log_viewer.auto_analyze', '一键分析') }}</span>
                 </button>
                 
                 <!-- 手动开关 AI 侧边栏按钮 -->
                 <button data-tour="log-viewer-ai-toggle" @click="showAiSidebar = !showAiSidebar" class="px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all border"
                         :class="showAiSidebar ? 'bg-accent-special/20 border-accent-special/50 text-accent-special shadow-[0_0_10px_rgba(var(--rgb-accent-special),0.2)]' : 'bg-bg-overlay/5 border-border-base/10 text-text-dim hover:text-accent-special'">
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
-                  <span class="font-bold">{{ showAiSidebar ? '隐藏 AI 助手' : '打开 AI 助手' }}</span>
+                  <span class="font-bold">{{ showAiSidebar ? t('dialog.log_viewer.hide_ai_assistant', '隐藏 AI 助手') : t('dialog.log_viewer.open_ai_assistant', '打开 AI 助手') }}</span>
                 </button>
 
               </template>
@@ -59,13 +59,13 @@
               
               <div class="flex items-center gap-2 text-sm">
                 <span class="w-2.5 h-2.5 rounded-full bg-accent-primary animate-pulse"></span>
-                <span class="text-text-main">已选 <strong class="text-accent-primary">{{ selectedLogs.length }}</strong> 条</span>
+	                <span class="text-text-main">{{ t('dialog.log_viewer.selected_count_prefix', '已选') }} <strong class="text-accent-primary">{{ selectedLogs.length }}</strong> {{ t('dialog.log_viewer.selected_count_suffix', '条') }}</span>
               </div>
               
               <!-- 即时 Token 状态显示 -->
               <div v-if="tokenInfo.isLoading" class="flex items-center gap-1 text-text-dim text-xs">
                 <svg class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                <span>估算中...</span>
+	                <span>{{ t('dialog.log_viewer.estimating', '估算中...') }}</span>
               </div>
               <div v-else class="flex items-center gap-1.5 text-xs font-bold" :class="getTokenColor(tokenInfo.estimated, tokenInfo.limit)">
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
@@ -75,15 +75,15 @@
               
               <button @click="showAiSidebar = true" :disabled="tokenInfo.isLoading"
                 class="text-sm font-bold text-accent-special hover:text-text-inverse transition-colors flex items-center gap-1 disabled:opacity-50">
-                AI 分析 
+	                {{ t('dialog.log_viewer.ai_analyze', 'AI 分析') }}
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
               </button>
               <!-- 复制内容 -->
-              <button @click="triggerCopy" class="ml-2 rounded-full bg-bg-overlay/5 p-1.5 text-text-dim hover:text-text-main" v-tooltip="'复制选中内容'">
+	              <button @click="triggerCopy" class="ml-2 rounded-full bg-bg-overlay/5 p-1.5 text-text-dim hover:text-text-main" v-tooltip="t('dialog.log_viewer.copy_selection', '复制选中内容')">
                 <Copy class="w-4 h-4" />
               </button>
               
-              <button @click="clearLogSelection" class="rounded-full bg-bg-overlay/5 p-1.5 text-text-dim hover:text-accent-danger" v-tooltip="'取消选择'">
+	              <button @click="clearLogSelection" class="rounded-full bg-bg-overlay/5 p-1.5 text-text-dim hover:text-accent-danger" v-tooltip="t('common.action.clear_selection', '取消选择')">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
@@ -103,7 +103,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Terminal, Gamepad2, Copy } from 'lucide-vue-next'
 import { useAppStore } from '../../app/stores/appStore'
 import { useLogStore } from './logStore'
@@ -112,7 +112,8 @@ import UnifiedLogPanel from './UnifiedLogPanel.vue';
 import AiDiagnosticSidebar from '../ai/AiDiagnosticSidebar.vue'
 import CommonSwitch from '../../shared/components/input/CommonSwitch.vue';
 import CommonModalShell from '../../shared/components/modal/CommonModalShell.vue'
-import { toUserMessage } from '../../shared/lib/common'
+import { showUserErrorToast } from '../../shared/lib/common'
+import { t } from '../../shared/i18n.js'
 
 
 // -----------------------------------------------------------------
@@ -126,11 +127,11 @@ const toast = useToast()
 // 状态定义 (State / Refs)
 // -----------------------------------------------------------------
 const currentTab = ref('game') // 'app' | 'game'
-const tabs = [
-  { id: 'game', label: '游戏日志', icon: Gamepad2, assistantId: 'assistant.log_game' },
-  { id: 'app', label: '系统日志', icon: Terminal, assistantId: 'assistant.log_app' }
-]
-const currentAssistantId = computed(() => tabs.find(tab => tab.id === currentTab.value)?.assistantId || 'assistant.log_game')
+const tabs = computed(() => [
+  { id: 'game', label: t('dialog.log_viewer.tab.game', '游戏日志'), icon: Gamepad2, assistantId: 'assistant.log_game' },
+  { id: 'app', label: t('dialog.log_viewer.tab.app', '系统日志'), icon: Terminal, assistantId: 'assistant.log_app' }
+])
+const currentAssistantId = computed(() => tabs.value.find(tab => tab.id === currentTab.value)?.assistantId || 'assistant.log_game')
 
 // AI 诊断侧栏和附件状态与当前日志来源强绑定。
 const showAiSidebar = computed({
@@ -223,8 +224,37 @@ const fetchTokenEstimate = async (logs, requestSeq) => {
       requestSeq,
     })
   } catch (e) {
-    console.error('Token 计算失败:', e)
+    console.error('Token calculation failed:', e)
   }
+}
+
+const getActiveLogPanel = () => Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value
+
+const openSystemLogTarget = async (target = {}) => {
+  const errorId = String(target?.errorId || target?.error_id || '').trim()
+  logStore.setPendingFocusErrorId('app', errorId)
+  appStore.uiState.showLogDrawer = true
+  currentTab.value = 'app'
+  showAiSidebar.value = false
+  await nextTick()
+  await nextTick()
+  const panel = getActiveLogPanel()
+  if (panel?.focusErrorLog) {
+    const focused = await panel.focusErrorLog(errorId)
+    if (focused || !errorId) logStore.consumePendingFocusErrorId('app')
+  }
+}
+
+const consumePendingSystemLogTarget = () => {
+  const target = window.__RIMCROW_PENDING_LOG_TARGET__
+  if (!target) return
+  window.__RIMCROW_PENDING_LOG_TARGET__ = null
+  void openSystemLogTarget(target)
+}
+
+const handleOpenSystemLogTarget = (event) => {
+  window.__RIMCROW_PENDING_LOG_TARGET__ = null
+  void openSystemLogTarget(event?.detail || {})
 }
 
 const getTokenColor = (est, limit) => {
@@ -268,6 +298,15 @@ watch(currentTab, () => {
   autoDiagnosisRequest.value = null
 })
 
+onMounted(() => {
+  window.addEventListener('rimcrow-open-system-log-target', handleOpenSystemLogTarget)
+  consumePendingSystemLogTarget()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('rimcrow-open-system-log-target', handleOpenSystemLogTarget)
+})
+
 const autoAnalyzeGlobalErrors = async () => {
   /**
    * 发起“全局摘要分析”。
@@ -278,11 +317,11 @@ const autoAnalyzeGlobalErrors = async () => {
   const panel = Array.isArray(logPanelRef.value) ? logPanelRef.value[0] : logPanelRef.value
   const currentFilename = panel?.selectedFile || ''
   if (!currentFilename || !window.pywebview) {
-    toast.warning("未选中任何日志文件。")
+	    toast.warning(t('toast.log_viewer.no_log_file_selected', '未选中任何日志文件。'))
     return
   }
 
-  toast.info("正在扫描全部日志，请稍候。", { timeout: 3000 })
+	  toast.info(t('toast.log_viewer.scanning_all_logs', '正在扫描全部日志，请稍候。'), { timeout: 3000 })
   isGlobalScanning.value = true
   
   resetAttachmentState() 
@@ -309,14 +348,14 @@ const autoAnalyzeGlobalErrors = async () => {
     const tocCount = stats.output_item_count || diagnosisContext?.error_table_of_contents?.length || 0
     const repeatCount = stats.total_repeat_count || 0
     const tokenText = `${(Number(scanResult.tokenInfo?.estimated || 0) / 1000).toFixed(1)}k TK`
-    const notice = scanResult.notice || `压缩完成：保留 ${tocCount} 条错误摘要，共覆盖 ${repeatCount} 次错误，当前占用约 ${tokenText}。`
-    toast.success(`${notice} 正在启动 AI 分析。`, { timeout: 5000 })
+	  const notice = scanResult.notice || t('toast.log_viewer.scan_complete_notice', '压缩完成：保留 {tocCount} 条错误摘要，共覆盖 {repeatCount} 次错误，当前占用约 {tokenText}。', { tocCount, repeatCount, tokenText })
+	  toast.success(t('toast.log_viewer.starting_ai_analysis', '{notice} 正在启动 AI 分析。', { notice }), { timeout: 5000 })
     autoDiagnosisRequest.value = {
       nonce: Date.now(),
     }
   } catch (e) {
     clearLogSelection()
-    toast.error(toUserMessage(e?.message || e, '全局日志扫描失败。可能是日志文件暂时不可读、内容过大或 AI 诊断上下文生成失败，详细原因已写入系统日志。'))
+	  showUserErrorToast(e, t('toast.log_viewer.global_scan_failed', '全局日志扫描失败。可能是日志文件暂时不可读、内容过大或 AI 诊断上下文生成失败。'))
   }
 }
 </script>

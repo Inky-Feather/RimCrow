@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import errno
 import hashlib
 import json
 import os
@@ -14,25 +15,30 @@ import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass, field, is_dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
 from PIL import Image
 
+from backend.i18n.messages import localized_key, localized_params, tr
 from backend.load_order.package_tokens import parse_package_token
+from backend.paths.core import path_key
 from backend.settings import DATA_DIR, TOOLS_DIR, settings
 from backend.utils.event_bus import EventBus
+from backend.utils.json_io import write_json_atomic
 from backend.utils.logger import logger
 from backend.utils.tools import current_ms, generate_path_hash, normalize_package_id
 
 TEXTURE_TASK_TYPE = "texture-opt"
 TEXTURE_ANALYSIS_TASK_TYPE = "texture-opt-analyze"
 TEXTURE_TASK_RETENTION_SECONDS = 120
-TEXTURE_SCAN_SNAPSHOT_SCHEMA_VERSION = 2
+TEXTURE_SCAN_SNAPSHOT_SCHEMA_VERSION = 3
 TEXTURE_RESULT_HISTORY_LIMIT = 3
 TEXTURE_BASE_SCAN_CACHE_TTL_MS = 10 * 60 * 1000
 TEXTURE_PROGRESS_EMIT_INTERVAL_SECONDS = 1.0
-TEXTURE_ENCODE_BATCH_SIZE = 5000
+TEXTURE_ENCODE_BATCH_SIZE = 10000
+TEXTURE_RETRY_BATCH_SIZE = 64
+ZSTD_COMPRESS_RETRY_DELAYS_SECONDS = (0.1, 0.3)
 TODDS_WINDOWS_ASSET_PREFIX = "todds_Windows_"
 TODDS_FALLBACK_VERSION = "0.4.1"
 TODDS_FALLBACK_FILENAME = f"todds_Windows_{TODDS_FALLBACK_VERSION}.zip"
@@ -55,11 +61,6 @@ TODDS_PROGRESS_PATTERN = re.compile(r"Progress:\s*(\d+)\s*/\s*(\d+)", re.IGNOREC
 
 TEXTURE_EXCLUSIONS_PATH = DATA_DIR / "texture_opt_exclusions.json"
 TEXTURE_RESULTS_DIR = DATA_DIR / "logs" / "texture-opt" / "results"
-
-
-def _safe_json_dump(payload: Any, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _safe_json_load(path: Path, fallback: Any) -> Any:
@@ -238,7 +239,7 @@ class TextureTargetResolver:
     @staticmethod
     def _path_key(path: str) -> str:
         value = str(path or "").strip()
-        return os.path.normcase(os.path.abspath(value)) if value else ""
+        return path_key(os.path.abspath(value) if value else "", system_name=platform.system())
 
     @staticmethod
     def _has_texture_output(mod_path: str, *, include_zstd: bool = False) -> bool:
@@ -304,11 +305,14 @@ class TextureTask:
     status: str = "pending"
     progress: int = 0
     message: str = ""
+    message_key: str = ""
+    message_params: dict[str, Any] = field(default_factory=dict)
     metrics: dict[str, Any] = field(default_factory=dict)
     created_at: int = field(default_factory=current_ms)
     updated_at: int = field(default_factory=current_ms)
     summary: dict[str, Any] = field(default_factory=dict)
     error: str = ""
+    user_message: str = ""
     _cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def __post_init__(self) -> None:
@@ -342,9 +346,12 @@ class TextureTask:
             "status": self.status,
             "progress": self.progress,
             "message": self.message,
+            "message_key": self.message_key,
+            "message_params": dict(self.message_params),
             "metrics": dict(self.metrics),
             "summary": dict(self.summary),
             "error": self.error,
+            "user_message": self.user_message,
             "mod_paths": list(self.mod_paths),
             "mod_targets": [dict(item) for item in self.mod_targets],
             "created_at": self.created_at,
@@ -371,7 +378,7 @@ class _ToolProcessRunner:
 
         log_path: Path | None = None
         process = None
-        started_at = time.monotonic()
+        last_activity_at = time.monotonic()
         was_cancelled = False
         timeout_detail = ""
         try:
@@ -391,12 +398,12 @@ class _ToolProcessRunner:
                 reader_error: Exception | None = None
 
                 def consume_output() -> None:
-                    nonlocal reader_error
+                    nonlocal last_activity_at, reader_error
                     if not process or not process.stdout: return
                     try:
                         for line in process.stdout:
+                            last_activity_at = time.monotonic()
                             log_file.write(line)
-                            log_file.flush()
                             if output_callback:
                                 output_callback(line.rstrip("\r\n"))
                     except Exception as exc:
@@ -411,7 +418,7 @@ class _ToolProcessRunner:
                         break
                     if process.poll() is not None:
                         break
-                    if timeout_seconds and (time.monotonic() - started_at) > float(timeout_seconds):
+                    if timeout_seconds and (time.monotonic() - last_activity_at) > float(timeout_seconds):
                         _ToolProcessRunner.terminate_process(process)
                         timeout_detail = "__timeout__"
                         break
@@ -434,7 +441,7 @@ class _ToolProcessRunner:
         if timeout_detail:
             preserved_log = _ToolProcessRunner.preserve_process_log(log_path, tool_name)
             raise TextureOptError(
-                f"{tool_name} 执行超时（{int(timeout_seconds or 0)}秒）: {detail or '无输出'}"
+                f"{tool_name} 执行超时（连续 {int(timeout_seconds or 0)} 秒无输出）: {detail or '无输出'}"
                 + (f" [日志: {preserved_log}]" if preserved_log else "")
             )
         if process.returncode != 0:
@@ -570,33 +577,6 @@ class ToddsEncoder:
                 except OSError:
                     pass
 
-    def encode_mod(
-        self,
-        cancel_event: threading.Event,
-        *,
-        overwrite_existing: bool | None = None,
-        source_paths: list[str] | None = None,
-        scale_percent: int | None = None,
-        max_size: int | None = None,
-        use_fix_size: bool | None = None,
-        output_callback: Callable[[str], None] | None = None,
-    ) -> None:
-        if scale_percent is None and not bool(use_fix_size):
-            scale_percent = TextureOptimizationManager._get_scale_factor_percent(self.options)
-        if max_size is None:
-            max_size = int(self.options.get("max_size", 0) or 0)
-        if use_fix_size is None:
-            use_fix_size = scale_percent is None
-        self.encode_batch(
-            cancel_event,
-            source_paths=list(source_paths or []),
-            overwrite_existing=bool(overwrite_existing),
-            scale_percent=scale_percent,
-            max_size=max_size,
-            output_callback=output_callback,
-        )
-
-
 class TextureOptimizationManager:
     def __init__(self):
         self._tasks: dict[str, TextureTask] = {}
@@ -604,7 +584,6 @@ class TextureOptimizationManager:
         self._analysis_started_at: dict[str, int] = {}
         self._lock = threading.Lock()
         self._base_scan_cache: dict[str, dict[str, Any]] = {}
-        self._projected_plan_cache: dict[str, dict[str, Any]] = {}
         self._cache_lock = threading.Lock()
         self._last_todds_log_path = ""
         TEXTURE_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -639,8 +618,11 @@ class TextureOptimizationManager:
 
     @classmethod
     def _build_target_from_path(cls, mod_path: str) -> dict[str, Any] | None:
-        abs_path = os.path.abspath(str(mod_path or "").strip())
-        if not abs_path or not os.path.isdir(abs_path):
+        raw_path = str(mod_path or "").strip()
+        if not raw_path:
+            return None
+        abs_path = os.path.abspath(raw_path)
+        if not os.path.isdir(abs_path):
             return None
         path_hash = generate_path_hash(abs_path)
         return {
@@ -694,7 +676,7 @@ class TextureOptimizationManager:
             "mods": [item for item in payload.get("mods", []) if isinstance(item, dict)],
             "files": [item for item in payload.get("files", []) if isinstance(item, dict)],
         }
-        _safe_json_dump(normalized, TEXTURE_EXCLUSIONS_PATH)
+        write_json_atomic(TEXTURE_EXCLUSIONS_PATH, normalized, indent=2)
 
     @classmethod
     def _build_exclusion_indexes(cls) -> tuple[set[str], set[tuple[str, str]]]:
@@ -793,27 +775,24 @@ class TextureOptimizationManager:
         payload = json.dumps(cls._signature_payload(options), ensure_ascii=False, sort_keys=True)
         return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 
-    @classmethod
-    def _build_scan_cache_key(cls, mod_paths: list[str], options: dict[str, Any]) -> str:
-        payload = {
-            "mod_paths": [os.path.abspath(path) for path in mod_paths or [] if path],
-            "signature": cls._build_signature(options),
-        }
-        text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-        return hashlib.sha1(text.encode("utf-8")).hexdigest()
-
     @staticmethod
-    def _build_source_signature(records: list[tuple[str, int]]) -> str:
+    def _build_source_signature(records: list[tuple[str, int, int]]) -> str:
         digest = hashlib.sha1()
-        for rel_path, mtime_ns in sorted(records, key=lambda item: item[0]):
+        for rel_path, source_size, mtime_ns in sorted(records, key=lambda item: item[0]):
             digest.update(rel_path.encode("utf-8", errors="ignore"))
+            digest.update(b"\0")
+            digest.update(str(int(source_size)).encode("ascii"))
             digest.update(b"\0")
             digest.update(str(int(mtime_ns)).encode("ascii"))
             digest.update(b"\n")
         return digest.hexdigest()
 
-    def _compute_source_signature(self, mod_path: str, cancel_event: threading.Event | None = None) -> str:
-        records: list[tuple[str, int]] = []
+    def _collect_source_files(
+        self,
+        mod_path: str,
+        cancel_event: threading.Event | None = None,
+    ) -> list[tuple[Path, str, os.stat_result]]:
+        source_files: list[tuple[Path, str, os.stat_result]] = []
         for texture_root in self._iter_texture_root_dirs(mod_path):
             if cancel_event and cancel_event.is_set():
                 raise TextureOptCancelled("贴图扫描任务已取消")
@@ -830,8 +809,9 @@ class TextureOptimizationManager:
                         source_stat = source.stat()
                     except OSError:
                         continue
-                    records.append((self._to_rel_path(str(source), mod_path), int(source_stat.st_mtime_ns)))
-        return self._build_source_signature(records)
+                    rel_path = Path(os.path.relpath(source, mod_path)).as_posix()
+                    source_files.append((source, rel_path, source_stat))
+        return source_files
 
     @staticmethod
     def _strip_projection_fields(entry: dict[str, Any]) -> dict[str, Any]:
@@ -839,6 +819,7 @@ class TextureOptimizationManager:
         for field_name in [
             "output_exists",
             "output_size",
+            "output_mtime_ns",
             "dds_vram",
             "small_skipped",
             "needs_action",
@@ -850,8 +831,8 @@ class TextureOptimizationManager:
             "excluded",
             "last_error",
             "overwrite_existing",
-            "retry_scale_percent",
-            "retry_reason",
+            "zstd_had_dds_before_task",
+            "zstd_backup_path",
         ]:
             base_entry.pop(field_name, None)
         return base_entry
@@ -880,10 +861,19 @@ class TextureOptimizationManager:
         cache_key = str(base_index.get("mod_instance_key") or "")
         if not cache_key:
             return
+        generated_at = current_ms()
         with self._cache_lock:
+            # 缓存只在内存中使用；写入新结果时顺便清理过期项，避免长期运行后积累不再访问的模组索引。
+            expired_keys = [
+                key
+                for key, snapshot in self._base_scan_cache.items()
+                if generated_at - int(snapshot.get("generated_at", 0) or 0) > TEXTURE_BASE_SCAN_CACHE_TTL_MS
+            ]
+            for expired_key in expired_keys:
+                self._base_scan_cache.pop(expired_key, None)
             self._base_scan_cache[cache_key] = {
                 "schema_version": TEXTURE_SCAN_SNAPSHOT_SCHEMA_VERSION,
-                "generated_at": current_ms(),
+                "generated_at": generated_at,
                 "mod_path": str(base_index.get("mod_path") or ""),
                 "mod_name": str(base_index.get("mod_name") or ""),
                 "package_id": normalize_package_id(base_index.get("package_id", "")),
@@ -912,119 +902,6 @@ class TextureOptimizationManager:
                     self._base_scan_cache.pop(cache_key, None)
             return None
         return self._bind_base_index_metadata(cached, target)
-
-    @classmethod
-    def _build_exclusions_signature(cls) -> str:
-        payload = cls._load_exclusions()
-        normalized = {
-            "mods": sorted(
-                str(item.get("package_id") or "").strip().lower()
-                for item in payload.get("mods", [])
-                if str(item.get("package_id") or "").strip()
-            ),
-            "files": sorted(
-                (
-                    os.path.abspath(str(item.get("mod_path") or "")).lower(),
-                    cls._normalize_rel_path(str(item.get("rel_path") or "")).lower(),
-                )
-                for item in payload.get("files", [])
-                if str(item.get("mod_path") or "").strip() and str(item.get("rel_path") or "").strip()
-            ),
-        }
-        text = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
-        return hashlib.sha1(text.encode("utf-8")).hexdigest()
-
-    @classmethod
-    def _build_targets_signature(cls, mod_targets: list[dict[str, Any]] | list[str]) -> str:
-        payload = [
-            {
-                "mod_instance_key": str(target.get("mod_instance_key") or ""),
-                "mod_path": os.path.abspath(str(target.get("mod_path") or "")).lower(),
-            }
-            for target in cls._normalize_mod_targets(mod_targets)
-        ]
-        text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-        return hashlib.sha1(text.encode("utf-8")).hexdigest()
-
-    @classmethod
-    def _build_projected_plan_cache_key(cls, mod_targets: list[dict[str, Any]] | list[str], options: dict[str, Any]) -> str:
-        payload = {
-            "targets": cls._build_targets_signature(mod_targets),
-            "options": cls._build_signature(options),
-            "exclusions": cls._build_exclusions_signature(),
-        }
-        text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-        return hashlib.sha1(text.encode("utf-8")).hexdigest()
-
-    def _store_projected_plan_cache(
-        self,
-        mod_targets: list[dict[str, Any]] | list[str],
-        options: dict[str, Any],
-        scan_results: list[dict[str, Any]],
-    ) -> None:
-        cache_key = self._build_projected_plan_cache_key(mod_targets, options)
-        with self._cache_lock:
-            self._projected_plan_cache[cache_key] = {
-                "generated_at": current_ms(),
-                "scan_results": scan_results,
-            }
-
-    def _take_projected_plan_cache(
-        self,
-        mod_targets: list[dict[str, Any]] | list[str],
-        options: dict[str, Any],
-    ) -> list[dict[str, Any]] | None:
-        cache_key = self._build_projected_plan_cache_key(mod_targets, options)
-        with self._cache_lock:
-            cached = self._projected_plan_cache.pop(cache_key, None)
-        if not isinstance(cached, dict):
-            return None
-        generated_at = int(cached.get("generated_at", 0) or 0)
-        if generated_at <= 0 or (current_ms() - generated_at) > TEXTURE_BASE_SCAN_CACHE_TTL_MS:
-            return None
-        results = cached.get("scan_results")
-        return results if isinstance(results, list) else None
-
-    def _store_scan_snapshot(self, snapshot: dict[str, Any]) -> None:
-        for item in snapshot.get("base_indexes", []):
-            if isinstance(item, dict):
-                self._store_base_scan_cache(item)
-
-    def _get_cached_scan_snapshot(self, mod_paths: list[str], options: dict[str, Any]) -> dict[str, Any] | None:
-        targets = self._normalize_mod_targets(mod_paths)
-        if not targets:
-            return None
-        base_indexes: list[dict[str, Any]] = []
-        for target in targets:
-            cached = self._get_cached_base_scan(target)
-            if not cached:
-                return None
-            if str(cached.get("source_signature") or "") != self._compute_source_signature(str(target.get("mod_path") or "")):
-                return None
-            base_indexes.append(cached)
-        summary, rows = self._project_base_indexes(base_indexes, self._build_options(options), apply_exclusions=True)
-        return {
-            "id": uuid.uuid4().hex,
-            "schema_version": TEXTURE_SCAN_SNAPSHOT_SCHEMA_VERSION,
-            "cache_key": self._build_scan_cache_key(mod_paths, self._build_options(options)),
-            "signature": self._build_signature(self._build_options(options)),
-            "generated_at": current_ms(),
-            "mod_paths": [str(target.get("mod_path") or "") for target in targets],
-            "summary": summary,
-            "mods": [{"mod_path": row.get("mod_path"), "stat": row} for row in rows],
-            "base_indexes": base_indexes,
-        }
-
-    def _invalidate_scan_cache(self, mod_paths: list[str]) -> int:
-        targets = {os.path.abspath(path).lower() for path in mod_paths or [] if path}
-        removed = 0
-        with self._cache_lock:
-            for cache_key, snapshot in list(self._base_scan_cache.items()):
-                snapshot_path = os.path.abspath(str(snapshot.get("mod_path") or "")).lower()
-                if snapshot_path in targets:
-                    self._base_scan_cache.pop(cache_key, None)
-                    removed += 1
-        return removed
 
     def _remember_todds_log_path(self, exc: Exception) -> str:
         match = re.search(r"\[日志:\s*(.*?)\]$", str(exc or ""))
@@ -1105,18 +982,20 @@ class TextureOptimizationManager:
                     task_id,
                     status="cancelled",
                     progress=0,
-                    message="贴图扫描任务已取消",
+                    message=tr("tasks.texture.scan_cancelled", "贴图扫描任务已取消"),
                     processed_mods=0,
                     total_mods=len(normalized_targets),
                     summary=self._create_empty_stat(include_mod_count=True, mod_count=len(normalized_targets)),
                 )
             except Exception as exc:
                 logger.error("后台贴图分析任务执行失败: %s", exc, exc_info=True)
+                failed_message = tr("tasks.texture.scan_failed", "贴图扫描任务失败。请检查 Mod 路径、贴图文件和工具配置后重试。")
                 self._emit_analysis_progress(
                     task_id,
                     status="failed",
                     progress=0,
-                    message=f"贴图扫描任务失败: {exc}",
+                    message=tr("tasks.texture.scan_failed_title", "贴图扫描失败"),
+                    user_message=failed_message,
                     processed_mods=0,
                     total_mods=len(normalized_targets),
                     summary=self._create_empty_stat(include_mod_count=True, mod_count=len(normalized_targets)),
@@ -1149,7 +1028,7 @@ class TextureOptimizationManager:
 
         worker = threading.Thread(target=self._run_task, args=(task,), daemon=True, name=f"TextureOpt-{task_id[:8]}")
         worker.start()
-        self._emit_progress(task, status="pending", progress=0, message="准备任务...")
+        self._emit_progress(task, status="pending", progress=0, message=tr("tasks.texture.prepare_task", "准备任务..."))
         return task.to_payload()
 
     def cancel_task(self, task_id: str) -> dict[str, Any]:
@@ -1157,7 +1036,7 @@ class TextureOptimizationManager:
         if task:
             task._cancel_event.set()
             if task.status == "pending":
-                self._set_task_state(task, status="cancelled", message="贴图优化任务已取消")
+                self._set_task_state(task, status="cancelled", message=tr("tasks.texture.cancelled", "贴图优化任务已取消"))
             return task.to_payload()
 
         analysis_event = self._analysis_tasks.get(task_id)
@@ -1175,16 +1054,23 @@ class TextureOptimizationManager:
         merged_options = self._build_options(options)
         try:
             executable = ToddsEncoder(merged_options).resolve_executable()
+            message = tr("api.texture.todds_found", "已找到 todds 可执行文件")
             return {
                 "available": True,
                 "resolved_path": str(executable),
-                "message": "已找到 todds 可执行文件",
+                "message": str(message),
+                "message_key": localized_key(message),
+                "message_params": localized_params(message),
             }
         except TextureOptError as exc:
+            logger.warning("贴图工具不可用: %s", exc)
+            message = tr("api.texture.tool_unavailable", "贴图工具暂不可用。请检查工具配置、下载状态或文件权限。")
             return {
                 "available": False,
                 "resolved_path": "",
-                "message": str(exc),
+                "message": str(message),
+                "message_key": localized_key(message),
+                "message_params": localized_params(message),
             }
 
     def prepare_tool_download(self, download_mgr, options: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1226,10 +1112,10 @@ class TextureOptimizationManager:
                     extract_dir=str(texture_tools_path),
                     cleanup_archive=True,
                 ),
-                download_start_message="开始下载 todds 工具包",
-                install_start_message="todds 工具包获取成功，正在解压...",
-                success_toast=f"贴图工具下载完成: {texture_tools_path}",
-                failure_toast="贴图工具下载失败",
+                download_start_message=tr("tasks.texture.tool_download_start", "开始下载 todds 工具包"),
+                install_start_message=tr("tasks.texture.tool_install_start", "todds 工具包获取成功，正在解压..."),
+                success_toast=tr("toast.texture.tool_download_done", "贴图工具下载完成: {path}", path=str(texture_tools_path)),
+                failure_toast=tr("toast.texture.tool_download_failed", "贴图工具下载失败"),
             ),
         )
         return {"already_ready": False}
@@ -1254,12 +1140,30 @@ class TextureOptimizationManager:
             cancel_event,
             analysis_task_id=analysis_task_id,
         )
+        scan_failed = int(summary.get("scan_failed_count", 0) or 0)
         elapsed_ms = max(0, current_ms() - int(self._analysis_started_at.get(analysis_task_id, current_ms())))
         self._emit_analysis_progress(
             analysis_task_id,
-            status="success",
+            status="failed" if scan_failed > 0 else "success",
             progress=100,
-            message=f"统计完成，用时 {self._format_elapsed_ms(elapsed_ms)}",
+            message=(
+                tr(
+                    "tasks.texture.analysis_completed_with_failed",
+                    "统计完成，{failed_count} 个模组扫描失败，用时 {elapsed}",
+                    {"failed_count": scan_failed, "elapsed": self._format_elapsed_ms(elapsed_ms)},
+                )
+                if scan_failed > 0
+                else tr("tasks.texture.analysis_completed_elapsed", "统计完成，用时 {elapsed}", {"elapsed": self._format_elapsed_ms(elapsed_ms)})
+            ),
+            user_message=(
+                tr(
+                    "tasks.texture.analysis_completed_with_failed",
+                    "统计完成，{failed_count} 个模组扫描失败，用时 {elapsed}",
+                    {"failed_count": scan_failed, "elapsed": self._format_elapsed_ms(elapsed_ms)},
+                )
+                if scan_failed > 0
+                else None
+            ),
             processed_mods=len(normalized_targets),
             total_mods=len(normalized_targets),
             summary=summary,
@@ -1277,13 +1181,17 @@ class TextureOptimizationManager:
 
     def _run_task(self, task: TextureTask) -> None:
         try:
-            self._set_task_state(task, status="running", message="正在执行贴图队列...")
+            self._set_task_state(task, status="running", message=tr("tasks.texture.queue_running", "正在执行贴图队列..."))
             summary = self._clean_generated(task) if task.action == "clean_generated" else self._optimize(task)
             success_message = str(summary.pop("message", "贴图优化任务完成"))
             final_status = str(summary.pop("final_status", "success") or "success")
             final_summary = summary.pop("final_summary", None)
             final_mods = summary.pop("final_mods", None)
             refresh_after_analyze = bool(summary.pop("refresh_after_analyze", True))
+            failed_count = int(summary.get("failed_count", 0) or 0)
+            if failed_count <= 0:
+                failed_count = sum(int(summary.get(key, 0) or 0) for key in ("failed", "scan_failed", "delete_failed"))
+            summary["failed_count"] = failed_count
             elapsed_ms = max(0, current_ms() - int(task.created_at))
             metrics = self._build_metrics(summary)
             if isinstance(final_summary, dict):
@@ -1297,13 +1205,14 @@ class TextureOptimizationManager:
                 metrics["todds_log_path"] = self._last_todds_log_path
             result_path = ""
             if isinstance(final_summary, dict) and isinstance(final_mods, list):
+                write_metrics = {key: value for key, value in metrics.items() if key != "final_mods"}
                 self._emit_progress(
                     task,
                     status="running",
                     progress=max(int(task.progress or 0), 99),
-                    message="写入任务结果",
+                    message=tr("tasks.texture.write_result", "写入任务结果"),
                     metrics={
-                        **metrics,
+                        **write_metrics,
                         "phase": "finalize",
                         "phase_label": "收尾阶段",
                         "phase_percent": 90,
@@ -1313,14 +1222,21 @@ class TextureOptimizationManager:
                         "refresh_after_analyze": refresh_after_analyze,
                     },
                 )
-                result_path = self._write_task_result_file(
-                    task,
-                    task.options,
-                    final_summary,
-                    final_mods,
-                    failed_items if isinstance(failed_items, list) else [],
-                )
-                metrics["result_path"] = result_path
+                try:
+                    result_path = self._write_task_result_file(
+                        task,
+                        task.options,
+                        final_summary,
+                        final_mods,
+                        failed_items if isinstance(failed_items, list) else [],
+                        failed_count,
+                    )
+                    metrics["result_path"] = result_path
+                except OSError as exc:
+                    logger.warning("写入贴图优化任务结果失败：task_id=%s error=%s", task.id, exc)
+                    metrics["result_write_failed"] = True
+                    metrics["result_write_error"] = str(exc)
+                    success_message = f"{success_message}，{tr('tasks.texture.result_write_failed', '结果记录写入失败')}"
             if task.action == "optimize":
                 metrics["phase"] = "finalize"
                 metrics["phase_label"] = "收尾阶段"
@@ -1334,16 +1250,17 @@ class TextureOptimizationManager:
                 task,
                 status=final_status,
                 progress=100,
-                message=f"{success_message}，用时 {self._format_elapsed_ms(elapsed_ms)}",
+                message=tr("tasks.texture.completed_elapsed", "{message}，用时 {elapsed}", {"message": success_message, "elapsed": self._format_elapsed_ms(elapsed_ms)}),
                 summary=summary,
                 metrics=metrics,
             )
-        except TextureOptCancelled as exc:
+        except TextureOptCancelled:
             logger.warning("贴图优化任务已取消：id=%s action=%s", task.id, task.action)
-            self._set_task_state(task, status="cancelled", message=str(exc), error="")
-        except Exception as exc:
+            self._set_task_state(task, status="cancelled", message=tr("tasks.texture.cancelled", "贴图优化任务已取消"), error="")
+        except Exception:
             logger.error("贴图优化任务失败", exc_info=True)
-            self._set_task_state(task, status="failed", message="贴图优化失败", error=str(exc))
+            failed_message = tr("tasks.texture.failed", "贴图优化失败。请检查工具配置、贴图文件和输出目录权限后重试。")
+            self._set_task_state(task, status="failed", message=tr("tasks.texture.failed_title", "贴图优化失败"), error=failed_message)
 
     def _optimize(self, task: TextureTask) -> dict[str, Any]:
         options = self._build_options(task.options)
@@ -1365,11 +1282,29 @@ class TextureOptimizationManager:
         failed = 0
         successful_entries: list[dict[str, Any]] = []
         successful_mod_paths: set[str] = set()
-        failed_items: list[dict[str, Any]] = []
-        retry_candidates: list[dict[str, Any]] = []
+        scan_failed_items = [
+            {
+                "package_id": str(item.get("stat", {}).get("package_id") or ""),
+                "mod_path": str(item.get("mod_path") or ""),
+                "mod_name": str(item.get("mod_name") or item.get("stat", {}).get("mod_name") or ""),
+                "rel_path": "",
+                "error": str(item.get("stat", {}).get("last_error") or "扫描失败"),
+                "todds_log_path": "",
+            }
+            for item in scan_results
+            if str(item.get("stat", {}).get("scan_status") or "") == "failed"
+        ]
+        scan_failed = len(scan_failed_items)
+        failed_items: list[dict[str, Any]] = scan_failed_items[:20]
+        retry_candidates: list[tuple[dict[str, Any], bool, int | None]] = []
         zstd_output_mode = self._is_zstd_output_mode(options)
         zstd_clean_old_dds = bool(options.get("zstd_clean_old_dds", False))
         output_label = "ZSTD" if zstd_output_mode else "DDS"
+        if zstd_output_mode:
+            for batch in batches:
+                for entry in batch["entries"]:
+                    source_text = str(entry.get("source_path") or "")
+                    entry["zstd_had_dds_before_task"] = bool(source_text and Path(source_text).with_suffix(TEXTURE_OUTPUT_DDS_EXT).exists())
 
         def is_recoverable_encode_error(exc: Exception) -> bool:
             if not isinstance(exc, TextureOptError):
@@ -1378,7 +1313,8 @@ class TextureOptimizationManager:
             return message.startswith("todds 执行失败") or message.startswith("todds 执行超时")
 
         def remember_failed_entry(entry: dict[str, Any], exc: Exception) -> None:
-            error_text = str(exc or "未知错误")
+            logger.warning("贴图条目处理失败：rel_path=%s error=%s", entry.get("rel_path"), exc)
+            error_text = str(exc or "").strip() or str(tr("tasks.texture.item_failed", "贴图处理失败。请检查贴图文件、工具配置和输出目录权限。"))
             entry["last_error"] = error_text
             if len(failed_items) < 20:
                 failed_items.append(
@@ -1391,6 +1327,9 @@ class TextureOptimizationManager:
                         "todds_log_path": self._last_todds_log_path,
                     }
                 )
+
+        def queue_retry_entry(entry: dict[str, Any], *, overwrite_existing: bool, scale_percent: int | None) -> None:
+            retry_candidates.append((entry, overwrite_existing, scale_percent))
 
         def refresh_mod_stats(mod_paths: set[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
             for mod_path in mod_paths:
@@ -1415,24 +1354,63 @@ class TextureOptimizationManager:
             overwrite_existing: bool,
             scale_percent: int | None,
             output_callback: Callable[[str], None] | None = None,
-        ) -> None:
-            source_paths = [str(entry.get("source_path") or "") for entry in entries]
-            backups = self._prepare_zstd_dds_backups(entries) if zstd_output_mode else []
+        ) -> tuple[list[dict[str, Any]], list[tuple[dict[str, Any], Exception]]]:
+            failed_pairs: list[tuple[dict[str, Any], Exception]] = []
+            process_entries = entries
+            backups: dict[str, tuple[dict[str, Any], Path, Path]] = {}
+            if zstd_output_mode:
+                backups, failed_pairs = self._prepare_zstd_dds_backups(entries)
+                failed_ids = {id(entry) for entry, _exc in failed_pairs}
+                process_entries = [entry for entry in entries if id(entry) not in failed_ids]
+            source_paths = [str(entry.get("source_path") or "") for entry in process_entries]
+            if not source_paths:
+                return [], failed_pairs
             try:
-                encoder.encode_mod(
+                encoder.encode_batch(
                     task._cancel_event,
                     overwrite_existing=True if zstd_output_mode else overwrite_existing,
                     source_paths=source_paths,
                     scale_percent=scale_percent,
                     max_size=0,
-                    use_fix_size=scale_percent is None,
                     output_callback=output_callback,
                 )
                 if zstd_output_mode:
-                    self._finalize_zstd_batch_results(entries)
-                    self._restore_zstd_dds_backups(backups, keep_old_dds=not zstd_clean_old_dds)
+                    successful_entries, finalize_failed_pairs = self._finalize_zstd_batch_results(process_entries)
+                    failed_pairs.extend(finalize_failed_pairs)
+                    successful_dds_keys = {
+                        os.path.normcase(str(Path(str(entry.get("source_path") or "")).with_suffix(TEXTURE_OUTPUT_DDS_EXT).resolve()))
+                        for entry in successful_entries
+                        if str(entry.get("source_path") or "")
+                    }
+                    failed_pairs.extend(self._cleanup_generated_zstd_dds(process_entries, backups))
+                    failed_pairs.extend(self._restore_zstd_dds_backups(
+                        backups,
+                        keep_old_dds=not zstd_clean_old_dds,
+                        successful_dds_keys=successful_dds_keys,
+                    ))
+                    failed_ids = {id(entry) for entry, _exc in failed_pairs}
+                    successful_entries = [entry for entry in successful_entries if id(entry) not in failed_ids]
+                    successful_entries, verify_failed_pairs = self._verify_generated_entries(
+                        successful_entries,
+                        must_change=True,
+                        output_stats_by_mod=output_stats_by_mod_path,
+                    )
+                    failed_pairs.extend(verify_failed_pairs)
+                    failed_by_entry: dict[int, tuple[dict[str, Any], Exception]] = {}
+                    for failed_entry, entry_error in failed_pairs:
+                        failed_by_entry.setdefault(id(failed_entry), (failed_entry, entry_error))
+                    successful_entries = [entry for entry in successful_entries if id(entry) not in failed_by_entry]
+                    return successful_entries, list(failed_by_entry.values())
+                successful_entries, verify_failed_pairs = self._verify_generated_entries(
+                    process_entries,
+                    must_change=overwrite_existing,
+                    output_stats_by_mod=output_stats_by_mod_path,
+                )
+                failed_pairs.extend(verify_failed_pairs)
+                return successful_entries, failed_pairs
             except Exception:
                 if zstd_output_mode:
+                    self._cleanup_generated_zstd_dds(process_entries, backups)
                     self._restore_zstd_dds_backups(backups, keep_old_dds=True)
                 raise
 
@@ -1441,7 +1419,7 @@ class TextureOptimizationManager:
             task,
             status="running",
             progress=25,
-            message=f"开始生成 {output_label}",
+            message=tr("tasks.texture.encode_start", "开始生成 {output_label}", {"output_label": output_label}),
             metrics={
                 "done": 0,
                 "total": total_pending,
@@ -1494,9 +1472,17 @@ class TextureOptimizationManager:
                     status="running",
                     progress=min(90, max(25, 25 + int((cumulative_done / max(1, total_pending)) * 65))),
                     message=(
-                        f"等待 todds 完成本批写入: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})"
+                        tr(
+                            "tasks.texture.encode_batch_wait",
+                            "等待 todds 完成本批写入: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+                            {"batch_index": batch_index, "batch_total": max(1, len(batches)), "scale_label": scale_label},
+                        )
                         if batch_finishing
-                        else f"生成 {output_label}: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})"
+                        else tr(
+                            "tasks.texture.encode_batch",
+                            "生成 {output_label}: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+                            {"output_label": output_label, "batch_index": batch_index, "batch_total": max(1, len(batches)), "scale_label": scale_label},
+                        )
                     ),
                     metrics={
                         "done": cumulative_done,
@@ -1521,9 +1507,9 @@ class TextureOptimizationManager:
                 )
 
             try:
-                run_encode_batch(
+                batch_successful_entries, batch_failed_pairs = run_encode_batch(
                     batch["entries"],
-                    overwrite_existing=bool(options.get("overwrite_existing", True)),
+                    overwrite_existing=bool(batch["overwrite_existing"]),
                     scale_percent=batch["scale_percent"],
                     output_callback=handle_todds_output,
                 )
@@ -1533,21 +1519,38 @@ class TextureOptimizationManager:
                 self._remember_todds_log_path(exc)
                 if not is_recoverable_encode_error(exc):
                     raise
-                if len(batch["entries"]) == 1:
-                    failed += 1
-                    remember_failed_entry(batch["entries"][0], exc)
-                else:
-                    for entry in batch["entries"]:
-                        entry["overwrite_existing"] = bool(batch["overwrite_existing"])
-                        entry["retry_scale_percent"] = batch["scale_percent"]
-                        retry_candidates.append(entry)
+                already_done: list[dict[str, Any]] = []
+                if not zstd_output_mode:
+                    already_done, _verify_failed_pairs = self._verify_generated_entries(
+                        batch["entries"],
+                        must_change=bool(batch["overwrite_existing"]),
+                        output_stats_by_mod=output_stats_by_mod_path,
+                    )
+                    if already_done:
+                        optimized += len(already_done)
+                        successful_entries.extend(already_done)
+                        successful_mod_paths.update(
+                            str(entry.get("mod_path") or "")
+                            for entry in already_done
+                            if str(entry.get("mod_path") or "")
+                        )
+                done_ids = {id(entry) for entry in already_done}
+                pending_retry_count = len(batch["entries"]) - len(done_ids)
+                logger.warning("贴图批次进入重试：count=%s scale=%s error=%s", pending_retry_count, batch["scale_percent"], exc)
+                for entry in batch["entries"]:
+                    if id(entry) not in done_ids:
+                        queue_retry_entry(entry, overwrite_existing=bool(batch["overwrite_existing"]), scale_percent=batch["scale_percent"])
             else:
                 batch_done = batch_completed_base + batch_size
                 self._emit_progress(
                     task,
                     status="running",
                     progress=min(95, max(25, 25 + int((batch_done / max(1, total_pending)) * 65))),
-                    message=f"登记生成结果: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
+                    message=tr(
+                        "tasks.texture.encode_record_batch",
+                        "登记生成结果: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+                        {"batch_index": batch_index, "batch_total": max(1, len(batches)), "scale_label": scale_label},
+                    ),
                     metrics={
                         "done": batch_completed_base,
                         "total": total_pending,
@@ -1567,15 +1570,20 @@ class TextureOptimizationManager:
                         "refresh_after_analyze": False,
                     },
                 )
-                self._apply_batch_results(
-                    batch["entries"],
-                    output_stats_by_mod=output_stats_by_mod_path,
-                )
-                optimized += len(batch["entries"])
-                successful_entries.extend(batch["entries"])
+                for entry, _entry_error in batch_failed_pairs:
+                    queue_retry_entry(entry, overwrite_existing=bool(batch["overwrite_existing"]), scale_percent=batch["scale_percent"])
+                if batch_failed_pairs:
+                    logger.warning(
+                        "贴图批次存在未确认结果，进入重试：count=%s scale=%s first_error=%s",
+                        len(batch_failed_pairs),
+                        batch["scale_percent"],
+                        batch_failed_pairs[0][1],
+                    )
+                optimized += len(batch_successful_entries)
+                successful_entries.extend(batch_successful_entries)
                 successful_mod_paths.update(
                     str(entry.get("mod_path") or "")
-                    for entry in batch["entries"]
+                    for entry in batch_successful_entries
                     if str(entry.get("mod_path") or "")
                 )
 
@@ -1584,7 +1592,11 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=min(90, max(25, 25 + int((processed_done / max(1, total_pending)) * 65))),
-                message=f"生成 {output_label}: 第 {batch_index}/{max(1, len(batches))} 批 ({scale_label})",
+                message=tr(
+                    "tasks.texture.encode_batch",
+                    "生成 {output_label}: 第 {batch_index}/{batch_total} 批 ({scale_label})",
+                    {"output_label": output_label, "batch_index": batch_index, "batch_total": max(1, len(batches)), "scale_label": scale_label},
+                ),
                 metrics={
                     "done": processed_done,
                     "total": total_pending,
@@ -1613,7 +1625,7 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=90,
-                message="主批次完成，开始统一重试可恢复失败项",
+                message=tr("tasks.texture.retry_start", "主批次完成，开始统一重试可恢复失败项"),
                 metrics={
                     "done": optimized + failed,
                     "total": total_pending,
@@ -1629,17 +1641,51 @@ class TextureOptimizationManager:
                     "refresh_after_analyze": False,
                 },
             )
-            grouped: dict[tuple[bool, int | None], list[dict[str, Any]]] = {}
-            for entry in retry_candidates:
-                grouped.setdefault((bool(entry.get("overwrite_existing")), entry.get("retry_scale_percent")), []).append(entry)
-            for (overwrite_existing, retry_scale_percent), entries in grouped.items():
-                for offset in range(0, len(entries), TEXTURE_ENCODE_BATCH_SIZE):
-                    chunk = entries[offset : offset + TEXTURE_ENCODE_BATCH_SIZE]
+            grouped_retries: dict[tuple[bool, int | None], list[dict[str, Any]]] = {}
+            for entry, overwrite_existing, retry_scale_percent in retry_candidates:
+                grouped_retries.setdefault((overwrite_existing, retry_scale_percent), []).append(entry)
+
+            retry_batches: list[tuple[list[dict[str, Any]], bool, int | None]] = []
+            for (overwrite_existing, retry_scale_percent), grouped_entries in grouped_retries.items():
+                for offset in range(0, len(grouped_entries), TEXTURE_RETRY_BATCH_SIZE):
+                    retry_batches.append((grouped_entries[offset : offset + TEXTURE_RETRY_BATCH_SIZE], overwrite_existing, retry_scale_percent))
+
+            for retry_entries, overwrite_existing, retry_scale_percent in retry_batches:
+                if task._cancel_event.is_set():
+                    raise TextureOptCancelled("DDS 生成任务已取消")
+                single_retry_entries: list[dict[str, Any]] = []
+                try:
+                    retry_successful_entries, retry_failed_pairs = run_encode_batch(
+                        retry_entries,
+                        overwrite_existing=overwrite_existing,
+                        scale_percent=retry_scale_percent,
+                    )
+                except TextureOptCancelled:
+                    raise
+                except Exception as exc:
+                    self._remember_todds_log_path(exc)
+                    if not is_recoverable_encode_error(exc):
+                        raise
+                    single_retry_entries = retry_entries
+                else:
+                    optimized += len(retry_successful_entries)
+                    retry_done += len(retry_successful_entries)
+                    successful_entries.extend(retry_successful_entries)
+                    successful_mod_paths.update(
+                        str(successful_entry.get("mod_path") or "")
+                        for successful_entry in retry_successful_entries
+                        if str(successful_entry.get("mod_path") or "")
+                    )
+                    single_retry_entries = [failed_entry for failed_entry, _entry_error in retry_failed_pairs]
+
+                process_failures = 0
+                last_process_error: Exception | None = None
+                for entry in single_retry_entries:
                     if task._cancel_event.is_set():
                         raise TextureOptCancelled("DDS 生成任务已取消")
                     try:
-                        run_encode_batch(
-                            chunk,
+                        single_successes, single_failures = run_encode_batch(
+                            [entry],
                             overwrite_existing=overwrite_existing,
                             scale_percent=retry_scale_percent,
                         )
@@ -1647,50 +1693,57 @@ class TextureOptimizationManager:
                         raise
                     except Exception as exc:
                         self._remember_todds_log_path(exc)
-                        for entry in chunk:
-                            failed += 1
-                            remember_failed_entry(entry, exc)
-                            retry_done += 1
+                        if not is_recoverable_encode_error(exc):
+                            raise
+                        process_failures += 1
+                        last_process_error = exc
+                        failed += 1
+                        retry_done += 1
+                        remember_failed_entry(entry, exc)
                     else:
-                        self._apply_batch_results(
-                            chunk,
-                            output_stats_by_mod=output_stats_by_mod_path,
-                        )
-                        optimized += len(chunk)
-                        retry_done += len(chunk)
-                        successful_entries.extend(chunk)
+                        for failed_entry, entry_error in single_failures:
+                            failed += 1
+                            retry_done += 1
+                            remember_failed_entry(failed_entry, entry_error)
+                        optimized += len(single_successes)
+                        retry_done += len(single_successes)
+                        successful_entries.extend(single_successes)
                         successful_mod_paths.update(
-                            str(entry.get("mod_path") or "")
-                            for entry in chunk
-                            if str(entry.get("mod_path") or "")
+                            str(successful_entry.get("mod_path") or "")
+                            for successful_entry in single_successes
+                            if str(successful_entry.get("mod_path") or "")
                         )
-                    self._emit_progress(
-                        task,
-                        status="running",
-                        progress=min(95, 90 + int((retry_done / max(1, len(retry_candidates))) * 5)),
-                        message="统一重试可恢复失败项",
-                        metrics={
-                            "done": optimized + failed,
-                            "total": total_pending,
-                            "optimized": optimized,
-                            "skipped": skipped,
-                            "failed": failed,
-                            "phase": "retry",
-                            "phase_label": "重试阶段",
-                            "phase_percent": int((retry_done / max(1, len(retry_candidates))) * 100),
-                            "phase_done": retry_done,
-                            "phase_total": len(retry_candidates),
-                            "phase_unit": "张",
-                            "refresh_after_analyze": False,
-                        },
-                    )
+
+                # 整个重试子批次都出现相同层级的进程失败时，继续启动后续进程只会重复失败。
+                if len(single_retry_entries) > 1 and process_failures == len(single_retry_entries) and last_process_error is not None:
+                    raise last_process_error
+                self._emit_progress(
+                    task,
+                    status="running",
+                    progress=min(95, 90 + int((retry_done / max(1, len(retry_candidates))) * 5)),
+                    message=tr("tasks.texture.retry_recoverable", "统一重试可恢复失败项"),
+                    metrics={
+                        "done": optimized + failed,
+                        "total": total_pending,
+                        "optimized": optimized,
+                        "skipped": skipped,
+                        "failed": failed,
+                        "phase": "retry",
+                        "phase_label": "重试阶段",
+                        "phase_percent": int((retry_done / max(1, len(retry_candidates))) * 100),
+                        "phase_done": retry_done,
+                        "phase_total": len(retry_candidates),
+                        "phase_unit": "张",
+                        "refresh_after_analyze": False,
+                    },
+                )
 
         if successful_entries:
             self._emit_progress(
                 task,
                 status="running",
                 progress=96,
-                message="更新生成状态",
+                message=tr("tasks.texture.update_encode_state", "更新生成状态"),
                 metrics={
                     "done": optimized + failed,
                     "total": total_pending,
@@ -1710,7 +1763,7 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=98,
-                message="统计生成结果",
+                message=tr("tasks.texture.summarize_encode_result", "统计生成结果"),
                 metrics={
                     "done": optimized + failed,
                     "total": total_pending,
@@ -1729,13 +1782,23 @@ class TextureOptimizationManager:
             final_summary, final_mods = refresh_mod_stats(successful_mod_paths)
         else:
             final_summary, final_mods = self._compose_progress_snapshot(task.mod_paths, final_mods_by_path)
-        message_parts = [part for part in [self._format_scale_counts(final_summary), f"失败 {failed} 张" if failed > 0 else ""] if part]
+        message_parts = [
+            part
+            for part in [
+                self._format_scale_counts(final_summary),
+                f"失败 {failed} 张" if failed > 0 else "",
+                f"扫描失败 {scan_failed} 个" if scan_failed > 0 else "",
+            ]
+            if part
+        ]
         return {
             "optimized": optimized,
             "skipped": skipped,
             "failed": failed,
+            "scan_failed": scan_failed,
+            "failed_count": failed + scan_failed,
             "failed_items": failed_items,
-            "final_status": "failed" if failed > 0 and optimized == 0 and total_pending > 0 else "success",
+            "final_status": "failed" if failed > 0 or scan_failed > 0 else "success",
             "preexisting_dds": int(final_summary.get("current_output_count", 0)),
             "orphan_deleted": 0,
             "total_jobs": len(task.mod_paths),
@@ -1743,49 +1806,125 @@ class TextureOptimizationManager:
             "final_summary": final_summary,
             "final_mods": final_mods,
             "refresh_after_analyze": False,
-            "message": f"{output_label} 生成完成{f'''，{', '.join(message_parts)}''' if message_parts else ''}",
+            "message": tr(
+                "tasks.texture.encode_completed",
+                "{output_label} 生成完成{details}",
+                {"output_label": output_label, "details": f"，{', '.join(message_parts)}" if message_parts else ""},
+            ),
         }
 
     @staticmethod
     def _zstd_backup_path(dds_path: Path) -> Path:
         return dds_path.with_name(f"{dds_path.name}.zstd-backup-{uuid.uuid4().hex}")
 
-    def _prepare_zstd_dds_backups(self, entries: list[dict[str, Any]]) -> list[tuple[Path, Path]]:
-        backups: list[tuple[Path, Path]] = []
+    @classmethod
+    def _run_zstd_file_operation(cls, operation: Callable[[], Any], *, action: str, path: Path) -> None:
+        for attempt in range(len(ZSTD_COMPRESS_RETRY_DELAYS_SECONDS) + 1):
+            try:
+                operation()
+                return
+            except OSError as exc:
+                if attempt >= len(ZSTD_COMPRESS_RETRY_DELAYS_SECONDS) or not cls._is_retryable_zstd_io_error(exc):
+                    raise
+                logger.warning("贴图 zstd 文件操作失败，准备重试：action=%s path=%s attempt=%s error=%s", action, path, attempt + 1, exc)
+                time.sleep(ZSTD_COMPRESS_RETRY_DELAYS_SECONDS[attempt])
+
+    def _prepare_zstd_dds_backups(self, entries: list[dict[str, Any]]) -> tuple[dict[str, tuple[dict[str, Any], Path, Path]], list[tuple[dict[str, Any], Exception]]]:
+        backups: dict[str, tuple[dict[str, Any], Path, Path]] = {}
+        failed_pairs: list[tuple[dict[str, Any], Exception]] = []
         seen_paths: set[str] = set()
         for entry in entries:
             source_text = str(entry.get("source_path") or "")
             if not source_text:
                 continue
-            source_path = Path(source_text)
-            dds_path = source_path.with_suffix(TEXTURE_OUTPUT_DDS_EXT)
-            path_key = os.path.normcase(str(dds_path.resolve()))
-            if path_key in seen_paths:
-                continue
-            seen_paths.add(path_key)
-            if not dds_path.exists():
-                continue
-            backup_path = self._zstd_backup_path(dds_path)
             try:
-                dds_path.replace(backup_path)
-                backups.append((dds_path, backup_path))
+                source_path = Path(source_text)
+                dds_path = source_path.with_suffix(TEXTURE_OUTPUT_DDS_EXT)
+                path_key = os.path.normcase(str(dds_path.resolve()))
+                if path_key in seen_paths:
+                    continue
+                seen_paths.add(path_key)
+                existing_backup_text = str(entry.get("zstd_backup_path") or "")
+                existing_backup = Path(existing_backup_text) if existing_backup_text else None
+                if existing_backup and existing_backup.exists():
+                    if dds_path.exists():
+                        self._run_zstd_file_operation(lambda: dds_path.unlink(missing_ok=True), action="cleanup_retry_dds", path=dds_path)
+                    backups[path_key] = (entry, dds_path, existing_backup)
+                    continue
+                entry.pop("zstd_backup_path", None)
+                if not dds_path.exists():
+                    continue
+                if not bool(entry.get("zstd_had_dds_before_task")):
+                    self._run_zstd_file_operation(lambda: dds_path.unlink(missing_ok=True), action="cleanup_generated_dds", path=dds_path)
+                    continue
+                backup_path = self._zstd_backup_path(dds_path)
+                self._run_zstd_file_operation(lambda: dds_path.replace(backup_path), action="backup_old_dds", path=dds_path)
+                entry["zstd_backup_path"] = str(backup_path)
+                backups[path_key] = (entry, dds_path, backup_path)
             except OSError as exc:
-                raise TextureOptError(f"准备 ZSTD 临时文件失败: {dds_path}，{exc}") from exc
-        return backups
+                error = TextureOptError(f"准备 ZSTD 临时文件失败: {source_text}，{exc}")
+                logger.warning("准备贴图 zstd DDS 备份失败：source=%s error=%s", source_text, exc)
+                failed_pairs.append((entry, error))
+        return backups, failed_pairs
+
+    @classmethod
+    def _cleanup_generated_zstd_dds(
+        cls,
+        entries: list[dict[str, Any]],
+        backups: dict[str, tuple[dict[str, Any], Path, Path]],
+    ) -> list[tuple[dict[str, Any], Exception]]:
+        failed_pairs: list[tuple[dict[str, Any], Exception]] = []
+        for entry in entries:
+            source_text = str(entry.get("source_path") or "")
+            if not source_text:
+                continue
+            dds_path = Path(source_text).with_suffix(TEXTURE_OUTPUT_DDS_EXT)
+            try:
+                path_key = os.path.normcase(str(dds_path.resolve()))
+                if path_key not in backups and dds_path.exists():
+                    cls._run_zstd_file_operation(lambda: dds_path.unlink(missing_ok=True), action="cleanup_generated_dds", path=dds_path)
+            except OSError as exc:
+                logger.warning("清理本次生成的临时 DDS 失败：dds=%s error=%s", dds_path, exc)
+                failed_pairs.append((entry, TextureOptError(f"清理 ZSTD 临时 DDS 失败: {dds_path}，{exc}")))
+        return failed_pairs
+
+    @classmethod
+    def _restore_zstd_dds_backups(
+        cls,
+        backups: dict[str, tuple[dict[str, Any], Path, Path]],
+        *,
+        keep_old_dds: bool,
+        successful_dds_keys: set[str] | None = None,
+    ) -> list[tuple[dict[str, Any], Exception]]:
+        failed_pairs: list[tuple[dict[str, Any], Exception]] = []
+        for entry, dds_path, backup_path in backups.values():
+            try:
+                restore_old = keep_old_dds
+                if not restore_old and successful_dds_keys is not None:
+                    try:
+                        restore_old = os.path.normcase(str(dds_path.resolve())) not in successful_dds_keys
+                    except OSError:
+                        restore_old = True
+                if restore_old:
+                    if dds_path.exists():
+                        cls._run_zstd_file_operation(lambda: dds_path.unlink(missing_ok=True), action="cleanup_generated_dds", path=dds_path)
+                    if backup_path.exists():
+                        cls._run_zstd_file_operation(lambda: backup_path.replace(dds_path), action="restore_old_dds", path=backup_path)
+                elif backup_path.exists():
+                    if dds_path.exists():
+                        cls._run_zstd_file_operation(lambda: dds_path.unlink(missing_ok=True), action="cleanup_generated_dds", path=dds_path)
+                    cls._run_zstd_file_operation(lambda: backup_path.unlink(missing_ok=True), action="remove_old_dds_backup", path=backup_path)
+                entry.pop("zstd_backup_path", None)
+            except OSError as exc:
+                logger.warning("恢复贴图 zstd DDS 失败：dds=%s backup=%s error=%s", dds_path, backup_path, exc)
+                failed_pairs.append((entry, TextureOptError(f"恢复原 DDS 失败: {dds_path}，{exc}")))
+        return failed_pairs
 
     @staticmethod
-    def _restore_zstd_dds_backups(backups: list[tuple[Path, Path]], *, keep_old_dds: bool) -> None:
-        for dds_path, backup_path in backups:
-            try:
-                if keep_old_dds:
-                    if dds_path.exists():
-                        dds_path.unlink()
-                    if backup_path.exists():
-                        backup_path.replace(dds_path)
-                elif backup_path.exists():
-                    backup_path.unlink()
-            except OSError as exc:
-                logger.warning("清理贴图 zstd DDS 备份失败：dds=%s backup=%s error=%s", dds_path, backup_path, exc)
+    def _is_retryable_zstd_io_error(exc: OSError) -> bool:
+        retryable_errno = {errno.EACCES, errno.EPERM, errno.EBUSY, errno.EAGAIN}
+        retryable_winerror = {32, 33}  # Windows 文件共享/锁定冲突
+        return getattr(exc, "errno", None) in retryable_errno or getattr(exc, "winerror", None) in retryable_winerror
 
     @staticmethod
     def _compress_dds_to_zstd(dds_path: Path, zstd_path: Path) -> int:
@@ -1817,70 +1956,93 @@ class TextureOptimizationManager:
                 except OSError:
                     pass
 
-    def _finalize_zstd_batch_results(self, entries: list[dict[str, Any]]) -> None:
-        for entry in entries:
-            source_text = str(entry.get("source_path") or "")
-            if not source_text:
-                continue
-            source_path = Path(source_text)
-            dds_path = source_path.with_suffix(TEXTURE_OUTPUT_DDS_EXT)
-            zstd_path = source_path.with_suffix(TEXTURE_OUTPUT_ZSTD_EXT)
-            # ZSTD 模式复用 todds 的 DDS 编码结果，再压缩成 Image Opt 可读取的同名文件。
-            self._compress_dds_to_zstd(dds_path, zstd_path)
-            try:
-                dds_path.unlink()
-            except FileNotFoundError:
-                pass
-            except OSError as exc:
-                raise TextureOptError(f"删除 ZSTD 临时 DDS 失败: {dds_path}，{exc}") from exc
-            entry["output_path"] = str(zstd_path)
-            entry["output_rel_path"] = self._to_rel_path(str(zstd_path), str(entry.get("mod_path") or zstd_path.parent))
-            entry["output_format"] = "zstd"
-
-    def _apply_batch_results(
-        self,
+    @staticmethod
+    def _verify_generated_entries(
         entries: list[dict[str, Any]],
         *,
+        must_change: bool = False,
         output_stats_by_mod: dict[str, dict[str, dict[str, Any]]] | None = None,
-    ) -> None:
+    ) -> tuple[list[dict[str, Any]], list[tuple[dict[str, Any], Exception]]]:
+        successful_entries: list[dict[str, Any]] = []
+        failed_pairs: list[tuple[dict[str, Any], Exception]] = []
         for entry in entries:
-            entry["output_exists"] = True
-            output_path = Path(str(entry.get("output_path") or ""))
+            output_text = str(entry.get("output_path") or "").strip()
+            if not output_text:
+                failed_pairs.append((entry, TextureOptError("生成结果缺少输出路径")))
+                continue
+            output_path = Path(output_text)
             try:
                 output_stat = output_path.stat()
-                output_size = int(output_stat.st_size)
-                output_mtime_ns = int(output_stat.st_mtime_ns)
-            except OSError:
-                output_size = int(entry.get("output_size", 0) or 0)
-                output_mtime_ns = 0
+            except OSError as exc:
+                failed_pairs.append((entry, TextureOptError(f"生成结果未写出: {output_path}，{exc}")))
+                continue
+            output_size = int(output_stat.st_size)
+            if output_size <= 0:
+                failed_pairs.append((entry, TextureOptError(f"生成结果为空: {output_path}")))
+                continue
+            output_mtime_ns = int(output_stat.st_mtime_ns)
+            if must_change and bool(entry.get("output_exists")) and output_size == int(entry.get("output_size", 0) or 0) and output_mtime_ns == int(entry.get("output_mtime_ns", 0) or 0):
+                failed_pairs.append((entry, TextureOptError(f"生成结果未更新: {output_path}")))
+                continue
+            entry["output_exists"] = True
             entry["output_size"] = output_size
+            entry["output_mtime_ns"] = output_mtime_ns
             entry["needs_action"] = False
             entry["action_status"] = "up_to_date"
             mod_path = str(entry.get("mod_path") or "")
-            if not mod_path:
-                continue
             output_rel_path = str(entry.get("output_rel_path") or "")
-            if output_stats_by_mod is not None and output_rel_path:
+            if output_stats_by_mod is not None and mod_path and output_rel_path:
                 output_stats_by_mod.setdefault(mod_path, {})[output_rel_path] = {
                     "path": str(output_path),
                     "size": output_size,
                     "mtime_ns": output_mtime_ns,
-                    "format": self._output_format_for_path(output_path),
+                    "format": TextureOptimizationManager._output_format_for_path(output_path),
                 }
+            successful_entries.append(entry)
+        return successful_entries, failed_pairs
+
+    def _finalize_zstd_batch_results(self, entries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[tuple[dict[str, Any], Exception]]]:
+        def compress_entry(entry: dict[str, Any]) -> tuple[dict[str, Any] | None, tuple[dict[str, Any], Exception] | None]:
+            source_text = str(entry.get("source_path") or "")
+            if not source_text:
+                return None, None
+            source_path = Path(source_text)
+            dds_path = source_path.with_suffix(TEXTURE_OUTPUT_DDS_EXT)
+            zstd_path = source_path.with_suffix(TEXTURE_OUTPUT_ZSTD_EXT)
+            # ZSTD 模式复用 todds 的 DDS 编码结果，再压缩成 Image Opt 可读取的同名文件。
+            try:
+                self._run_zstd_file_operation(lambda: self._compress_dds_to_zstd(dds_path, zstd_path), action="compress_zstd", path=zstd_path)
+            except TextureOptError as exc:
+                message = str(exc or "")
+                if message.startswith("当前环境缺少 zstandard") or message.startswith("当前 zstandard 安装不完整"):
+                    raise
+                return None, (entry, exc)
+            except OSError as exc:
+                return None, (entry, TextureOptError(f"压缩 ZSTD 失败: {dds_path}，{exc}"))
+            entry["output_path"] = str(zstd_path)
+            entry["output_rel_path"] = str(PurePosixPath(str(entry.get("rel_path") or "")).with_suffix(TEXTURE_OUTPUT_ZSTD_EXT))
+            entry["output_format"] = "zstd"
+            return entry, None
+
+        # 压缩器和临时文件按条目独立，使用少量线程并行可利用多核，同时避免过多并发争用磁盘。
+        workers = max(1, min(len(entries), 4, os.cpu_count() or 1))
+        if workers == 1:
+            results = [compress_entry(entry) for entry in entries]
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers, thread_name_prefix="TextureZstd") as executor:
+                results = list(executor.map(compress_entry, entries))
+
+        successful_entries = [entry for entry, _failure in results if entry is not None]
+        failed_pairs = [failure for _entry, failure in results if failure is not None]
+        return successful_entries, failed_pairs
 
     def _scan_targets_for_optimize(self, task: TextureTask, options: dict[str, Any]) -> list[dict[str, Any]]:
-        cached_results = self._take_projected_plan_cache(task.mod_targets, options)
-        if cached_results is not None:
-            return cached_results
-
         plan = self._build_texture_plan(
             task.mod_targets,
             options,
             task._cancel_event,
             progress_task=task,
             progress_kind="optimize",
-            validate_cache=False,
-            store_projected_cache=False,
         )
         return list(plan["results"])
 
@@ -1893,26 +2055,22 @@ class TextureOptimizationManager:
         progress_task: TextureTask | None = None,
         analysis_task_id: str | None = None,
         progress_kind: str = "analysis",
-        validate_cache: bool = True,
-        store_projected_cache: bool = False,
     ) -> dict[str, Any]:
         normalized_targets = self._normalize_mod_targets(mod_targets)
         ordered_paths = [str(target.get("mod_path") or "") for target in normalized_targets]
         total_mods = max(1, len(normalized_targets))
         workers = self._resolve_scan_workers(total_mods, options)
         scan_results: list[dict[str, Any] | None] = [None] * len(normalized_targets)
-        base_indexes: list[dict[str, Any] | None] = [None] * len(normalized_targets)
         partial_by_path: dict[str, dict[str, Any]] = {}
         excluded_indexes = self._build_exclusion_indexes()
         last_emit_at = 0.0
 
-        def build_target_plan(target: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        def build_target_plan(target: dict[str, Any]) -> dict[str, Any]:
             if cancel_event and cancel_event.is_set():
                 raise TextureOptCancelled("贴图扫描任务已取消")
             base_index = self._load_or_build_base_index(
                 target,
                 cancel_event=cancel_event,
-                validate_cache=validate_cache,
             )
             if cancel_event and cancel_event.is_set():
                 raise TextureOptCancelled("贴图扫描任务已取消")
@@ -1922,7 +2080,7 @@ class TextureOptimizationManager:
                 apply_exclusions=True,
                 excluded_indexes=excluded_indexes,
             )
-            return base_index, result
+            return result
 
         def emit_plan_progress(result: dict[str, Any], completed: int, *, force: bool = False) -> None:
             nonlocal last_emit_at
@@ -1940,7 +2098,7 @@ class TextureOptimizationManager:
                     analysis_task_id,
                     status="running",
                     progress=min(99, phase_percent),
-                    message=f"已扫描 {result['mod_name']}",
+                    message=tr("tasks.texture.scanned_mod", "已扫描 {mod_name}", {"mod_name": result["mod_name"]}),
                     processed_mods=completed,
                     total_mods=total_mods,
                     summary=partial_summary,
@@ -1952,7 +2110,11 @@ class TextureOptimizationManager:
                     progress_task,
                     status="running",
                     progress=min(24, max(1, int((completed / total_mods) * 24))),
-                    message=f"准备生成: {result['mod_name']}" if progress_kind == "optimize" else f"已扫描 {result['mod_name']}",
+                    message=(
+                        tr("tasks.texture.prepare_generate_mod", "准备生成: {mod_name}", {"mod_name": result["mod_name"]})
+                        if progress_kind == "optimize"
+                        else tr("tasks.texture.scanned_mod", "已扫描 {mod_name}", {"mod_name": result["mod_name"]})
+                    ),
                     metrics={
                         "done": completed,
                         "total": len(normalized_targets),
@@ -1985,8 +2147,24 @@ class TextureOptimizationManager:
                 if cancel_event and cancel_event.is_set():
                     raise TextureOptCancelled("贴图扫描任务已取消")
                 index = future_map[future]
-                base_index, result = future.result()
-                base_indexes[index] = base_index
+                try:
+                    result = future.result()
+                except TextureOptCancelled:
+                    raise
+                except Exception as exc:
+                    target = normalized_targets[index]
+                    mod_path = str(target.get("mod_path") or "")
+                    mod_name = str(target.get("mod_name") or Path(mod_path).name)
+                    logger.warning("扫描贴图 Mod 失败：mod_path=%s error=%s", mod_path, exc)
+                    stat = self._create_empty_stat(mod_path=mod_path, mod_name=mod_name)
+                    stat["package_id"] = str(target.get("package_id") or "")
+                    stat["store"] = self._normalize_store(target.get("store"))
+                    stat["path_hash"] = str(target.get("path_hash") or generate_path_hash(mod_path))
+                    stat["mod_instance_key"] = str(target.get("mod_instance_key") or stat["path_hash"]).strip()
+                    stat["scan_status"] = "failed"
+                    stat["scan_failed_count"] = 1
+                    stat["last_error"] = str(exc or "").strip() or "扫描失败"
+                    result = {"mod_path": mod_path, "mod_name": mod_name, "entries": [], "stat": stat, "output_stats": {}}
                 scan_results[index] = result
                 partial_by_path[str(result["mod_path"])] = dict(result["stat"])
                 completed += 1
@@ -1995,15 +2173,12 @@ class TextureOptimizationManager:
         results = [result for result in scan_results if isinstance(result, dict)]
         stats_by_path = {str(result["mod_path"]): dict(result["stat"]) for result in results}
         summary, rows = self._compose_progress_snapshot(ordered_paths, stats_by_path)
-        if store_projected_cache:
-            self._store_projected_plan_cache(normalized_targets, options, results)
         return {
             "targets": normalized_targets,
             "ordered_paths": ordered_paths,
             "summary": summary,
             "rows": rows,
             "results": results,
-            "base_indexes": [item for item in base_indexes if isinstance(item, dict)],
         }
 
     def _compose_progress_snapshot(
@@ -2034,9 +2209,30 @@ class TextureOptimizationManager:
         deleted = 0
         checked = 0
         delete_failed = 0
-        changed_mod_paths: set[str] = set()
+        failed_items: list[dict[str, Any]] = []
         total_mods = max(1, len(task.mod_targets))
         last_emit_at = 0.0
+
+        def remember_delete_failed(mod_target: dict[str, Any], output_path: Path, exc: OSError) -> None:
+            mod_path = str(mod_target.get("mod_path") or "")
+            mod_name = str(mod_target.get("mod_name") or Path(mod_path).name)
+            try:
+                rel_path = output_path.resolve().relative_to(Path(mod_path).resolve()).as_posix()
+            except (OSError, ValueError):
+                rel_path = output_path.name
+            logger.warning("删除贴图清理输出失败：mod_path=%s rel_path=%s path=%s error=%s", mod_path, rel_path, output_path, exc)
+            if len(failed_items) < 20:
+                failed_items.append(
+                    {
+                        "package_id": str(mod_target.get("package_id") or ""),
+                        "mod_path": mod_path,
+                        "mod_name": mod_name,
+                        "rel_path": rel_path,
+                        "file_path": str(output_path),
+                        "error": f"删除 {output_label} 失败: {output_path}，{exc}",
+                        "todds_log_path": "",
+                    }
+                )
 
         def emit_clean_progress(index: int, mod_name: str, *, force: bool = False) -> None:
             nonlocal last_emit_at
@@ -2049,7 +2245,11 @@ class TextureOptimizationManager:
                 task,
                 status="running",
                 progress=max(1, min(99, phase_percent)),
-                message=f"清理{clean_target_label}: {mod_name}，已检查 {checked} 个，已删除 {deleted} 个",
+                message=tr(
+                    "tasks.texture.clean_progress",
+                    "清理{target_label}: {mod_name}，已检查 {checked} 个，已删除 {deleted} 个",
+                    {"target_label": clean_target_label, "mod_name": mod_name, "checked": checked, "deleted": deleted},
+                ),
                 metrics={
                     "checked_outputs": checked,
                     "orphan_deleted": deleted,
@@ -2073,7 +2273,7 @@ class TextureOptimizationManager:
             task,
             status="running",
             progress=1,
-            message=f"开始清理{clean_target_label}",
+            message=tr("tasks.texture.clean_start", "开始清理{target_label}", {"target_label": clean_target_label}),
             metrics={
                 "checked_outputs": 0,
                 "orphan_deleted": 0,
@@ -2113,7 +2313,6 @@ class TextureOptimizationManager:
                 )
             else:
                 targets = self._iter_texture_output_paths(mod_path, output_format=clean_output_format)
-            mod_changed = False
             for output_path in targets:
                 if task._cancel_event.is_set():
                     raise TextureOptCancelled("清理 DDS 任务已取消")
@@ -2124,20 +2323,15 @@ class TextureOptimizationManager:
                 try:
                     output_path.unlink()
                     deleted += 1
-                    mod_changed = True
                 except OSError as exc:
                     delete_failed += 1
-                    logger.warning("删除贴图清理输出失败：path=%s error=%s", output_path, exc)
+                    remember_delete_failed(mod_target, output_path, exc)
                 emit_clean_progress(index, mod_name)
-            if mod_changed:
-                changed_mod_paths.add(mod_path)
-        if changed_mod_paths:
-            self._invalidate_scan_cache(list(changed_mod_paths))
         self._emit_progress(
             task,
             status="running",
             progress=99,
-            message="清理完成，正在结束任务",
+            message=tr("tasks.texture.clean_finishing", "清理完成，正在结束任务"),
             metrics={
                 "checked_outputs": checked,
                 "orphan_deleted": deleted,
@@ -2156,10 +2350,22 @@ class TextureOptimizationManager:
                 "refresh_after_analyze": clean_without_source,
             },
         )
+        clean_message = (
+            tr(
+                "tasks.texture.clean_completed_with_failed",
+                "{target_label} 清理完成，已删除 {deleted} 个，失败 {failed} 个",
+                {"target_label": clean_target_label, "deleted": deleted, "failed": delete_failed},
+            )
+            if delete_failed > 0
+            else tr("tasks.texture.clean_completed", "{target_label} 清理完成", {"target_label": clean_target_label})
+        )
         return {
             "optimized": 0,
             "skipped": 0,
-            "failed": 0,
+            "failed": delete_failed,
+            "failed_count": delete_failed,
+            "failed_items": failed_items,
+            "final_status": "failed" if delete_failed > 0 else "success",
             "preexisting_dds": 0,
             "orphan_deleted": deleted,
             "checked_outputs": checked,
@@ -2168,7 +2374,7 @@ class TextureOptimizationManager:
             "clean_output_format": clean_output_format,
             "clean_without_source": clean_without_source,
             "refresh_after_analyze": clean_without_source,
-            "message": f"{clean_target_label} 清理完成",
+            "message": clean_message,
         }
 
     def _scan_mods(
@@ -2185,67 +2391,26 @@ class TextureOptimizationManager:
             cancel_event,
             analysis_task_id=analysis_task_id,
             progress_kind="analysis",
-            validate_cache=True,
-            store_projected_cache=True,
         )
         return dict(plan["summary"]), list(plan["rows"])
-
-    def _scan_single_mod(
-        self,
-        mod_path: str,
-        options: dict[str, Any],
-        *,
-        cancel_event: threading.Event | None = None,
-        short_circuit_existing: bool = False,
-    ) -> dict[str, Any]:
-        del short_circuit_existing
-        target = self._build_target_from_path(mod_path)
-        if not target:
-            raise TextureOptError("没有可分析的 Mod 路径")
-        return self._scan_single_target(target, options, cancel_event=cancel_event, apply_exclusions=True)
-
-    def _scan_single_target(
-        self,
-        target: dict[str, Any],
-        options: dict[str, Any],
-        *,
-        cancel_event: threading.Event | None = None,
-        apply_exclusions: bool,
-        validate_cache: bool = True,
-        excluded_indexes: tuple[set[str], set[tuple[str, str]]] | None = None,
-    ) -> dict[str, Any]:
-        if cancel_event and cancel_event.is_set():
-            raise TextureOptCancelled("贴图扫描任务已取消")
-        base_index = self._load_or_build_base_index(
-            target,
-            cancel_event=cancel_event,
-            validate_cache=validate_cache,
-        )
-        if cancel_event and cancel_event.is_set():
-            raise TextureOptCancelled("贴图扫描任务已取消")
-        return self._project_mod_index(
-            base_index,
-            options,
-            apply_exclusions=apply_exclusions,
-            excluded_indexes=excluded_indexes,
-        )
 
     def _load_or_build_base_index(
         self,
         target: dict[str, Any],
         *,
         cancel_event: threading.Event | None = None,
-        validate_cache: bool = True,
     ) -> dict[str, Any]:
         cached = self._get_cached_base_scan(target)
+        source_files: list[tuple[Path, str, os.stat_result]] | None = None
         if cached:
-            if not validate_cache:
-                return cached
-            current_signature = self._compute_source_signature(str(target.get("mod_path") or ""), cancel_event=cancel_event)
+            source_files = self._collect_source_files(str(target.get("mod_path") or ""), cancel_event)
+            current_signature = self._build_source_signature(
+                [(rel_path, int(source_stat.st_size), int(source_stat.st_mtime_ns)) for _source, rel_path, source_stat in source_files]
+            )
             if current_signature == str(cached.get("source_signature") or ""):
                 return cached
 
-        base_index = self._build_mod_base_index(target, cancel_event=cancel_event)
+        base_index = self._build_mod_base_index(target, cancel_event=cancel_event, source_files=source_files)
         self._store_base_scan_cache(base_index)
         return base_index
 
@@ -2254,130 +2419,80 @@ class TextureOptimizationManager:
         target: dict[str, Any],
         *,
         cancel_event: threading.Event | None = None,
+        source_files: list[tuple[Path, str, os.stat_result]] | None = None,
     ) -> dict[str, Any]:
         mod_path = str(target.get("mod_path") or "")
         mod_name = str(target.get("mod_name") or Path(mod_path).name)
-        records: list[tuple[str, int]] = []
+        package_id = normalize_package_id(target.get("package_id", ""))
+        store = self._normalize_store(target.get("store"))
+        path_hash = str(target.get("path_hash") or generate_path_hash(mod_path)).strip()
+        mod_instance_key = str(target.get("mod_instance_key") or path_hash).strip()
+        records: list[tuple[str, int, int]] = []
         base_entries: list[dict[str, Any]] = []
+        if source_files is None:
+            source_files = self._collect_source_files(mod_path, cancel_event)
 
-        for texture_root in self._iter_texture_root_dirs(mod_path):
+        for source, rel_path, source_stat in source_files:
             if cancel_event and cancel_event.is_set():
                 raise TextureOptCancelled("贴图扫描任务已取消")
-            for current_root, dirs, files in os.walk(texture_root):
-                dirs.sort()
-                if cancel_event and cancel_event.is_set():
-                    raise TextureOptCancelled("贴图扫描任务已取消")
-                current_path = Path(current_root)
-                for name in sorted(files):
-                    if cancel_event and cancel_event.is_set():
-                        raise TextureOptCancelled("贴图扫描任务已取消")
-                    if Path(name).suffix.lower() not in SOURCE_IMAGE_EXTENSIONS:
-                        continue
-                    source = current_path / name
-                    try:
-                        source_stat = source.stat()
-                    except OSError:
-                        continue
+            output_path = source.with_suffix(TEXTURE_OUTPUT_DDS_EXT)
+            output_rel_path = str(PurePosixPath(rel_path).with_suffix(TEXTURE_OUTPUT_DDS_EXT))
+            records.append((rel_path, int(source_stat.st_size), int(source_stat.st_mtime_ns)))
+            entry = {
+                "mod_path": mod_path,
+                "mod_name": mod_name,
+                "package_id": package_id,
+                "store": store,
+                "path_hash": path_hash,
+                "mod_instance_key": mod_instance_key,
+                "rel_path": rel_path,
+                "source_path": str(source),
+                "source_mtime_ns": int(source_stat.st_mtime_ns),
+                "output_path": str(output_path),
+                "output_rel_path": output_rel_path,
+                "source_readable": False,
+                "width": 0,
+                "height": 0,
+                "has_alpha": False,
+                "source_size": int(source_stat.st_size),
+                "source_vram": 0,
+                "supported_scale_percents": (),
+                "engine_unsupported": False,
+                "engine_unsupported_reason": "",
+            }
+            try:
+                capability = self._get_source_capability(source, source_stat)
+            except Exception as exc:
+                entry["engine_unsupported"] = True
+                entry["engine_unsupported_reason"] = f"PNG 文件无法解析: {exc}"
+                base_entries.append(entry)
+                continue
 
-                    rel_path = self._to_rel_path(str(source), mod_path)
-                    output_path = source.with_suffix(TEXTURE_OUTPUT_DDS_EXT)
-                    output_rel_path = self._to_rel_path(str(output_path), mod_path)
-                    records.append((rel_path, int(source_stat.st_mtime_ns)))
-                    entry = {
-                        "mod_path": mod_path,
-                        "mod_name": mod_name,
-                        "package_id": normalize_package_id(target.get("package_id", "")),
-                        "store": self._normalize_store(target.get("store")),
-                        "path_hash": str(target.get("path_hash") or generate_path_hash(mod_path)).strip(),
-                        "mod_instance_key": str(target.get("mod_instance_key") or target.get("path_hash") or generate_path_hash(mod_path)).strip(),
-                        "rel_path": rel_path,
-                        "source_path": str(source),
-                        "source_mtime_ns": int(source_stat.st_mtime_ns),
-                        "output_path": str(output_path),
-                        "output_rel_path": output_rel_path,
-                        "source_readable": False,
-                        "width": 0,
-                        "height": 0,
-                        "has_alpha": False,
-                        "source_size": int(source_stat.st_size),
-                        "source_vram": 0,
-                        "supported_scale_percents": (),
-                        "engine_unsupported": False,
-                        "engine_unsupported_reason": "",
-                    }
-                    try:
-                        capability = self._get_source_capability(source)
-                    except Exception as exc:
-                        entry["engine_unsupported"] = True
-                        entry["engine_unsupported_reason"] = f"PNG 文件无法解析: {exc}"
-                        base_entries.append(entry)
-                        continue
-
-                    entry.update(
-                        {
-                            "source_readable": True,
-                            "width": int(capability.get("width", 0) or 0),
-                            "height": int(capability.get("height", 0) or 0),
-                            "has_alpha": bool(capability.get("has_alpha")),
-                            "source_size": int(capability.get("source_size", 0) or 0),
-                            "source_vram": int(capability.get("source_vram", 0) or 0),
-                            "supported_scale_percents": tuple(capability.get("supported_scale_percents", ())),
-                            "engine_unsupported": bool(capability.get("engine_unsupported")),
-                            "engine_unsupported_reason": str(capability.get("engine_unsupported_reason") or ""),
-                        }
-                    )
-                    base_entries.append(entry)
+            entry.update(
+                {
+                    "source_readable": True,
+                    "width": int(capability.get("width", 0) or 0),
+                    "height": int(capability.get("height", 0) or 0),
+                    "has_alpha": bool(capability.get("has_alpha")),
+                    "source_size": int(capability.get("source_size", 0) or 0),
+                    "source_vram": int(capability.get("source_vram", 0) or 0),
+                    "supported_scale_percents": tuple(capability.get("supported_scale_percents", ())),
+                    "engine_unsupported": bool(capability.get("engine_unsupported")),
+                    "engine_unsupported_reason": str(capability.get("engine_unsupported_reason") or ""),
+                }
+            )
+            base_entries.append(entry)
 
         return {
             "mod_path": mod_path,
             "mod_name": mod_name,
-            "package_id": normalize_package_id(target.get("package_id", "")),
-            "store": self._normalize_store(target.get("store")),
-            "path_hash": str(target.get("path_hash") or generate_path_hash(mod_path)).strip(),
-            "mod_instance_key": str(target.get("mod_instance_key") or target.get("path_hash") or generate_path_hash(mod_path)).strip(),
+            "package_id": package_id,
+            "store": store,
+            "path_hash": path_hash,
+            "mod_instance_key": mod_instance_key,
             "source_signature": self._build_source_signature(records),
             "entries": base_entries,
         }
-
-    def _project_targets(
-        self,
-        mod_targets: list[dict[str, Any]] | list[str],
-        options: dict[str, Any],
-        *,
-        apply_exclusions: bool,
-        cancel_event: threading.Event | None = None,
-        validate_cache: bool = True,
-    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        base_indexes = [
-            self._load_or_build_base_index(
-                target,
-                cancel_event=cancel_event,
-                validate_cache=validate_cache,
-            )
-            for target in self._normalize_mod_targets(mod_targets)
-        ]
-        return self._project_base_indexes(base_indexes, options, apply_exclusions=apply_exclusions)
-
-    def _project_base_indexes(
-        self,
-        base_indexes: list[dict[str, Any]],
-        options: dict[str, Any],
-        *,
-        apply_exclusions: bool,
-    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        ordered_paths = [str(item.get("mod_path") or "") for item in base_indexes]
-        excluded_indexes = self._build_exclusion_indexes() if apply_exclusions else None
-        results = [
-            self._project_mod_index(
-                item,
-                options,
-                apply_exclusions=apply_exclusions,
-                excluded_indexes=excluded_indexes,
-            )
-            for item in base_indexes
-        ]
-        stats_by_path = {str(item["mod_path"]): dict(item["stat"]) for item in results}
-        return self._compose_progress_snapshot(ordered_paths, stats_by_path)
 
     def _project_mod_index(
         self,
@@ -2406,17 +2521,19 @@ class TextureOptimizationManager:
             source_path = Path(str(entry.get("source_path") or ""))
             output_path = self._source_output_path(source_path, options)
             entry["output_path"] = str(output_path)
-            entry["output_rel_path"] = self._to_rel_path(str(output_path), mod_path)
+            output_ext = TEXTURE_OUTPUT_ZSTD_EXT if self._is_zstd_output_mode(options) else TEXTURE_OUTPUT_DDS_EXT
+            entry["output_rel_path"] = str(PurePosixPath(str(entry.get("rel_path") or "")).with_suffix(output_ext))
             entry["output_format"] = str(options.get("output_format") or "dds")
             output_rel = str(entry.get("output_rel_path") or "")
             output_info = output_stats.get(output_rel) or {}
             entry["output_exists"] = bool(output_info)
             entry["output_size"] = int(output_info.get("size", 0))
+            entry["output_mtime_ns"] = int(output_info.get("mtime_ns", 0))
             entry["dds_vram"] = 0
             entry["small_skipped"] = False
             entry["needs_action"] = False
             entry["plan_kind"] = "keep_original"
-            entry["plan_label"] = "原尺寸"
+            entry["plan_label"] = "不缩放"
             entry["scale_percent"] = None
             entry["action_status"] = "unreadable"
             entry["is_mask_source"] = str(entry.get("rel_path") or "").lower().endswith("_m.png")
@@ -2442,9 +2559,15 @@ class TextureOptimizationManager:
                 supported_scales,
                 min_output_size,
             )
+            if bool(entry.get("is_mask_source")):
+                scale_percent = None
 
             entry["small_skipped"] = oversize_or_small
             entry["scale_percent"] = scale_percent
+            if oversize_or_small:
+                entry["plan_label"] = "超范围不缩放"
+            if bool(entry.get("is_mask_source")):
+                entry["plan_label"] = "遮罩贴图不缩放"
             is_excluded = apply_exclusions and (
                 bool(package_id and package_id in excluded_mod_ids)
                 or (
@@ -2459,10 +2582,6 @@ class TextureOptimizationManager:
                 continue
             if is_excluded:
                 entry["action_status"] = "excluded"
-                entries.append(entry)
-                continue
-            if bool(entry.get("is_mask_source")):
-                entry["action_status"] = "mask_skipped"
                 entries.append(entry)
                 continue
             if scale_percent is None:
@@ -2485,6 +2604,7 @@ class TextureOptimizationManager:
                 entry["plan_label"] = f"{scale_percent}%"
 
             entry["needs_action"] = self._entry_needs_action(entry, process_mode)
+            entry["overwrite_existing"] = process_mode != "all_skip_existing"
             if entry["needs_action"]:
                 entry["action_status"] = "pending"
             elif bool(entry.get("output_exists")):
@@ -2503,6 +2623,8 @@ class TextureOptimizationManager:
         if process_mode == "all_skip_existing":
             return not output_exists
         if process_mode == "scaled_only_overwrite":
+            if bool(entry.get("is_mask_source")):
+                return True
             return scale_percent is not None
         return True
 
@@ -2519,18 +2641,17 @@ class TextureOptimizationManager:
         for entry in entries:
             if not bool(entry.get("needs_action")):
                 continue
-            batch_key = (bool(entry.get("output_exists")), entry.get("scale_percent"))
+            overwrite_existing = bool(entry.get("overwrite_existing", bool(entry.get("output_exists"))))
+            batch_key = (overwrite_existing, entry.get("scale_percent"))
             batch = grouped.setdefault(
                 batch_key,
                 {
-                    "overwrite_existing": bool(entry.get("output_exists")),
+                    "overwrite_existing": overwrite_existing,
                     "scale_percent": entry.get("scale_percent"),
                     "entries": [],
-                    "source_paths": [],
                 },
             )
             batch["entries"].append(entry)
-            batch["source_paths"].append(str(entry.get("source_path") or ""))
 
         grouped_batches = list(grouped.values())
         grouped_batches.sort(
@@ -2543,57 +2664,15 @@ class TextureOptimizationManager:
         batches: list[dict[str, Any]] = []
         for batch in grouped_batches:
             entries_batch = list(batch["entries"])
-            source_paths_batch = list(batch["source_paths"])
             for offset in range(0, len(entries_batch), TEXTURE_ENCODE_BATCH_SIZE):
                 batches.append(
                     {
                         "overwrite_existing": bool(batch["overwrite_existing"]),
                         "scale_percent": batch["scale_percent"],
                         "entries": entries_batch[offset : offset + TEXTURE_ENCODE_BATCH_SIZE],
-                        "source_paths": source_paths_batch[offset : offset + TEXTURE_ENCODE_BATCH_SIZE],
                     }
                 )
         return batches
-
-    def _build_mod_plan(self, entries: list[dict[str, Any]]) -> dict[str, Any]:
-        current_keys: list[str] = []
-        source_count = 0
-        up_to_date_count = 0
-        skipped_small_count = 0
-        skipped_mask_count = 0
-        unsupported_count = 0
-        pending_count = 0
-        for entry in entries:
-            rel_path = str(entry.get("rel_path") or "")
-            if rel_path and not bool(entry.get("small_skipped")):
-                current_keys.append(rel_path)
-            if not bool(entry.get("source_readable")):
-                continue
-            source_count += 1
-            if bool(entry.get("engine_unsupported")):
-                unsupported_count += 1
-                continue
-            if bool(entry.get("is_mask_source")):
-                skipped_mask_count += 1
-                continue
-            if bool(entry.get("small_skipped")):
-                skipped_small_count += 1
-                continue
-            if bool(entry.get("output_exists")) and not bool(entry.get("needs_action")):
-                up_to_date_count += 1
-                continue
-            if bool(entry.get("needs_action")):
-                pending_count += 1
-        return {
-            "source_count": source_count,
-            "up_to_date_count": up_to_date_count,
-            "pending_count": pending_count,
-            "skipped_small_count": skipped_small_count,
-            "skipped_mask_count": skipped_mask_count,
-            "unsupported_count": unsupported_count,
-            "excluded_count": sum(1 for entry in entries if bool(entry.get("excluded"))),
-            "current_keys": current_keys,
-        }
 
     @staticmethod
     def _build_mod_stat(
@@ -2623,12 +2702,9 @@ class TextureOptimizationManager:
         for entry in entries:
             output_rel = str(entry.get("output_rel_path") or "")
             output_size = int(entry.get("output_size", 0) or 0)
-            source_path = Path(str(entry.get("source_path") or ""))
+            source_rel_path = PurePosixPath(str(entry.get("rel_path") or ""))
             for output_ext in TEXTURE_OUTPUT_EXTENSIONS:
-                try:
-                    seen_output_keys.add(TextureOptimizationManager._to_rel_path(str(source_path.with_suffix(output_ext)), mod_path))
-                except (OSError, ValueError):
-                    pass
+                seen_output_keys.add(str(source_rel_path.with_suffix(output_ext)))
             if not bool(entry.get("source_readable")):
                 stat["unreadable_source_count"] += 1
                 continue
@@ -2654,15 +2730,17 @@ class TextureOptimizationManager:
             if bool(entry.get("excluded")):
                 stat["excluded_count"] += 1
                 continue
-            if bool(entry.get("is_mask_source")):
-                stat["skipped_mask_count"] += 1
-                continue
-
             plan_kind = str(entry.get("plan_kind") or "keep_original")
             if plan_kind == "fallback":
                 stat["fallback_scaled_count"] += 1
             elif plan_kind == "keep_original":
                 stat["keep_original_count"] += 1
+                if bool(entry.get("is_mask_source")):
+                    stat["keep_original_mask_count"] += 1
+                elif bool(entry.get("small_skipped")):
+                    stat["keep_original_range_count"] += 1
+                else:
+                    stat["keep_original_normal_count"] += 1
             else:
                 stat["scaled_count"] += 1
 
@@ -2691,12 +2769,7 @@ class TextureOptimizationManager:
         stat["vram_saving_bytes_est"] = int(stat["source_vram_bytes_est"]) - int(stat["output_vram_bytes_est"])
         return stat
 
-    def _get_source_capability(self, source: Path) -> dict[str, Any]:
-        try:
-            source_stat = source.stat()
-        except OSError as exc:
-            raise TextureOptError(f"无法读取源图文件: {exc}") from exc
-
+    def _get_source_capability(self, source: Path, source_stat: os.stat_result) -> dict[str, Any]:
         image_info = self._inspect_source_image(source, precise_alpha=False)
         width = int(image_info.get("width", 0) or 0)
         height = int(image_info.get("height", 0) or 0)
@@ -2704,6 +2777,7 @@ class TextureOptimizationManager:
         source_size = int(source_stat.st_size)
         source_vram = width * height * 4
         supported_scale_percents = self._collect_supported_scale_percents(width, height)
+        unsupported_reason = self._get_todds_unsupported_reason(source, image_info)
         capability = {
             "path": str(source),
             "width": width,
@@ -2712,8 +2786,8 @@ class TextureOptimizationManager:
             "source_size": source_size,
             "source_vram": source_vram,
             "supported_scale_percents": supported_scale_percents,
-            "engine_unsupported": bool(self._get_todds_unsupported_reason(source, image_info)),
-            "engine_unsupported_reason": self._get_todds_unsupported_reason(source, image_info),
+            "engine_unsupported": bool(unsupported_reason),
+            "engine_unsupported_reason": unsupported_reason,
         }
         return capability
 
@@ -2790,94 +2864,6 @@ class TextureOptimizationManager:
         if generate_mipmaps:
             dds_vram = int(dds_vram * 1.333)
         return dds_vram
-
-    @staticmethod
-    def _resolve_encode_behavior(width: int, height: int, options: dict[str, Any]) -> dict[str, Any]:
-        preferred = TextureOptimizationManager._get_scale_factor_percent(options)
-        if preferred is None:
-            return {"mode": "keep_original", "scale_percent": None, "use_fix_size": True}
-        min_output_size = TextureOptimizationManager._get_scale_target_size(options)
-        candidates = TextureOptimizationManager._iter_scale_step_candidates(options)
-        supported = TextureOptimizationManager._collect_supported_scale_percents(width, height)
-        scale_percent = TextureOptimizationManager._pick_scale_step_percent_from_supported(
-            width,
-            height,
-            candidates,
-            min_output_size,
-        )
-        if scale_percent is None or scale_percent not in supported:
-            return {"mode": "keep_original", "scale_percent": None, "use_fix_size": True}
-        return {"mode": "scale", "scale_percent": scale_percent, "use_fix_size": False}
-
-    @staticmethod
-    def _calculate_target_dimensions(width: int, height: int, options: dict[str, Any]) -> tuple[int, int]:
-        scale_factor = max(0.0, float(options.get("scale_factor", 1.0) or 1.0))
-        if scale_factor > 1.0:
-            return max(1, int(round(width * scale_factor))), max(1, int(round(height * scale_factor)))
-        behavior = TextureOptimizationManager._resolve_encode_behavior(width, height, options)
-        scale_percent = behavior.get("scale_percent")
-        if scale_percent is None:
-            return max(1, int(width)), max(1, int(height))
-        return (
-            max(1, int(round(width * int(scale_percent) / 100))),
-            max(1, int(round(height * int(scale_percent) / 100))),
-        )
-
-    @staticmethod
-    def _should_skip_texture(entry: dict[str, Any], options: dict[str, Any]) -> bool:
-        return TextureOptimizationManager._is_outside_recommended_source_range(
-            int(entry.get("width", 0) or 0),
-            int(entry.get("height", 0) or 0),
-            options,
-        )
-
-    def _scan_mods_snapshot(self, mod_paths: list[str], options: dict[str, Any]) -> dict[str, Any]:
-        merged_options = self._build_options(options)
-        targets = self._normalize_mod_targets(mod_paths)
-        plan = self._build_texture_plan(
-            targets,
-            merged_options,
-            None,
-            progress_kind="analysis",
-            validate_cache=True,
-            store_projected_cache=False,
-        )
-        base_indexes = [item for item in plan.get("base_indexes", []) if isinstance(item, dict)]
-        return {
-            "id": uuid.uuid4().hex,
-            "schema_version": TEXTURE_SCAN_SNAPSHOT_SCHEMA_VERSION,
-            "cache_key": self._build_scan_cache_key(mod_paths, merged_options),
-            "signature": self._build_signature(merged_options),
-            "generated_at": current_ms(),
-            "mod_paths": [str(target.get("mod_path") or "") for target in targets],
-            "summary": plan["summary"],
-            "mods": [{"mod_path": row.get("mod_path"), "stat": row} for row in plan["rows"]],
-            "base_indexes": base_indexes,
-        }
-
-    def _scan_single_mod_snapshot(self, mod_path: str, options: dict[str, Any]) -> dict[str, Any]:
-        return self._scan_single_mod(mod_path, self._build_options(options))
-
-    def _build_scan_entry(
-        self,
-        mod_path: str,
-        source_path: str,
-        *,
-        output_stats: dict[str, dict[str, Any]],
-        options: dict[str, Any],
-    ) -> dict[str, Any]:
-        projected = self._scan_single_mod(mod_path, self._build_options(options))
-        source_abs = os.path.abspath(source_path)
-        for entry in projected.get("entries", []):
-            if os.path.abspath(str(entry.get("source_path") or "")) == source_abs:
-                updated = dict(entry)
-                output_rel = str(updated.get("output_rel_path") or "")
-                output_info = output_stats.get(output_rel) or {}
-                if output_info:
-                    updated["output_exists"] = True
-                    updated["output_size"] = int(output_info.get("size", 0))
-                return updated
-        raise TextureOptError("未找到对应的源图条目")
 
     @staticmethod
     def _iter_texture_root_dirs(mod_path: str):
@@ -2982,15 +2968,30 @@ class TextureOptimizationManager:
         return ""
 
     @staticmethod
-    def _iter_texture_output_paths(mod_path: str, *, include_zstd: bool = False, output_format: str = ""):
+    def _iter_texture_output_paths(
+        mod_path: str,
+        *,
+        include_zstd: bool = False,
+        output_format: str = "",
+        source_presence: bool | None = None,
+    ):
         normalized_format = str(output_format or ("all" if include_zstd else "dds")).strip().lower()
         for texture_root in TextureOptimizationManager._iter_texture_root_dirs(mod_path):
             for current_root, _dirs, files in os.walk(texture_root):
+                lower_names = {name.lower() for name in files} if source_presence is not None else set()
                 for name in files:
                     lower_name = name.lower()
                     path = Path(current_root) / name
                     is_zstd = lower_name.endswith(TEXTURE_OUTPUT_ZSTD_EXT)
                     is_dds = lower_name.endswith(TEXTURE_OUTPUT_DDS_EXT) and not is_zstd
+                    if not is_dds and not is_zstd:
+                        continue
+                    if source_presence is not None:
+                        output_ext = TEXTURE_OUTPUT_ZSTD_EXT if is_zstd else TEXTURE_OUTPUT_DDS_EXT
+                        source_stem = lower_name[: -len(output_ext)]
+                        has_source = any(f"{source_stem}{ext}" in lower_names for ext in SOURCE_REFERENCE_IMAGE_EXTENSIONS)
+                        if has_source != source_presence:
+                            continue
                     if is_dds and normalized_format in {"dds", "all"}:
                         yield path
                     elif is_zstd and normalized_format in {"zstd", "all"}:
@@ -3008,12 +3009,11 @@ class TextureOptimizationManager:
             mod_path,
             include_zstd=include_zstd,
             output_format=output_format,
+            source_presence=True,
         ):
             if cancel_event and cancel_event.is_set():
                 raise TextureOptCancelled("清理 DDS 任务已取消")
-            source_path = TextureOptimizationManager._resolve_output_source(output_path)
-            if source_path.exists():
-                yield output_path
+            yield output_path
 
     @staticmethod
     def _iter_texture_output_paths_without_source(
@@ -3027,12 +3027,11 @@ class TextureOptimizationManager:
             mod_path,
             include_zstd=include_zstd,
             output_format=output_format,
+            source_presence=False,
         ):
             if cancel_event and cancel_event.is_set():
                 raise TextureOptCancelled("清理 DDS 任务已取消")
-            source_path = TextureOptimizationManager._resolve_output_source(output_path)
-            if not source_path.exists():
-                yield output_path
+            yield output_path
 
     @staticmethod
     def _collect_output_stats(mod_path: str) -> dict[str, dict[str, Any]]:
@@ -3042,46 +3041,14 @@ class TextureOptimizationManager:
                 output_stat = output_path.stat()
             except OSError:
                 continue
-            stats[TextureOptimizationManager._to_rel_path(str(output_path), mod_path)] = {
+            output_rel_path = Path(os.path.relpath(output_path, mod_path)).as_posix()
+            stats[output_rel_path] = {
                 "path": str(output_path),
                 "size": int(output_stat.st_size),
                 "mtime_ns": int(output_stat.st_mtime_ns),
                 "format": TextureOptimizationManager._output_format_for_path(output_path),
             }
         return stats
-
-    @staticmethod
-    def _resolve_output_source(path: Path) -> Path:
-        lower_name = path.name.lower()
-        if lower_name.endswith(TEXTURE_OUTPUT_ZSTD_EXT):
-            stem = path.name[: -len(TEXTURE_OUTPUT_ZSTD_EXT)]
-        elif lower_name.endswith(TEXTURE_OUTPUT_DDS_EXT):
-            stem = path.stem
-        else:
-            return path
-        for ext in SOURCE_REFERENCE_IMAGE_EXTENSIONS:
-            candidate = path.with_name(stem + ext)
-            if candidate.exists(): return candidate
-        return path.with_name(stem + SOURCE_IMAGE_EXTENSIONS[0])
-
-    @staticmethod
-    def _to_rel_path(path: str, root: str) -> str:
-        return Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
-
-    @staticmethod
-    def _normalize_mod_paths(mod_paths: list[str]) -> list[str]:
-        normalized: list[str] = []
-        seen: set[str] = set()
-        for path in mod_paths:
-            if not path:
-                continue
-            abs_path = os.path.abspath(path)
-            lower = abs_path.lower()
-            if lower in seen or not os.path.isdir(abs_path):
-                continue
-            seen.add(lower)
-            normalized.append(abs_path)
-        return normalized
 
     @staticmethod
     def _resolve_scan_workers(total_mods: int, options: dict[str, Any]) -> int:
@@ -3162,18 +3129,13 @@ class TextureOptimizationManager:
         return merged
 
     @staticmethod
-    def _calc_progress(current: int, total: int) -> int:
-        if total <= 0: return 0
-        if current <= 0: return 0
-        if current >= total: return 99
-        return min(99, max(1, int((current / total) * 100)))
-
-    @staticmethod
     def _build_metrics(summary: dict[str, Any]) -> dict[str, Any]:
         return {
             "optimized": summary.get("optimized", 0),
             "skipped": summary.get("skipped", 0),
             "failed": summary.get("failed", 0),
+            "failed_count": summary.get("failed_count", 0),
+            "scan_failed": summary.get("scan_failed", 0),
             "orphan_deleted": summary.get("orphan_deleted", 0),
             "checked_outputs": summary.get("checked_outputs", 0),
             "delete_failed": summary.get("delete_failed", 0),
@@ -3197,9 +3159,11 @@ class TextureOptimizationManager:
         final_summary: dict[str, Any],
         final_mods: list[dict[str, Any]],
         failed_items: list[dict[str, Any]],
+        failed_count: int = 0,
     ) -> str:
         path = self._results_file_path(task.id)
-        _safe_json_dump(
+        write_json_atomic(
+            path,
             {
                 "task_id": task.id,
                 "action": task.action,
@@ -3211,9 +3175,10 @@ class TextureOptimizationManager:
                 "summary": final_summary,
                 "mods": final_mods,
                 "failed_items": failed_items,
+                "failed_count": int(failed_count),
                 "todds_log_path": self._last_todds_log_path,
             },
-            path,
+            indent=2,
         )
         self._prune_result_history()
         return str(path)
@@ -3283,9 +3248,13 @@ class TextureOptimizationManager:
             "skipped_mask_count": 0,
             "unsupported_source_count": 0,
             "unreadable_source_count": 0,
+            "scan_failed_count": 0,
             "scaled_count": 0,
             "fallback_scaled_count": 0,
             "keep_original_count": 0,
+            "keep_original_normal_count": 0,
+            "keep_original_mask_count": 0,
+            "keep_original_range_count": 0,
             "combined_total_bytes": 0,
             "scale_breakdown": [],
             "projection_basis": [],
@@ -3316,8 +3285,17 @@ class TextureOptimizationManager:
             for (kind, label), count in scale_buckets.items()
             if int(count) > 0
         ]
-        items.sort(key=lambda item: (order.get(str(item["kind"]), 99), -int(item["count"]), str(item["label"])))
+        items.sort(key=lambda item: (
+            order.get(str(item["kind"]), 99),
+            TextureOptimizationManager._scale_label_sort_value(str(item["label"])),
+            str(item["label"]),
+        ))
         return items
+
+    @staticmethod
+    def _scale_label_sort_value(label: str) -> float:
+        match = re.search(r"(\d+(?:\.\d+)?)\s*%", str(label or ""))
+        return float(match.group(1)) if match else float("inf")
 
     @staticmethod
     def _merge_stat(target: dict[str, Any], source: dict[str, Any]) -> None:
@@ -3382,15 +3360,16 @@ class TextureOptimizationManager:
         *,
         status: str | None = None,
         progress: int | None = None,
-        message: str | None = None,
+        message: Any | None = None,
         metrics: dict[str, Any] | None = None,
         summary: dict[str, Any] | None = None,
-        error: str | None = None,
+        error: Any | None = None,
     ) -> None:
         if summary is not None:
             task.summary = summary
         if error is not None:
-            task.error = error
+            task.error = str(error or "")
+            task.user_message = str(error or "")
         final_status = status or task.status
         self._emit_progress(
             task,
@@ -3398,16 +3377,22 @@ class TextureOptimizationManager:
             task.progress if progress is None else progress,
             task.message if message is None else message,
             task.metrics if metrics is None else metrics,
+            user_message=task.user_message if error is not None else None,
         )
         if final_status in {"success", "failed", "cancelled"} and not getattr(task, "_cleanup_scheduled", False):
             setattr(task, "_cleanup_scheduled", True)
             self._schedule_task_cleanup(task.id)
 
-    def _emit_progress(self, task: TextureTask, status: str, progress: int, message: str, metrics: dict[str, Any] | None = None) -> None:
+    def _emit_progress(self, task: TextureTask, status: str, progress: int, message: Any, metrics: dict[str, Any] | None = None, user_message: Any | None = None) -> None:
         updated_at = current_ms()
+        key = localized_key(message)
+        params = localized_params(message)
         task.status = status
         task.progress = progress
-        task.message = message
+        task.message = str(message or "")
+        task.user_message = str(user_message if user_message is not None else message or "")
+        task.message_key = key
+        task.message_params = params
         task.metrics = metrics or {}
         task.updated_at = updated_at
         task_created_at = int(getattr(task, "created_at", updated_at))
@@ -3415,7 +3400,17 @@ class TextureOptimizationManager:
         task.metrics["task_updated_at"] = updated_at
         task.metrics.setdefault("task_action", str(getattr(task, "action", "")))
         task.metrics["task_status"] = status
-        EventBus.emit_progress(task.id, TEXTURE_TASK_TYPE, status=status, progress=progress, message=message, metrics=task.metrics)
+        EventBus.emit_progress(
+            task.id,
+            TEXTURE_TASK_TYPE,
+            status=status,
+            progress=progress,
+            message=task.message,
+            metrics=task.metrics,
+            message_key=key,
+            message_params=params,
+            user_message=task.user_message,
+        )
 
     def _emit_analysis_progress(
         self,
@@ -3423,7 +3418,8 @@ class TextureOptimizationManager:
         *,
         status: str,
         progress: int,
-        message: str,
+        message: Any,
+        user_message: Any | None = None,
         processed_mods: int,
         total_mods: int,
         summary: dict[str, Any],
@@ -3446,7 +3442,17 @@ class TextureOptimizationManager:
             metrics["current_entry"] = current_entry
         if final_mods is not None:
             metrics["final_mods"] = final_mods
-        EventBus.emit_progress(task_id, TEXTURE_ANALYSIS_TASK_TYPE, status=status, progress=progress, message=message, metrics=metrics)
+        EventBus.emit_progress(
+            task_id,
+            TEXTURE_ANALYSIS_TASK_TYPE,
+            status=status,
+            progress=progress,
+            message=str(message or ""),
+            metrics=metrics,
+            message_key=localized_key(message),
+            message_params=localized_params(message),
+            user_message=str(user_message or ""),
+        )
 
     def _schedule_task_cleanup(self, task_id: str, delay_seconds: float = TEXTURE_TASK_RETENTION_SECONDS) -> None:
         def _cleanup() -> None:

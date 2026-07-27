@@ -124,6 +124,67 @@ class TestImportCheckReport(unittest.TestCase):
         self.assertEqual(item["status"], "unknown")
         self.assertEqual(item["target_workshop_id"], "")
 
+    def test_missing_item_uses_install_source_fallback_for_git_url(self):
+        parsed = ParsedLoadOrderData(
+            format="modlist",
+            list_name="Demo",
+            package_ids=["git.only"],
+            mod_names=["Git Only"],
+            workshop_ids=["0"],
+        )
+        install_sources = {
+            "git.only": {
+                "original_sources": [
+                    {
+                        "package_id": "git.only",
+                        "url": "https://gitgud.io/team/git-only",
+                        "name": "Git Only",
+                        "source_origin": "git_catalog",
+                    }
+                ],
+                "replacement_sources": [],
+            }
+        }
+
+        report = build_import_check_report(parsed, installed_mods=[], install_sources_by_package_id=install_sources)
+        item = report["items"][0]
+
+        self.assertEqual(item["status"], "missing")
+        self.assertEqual(item["target_workshop_id"], "")
+        self.assertEqual(item["target_source"]["kind"], "url")
+        self.assertEqual(item["target_source"]["source_origin"], "git_catalog")
+
+    def test_missing_item_uses_install_source_fallback_for_catalog_workshop_url(self):
+        parsed = ParsedLoadOrderData(
+            format="modlist",
+            list_name="Demo",
+            package_ids=["catalog.workshop"],
+            mod_names=["Catalog Workshop"],
+            workshop_ids=["0"],
+        )
+        install_sources = {
+            "catalog.workshop": {
+                "original_sources": [
+                    {
+                        "package_id": "catalog.workshop",
+                        "workshop_id": "7777777777",
+                        "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=7777777777",
+                        "name": "Catalog Workshop",
+                        "source_origin": "git_catalog",
+                    }
+                ],
+                "replacement_sources": [],
+            }
+        }
+
+        report = build_import_check_report(parsed, installed_mods=[], install_sources_by_package_id=install_sources)
+        item = report["items"][0]
+
+        self.assertEqual(item["status"], "missing")
+        self.assertEqual(item["target_workshop_id"], "7777777777")
+        self.assertEqual(item["target_source"]["kind"], "workshop")
+        self.assertEqual(item["resolved_from"], "install_source")
+
     def test_valid_workshop_id_match_prevents_false_missing_even_when_package_id_differs(self):
         parsed = ParsedLoadOrderData(
             format="modlist",

@@ -4,6 +4,8 @@ from difflib import SequenceMatcher
 import re
 from typing import Any
 
+from backend.load_order.package_tokens import build_steam_package_token
+from backend.settings import settings
 from backend.utils.tools import normalize_package_id
 
 
@@ -29,12 +31,51 @@ GENERIC_NAME_NOISE_TOKENS = {
 }
 
 # 默认关闭名称决胜，避免把整合语言包压成单一归属。
+# 名称相似度后续用于“无规则语言包”的候选归属补充；当前规则归属阶段先关闭，避免误抢主模组。
 ENABLE_NAME_TIEBREAKER = False
 
 
-def _is_language_pack_mod(mod: dict[str, Any] | None) -> bool:
-    mod_type = str((mod or {}).get("user_mod_type") or (mod or {}).get("mod_type") or "").strip()
-    return mod_type == "LanguagePack"
+def _int_count(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def get_effective_mod_type(mod: dict[str, Any] | None, wide_detection: bool | None = None) -> str:
+    mod = mod or {}
+    user_mod_type = str(mod.get("user_mod_type") or "").strip()
+    if user_mod_type:
+        return user_mod_type
+
+    mod_type = str(mod.get("mod_type") or "").strip()
+    if mod_type == "LanguagePack":
+        return "LanguagePack"
+    if wide_detection is None and mod.get("is_language_pack") is True:
+        return "LanguagePack"
+    if wide_detection is None:
+        wide_detection = bool(getattr(settings.config, "wide_language_pack_detection", False))
+    if wide_detection:
+        stats = mod.get("file_stats") or {}
+        if (
+            _int_count(stats.get("lang_xml")) > 0
+            and _int_count(stats.get("code_dll")) == 0
+            and _int_count(stats.get("image")) == 0
+            and _int_count(stats.get("audio")) == 0
+            and _int_count(stats.get("game_xml")) == 0
+        ):
+            return "LanguagePack"
+
+    return mod_type or "Unknown"
+
+
+def is_language_pack_mod(mod: dict[str, Any] | None, wide_detection: bool | None = None) -> bool:
+    return get_effective_mod_type(mod, wide_detection) == "LanguagePack"
+
+
+def is_usable_language_pack_ownership(owner_result: dict[str, Any] | None) -> bool:
+    confidence = str((owner_result or {}).get("summary_confidence") or "").strip().lower()
+    return confidence in {"high", "medium"}
 
 
 def _is_core_or_dlc(package_id: str) -> bool:
@@ -107,7 +148,10 @@ def _name_similarity(left: str, right: str) -> float:
     return max(seq_score * 0.6 + token_score * 0.4, containment_score)
 
 
-def _build_asset_index(mods: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _build_asset_index(
+    mods: list[dict[str, Any]],
+    wide_detection: bool | None = None,
+) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
     for mod in mods:
         package_id = normalize_package_id(mod.get("package_id"))
@@ -118,6 +162,8 @@ def _build_asset_index(mods: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "name": mod.get("name") or "",
             "mod_type": mod.get("mod_type") or "",
             "user_mod_type": mod.get("user_mod_type") or "",
+            "file_stats": mod.get("file_stats") or {},
+            "is_language_pack": is_language_pack_mod(mod, wide_detection),
         }
     return index
 
@@ -148,10 +194,11 @@ def _build_candidate(
     source_flags: set[str],
     language_pack_name: str,
     asset_index: dict[str, dict[str, Any]],
+    wide_detection: bool | None = None,
 ) -> dict[str, Any]:
     target = asset_index.get(package_id, {})
     known = bool(target)
-    is_language_pack_target = _is_language_pack_mod(target)
+    is_language_pack_target = is_language_pack_mod(target, wide_detection)
     is_hard_noise = _is_hard_noise(package_id)
     similarity = _name_similarity(language_pack_name, str(target.get("name") or package_id))
 
@@ -160,6 +207,7 @@ def _build_candidate(
         "source_flags": sorted(source_flags),
         "is_hard_noise": is_hard_noise,
         "is_language_pack_target": is_language_pack_target,
+        "is_installed": known,
         "is_soft_noise": is_language_pack_target or not known,
         "name_similarity": round(similarity, 4),
     }
@@ -200,7 +248,15 @@ def _pick_best_by_name_similarity(candidates: list[dict[str, Any]]) -> tuple[dic
 def _resolve_candidate_set(
     candidates: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], str, str]:
-    if len(candidates) == 1: return ( [candidates[0]], "single", "high" )
+    if len(candidates) == 1:
+        candidate = candidates[0]
+        if "user_override" in candidate["source_flags"]:
+            return ([candidate], "single", "high")
+        if not candidate["is_installed"]:
+            return ([candidate], "single", "low")
+        if "dependency" in candidate["source_flags"]:
+            return ([candidate], "single", "high")
+        return ([candidate], "single", "medium")
 
     dependency_candidates = [
         candidate for candidate in candidates
@@ -211,18 +267,14 @@ def _resolve_candidate_set(
         if "load_after" in candidate["source_flags"]
     ]
 
+    if not any(candidate["is_installed"] for candidate in candidates):
+        return (candidates, "multiple", "low")
+
     if len(dependency_candidates) == 1:
-        primary = dependency_candidates[0]
-        competing = [
-            candidate for candidate in candidates
-            if candidate["package_id"] != primary["package_id"]
-        ]
-        if not competing or all(candidate["is_soft_noise"] for candidate in competing):
-            return ( [primary], "single", "high" )
-        return ( [primary], "single", "medium" )
+        return ( [dependency_candidates[0]], "single", "high" )
 
     if not dependency_candidates and len(load_after_candidates) == 1:
-        return ( [load_after_candidates[0]], "single", "high" )
+        return ( [load_after_candidates[0]], "single", "medium" )
 
     if len(dependency_candidates) > 1:
         return ( dependency_candidates, "multiple", "medium" )
@@ -264,8 +316,9 @@ def resolve_language_pack_ownership_for_mod(
     language_pack: dict[str, Any],
     asset_index: dict[str, dict[str, Any]],
     user_mod_rules: dict[str, Any] | None = None,
+    wide_detection: bool | None = None,
 ) -> dict[str, Any]:
-    if not _is_language_pack_mod(language_pack):
+    if not is_language_pack_mod(language_pack, wide_detection):
         return {
             "owners": [],
             "analyzed_owners": [],
@@ -292,7 +345,13 @@ def resolve_language_pack_ownership_for_mod(
     if not candidate_sources: return _finalize_result([], "unknown", "unknown")
 
     analyzed_candidates = [
-        _build_candidate(package_id, source_flags, str(language_pack.get("name") or ""), asset_index)
+        _build_candidate(
+            package_id,
+            source_flags,
+            str(language_pack.get("name") or ""),
+            asset_index,
+            wide_detection,
+        )
         for package_id, source_flags in candidate_sources.items()
     ]
     analyzed_effective_candidates = _filter_auto_candidates(analyzed_candidates)
@@ -302,7 +361,13 @@ def resolve_language_pack_ownership_for_mod(
 
     if override_owner_ids:
         override_candidates = [
-            _build_candidate(package_id, {"user_override"}, str(language_pack.get("name") or ""), asset_index)
+            _build_candidate(
+                package_id,
+                {"user_override"},
+                str(language_pack.get("name") or ""),
+                asset_index,
+                wide_detection,
+            )
             for package_id in override_owner_ids
         ]
         owners = override_candidates if override_replace else _merge_unique_candidates(analyzed_owners, override_candidates)
@@ -341,17 +406,31 @@ def resolve_language_pack_ownership_for_mod(
 def resolve_language_pack_ownership_for_mods(
     mods: list[dict[str, Any]],
     user_mod_rules: dict[str, Any] | None = None,
+    wide_detection: bool | None = None,
 ) -> dict[str, dict[str, Any]]:
-    asset_index = _build_asset_index(mods)
-    language_packs = [mod for mod in mods if _is_language_pack_mod(mod)]
+    # 共存工坊版和本地版包名相同，但 About.xml 里的依赖/前置可能不同；
+    # 用来源 token 分开保存结果，调用方才能在读取实际实例时拿到对应判定。
+    asset_index = _build_asset_index(mods, wide_detection)
     result: dict[str, dict[str, Any]] = {}
-    for mod in language_packs:
+    for mod in mods:
         package_id = normalize_package_id(mod.get("package_id"))
         if not package_id:
             continue
-        result[package_id] = resolve_language_pack_ownership_for_mod(
-            mod,
-            asset_index,
-            user_mod_rules=user_mod_rules,
-        )
+        if is_language_pack_mod(mod, wide_detection):
+            result[package_id] = resolve_language_pack_ownership_for_mod(
+                mod,
+                asset_index,
+                user_mod_rules=user_mod_rules,
+                wide_detection=wide_detection,
+            )
+
+        workshop_variant = mod.get("coexist_workshop_variant")
+        if isinstance(workshop_variant, dict) and is_language_pack_mod(workshop_variant, wide_detection):
+            steam_token = build_steam_package_token(package_id)
+            result[steam_token] = resolve_language_pack_ownership_for_mod(
+                workshop_variant,
+                asset_index,
+                user_mod_rules=user_mod_rules,
+                wide_detection=wide_detection,
+            )
     return result

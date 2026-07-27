@@ -105,6 +105,93 @@ class TestLoadOrderManagerSave(unittest.TestCase):
             self.assertIn("<li>ludeon.rimworld</li>", content)
             self.assertNotIn("<li>old.mod</li>", content)
 
+    def test_load_order_export_preserves_source_suffix_by_default(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = self._create_context(temp_dir)
+            manager = LoadOrderManager(context)
+            manager._enrich_mod_entries = lambda entries: entries
+            target_path = Path(temp_dir) / "export.rml"
+
+            result = manager.save_active_mods(
+                ["author.workshop_steam"],
+                target_path=str(target_path),
+                export_format="rml",
+                is_dirty=False,
+            )
+
+            self.assertTrue(result)
+            self.assertIn("author.workshop_steam", target_path.read_text(encoding="utf-8"))
+
+    def test_api_load_order_export_string_false_keeps_source_suffix(self):
+        from backend.api import API
+
+        captured = {}
+
+        class FakeLoadOrderManager:
+            def save_active_mods(self, active_ids, target_path=None, trigger_dialog=True, **kwargs):
+                captured.update(kwargs)
+                return True
+
+        api = object.__new__(API)
+        api.load_order_mgr = FakeLoadOrderManager()
+
+        result = api.load_order_export(
+            ["author.workshop_steam"],
+            target_path="export.rml",
+            trigger_dialog=False,
+            use_raw_package_ids="false",
+        )
+
+        self.assertEqual(result.get("status"), "success")
+        self.assertTrue(captured["preserve_package_tokens"])
+
+    def test_load_order_export_can_use_raw_package_names(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = self._create_context(temp_dir)
+            manager = LoadOrderManager(context)
+            manager._enrich_mod_entries = lambda entries: entries
+            target_path = Path(temp_dir) / "export.rml"
+
+            result = manager.save_active_mods(
+                ["author.workshop_steam"],
+                target_path=str(target_path),
+                export_format="rml",
+                is_dirty=False,
+                preserve_package_tokens=False,
+            )
+
+            self.assertTrue(result)
+            content = target_path.read_text(encoding="utf-8")
+            self.assertIn("author.workshop", content)
+            self.assertNotIn("author.workshop_steam", content)
+
+    def test_automatic_backup_keeps_source_suffix(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            context = self._create_context(temp_dir)
+            mods_config = Path(context.mods_config_file)
+            mods_config.write_text("<ModsConfigData />", encoding="utf-8")
+            manager = LoadOrderManager(context)
+            captured_entries = []
+
+            manager.read_active_mods = lambda *_args, **_kwargs: {
+                "active_mods": ["author.workshop_steam"],
+                "mods": [{
+                    "package_id": "author.workshop",
+                    "package_token": "author.workshop_steam",
+                }],
+            }
+            original_write_rml_file = manager._write_rml_file
+
+            def capture_backup(path, entries):
+                captured_entries.extend(entries)
+                original_write_rml_file(path, entries)
+
+            manager._write_rml_file = capture_backup
+
+            manager._create_backup()
+
+            self.assertEqual(captured_entries[0]["package_token"], "author.workshop_steam")
+
 
 if __name__ == "__main__":
     unittest.main()

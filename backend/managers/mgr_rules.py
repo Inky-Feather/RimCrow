@@ -13,6 +13,8 @@ from backend.utils.logger import logger
 from backend.database.dao import GroupDAO, ModDAO, normalize_interlock_payload, normalize_user_mod_data_payload
 from backend.settings import RULES_DIR, USER_RULES_PATH, settings
 from backend.utils.tools import current_ms, normalize_package_id
+from backend.load_order.language_pack_ownership import get_effective_mod_type
+from backend.load_order.package_tokens import parse_package_token, select_mod_instance
 from backend._version import __version__
 
 RULE_SOURCES = ["user", "native", "community", "dynamic", "workshop"]
@@ -89,7 +91,25 @@ def _resolve_import_group_mod_ids(raw_mod_ids: list[Any]) -> list[str]:
         resolved_ids.append(resolved_id)
 
     return resolved_ids
-    
+
+
+def resolve_mod_rules(rule_mgr: Any, package_token: Any, mod_full_data: dict | None) -> tuple[dict, Dict[str, Any]]:
+    """统一规则解析入口：token 只选实例，外置规则按规范包名合并。"""
+    mod_data = mod_full_data if isinstance(mod_full_data, dict) else {}
+    if not rule_mgr:
+        return select_mod_instance(mod_data, package_token), {}
+
+    resolver = getattr(rule_mgr, "resolve_effective_mod_rules", None)
+    if callable(resolver):
+        resolved = resolver(package_token, mod_data)
+        if isinstance(resolved, tuple) and len(resolved) == 2:
+            return resolved
+
+    selected_mod = select_mod_instance(mod_data, package_token)
+    canonical_id = parse_package_token(package_token).canonical_package_id or normalize_package_id(selected_mod.get("package_id"))
+    return selected_mod, rule_mgr.get_effective_mod_rules(canonical_id, selected_mod)
+
+
 class RuleManager:
     def __init__(self, context: ProfileContext):
         # 内存中的规则缓存
@@ -315,9 +335,11 @@ class RuleManager:
             # 3. 收集这些依赖中涉及到的所有目标 Workshop ID
             # 需要把这些 Workshop ID 转换回 Package ID，排序引擎才能识别
             all_target_wids = set()
+            raw_dep_count = 0
             for row in active_metas:
                 if row['dependencies_mods']:
                     # 依赖格式: {"2891845502": "Name"}
+                    raw_dep_count += len(row['dependencies_mods'])
                     all_target_wids.update(row['dependencies_mods'].keys())
             if not all_target_wids:
                 self.workshop_rules_cache = {}
@@ -332,6 +354,8 @@ class RuleManager:
             }
             # 5. 组装最终缓存
             new_cache = {}
+            resolved_dep_count = 0
+            unresolved_dep_count = 0
             for row in active_metas:
                 source_pid = row['package_id'].lower()
                 raw_deps = row['dependencies_mods'] # dict
@@ -341,10 +365,16 @@ class RuleManager:
                     target_mod = wid_to_pid_map.get(str(target_wid))
                     if target_mod:
                         resolved_target_pids.append((target_mod.package_id.lower(), target_mod.name))
+                        resolved_dep_count += 1
+                    else:
+                        unresolved_dep_count += 1
                 if resolved_target_pids:
                     new_cache[source_pid] = resolved_target_pids
             self.workshop_rules_cache = new_cache
-            logger.info(f"创意工坊规则缓存已构建，生效 MOD 数量：{len(new_cache)}")
+            logger.info(
+                "创意工坊规则缓存已构建，源记录：%s，原始依赖：%s，成功转换：%s，丢弃：%s，生效 MOD：%s",
+                len(active_metas), raw_dep_count, resolved_dep_count, unresolved_dep_count, len(new_cache),
+            )
         except Exception as e:
             logger.error(f"构建创意工坊规则缓存失败：{e}", exc_info=True)
     
@@ -517,12 +547,13 @@ class RuleManager:
     def _resolve_condition_field(self, mod_data: dict, field: str):
         """解析筛选字段，支持别名与点分路径。"""
         field_aliases = {
-            "mod_type": ["user_mod_type", "mod_type"],
-            "user_mod_type": ["user_mod_type", "mod_type"],
             # 名称只匹配原始 name；别名则允许“别名 / 显示名 / 原名”三者任一命中。
             "name": ["name"],
             "alias_name": ["alias_name", "display_name", "name"],
         }
+
+        if field in {"mod_type", "user_mod_type"}:
+            return get_effective_mod_type(mod_data)
 
         def _resolve_path(data, path: str):
             current = data
@@ -699,7 +730,7 @@ class RuleManager:
         authors = mod_data.get('author', [])
         if 'Ludeon Studios' in authors: return 60
         # 3. 根据 Mod 类型判定 (来自 analyzer.py 的分析结果)
-        mod_type = str(mod_data.get('user_mod_type') or mod_data.get('mod_type', 'Unknown')).strip()
+        mod_type = self._resolve_condition_field(mod_data, "mod_type")
         if mod_type == 'LanguagePack': return 900  # 汉化包置底
         if mod_type == 'Texture': return 850  # 纹理包置后
         if mod_type == 'Audio': return 860  # 音频包置后
@@ -770,6 +801,14 @@ class RuleManager:
         except ValueError:
             return 999 # 未知来源优先级最低
         
+    def resolve_effective_mod_rules(self, package_token: str, mod_full_data: dict) -> tuple[dict, Dict[str, Any]]:
+        """选择实际实例后计算生效规则，避免调用方混淆 token 与规范包名。"""
+        token_info = parse_package_token(package_token)
+        selected_mod = select_mod_instance(mod_full_data, package_token)
+        canonical_id = token_info.canonical_package_id or normalize_package_id(selected_mod.get("package_id"))
+        rules = self.get_effective_mod_rules(canonical_id, selected_mod)
+        return selected_mod, rules
+
     def get_effective_mod_rules(self, mod_id: str, mod_full_data: dict) -> Dict[str, Any]:
         """
         获取该 Mod 生效的最终规则集（经过优先级合并和去重）。
@@ -783,7 +822,8 @@ class RuleManager:
             "weight_override": {"type": "top"|"bottom", "source": "user", "detail": "..."}
         }
         """
-        mid_l = mod_id.lower()
+        # token 后缀只用于选择共存实例；外置、社区、用户和内置规则均按规范包名共享。
+        mid_l = normalize_package_id(mod_id)
         
         # 定义结果容器，使用字典方便按 target_id 去重
         # 结构: { "target_id": { "source": "...", "priority": int, "detail": ... } }
@@ -815,6 +855,28 @@ class RuleManager:
                 }
         def _is_rule_value_enabled(value: Any) -> bool:
             return value is True or str(value).strip().lower() == "true"
+        def _make_rule(category: str, target_id: str, source_type: str, source_name: str,
+                       is_force: bool, alternatives: list, detail: Any, priority_idx: int):
+            return {
+                "target_id": target_id,
+                "type": category,
+                "version_requirement": ["all"], # 输出时已是清洗过的，统一标为 all 即可
+                "alternatives": alternatives or [],
+                "is_force": is_force,
+                "effective": True,
+                "source": {
+                    "type": source_type,
+                    "name": source_name,
+                    "detail": detail
+                },
+                "priority_idx": priority_idx # 内部计算字段，最终剔除
+            }
+        def _shadow_rule(rule: dict, shadowed_by: dict):
+            # 同一关系的低优先级来源不参与排序，但要保留下来供冲突弹窗解释“还有谁也定义了这条规则”。
+            shadowed = {key: value for key, value in rule.items() if key not in ("priority_idx", "shadowed_rules")}
+            shadowed["effective"] = False
+            shadowed["shadowed_by"] = shadowed_by
+            return shadowed
         def _merge_rule(category: str, target_id: str, source_type: str, source_name: str, 
                         is_force: bool = False, alternatives: list = [], detail: Any = None):
             target_id = str(target_id or "").strip().lower()
@@ -822,6 +884,7 @@ class RuleManager:
             
             new_p_idx = self.get_source_priority(source_type)
             current = rules_map[category].get(target_id)
+            new_rule = _make_rule(category, target_id, source_type, source_name, is_force, alternatives, detail, new_p_idx)
             
             # 如果当前没有规则，或者新规则的优先级更高(索引更小)，则覆盖
             should_override = False
@@ -833,19 +896,12 @@ class RuleManager:
                 should_override = True  # 二者同为强制(或同为非强制)，遵循来源优先级（如：用户的强制 覆盖 原版的强制）
                 
             if should_override:
-                rules_map[category][target_id] = {
-                    "target_id": target_id,
-                    "type": category,
-                    "version_requirement": ["all"], # 输出时已是清洗过的，统一标为 all 即可
-                    "alternatives": alternatives or [],
-                    "is_force": is_force,
-                    "source": {
-                        "type": source_type,
-                        "name": source_name,
-                        "detail": detail
-                    },
-                    "priority_idx": new_p_idx # 内部计算字段，最终剔除
-                }
+                if current:
+                    shadowed_rules = [current, *current.get("shadowed_rules", [])]
+                    new_rule["shadowed_rules"] = [_shadow_rule(rule, new_rule["source"]) for rule in shadowed_rules]
+                rules_map[category][target_id] = new_rule
+            else:
+                current.setdefault("shadowed_rules", []).append(_shadow_rule(new_rule, current["source"]))
 
         # 1. Native (About.xml) - 优先级: native
         # 不受黑名单机制影响，严格执行游戏版本过滤
@@ -924,9 +980,9 @@ class RuleManager:
                 rule_name = rule.get("name", "动态规则")
                 act_type = act.get("type")
                 if act_type == "load_after":
-                    _merge_rule("load_after", act.get("value"), "dynamic", rule_name)
+                    _merge_rule("load_after", act.get("value"), "dynamic", rule_name, detail={"rule_id": rule.get("rule_id")})
                 elif act_type == "load_before":
-                    _merge_rule("load_before", act.get("value"), "dynamic", rule_name)
+                    _merge_rule("load_before", act.get("value"), "dynamic", rule_name, detail={"rule_id": rule.get("rule_id")})
                 # [新增] 集中处理动态规则的权重干预，并利用已有的 _apply_weight_override 参与优先级竞争
                 elif act_type == "weight_shift":
                     shift_value, _, _ = self._clamp_dynamic_shift(act.get("value", 0), default=0)
@@ -1039,7 +1095,7 @@ class RuleManager:
             }
         # 情况 1：获取单个 Mod 的规则
         if package_id:
-            pid_l = package_id.lower().strip()
+            pid_l = normalize_package_id(package_id)
             mod = self.workshop_rules_cache.get(pid_l)
             return _transform(mod) if mod else {}
         # 情况 2：获取全量已生成的工坊规则

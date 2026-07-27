@@ -20,13 +20,17 @@ import webview # 引入 webview 库
 from webview.util import parse_file_type
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
+from backend.paths.game_locations import normalize_steam_root, resolve_steam_executable_path, resolve_steamcmd_executable_path
+from backend.paths.rimworld_layout import normalize_rimworld_install_root
+from backend.i18n.messages import localized_key, localized_params, tr
+from backend.scanner.parser_xml import ModXMLParser
 from backend.profile import UserDataRoot
-from backend.settings import GALLERY_CACHE_DIR, THUMBNAIL_CACHE_DIR, settings
+from backend.settings import GALLERY_CACHE_DIR, MODS_DIR, THUMBNAIL_CACHE_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR, RIMWORLD_WORKSHOP_CONTENT_PARTS
 from backend.utils.logger import logger
 from backend.utils.text_decode import decode_text_bytes
-from backend.utils.tools import delete_fs_path, normalize_path_for_storage, same_path
+from backend.utils.tools import delete_fs_path, normalize_package_id, normalize_path_for_storage, same_path
 from backend.utils.shortcuts import (
     create_shortcut,
     format_shortcut_arguments,
@@ -391,6 +395,71 @@ class FileManager:
     3. 提供文件/文件夹打开操作
     4. 提供本地路径到 URL 的转换
     """
+
+    _JUNCTION_UNSUPPORTED_FILE_SYSTEMS = {"FAT", "FAT32", "EXFAT"}
+
+    @staticmethod
+    def _get_windows_filesystem_type(path: str) -> str:
+        """获取路径所在卷的文件系统类型；无法识别时返回空字符串。"""
+        if platform.system() != "Windows":
+            return ""
+        try:
+            import ctypes
+
+            normalized_path = os.path.abspath(path)
+            volume_root = ctypes.create_unicode_buffer(260)
+            if not ctypes.windll.kernel32.GetVolumePathNameW(normalized_path, volume_root, len(volume_root)):
+                logger.warning("无法识别路径所在卷的文件系统类型: %s", normalized_path)
+                return ""
+
+            filesystem_name = ctypes.create_unicode_buffer(256)
+            if not ctypes.windll.kernel32.GetVolumeInformationW(
+                volume_root.value, None, 0, None, None, None, filesystem_name, len(filesystem_name),
+            ):
+                logger.warning("无法读取卷的文件系统类型: %s", volume_root.value)
+                return ""
+            return filesystem_name.value.upper()
+        except (AttributeError, OSError) as e:
+            logger.warning("检测路径文件系统类型失败: %s，错误: %s", path, e)
+            return ""
+
+    @classmethod
+    def _is_junction_supported(cls, path: str) -> bool:
+        """仅在已知 FAT 系文件系统上提前阻止 Junction 创建。"""
+        if platform.system() != "Windows":
+            return True
+        filesystem_type = str(cls._get_windows_filesystem_type(path) or "").strip().upper()
+        return filesystem_type not in cls._JUNCTION_UNSUPPORTED_FILE_SYSTEMS
+
+    @classmethod
+    def _get_link_deployment_failure(cls, local_mods_path: str):
+        """返回不能创建运行时模组链接时的用户提示。"""
+        if cls._is_junction_supported(local_mods_path):
+            return None
+        return tr(
+            "api.path.runtime_link_deployment_unsupported",
+            "当前环境的模组目录所在磁盘不支持文件链接，无法通过文件链接加载模组：{path}\n请将该目录改到 NTFS 磁盘后重试。",
+            path=local_mods_path,
+        )
+
+    @staticmethod
+    def _is_empty_directory(path: str) -> bool:
+        """不存在的目录视为空；无法读取或不是目录时不自动处理。"""
+        if not os.path.exists(path):
+            return True
+        if not os.path.isdir(path):
+            return False
+        try:
+            with os.scandir(path) as entries:
+                return next(entries, None) is None
+        except OSError as e:
+            logger.warning("无法读取目录，跳过自动存储回退: %s，错误: %s", path, e)
+            return False
+
+    @staticmethod
+    def _steamcmd_workshop_mods_path(steamcmd_root: str) -> str:
+        """根据 SteamCMD 根目录推导 RimWorld 工坊下载目录。"""
+        return os.path.normpath(os.path.abspath(os.path.join(str(steamcmd_root or ""), *RIMWORLD_WORKSHOP_CONTENT_PARTS)))
     # 定义内部常量，统一管理链接目录名
     LINK_PREFIX = "_Link_" # 使用统一前缀识别由管理器创建的链接
     # 本地化复制属于后台线程任务，这里集中维护取消令牌，供 API 全局任务栏复用。
@@ -422,6 +491,8 @@ class FileManager:
             os.makedirs(THUMBNAIL_CACHE_DIR, exist_ok=True)
         if not os.path.exists(GALLERY_CACHE_DIR):
             os.makedirs(GALLERY_CACHE_DIR, exist_ok=True)
+        self._remote_cache_stats = {"file_count": 0, "total_bytes": 0}
+        self._remote_cache_stats_time = 0.0
             
         # 2. 启动 HTTP Server
         self._port = 0
@@ -450,8 +521,13 @@ class FileManager:
         """返回当前 HTTP 服务器端口"""
         return self._port
 
-    def get_remote_cache_stats(self) -> dict[str, int]:
+    def get_remote_cache_stats(self, force: bool = False) -> dict[str, int]:
         """统计网络图片缓存数量与总占用。"""
+        now = time.monotonic()
+        cached_stats = getattr(self, "_remote_cache_stats", {"file_count": 0, "total_bytes": 0})
+        cached_time = getattr(self, "_remote_cache_stats_time", 0.0)
+        if not force and now - cached_time < 300:
+            return dict(cached_stats)
         total_files = 0
         total_bytes = 0
         for entry in Path(GALLERY_CACHE_DIR).iterdir():
@@ -462,19 +538,23 @@ class FileManager:
                 total_bytes += entry.stat().st_size
             except OSError:
                 continue
-        return {
+        self._remote_cache_stats = {
             "file_count": total_files,
             "total_bytes": total_bytes,
         }
+        self._remote_cache_stats_time = now
+        return dict(self._remote_cache_stats)
 
     def clear_remote_cache(self) -> dict[str, int]:
         """清空网络图片缓存，并返回清理前统计。"""
-        cleared_stats = self.get_remote_cache_stats()
+        cleared_stats = self.get_remote_cache_stats(force=True)
         for entry in Path(GALLERY_CACHE_DIR).iterdir():
             if entry.is_file():
                 delete_fs_path(str(entry))
         with LocalAssetHandler._remote_failure_lock:
             LocalAssetHandler._remote_failure_cache.clear()
+        self._remote_cache_stats = {"file_count": 0, "total_bytes": 0}
+        self._remote_cache_stats_time = time.monotonic()
         return cleared_stats
     
     # =========================================================
@@ -620,8 +700,8 @@ class FileManager:
                 "file-delete",
                 status="running",
                 progress=min(95, int((index - 1) / max(total, 1) * 90) + 5),
-                message=f"正在删除: {os.path.basename(path)}",
-                metrics={"title": "删除文件", "current": index, "total": total},
+                message=tr("tasks.file_delete.deleting", "正在删除: {filename}", filename=os.path.basename(path)),
+                metrics={"title": str(tr("tasks.title.file_delete", "删除文件")), "current": index, "total": total},
             )
             try:
                 deleted = delete_fs_path(path, force=force)
@@ -629,8 +709,8 @@ class FileManager:
                 if deleted or not os.path.exists(os.path.abspath(path)):
                     success_count += 1
             except Exception as e:
-                logger.error(f"批量删除出错: {path} -> {e}")
-                error_list.append(f"删除失败 ({os.path.basename(path)}): {str(e)}")
+                logger.error(f"批量删除出错: {path} -> {e}", exc_info=True)
+                error_list.append(str(tr("errors.files.delete_failed", "删除失败 ({filename}): 请检查文件是否被占用或权限是否不足。", filename=os.path.basename(path))))
 
         final_status = "failed" if success_count <= 0 and error_list else "success"
         EventBus.emit_progress(
@@ -638,8 +718,8 @@ class FileManager:
             "file-delete",
             status=final_status,
             progress=100,
-            message=f"删除完成：成功 {success_count} 个，失败 {len(error_list)} 个",
-            metrics={"title": "删除文件", "current": total, "total": total, "success_count": success_count, "error_count": len(error_list)},
+            message=tr("tasks.file_delete.complete", "删除完成：成功 {success_count} 个，失败 {error_count} 个", success_count=success_count, error_count=len(error_list)),
+            metrics={"title": str(tr("tasks.title.file_delete", "删除文件")), "current": total, "total": total, "success_count": success_count, "error_count": len(error_list)},
         )
         return success_count, error_list
     
@@ -1013,13 +1093,18 @@ class FileManager:
         """
         将本地 Mods 目录中的管理器链接收敛到 deploy_paths。
         这里复用既有同步逻辑，避免手写删除规则误伤 Self/Tool 链接。
+        返回：(是否成功，预检失败时的用户提示)。
         """
+        failure_message = FileManager._get_link_deployment_failure(local_mods_path)
+        if failure_message:
+            logger.error("模组链接部署失败：%s", failure_message)
+            return False, failure_message
         if settings.config.link_deployment_mode_full:
-            return FileManager.sync_links_full(local_mods_path, deploy_paths)
-        return FileManager.sync_links(local_mods_path, deploy_paths)
+            return FileManager.sync_links_full(local_mods_path, deploy_paths), None
+        return FileManager.sync_links(local_mods_path, deploy_paths), None
     
     @staticmethod
-    def localize_workshop_mods(query, local_root: str, folder_name_type: str = 'workshop_id'):
+    def localize_workshop_mods(query, local_root: str, folder_name_type: str = 'workshop_id', conflict_action: str = ''):
         """
         将工坊模组本地化或同步为本地共存模组，并推送实时进度
         :param query: 包含工坊模组信息的查询结果
@@ -1027,25 +1112,47 @@ class FileManager:
         :param folder_name_type: 文件夹命名类型，可选 'alias_name', 'name', 'package_id', 'workshop_id'
         """
         tasks = []
+        conflicts = []
         task_id = uuid.uuid4().hex
+        normalized_conflict_action = str(conflict_action or '').strip().lower()
         EventBus.resume()   # 恢复事件总线
         for mod_data in query:
-            # 核心退回逻辑：alias_name > name > package_id > workshop_id
-            display_name = mod_data.get('workshop_id')
-            if(folder_name_type=='alias_name'): display_name = ( mod_data.get('alias_name') or mod_data.get('name') or mod_data.get('package_id') or mod_data.get('workshop_id') )
-            elif(folder_name_type=='name'): display_name = ( mod_data.get('name') or mod_data.get('package_id') or mod_data.get('workshop_id') )
-            elif( folder_name_type=='package_id' ): display_name = ( mod_data.get('package_id') or mod_data.get('workshop_id') )
-            else: display_name = mod_data.get('workshop_id')
-            
-            # 净化文件名
-            safe_name = FileManager.sanitize_filename(display_name)
-            folder_name = f"_{safe_name}_"
+            display_name, safe_name = FileManager._resolve_localize_folder_name(mod_data, folder_name_type)
+            package_id = normalize_package_id(mod_data.get('package_id'))
+            target_path = os.path.join(local_root, safe_name)
+            legacy_path = os.path.join(local_root, f"_{safe_name}_")
+            target_package_id = FileManager._read_mod_package_id(target_path) if os.path.exists(target_path) else ""
+            legacy_package_id = FileManager._read_mod_package_id(legacy_path) if os.path.exists(legacy_path) else ""
+
+            if target_package_id and target_package_id == package_id:
+                dst_path = target_path
+            elif not os.path.exists(target_path) and legacy_package_id == package_id:
+                dst_path = legacy_path
+            elif os.path.exists(target_path):
+                conflict = FileManager._build_localize_conflict(mod_data, display_name, safe_name, target_path, target_package_id)
+                if normalized_conflict_action == 'skip':
+                    continue
+                if normalized_conflict_action == 'save_as':
+                    dst_path = legacy_path
+                elif normalized_conflict_action == 'overwrite':
+                    dst_path = target_path
+                else:
+                    conflicts.append(conflict)
+                    continue
+            else:
+                dst_path = target_path
+
             tasks.append({
                 'src': mod_data['path'],
-                'dst': os.path.join(local_root, folder_name),
+                'dst': dst_path,
                 'label': display_name, # 用于进度显示
-                'is_sync': os.path.exists(os.path.join(local_root, folder_name)),
+                'is_sync': os.path.exists(dst_path),
             })
+        if conflicts:
+            return {
+                "requires_conflict_action": True,
+                "conflicts": conflicts,
+            }
         if not tasks: return False
         sync_count = sum(1 for task in tasks if task.get('is_sync'))
         create_count = len(tasks) - sync_count
@@ -1104,7 +1211,7 @@ class FileManager:
                 final_message = f"{action_title}已取消"
             except Exception as e:
                 logger.error(f"本地化任务失败：{e}", exc_info=True)
-                errors.append(str(e))
+                errors.append(str(tr("errors.files.localize_failed", "本地化失败，请检查源目录、目标目录和文件权限。")))
                 final_status = "failed"
                 final_message = f"{action_title}失败"
             finally:
@@ -1162,6 +1269,43 @@ class FileManager:
             })
         threading.Thread(target=run_task, daemon=True).start()
         return task_id
+
+    @staticmethod
+    def _resolve_localize_folder_name(mod_data: dict, folder_name_type: str) -> tuple[str, str]:
+        # 目录名用于用户查看；同步身份仍以包名判断，避免把下划线当业务标识。
+        display_name = mod_data.get('workshop_id')
+        if(folder_name_type=='alias_name'): display_name = ( mod_data.get('alias_name') or mod_data.get('name') or mod_data.get('package_id') or mod_data.get('workshop_id') )
+        elif(folder_name_type=='name'): display_name = ( mod_data.get('name') or mod_data.get('package_id') or mod_data.get('workshop_id') )
+        elif( folder_name_type=='package_id' ): display_name = ( mod_data.get('package_id') or mod_data.get('workshop_id') )
+        else: display_name = mod_data.get('workshop_id')
+        safe_name = FileManager.sanitize_filename(display_name)
+        return str(display_name or safe_name), safe_name
+
+    @staticmethod
+    def _read_mod_package_id(path: str) -> str:
+        if not path or not os.path.isdir(path):
+            return ""
+        for filename in ("About.xml", "About.xml.disabled"):
+            about_path = os.path.join(path, "About", filename)
+            if not os.path.isfile(about_path):
+                continue
+            try:
+                return normalize_package_id(ModXMLParser().parse(path, about_path=about_path).get("package_id"))
+            except Exception as exc:
+                logger.debug("读取本地共存目录包名失败：path=%s reason=%s", path, exc)
+        return ""
+
+    @staticmethod
+    def _build_localize_conflict(mod_data: dict, display_name: str, safe_name: str, target_path: str, existing_package_id: str) -> dict:
+        return {
+            "path_hash": str(mod_data.get("path_hash") or ""),
+            "name": str(mod_data.get("name") or display_name or safe_name),
+            "package_id": normalize_package_id(mod_data.get("package_id")),
+            "target_folder": safe_name,
+            "target_path": normalize_path_for_storage(target_path),
+            "existing_package_id": existing_package_id,
+            "save_as_folder": f"_{safe_name}_",
+        }
 
     @staticmethod
     def cancel_localize_task(task_id: str) -> bool:
@@ -1249,7 +1393,7 @@ class FileManager:
                     except Exception as cleanup_error:
                         logger.debug(f"清理失败本地化临时文件夹失败：{cleanup_path} - {cleanup_error}")
                 logger.error(f"复制文件失败：{src} -> {dst}，错误：{e}")
-                error_list.append(f"模组 {label} 处理失败: {str(e)}")
+                error_list.append(str(tr("errors.files.mod_process_failed", "模组 {label} 处理失败: 请检查文件是否被占用或权限是否不足。", label=label)))
 
         return success_list, error_list, total
     
@@ -1293,6 +1437,10 @@ class FileManager:
                 'raw_name': link_name,
                 'src_path': os.path.normpath(os.path.abspath(src))
             }
+        missing_sources = [info['src_path'] for info in target_map.values() if not os.path.isdir(info['src_path'])]
+        if missing_sources:
+            logger.error("同步链接失败：源目录不存在: %s", missing_sources)
+            return False
 
         # --- 2. 扫描磁盘并识别“必须删除”的项 ---
         # 遍历目录下的所有内容，只要命中前缀且不在 target_map 中，就是删除目标
@@ -1342,6 +1490,15 @@ class FileManager:
             logger.info(f"正在创建 {len(links_to_create)} 个缺失链接...")
             FileManager._create_links_windows_batch(links_to_create)
 
+        failed_links = [
+            f"{dst} -> {src}"
+            for src, dst in links_to_create
+            if not FileManager._is_link_correct(dst, src)
+        ]
+        if failed_links:
+            logger.error("同步链接失败：创建后校验未通过: %s", failed_links)
+            return False
+
         logger.info(f"同步结果：保留 {len(existing_valid_keys)} 个，创建 {len(links_to_create)} 个，删除 {len(to_delete_paths)} 个")
         return True
 
@@ -1360,6 +1517,10 @@ class FileManager:
                 'raw_name': link_name,
                 'src_path': os.path.normpath(os.path.abspath(src))
             }
+        missing_sources = [info['src_path'] for info in target_map.values() if not os.path.isdir(info['src_path'])]
+        if missing_sources:
+            logger.error("完整同步链接失败：源目录不存在: %s", missing_sources)
+            return False
 
         to_delete_paths = []
         links_to_create = []
@@ -1390,6 +1551,15 @@ class FileManager:
         # 5. 执行极速创建
         if links_to_create:
             FileManager._create_links_fast(links_to_create)
+
+        failed_links = [
+            f"{dst} -> {src}"
+            for src, dst in links_to_create
+            if not FileManager._is_link_correct(dst, src)
+        ]
+        if failed_links:
+            logger.error("完整同步链接失败：创建后校验未通过: %s", failed_links)
+            return False
 
         logger.info(f"完整同步结果：创建 {len(links_to_create)} 个，删除 {len(to_delete_paths)} 个")
         return True
@@ -1462,7 +1632,9 @@ class FileManager:
             temp_path = tf.name
 
         try:
-            subprocess.run(temp_path, shell=True, capture_output=True, check=True)
+            result = subprocess.run(temp_path, shell=True, capture_output=True, text=True, encoding="gbk", errors="replace")
+            if result.returncode != 0:
+                logger.error("批量创建链接命令失败: code=%s, stdout=%s, stderr=%s", result.returncode, result.stdout.strip(), result.stderr.strip())
         finally:
             if os.path.exists(temp_path): os.remove(temp_path)
     
@@ -1505,17 +1677,41 @@ class FileManager:
         # SteamCMD 期望的下载路径 (Link Location, 通常是 RimWorld 工坊内容目录)
         steamcmd_link_path = os.path.normpath(os.path.abspath(settings.config.steamcmd_mods_path))
         
+        if same_path(steamcmd_link_path, real_storage_path):
+            os.makedirs(real_storage_path, exist_ok=True)
+            logger.debug(
+                "SteamCMD 下载目录已关联管理器 Mod 目录，无需创建重定向：%s",
+                real_storage_path,
+            )
+            return True
+
+        if not FileManager._is_junction_supported(steamcmd_link_path):
+            default_mods_path = os.path.normpath(os.path.abspath(MODS_DIR))
+            if same_path(real_storage_path, default_mods_path) and FileManager._is_empty_directory(real_storage_path):
+                try:
+                    os.makedirs(steamcmd_link_path, exist_ok=True)
+                except OSError as e:
+                    logger.error("SteamCMD 下载目录创建失败，无法自动使用该目录: %s，错误: %s", steamcmd_link_path, e)
+                    return False
+
+                settings.config.self_mods_path = steamcmd_link_path
+                settings.save()
+                logger.warning(
+                    "SteamCMD 所在磁盘不支持目录连接，默认模组目录为空，已改用 SteamCMD 下载目录: %s",
+                    steamcmd_link_path,
+                )
+                return True
+
+            logger.error(
+                "SteamCMD 所在磁盘不支持目录连接，未自动修改已有或自定义的管理器模组目录: %s",
+                real_storage_path,
+            )
+            return False
+
         os.makedirs(os.path.dirname(steamcmd_link_path), exist_ok=True)
         os.makedirs(real_storage_path, exist_ok=True)
 
         logger.info(f"正在重定向 SteamCMD 目录：{steamcmd_link_path} -> {real_storage_path}")
-
-        if same_path(steamcmd_link_path, real_storage_path):
-            logger.warning(
-                "跳过 SteamCMD 重定向：源目录和目标目录相同：%s",
-                real_storage_path,
-            )
-            return True
 
         # ---------------------------------------------------------
         # 步骤 A: 处理 mods_path 变更导致的数据迁移
@@ -1642,14 +1838,21 @@ class FileManager:
 class PathChecker:
 
     @classmethod
-    def _format_res(cls, is_pass: bool, data: Any = None, msg: str = "", msg_type: str = "success"):
+    def _format_res(cls, is_pass: bool, data: Any = None, msg: Any = "", msg_type: str = "success"):
         """统一返回格式"""
-        return {
+        result = {
             'pass': is_pass,
             'data': data,
             'type': msg_type if is_pass else ("error" if msg_type == "success" else msg_type),
-            'msg': msg
+            'msg': str(msg or "")
         }
+        key = localized_key(msg)
+        if key:
+            result['msg_key'] = key
+        params = localized_params(msg)
+        if params:
+            result['msg_params'] = params
+        return result
     
     @classmethod
     def check_normal_path(cls, path_str: str) -> Dict:
@@ -1662,17 +1865,17 @@ class PathChecker:
             'msg': ''
         }
         """
-        if not path_str: return cls._format_res(False, msg="路径不能为空")
+        if not path_str: return cls._format_res(False, msg=tr("api.path.empty", "路径不能为空"))
         path = Path(path_str)
         # 文件路径只警告，检查其父路径是否存在
         if len(os.path.splitext(path_str.strip())[1]) > 0:
             if path.parent.exists():
-                if path.is_file(): return cls._format_res(True, data=str(path), msg=f"路径有效：{path}")
-                return cls._format_res(True, msg=f"父路径下不存在该文件，软件会按需生成该文件。", msg_type="warning")
-            return cls._format_res(False, msg=f"{path_str}\n父路径不存在！")
+                if path.is_file(): return cls._format_res(True, data=str(path), msg=tr("api.path.valid", "路径有效：{path}", path=str(path)))
+                return cls._format_res(True, msg=tr("api.path.parent_exists_file_will_be_created", "父路径下不存在该文件，软件会按需生成该文件。"), msg_type="warning")
+            return cls._format_res(False, msg=tr("api.path.parent_missing", "{path}\n父路径不存在！", path=path_str))
         
-        if not path.exists(): return cls._format_res(False, msg=f"{path_str}\n路径不存在！")
-        return cls._format_res(True, data=str(path), msg=f"路径有效：{path}")
+        if not path.exists(): return cls._format_res(False, msg=tr("api.path.not_exists", "{path}\n路径不存在！", path=path_str))
+        return cls._format_res(True, data=str(path), msg=tr("api.path.valid", "路径有效：{path}", path=str(path)))
     
     @classmethod
     def check_install_path(cls, path_str: str, *, force_steam_inspect: bool = False) -> Dict:
@@ -1685,21 +1888,21 @@ class PathChecker:
             'msg': ''
         }
         """
-        if not path_str: return cls._format_res(False, msg="安装路径不能为空")
-        path = Path(path_str)
-        if not path.exists(): return cls._format_res(False, msg="游戏安装路径不存在！")
+        if not path_str: return cls._format_res(False, msg=tr("api.path.game_install_empty", "安装路径不能为空"))
+        path = Path(normalize_rimworld_install_root(path_str, system_name=platform.system()))
+        if not path.exists(): return cls._format_res(False, msg=tr("api.path.game_install_missing", "游戏安装路径不存在！"))
         res = {}
         # 1. 检查执行文件
         exe = GameManager.detect_executable(str(path))
         if exe:
-            res = cls._format_res(True, data={}, msg=f"游戏安装路径: {path}")
+            res = cls._format_res(True, data={}, msg=tr("api.path.game_install_path", "游戏安装路径: {path}", path=str(path)))
             res['data']["game_exe"] = str(exe)
         else:
-            res = cls._format_res(False, msg="无法检测到游戏程序")
+            res = cls._format_res(False, msg=tr("api.path.game_executable_missing", "无法检测到游戏程序"))
             return res
         # 2. 检查版本
         version = GameManager.get_game_version(str(path))
-        res['data']["game_version"] = version if version else "未知"
+        res['data']["game_version"] = version if version else str(tr("common.status.unknown", "未知"))
         # 3. Steam 判定
         from backend.managers.mgr_game_install import GameInstallInspector
 
@@ -1707,28 +1910,33 @@ class PathChecker:
         install_facts = inspector.inspect(str(path), force=True) if force_steam_inspect else inspector.quick_inspect(str(path))
         res['data']["is_steam"] = bool(install_facts.is_steam)
         res['data']["is_steam_managed"] = bool(install_facts.is_steam_managed)
-        steam_text = "Steam 版" if install_facts.is_steam else "非 Steam 版"
-        managed_text = "受 Steam 管理主版本" if install_facts.is_steam_managed else "非 Steam 管理主版本"
-        res['msg'] = f"游戏本体：{exe}\n游戏版本：{version}\n{steam_text}\n{managed_text}"
+        steam_text = tr("api.path.game_install_steam", "Steam 版") if install_facts.is_steam else tr("api.path.game_install_non_steam", "非 Steam 版")
+        managed_text = tr("api.path.game_install_steam_managed", "受 Steam 管理主版本") if install_facts.is_steam_managed else tr("api.path.game_install_not_steam_managed", "非 Steam 管理主版本")
+        res.update(cls._format_res(
+            True,
+            data=res.get('data') or {},
+            msg=tr("api.path.game_install_summary", "游戏本体：{exe}\n游戏版本：{version}\n{steam_text}\n{managed_text}", exe=str(exe), version=version or str(tr("common.status.unknown", "未知")), steam_text=str(steam_text), managed_text=str(managed_text)),
+        ))
         
         return res
     
     @classmethod
     def check_user_data_path(cls, path_str:str) -> Dict:
-        if not path_str: return cls._format_res(False, msg="用户数据路径不能为空")
+        if not path_str: return cls._format_res(False, msg=tr("api.path.user_data_empty", "用户数据路径不能为空"))
         try:
             normalized_path = UserDataRoot.from_raw(
                 path_str,
                 default_roots=GameManager.get_default_user_data_paths(),
             ).root_path
         except ValueError as e:
-            return cls._format_res(False, msg=str(e))
+            logger.warning("用户数据路径校验失败: path=%s error=%s", path_str, e)
+            return cls._format_res(False, msg=tr("api.path.user_data_invalid", "用户数据路径无效，请检查路径是否正确。"))
         # 哪怕目录不存在，只要父目录存在且有写入权限，我们就认为合法（因为我们可以创建它）
         parent_dir = os.path.dirname(normalized_path)
         if parent_dir and not os.path.exists(parent_dir):
-            return cls._format_res(False, msg=f"父目录不存在: {parent_dir}")
+            return cls._format_res(False, msg=tr("api.path.parent_dir_missing", "父目录不存在: {path}", path=parent_dir))
         if parent_dir and not os.access(parent_dir, os.W_OK):
-            return cls._format_res(False, msg="目录无写入权限，请以管理员身份运行或更换路径")
+            return cls._format_res(False, msg=tr("api.path.parent_dir_not_writable", "目录无写入权限，请以管理员身份运行或更换路径"))
 
         config_dir = os.path.join(normalized_path, "Config")
         mods_config_file = os.path.join(config_dir, "ModsConfig.xml")
@@ -1736,23 +1944,23 @@ class PathChecker:
         if not os.path.exists(normalized_path):
             return cls._format_res(
                 True,
-                msg=f"用户数据目录 {normalized_path} 当前不存在，但父目录可写；保存或激活环境时会自动创建目录结构。",
+                msg=tr("api.path.user_data_will_be_created", "用户数据目录 {path} 当前不存在，但父目录可写；保存或激活环境时会自动创建目录结构。", path=normalized_path),
                 msg_type="warn",
             )
         if not os.path.exists(config_dir):
             return cls._format_res(
                 True,
-                msg=f"用户数据路径 {normalized_path} 下无 Config 目录；程序会在保存或激活环境时自动生成。",
+                msg=tr("api.path.user_data_config_missing", "用户数据路径 {path} 下无 Config 目录；程序会在保存或激活环境时自动生成。", path=normalized_path),
                 msg_type="warn",
             )
         if not os.path.exists(mods_config_file):
             return cls._format_res(
                 True,
-                msg=f"用户数据路径 {normalized_path} 下未检测到 Config/ModsConfig.xml；路径仍可使用，游戏首次写入配置后会自动生成。",
+                msg=tr("api.path.user_data_mods_config_missing", "用户数据路径 {path} 下未检测到 Config/ModsConfig.xml；路径仍可使用，游戏首次写入配置后会自动生成。", path=normalized_path),
                 msg_type="warn",
             )
 
-        return cls._format_res(True, msg="校验通过")
+        return cls._format_res(True, msg=tr("api.path.check_passed", "校验通过"))
     
     @classmethod
     def check_mods_config(cls, path_str: str) -> Dict:
@@ -1766,8 +1974,8 @@ class PathChecker:
         }
         """
         path = Path(path_str) / "ModsConfig.xml"
-        if path.exists(): return cls._format_res(True, data=str(path), msg=f"Mods 配置文件：{path}")
-        return cls._format_res(False, msg="未找到 ModsConfig.xml", msg_type="warn")
+        if path.exists(): return cls._format_res(True, data=str(path), msg=tr("api.path.mods_config_file", "Mods 配置文件：{path}", path=str(path)))
+        return cls._format_res(False, msg=tr("api.path.mods_config_missing", "未找到 ModsConfig.xml"), msg_type="warn")
 
     @classmethod
     def check_workshop_path(cls, path_str: str) -> Dict:
@@ -1784,7 +1992,7 @@ class PathChecker:
         }
         """
         if not path_str:
-            return cls._format_res(False, msg="Workshop 路径不存在")
+            return cls._format_res(False, msg=tr("api.path.workshop_missing", "Workshop 路径不存在"))
 
         path = Path(path_str)
         normalized_parts = [part.lower() for part in Path(os.path.normpath(path_str)).parts]
@@ -1797,13 +2005,13 @@ class PathChecker:
             return cls._format_res(
                 True,
                 data=path_str,
-                msg=f"RimWorld 工坊目录尚未生成：{path_str}\n订阅或下载工坊内容后通常会自动出现。",
+                msg=tr("api.path.workshop_will_be_created", "RimWorld 工坊目录尚未生成：{path}\n订阅或下载工坊内容后通常会自动出现。", path=path_str),
                 msg_type="warn",
             )
         if not path.exists():
-            return cls._format_res(False, msg="Workshop 路径不存在")
+            return cls._format_res(False, msg=tr("api.path.workshop_missing", "Workshop 路径不存在"))
         return cls._format_res(is_valid, data=path_str, 
-                               msg=f"Workshop 路径：{path_str}" if is_valid else f"路径不在 Steam Workshop {RIMWORLD_STEAM_APP_ID_STR} 目录中",
+                               msg=tr("api.path.workshop_path", "Workshop 路径：{path}", path=path_str) if is_valid else tr("api.path.not_steam_workshop_content", "路径不在 Steam Workshop {app_id} 目录中", app_id=RIMWORLD_STEAM_APP_ID_STR),
                                msg_type="success" if is_valid else "warn")
         
     @classmethod
@@ -1817,10 +2025,22 @@ class PathChecker:
             'msg': ''
         }
         """
-        if not path_str: return cls._format_res(False, msg="未指定 Steam 路径")
-        exe_path = Path(path_str) / "steam.exe"
-        if exe_path.exists(): return cls._format_res(True, data=path_str, msg=f"Steam 客户端：{exe_path}")
-        return cls._format_res(False, msg="路径下未找到 steam.exe", msg_type="warn")
+        if not path_str:
+            return cls._format_res(False, msg=tr("api.path.steam_empty", "未指定 Steam 路径"))
+        normalized_root = normalize_steam_root(path_str, system_name=platform.system())
+        steam_root = Path(normalized_root or path_str)
+        if not steam_root.exists():
+            return cls._format_res(False, msg=tr("api.path.steam_missing", "Steam 路径不存在"))
+
+        system_name = platform.system()
+        resolved_executable = resolve_steam_executable_path(str(steam_root), system_name=system_name)
+        if resolved_executable:
+            return cls._format_res(True, data=str(steam_root), msg=tr("api.path.steam_client", "Steam 客户端：{path}", path=str(resolved_executable)))
+        if system_name == "Linux":
+            return cls._format_res(True, data=str(steam_root), msg=tr("api.path.steam_root", "Steam 根目录：{path}", path=str(steam_root)))
+        if system_name == "Darwin":
+            return cls._format_res(False, msg=tr("api.path.steam_macos_executable_missing", "路径下未找到 Steam.app/Contents/MacOS/steam_osx"), msg_type="warn")
+        return cls._format_res(False, msg=tr("api.path.steam_windows_executable_missing", "路径下未找到 steam.exe"), msg_type="warn")
     
     @classmethod
     def check_steamcmd_path(cls, path_str: str) -> Dict:
@@ -1833,15 +2053,29 @@ class PathChecker:
             'msg': ''
         }
         """
-        if not path_str: return cls._format_res(False, msg="未指定 SteamCMD 路径")
+        if not path_str: return cls._format_res(False, msg=tr("api.path.steamcmd_empty", "未指定 SteamCMD 路径"))
         # 中文路经检查，steamcmd路径不能包含任何中文
         pattern = re.compile(r'[\u4e00-\u9fff]')
         result = pattern.search(path_str)
-        if result: return cls._format_res(False, msg="SteamCMD 路径不能包含中文")
+        if result: return cls._format_res(False, msg=tr("api.path.steamcmd_contains_chinese", "SteamCMD 路径不能包含中文"))
         
-        exe_path = Path(path_str) / "steamcmd.exe"
-        if exe_path.exists(): return cls._format_res(True, data=path_str, msg=f"SteamCMD 客户端：{exe_path}")
-        return cls._format_res(False, msg="路径下未找到 steamcmd.exe", msg_type="warn")
+        exe_path = Path(resolve_steamcmd_executable_path(path_str, system_name=platform.system()))
+        if exe_path.exists():
+            steamcmd_mods_path = FileManager._steamcmd_workshop_mods_path(path_str)
+            if not FileManager._is_junction_supported(steamcmd_mods_path):
+                return cls._format_res(
+                    True,
+                    data=path_str,
+                    msg=tr(
+                        "api.path.steamcmd_junction_unsupported",
+                        "当前 SteamCMD 下载目录所在磁盘不支持目录连接。下载目录：{path}。管理器默认下载目录为空时，软件会自动使用该目录；已有模组或自定义下载目录时，请改用 NTFS 磁盘，或将管理器下载模组路径设为这个目录。",
+                        path=steamcmd_mods_path,
+                    ),
+                    msg_type="warn",
+                )
+            return cls._format_res(True, data=path_str, msg=tr("api.path.steamcmd_client", "SteamCMD 客户端：{path}", path=str(exe_path)))
+        expected_name = "steamcmd.exe" if platform.system() == "Windows" else "steamcmd.sh"
+        return cls._format_res(False, msg=tr("api.path.executable_missing_under_path", "路径下未找到 {expected}", expected=expected_name), msg_type="warn")
 
     @classmethod
     def check_texture_tools_path(cls, path_str: str) -> Dict:
@@ -1850,17 +2084,19 @@ class PathChecker:
         这里统一按“目录中是否存在 todds.exe”判断，和 SteamCMD 的目录检查风格保持一致。
         """
         if not path_str:
-            return cls._format_res(False, msg="未指定贴图工具目录")
+            return cls._format_res(False, msg=tr("api.path.texture_tools_empty", "未指定贴图工具目录"))
         path = Path(path_str)
         if not path.exists():
-            return cls._format_res(False, msg="贴图工具目录不存在")
+            return cls._format_res(False, msg=tr("api.path.texture_tools_missing", "贴图工具目录不存在"))
         if not path.is_dir():
-            return cls._format_res(False, msg="贴图工具路径必须是目录")
+            return cls._format_res(False, msg=tr("api.path.texture_tools_not_dir", "贴图工具路径必须是目录"))
 
         exe_path = path / "todds.exe"
         if exe_path.exists():
-            return cls._format_res(True, data=path_str, msg=f"贴图工具：{exe_path}")
-        return cls._format_res(False, msg="目录下未找到 todds.exe，可在外部工具检查中下载安装", msg_type="warn")
+            return cls._format_res(True, data=path_str, msg=tr("api.path.texture_tools_executable", "贴图工具：{path}", path=str(exe_path)))
+        if platform.system() != "Windows":
+            return cls._format_res(False, msg=tr("api.path.texture_tools_windows_only", "当前核心运行范围不包含 macOS/Linux 的 todds 自动化支持"), msg_type="warn")
+        return cls._format_res(False, msg=tr("api.path.todds_missing", "目录下未找到 todds.exe，可在外部工具检查中下载安装"), msg_type="warn")
 
     @classmethod
     def check_ripgrep_path(cls, path_str: str) -> Dict:
@@ -1871,12 +2107,12 @@ class PathChecker:
         但前端仍建议用户选择目录，以便后续自动更新时保持一致。
         """
         if not path_str:
-            return cls._format_res(False, msg="未指定 ripgrep 目录")
+            return cls._format_res(False, msg=tr("api.path.ripgrep_empty", "未指定 ripgrep 目录"))
         path = Path(path_str)
         if not path.exists():
-            return cls._format_res(False, msg="ripgrep 路径不存在")
+            return cls._format_res(False, msg=tr("api.path.ripgrep_missing", "ripgrep 路径不存在"))
         if not path.is_file() and not path.is_dir():
-            return cls._format_res(False, msg="ripgrep 路径必须是目录")
+            return cls._format_res(False, msg=tr("api.path.ripgrep_not_dir", "ripgrep 路径必须是目录"))
 
         from backend.text_search.tooling import get_ripgrep_status, resolve_ripgrep_root
 
@@ -1885,12 +2121,12 @@ class PathChecker:
             return cls._format_res(
                 True,
                 data=str(resolve_ripgrep_root(path_str)),
-                msg=f"ripgrep：{status.resolved_path}",
+                msg=tr("api.path.ripgrep_executable", "ripgrep：{path}", path=str(status.resolved_path)),
             )
 
         if path.is_file():
-            return cls._format_res(False, msg="请选择 rg.exe 或其所在目录", msg_type="warn")
-        return cls._format_res(False, msg="目录下未找到 rg.exe，可在外部工具检查中下载安装", msg_type="warn")
+            return cls._format_res(False, msg=tr("api.path.ripgrep_choose_executable_or_dir", "请选择 rg.exe 或其所在目录"), msg_type="warn")
+        return cls._format_res(False, msg=tr("api.path.ripgrep_missing_executable", "目录下未找到 rg.exe，可在外部工具检查中下载安装"), msg_type="warn")
         
     @classmethod
     def paths_check(cls, paths_data: Dict[str, str]) -> Dict:
@@ -1932,6 +2168,3 @@ class PathChecker:
         
     
 file_mgr = FileManager()
-
-
-

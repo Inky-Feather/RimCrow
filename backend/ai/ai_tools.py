@@ -13,7 +13,8 @@ from typing import Any, Callable, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from backend.database.dao import ModDAO, GroupDAO
-from backend.load_order.package_tokens import parse_package_token
+from backend.load_order.language_pack_ownership import get_effective_mod_type
+from backend.load_order.package_tokens import parse_package_token, select_mod_instance
 from backend.managers.mgr_load_order import LoadOrderManager
 from backend.managers.mgr_profile import ProfileContext
 from backend.managers.mgr_game_logs import LogCondenser
@@ -424,12 +425,12 @@ class AIToolExecutor:
         try:
             args = json.loads(arguments_str) if arguments_str else {}
         except json.JSONDecodeError:
-            payload = {"error": "参数解析失败(Invalid JSON)"}
+            payload = {"error": "工具参数格式不正确，请重新组织输入后重试。"}
             return self._build_execution_result(name=name, payload=payload)
 
         spec = self.registry.get(name)
         if spec is None:
-            payload = {"error": f"系统未注册此工具: {name}"}
+            payload = {"error": "系统工具不可用，请稍后重试。"}
             return self._build_execution_result(name=name, payload=payload)
 
         try:
@@ -438,9 +439,9 @@ class AIToolExecutor:
             logger.warning(
                 "[AI诊断] 工具参数校验失败。tool=%s",
                 name,
-                extra={"error_code": "AI.TOOL.ARGS_INVALID", "extra_context": {"tool": name, "original_error": str(e)}},
+                extra={"error_code": "AI.TOOL.ARGS_INVALID", "extra_context": {"tool": name}},
             )
-            payload = {"error": f"工具参数不合法: {e.errors(include_url=False)}"}
+            payload = {"error": "工具参数不符合要求，请重新组织输入后重试。"}
             return self._build_execution_result(name=name, payload=payload)
 
         try:
@@ -451,10 +452,10 @@ class AIToolExecutor:
             logger.error(
                 "AI 工具执行异常。tool=%s",
                 name,
-                extra={"error_code": "AI.TOOL.EXECUTION_FAILED", "extra_context": {"tool": name, "original_error": str(e)}},
+                extra={"error_code": "AI.TOOL.EXECUTION_FAILED", "extra_context": {"tool": name}},
                 exc_info=True,
             )
-            payload = {"error": f"工具执行内部异常: {str(e)}"}
+            payload = {"error": "工具执行失败，请稍后重试。"}
             return self._build_execution_result(name=name, payload=payload)
 
     def execute(self, name: str, arguments_str: str) -> str:
@@ -810,11 +811,14 @@ class AIToolExecutor:
 
     def _tool_get_mod_rules(self, args: GetModRulesArgs) -> dict[str, Any]:
         """获取指定模组的生效规则，可选择是否仅返回原生规则。"""
-        pkg_id = args.package_id.lower()
+        token_info = parse_package_token(args.package_id)
+        pkg_id = token_info.canonical_package_id
         native_only = args.native_only
         if not self.context: return {"error": "缺少当前环境上下文，无法执行工具。"}
         mod = ModDAO.get_visible_profile_mod(self.context, pkg_id)
-        if not mod: return {"error": f"未找到此模组: {pkg_id}"}
+        if not mod: return {"error": f"未找到此模组: {args.package_id}"}
+        # AI 查询也必须沿用调用方传入的实例 token；规则外置部分仍由规范包名合并。
+        mod = select_mod_instance(mod, args.package_id)
         if native_only:
             return {
                 "dependencies": mod.get("dependencies_mods", []),
@@ -841,7 +845,7 @@ class AIToolExecutor:
             "groups": mod.get("groups", []),
             "notes": str(mod.get("notes") or "").strip() or None,
             "sign_color": mod.get("sign_color"),
-            "mod_type": mod.get("user_mod_type", mod.get("mod_type")),
+            "mod_type": get_effective_mod_type(mod),
         }
         
         return result

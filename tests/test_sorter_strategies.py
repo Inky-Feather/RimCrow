@@ -30,6 +30,19 @@ fake_rules_module.RuleManager = type("RuleManager", (), {"__init__": lambda self
 fake_rules_module.POSITION_WEIGHT_TOP = 0
 fake_rules_module.POSITION_WEIGHT_DEFAULT = 500
 fake_rules_module.POSITION_WEIGHT_BOTTOM = 1000
+def _fake_resolve_mod_rules(rule_mgr, package_token, mod_full_data):
+    from backend.load_order.package_tokens import parse_package_token, select_mod_instance
+    from backend.utils.tools import normalize_package_id
+
+    resolver = getattr(rule_mgr, "resolve_effective_mod_rules", None)
+    if callable(resolver):
+        resolved = resolver(package_token, mod_full_data)
+        if isinstance(resolved, tuple) and len(resolved) == 2:
+            return resolved
+    selected_mod = select_mod_instance(mod_full_data, package_token)
+    canonical_id = parse_package_token(package_token).canonical_package_id or normalize_package_id(selected_mod.get("package_id"))
+    return selected_mod, rule_mgr.get_effective_mod_rules(canonical_id, selected_mod)
+fake_rules_module.resolve_mod_rules = _fake_resolve_mod_rules
 sys.modules.setdefault("backend.managers.mgr_rules", fake_rules_module)
 
 import backend.managers.mgr_sorter as mgr_sorter_module
@@ -80,6 +93,174 @@ class TestOrderSorterStrategies(unittest.TestCase):
             {},
         )
         self.assertEqual(result["strategy"], "classic_sort_logic")
+
+    def test_weighted_graph_keeps_shadowed_rule_details(self):
+        source_group = AtomicGroup(["mod.source"])
+        target_group = AtomicGroup(["mod.target"])
+        self.sorter.rule_mgr.get_source_priority.side_effect = lambda source: {"user": 0, "community": 2}.get(source, 999)
+        self.sorter.effective_rules_cache = {
+            "mod.source": {
+                "dependencies": [],
+                "load_after": [{
+                    "target_id": "mod.target",
+                    "source": {"type": "user", "name": "用户前置"},
+                    "shadowed_rules": [{
+                        "target_id": "mod.target",
+                        "source": {"type": "community", "name": "社区前置"},
+                        "effective": False,
+                        "shadowed_by": {"type": "user", "name": "用户前置"},
+                    }],
+                }],
+                "load_before": [],
+            },
+            "mod.target": {"dependencies": [], "load_after": [], "load_before": []},
+        }
+
+        _, edge_details = self.sorter._build_weighted_graph(
+            [source_group, target_group],
+            {},
+            {"mod.source": source_group, "mod.target": target_group},
+        )
+
+        rules = edge_details[(id(target_group), id(source_group))]
+        self.assertEqual([rule["rule_source"]["type"] for rule in rules], ["user", "community"])
+        self.assertTrue(rules[0]["effective"])
+        self.assertFalse(rules[1]["effective"])
+
+    def test_sort_uses_coexist_workshop_variant_rules_for_steam_token(self):
+        mods_data = [{
+            "package_id": "shared.mod",
+            "name": "Local",
+            "load_after_mods": [{"package_id": "local.dep"}],
+            "coexist_workshop_variant": {
+                "package_id": "shared.mod",
+                "name": "Workshop",
+                "load_after_mods": [{"package_id": "workshop.dep"}],
+            },
+        }]
+        self.sorter.rule_mgr.get_effective_mod_rules.side_effect = (
+            lambda mod_id, mod_data: {
+                "dependencies": [],
+                "load_after": [
+                    {"target_id": rule["package_id"], "source": {"type": "native"}}
+                    for rule in mod_data.get("load_after_mods", [])
+                ],
+                "load_before": [],
+                "incompatible": [],
+                "weight_info": {"final_weight": 500, "absolute_type": None},
+            }
+        )
+
+        with patch.object(mgr_sorter_module.ModDAO, "get_profile_mods", return_value=mods_data), \
+             patch.object(dao_module.GroupDAO, "get_groups_structured_by_mod_ids", return_value=[]), \
+             patch.object(self.sorter, "build_atomic_groups", return_value=([AtomicGroup(["shared.mod_steam"])], [])), \
+             patch.object(self.sorter, "_build_weighted_graph", return_value=({}, {})), \
+             patch.object(self.sorter, "_break_cycles", return_value=[]), \
+             patch.object(mgr_sorter_module.settings, "config", SimpleNamespace(
+                 auto_sort_strategy="classic_sort_logic",
+                 enable_tool_mods=False,
+                 auto_activate_dependencies=False,
+                 sort_mods_by="name",
+                 regular_mods_follow_dependencies=False,
+                 language_packs_follow_targets=False,
+             )):
+            self.sorter.sort(["shared.mod_steam"])
+
+        self.assertIn("shared.mod_steam", self.sorter.effective_rules_cache)
+        targets = [
+            rule["target_id"]
+            for rule in self.sorter.effective_rules_cache["shared.mod_steam"]["load_after"]
+        ]
+        self.assertEqual(targets, ["workshop.dep"])
+
+    def test_sort_uses_preferred_workshop_instance_after_token_canonicalization(self):
+        mods_data = [{
+            "package_id": "shared.mod",
+            "name": "Local",
+            "load_after_mods": [{"package_id": "local.dep"}],
+            "coexist_workshop_variant": {
+                "package_id": "shared.mod",
+                "name": "Workshop",
+                "load_after_mods": [{"package_id": "workshop.dep"}],
+            },
+        }]
+        self.sorter.rule_mgr.get_effective_mod_rules.side_effect = (
+            lambda mod_id, mod_data: {
+                "dependencies": [],
+                "load_after": [
+                    {"target_id": rule["package_id"], "source": {"type": "native"}}
+                    for rule in mod_data.get("load_after_mods", [])
+                ],
+                "load_before": [],
+                "incompatible": [],
+                "weight_info": {"final_weight": 500, "absolute_type": None},
+            }
+        )
+
+        with patch.object(mgr_sorter_module.ModDAO, "get_profile_mods", return_value=mods_data), \
+             patch.object(dao_module.GroupDAO, "get_groups_structured_by_mod_ids", return_value=[]), \
+             patch.object(self.sorter, "build_atomic_groups", return_value=([AtomicGroup(["shared.mod"])], [])), \
+             patch.object(self.sorter, "_build_weighted_graph", return_value=({}, {})), \
+             patch.object(self.sorter, "_break_cycles", return_value=[]), \
+             patch.object(mgr_sorter_module.settings, "config", SimpleNamespace(
+                 auto_sort_strategy="classic_sort_logic",
+                 enable_tool_mods=False,
+                 auto_activate_dependencies=False,
+                 sort_mods_by="name",
+                 regular_mods_follow_dependencies=False,
+                 language_packs_follow_targets=False,
+             )):
+            self.sorter.sort(["shared.mod"], preferred_tokens={"shared.mod": "shared.mod_steam"})
+
+        targets = [
+            rule["target_id"]
+            for rule in self.sorter.effective_rules_cache["shared.mod"]["load_after"]
+        ]
+        self.assertEqual(targets, ["workshop.dep"])
+
+    def test_sort_keeps_preferred_workshop_language_owner_result(self):
+        mods_data = [{
+            "package_id": "shared.pack",
+            "name": "Local",
+            "mod_type": "LanguagePack",
+            "coexist_workshop_variant": {
+                "package_id": "shared.pack",
+                "name": "Workshop",
+                "mod_type": "LanguagePack",
+            },
+        }]
+        self.sorter.rule_mgr.get_effective_mod_rules.return_value = {
+            "dependencies": [],
+            "load_after": [],
+            "load_before": [],
+            "incompatible": [],
+            "weight_info": {"final_weight": 500, "absolute_type": None},
+        }
+        owner_map = {
+            "shared.pack": {"owners": [{"package_id": "local.owner"}], "summary_confidence": "high"},
+            "shared.pack_steam": {"owners": [{"package_id": "workshop.owner"}], "summary_confidence": "high"},
+        }
+
+        with patch.object(mgr_sorter_module.ModDAO, "get_profile_mods", return_value=mods_data), \
+             patch.object(dao_module.GroupDAO, "get_groups_structured_by_mod_ids", return_value=[]), \
+             patch.object(mgr_sorter_module, "resolve_language_pack_ownership_for_mods", return_value=owner_map), \
+             patch.object(self.sorter, "build_atomic_groups", return_value=([AtomicGroup(["shared.pack"])], [])), \
+             patch.object(self.sorter, "_build_weighted_graph", return_value=({}, {})), \
+             patch.object(self.sorter, "_break_cycles", return_value=[]), \
+             patch.object(mgr_sorter_module.settings, "config", SimpleNamespace(
+                 auto_sort_strategy="classic_sort_logic",
+                 enable_tool_mods=False,
+                 auto_activate_dependencies=False,
+                 sort_mods_by="name",
+                 regular_mods_follow_dependencies=False,
+                 language_packs_follow_targets=False,
+             )):
+            self.sorter.sort(["shared.pack"], preferred_tokens={"shared.pack": "shared.pack_steam"})
+
+        self.assertEqual(
+            self.sorter.mod_map["shared.pack"]["language_pack_owner_result"]["owners"],
+            [{"package_id": "workshop.owner"}],
+        )
 
     def test_classic_sort_logic_group_weight_keeps_bottom_member_conservative(self):
         groups = [AtomicGroup(["mod.bottom", "mod.framework"]), AtomicGroup(["mod.normal"])]
@@ -321,6 +502,48 @@ class TestOrderSorterStrategies(unittest.TestCase):
                 },
                 "mod.lang": {
                     "weight_info": {"final_weight": 900, "absolute_type": None},
+                    "dependencies": [{"target_id": "mod.core"}],
+                    "load_after": [],
+                    "load_before": [],
+                },
+            },
+            groups,
+            adj,
+            {"language_packs_follow_targets": True},
+        )
+
+        self.assertEqual(result["sorted_ids"], ["mod.core", "mod.lang", "mod.unrelated"])
+
+    def test_language_pack_follow_targets_uses_medium_owner_result(self):
+        group_core = AtomicGroup(["mod.core"])
+        group_unrelated = AtomicGroup(["mod.unrelated"])
+        group_lang = AtomicGroup(["mod.lang"])
+        groups = [group_core, group_unrelated, group_lang]
+        adj = {
+            id(group_core): {id(group_lang): 1},
+        }
+        result = self._run_sort(
+            "classic_sort_logic",
+            [
+                {"package_id": "mod.core", "name": "Core", "mod_type": "XML"},
+                {"package_id": "mod.unrelated", "name": "Unrelated", "mod_type": "XML"},
+                {"package_id": "mod.lang", "name": "Lang", "mod_type": "LanguagePack"},
+            ],
+            {
+                "mod.core": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.unrelated": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.lang": {
+                    "weight_info": {"final_weight": 900, "absolute_type": None},
                     "dependencies": [],
                     "load_after": [{"target_id": "mod.core"}],
                     "load_before": [],
@@ -329,6 +552,63 @@ class TestOrderSorterStrategies(unittest.TestCase):
             groups,
             adj,
             {"language_packs_follow_targets": True},
+        )
+
+        self.assertEqual(result["sorted_ids"], ["mod.core", "mod.lang", "mod.unrelated"])
+
+    def test_wide_language_pack_detection_allows_sort_follow_targets(self):
+        group_core = AtomicGroup(["mod.core"])
+        group_unrelated = AtomicGroup(["mod.unrelated"])
+        group_lang = AtomicGroup(["mod.lang"])
+        groups = [group_core, group_unrelated, group_lang]
+        adj = {
+            id(group_core): {id(group_lang): 1},
+        }
+        result = self._run_sort(
+            "classic_sort_logic",
+            [
+                {"package_id": "mod.core", "name": "Core", "mod_type": "XML"},
+                {"package_id": "mod.unrelated", "name": "Unrelated", "mod_type": "XML"},
+                {
+                    "package_id": "mod.lang",
+                    "name": "Lang",
+                    "mod_type": "XML",
+                    "file_stats": {
+                        "lang_xml": 2,
+                        "patch_xml": 1,
+                        "game_xml": 0,
+                        "code_dll": 0,
+                        "image": 0,
+                        "audio": 0,
+                    },
+                },
+            ],
+            {
+                "mod.core": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.unrelated": {
+                    "weight_info": {"final_weight": 500, "absolute_type": None},
+                    "dependencies": [],
+                    "load_after": [],
+                    "load_before": [],
+                },
+                "mod.lang": {
+                    "weight_info": {"final_weight": 900, "absolute_type": None},
+                    "dependencies": [{"target_id": "mod.core"}],
+                    "load_after": [],
+                    "load_before": [],
+                },
+            },
+            groups,
+            adj,
+            {
+                "language_packs_follow_targets": True,
+                "wide_language_pack_detection": True,
+            },
         )
 
         self.assertEqual(result["sorted_ids"], ["mod.core", "mod.lang", "mod.unrelated"])
@@ -532,8 +812,8 @@ class TestOrderSorterStrategies(unittest.TestCase):
                 },
                 "mod.lang": {
                     "weight_info": {"final_weight": 900, "absolute_type": None},
-                    "dependencies": [],
-                    "load_after": [{"target_id": "mod.core"}],
+                    "dependencies": [{"target_id": "mod.core"}],
+                    "load_after": [],
                     "load_before": [],
                 },
             },
@@ -544,6 +824,44 @@ class TestOrderSorterStrategies(unittest.TestCase):
 
         self.assertEqual(result["sorted_ids"], ["mod.core", "mod.blocker", "mod.lang"])
         self.assertTrue(any(w["type"] == "language_pack_follow_blocked" for w in result["warnings"]))
+
+
+class TestOrderSorterCycleDiagnostics(unittest.TestCase):
+    def setUp(self):
+        self.sorter = OrderSorter(SimpleNamespace(game_version="1.5.4100"))
+
+    def test_break_cycles_reports_shortest_chain_for_removed_rule(self):
+        group_a = AtomicGroup(["mod.a"])
+        group_b = AtomicGroup(["mod.b"])
+        group_c = AtomicGroup(["mod.c"])
+        groups_map = {id(group_a): group_a, id(group_b): group_b, id(group_c): group_c}
+        edge_details = {
+            (id(group_a), id(group_b)): [{
+                "source_mod": "mod.a", "target_mod": "mod.b", "rule_source": {"type": "dynamic", "name": "测试规则"},
+                "weight": 10, "is_force": False,
+            }],
+            (id(group_b), id(group_c)): [{
+                "source_mod": "mod.b", "target_mod": "mod.c", "rule_source": {"type": "community", "name": "社区前置"},
+                "weight": 20, "is_force": False,
+            }],
+            (id(group_c), id(group_a)): [{
+                "source_mod": "mod.c", "target_mod": "mod.a", "rule_source": {"type": "native", "name": "原生前置"},
+                "weight": 30, "is_force": False,
+            }],
+        }
+        adj = {
+            id(group_a): {id(group_b): 10},
+            id(group_b): {id(group_c): 20},
+            id(group_c): {id(group_a): 30},
+        }
+
+        warning = self.sorter._break_cycles(adj, edge_details, groups_map)[0]
+
+        self.assertEqual(warning["type"], "cycle_broken")
+        self.assertEqual(
+            [(edge["from_id"], edge["to_id"]) for edge in warning["cycle"]],
+            [("mod.a", "mod.b"), ("mod.b", "mod.c"), ("mod.c", "mod.a")],
+        )
 
 
 if __name__ == "__main__":

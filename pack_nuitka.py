@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from fnmatch import fnmatch
 from pathlib import Path
 
 
@@ -97,6 +98,21 @@ def _add_existing_data_dir(cmd: list[str], source: Path, target: str) -> None:
         print(f"警告: 资源目录不存在，已跳过 {source}")
 
 
+def _steamworks_runtime_files(project_root: Path) -> list[Path]:
+    names_by_platform = {
+        "win32": ["SteamworksPy64.dll", "steam_api64.dll"],
+        "darwin": ["SteamworksPy.dylib", "libsteam_api.dylib"],
+        "linux": ["SteamworksPy.so", "libsteam_api.so"],
+    }
+    platform_key = "win32" if sys.platform.startswith(("win32", "cygwin", "msys")) else "darwin" if sys.platform == "darwin" else "linux"
+    runtime_dir = project_root / "tools" / "steamworks"
+    files = [runtime_dir / name for name in names_by_platform[platform_key]]
+    missing = [path for path in files if not path.is_file()]
+    if missing:
+        raise FileNotFoundError("缺少当前平台 Steamworks 运行库: " + ", ".join(str(path) for path in missing))
+    return files
+
+
 def _build_nuitka_args(
     main_file: str,
     icon_path: str,
@@ -165,6 +181,8 @@ def _build_nuitka_args(
 
     frontend_dist = project_root / "frontend" / "dist"
     _add_existing_data_dir(cmd, frontend_dist, "frontend/dist")
+    for runtime_file in _steamworks_runtime_files(project_root):
+        cmd.append(f"--include-data-files={runtime_file.as_posix()}=tools/steamworks/{runtime_file.name}")
     if mode == "onefile" and frontend_dist.exists():
         cmd.append("--include-data-files-external=frontend/dist/**")
 
@@ -250,7 +268,7 @@ def _iter_tools_files(tools_dir: Path):
     """遍历 tools 发布文件，只保留发布包运行需要的工具资源。"""
     if not tools_dir.exists():
         return
-    allowed_tool_dirs = {"ripgrep", "steamcmd", "steamworks", "texture_tools"}
+    allowed_tool_dirs = {"ripgrep", "steamcmd", "texture_tools"}
     for file_path in tools_dir.rglob("*"):
         if not file_path.is_file():
             continue
@@ -363,6 +381,7 @@ def filestree(
     """
     if exclude_dirs is None:
         exclude_dirs = []
+    exclude_patterns = [pattern.replace(os.sep, "/") for pattern in exclude_dirs]
     output_lines = []
     spec = get_gitignore_spec(start_path) if use_gitignore else None
     root_name = os.path.basename(os.path.abspath(start_path))
@@ -382,7 +401,12 @@ def filestree(
                 continue
             full_path = os.path.join(current_path, entry)
             rel_path = os.path.relpath(full_path, start_path)
-            if spec and spec.match_file(rel_path.replace(os.sep, "/")):
+            rel_match_path = rel_path.replace(os.sep, "/")
+            is_dir = os.path.isdir(full_path)
+            # pathspec 的目录规则（如 .*/）需要尾部斜杠才能命中。
+            if spec and (spec.match_file(rel_match_path) or (is_dir and spec.match_file(f"{rel_match_path}/"))):
+                continue
+            if exclude_patterns and any(fnmatch(rel_match_path, pattern) or (is_dir and fnmatch(f"{rel_match_path}/", pattern)) for pattern in exclude_patterns):
                 continue
             items.append(entry)
 
@@ -440,9 +464,7 @@ if __name__ == "__main__":
 
     print("\n=== 生成项目目录树 ===")
     excludes = [
-        "__pycache__", ".git", ".venv", ".idea", ".vscode",
-        "build", "dist", "node_modules",
-        "cache", "temp", "backups", "Downloads", "updates",
+        "Downloads",
     ]
     tree_text = filestree(".", exclude_dirs=excludes, use_gitignore=True, max_depth=5)
     output_file = "files_tree.txt"

@@ -27,6 +27,24 @@ export const stripPackageTokenSuffix = (value = '') => {
 
 export const normalizePackageId = (value = '') => stripPackageTokenSuffix(value)
 
+export const getEffectiveModType = (mod = {}) => {
+  const userModType = String(mod?.user_mod_type || '').trim()
+  if (userModType) return userModType
+  if (mod?.is_language_pack === true) return 'LanguagePack'
+  return String(mod?.mod_type || '').trim() || 'Unknown'
+}
+
+export const isLanguagePackType = (mod = {}) => getEffectiveModType(mod) === 'LanguagePack'
+
+export const isUsableLanguagePackOwnership = (ownerResult = {}) => {
+  const confidence = String(ownerResult?.summary_confidence || '').trim().toLowerCase()
+  return confidence === 'high' || confidence === 'medium'
+}
+
+export const hasUsableLanguagePackOwnership = (mod = {}) => (
+  isUsableLanguagePackOwnership(mod?.language_pack_owner_result)
+)
+
 export const isSteamPackageToken = (value = '') => normalizePackageToken(value).endsWith(STEAM_PACKAGE_SUFFIX)
 
 export const buildSteamPackageToken = (value = '') => {
@@ -61,11 +79,22 @@ export const normalizeUrl = (value = '') => {
 export const extractWorkshopId = (value = '') => {
   const text = String(value || '').trim()
   if (!text) return ''
-  // 兼容直接传工坊 ID。
-  if (/^\d{7,}$/.test(text)) return text
-  // 兼容从 Steam 链接里提取 `?id=xxxx`。
-  const match = text.match(/[?&]id=(\d{7,})/i)
-  return match?.[1] || ''
+  const candidates = [text]
+  try {
+    const decoded = decodeURIComponent(text)
+    if (decoded !== text) candidates.push(decoded)
+  } catch {}
+  for (const candidate of candidates) {
+    // 兼容直接传工坊 ID 或搜索框里的 w:ID。
+    const directMatch = candidate.match(/^(?:w:)?(\d{6,20})$/i)
+    if (directMatch) return directMatch[1]
+    // 兼容 Steam 网页链接和 steam://url/CommunityFilePage/ID。
+    const queryMatch = candidate.match(/[?&]id=(\d{6,20})/i)
+    if (queryMatch) return queryMatch[1]
+    const protocolMatch = candidate.match(/CommunityFilePage\/(\d{6,20})/i)
+    if (protocolMatch) return protocolMatch[1]
+  }
+  return ''
 }
 
 export const buildWorkshopUrl = (workshopId = '') => {
@@ -104,6 +133,12 @@ export const normalizeInstallSource = (raw = {}, fallbackPackageId = '') => {
   const source = raw && typeof raw === 'object' ? raw : {}
   const packageId = normalizePackageId(source.packageId || source.package_id || fallbackPackageId)
   const normalizedUrl = normalizeUrl(source.url || source.sourceUrl || source.source_url)
+  const sourceKind = String(source.kind || source.sourceKind || source.source_kind || '').trim().toLowerCase()
+  const installType = String(source.installType || source.install_type || '').trim() || 'source'
+  const defaultBranch = String(source.defaultBranch || source.default_branch || source.branch || '').trim()
+  const sourceOrigin = String(source.sourceOrigin || source.source_origin || '').trim() || 'unknown'
+  const title = String(source.title || source.name || packageId || normalizedUrl).trim()
+  const info = source.info && typeof source.info === 'object' ? source.info : null
   // workshopId 可以直接给，也可以从 url 中反推。
   const workshopId = normalizeWorkshopId(
     source.workshopId
@@ -114,15 +149,32 @@ export const normalizeInstallSource = (raw = {}, fallbackPackageId = '') => {
     ? [...new Set((source.supportedVersions || source.supported_versions).map(value => String(value || '').trim()).filter(Boolean))]
     : []
 
+  if (sourceKind === 'git') {
+    if (!normalizedUrl) return null
+    return {
+      kind: 'git',
+      packageId,
+      url: normalizedUrl,
+      title,
+      supportedVersions,
+      sourceOrigin,
+      isReplacement: !!source.isReplacement,
+      installType,
+      defaultBranch,
+      info,
+      urlSubtype: 'github',
+    }
+  }
+
   if (workshopId) {
     return {
       kind: 'workshop',
       packageId,
       workshopId,
       url: buildWorkshopUrl(workshopId),
-      title: String(source.title || source.name || packageId || workshopId).trim(),
+      title: title || workshopId,
       supportedVersions,
-      sourceOrigin: String(source.sourceOrigin || source.source_origin || '').trim() || 'unknown',
+      sourceOrigin,
       isReplacement: !!source.isReplacement,
       urlSubtype: 'workshop',
     }
@@ -133,9 +185,9 @@ export const normalizeInstallSource = (raw = {}, fallbackPackageId = '') => {
     kind: 'url',
     packageId,
     url: normalizedUrl,
-    title: String(source.title || source.name || packageId || normalizedUrl).trim(),
+    title,
     supportedVersions,
-    sourceOrigin: String(source.sourceOrigin || source.source_origin || '').trim() || 'unknown',
+    sourceOrigin,
     isReplacement: !!source.isReplacement,
     urlSubtype: detectUrlSubtype(normalizedUrl),
   }
@@ -175,6 +227,13 @@ export const normalizeInstallSources = (sources = [], fallbackPackageId = '') =>
 export const dedupeNormalizedPackageIds = (values = []) => [...new Set(
   (values || [])
     .map(normalizePackageId)
+    .filter(Boolean)
+)]
+
+// 列表项 token 会携带实例来源后缀，规则读取前不能提前压成裸包名。
+export const dedupeNormalizedPackageTokens = (values = []) => [...new Set(
+  (values || [])
+    .map(normalizePackageToken)
     .filter(Boolean)
 )]
 

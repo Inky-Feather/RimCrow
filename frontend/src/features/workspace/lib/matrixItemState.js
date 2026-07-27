@@ -1,16 +1,17 @@
 import { normalizeWorkshopId } from '../../mod/lib/modIdentity'
+import { t } from '../../../shared/i18n.js'
 
-export const MATRIX_FILTER_STATE_OPTIONS = [
-  { label: '显示所有', value: 'default' },
-  { label: '仅看新增', value: 'new' },
-  { label: '仅看变更', value: 'change' },
-  { label: '仅看可更新', value: 'update' },
-  { label: '仅看跨库同项', value: 'same' },
-  { label: '仅看同库冲突', value: 'conflict' },
-  { label: '仅看替代项', value: 'replace' },
-  { label: '仅看已禁用', value: 'disabled' },
-  { label: '仅看缺失', value: 'missing' },
-  { label: '仅看已删除', value: 'deleted' },
+export const getMatrixFilterStateOptions = () => [
+  { label: t('ui.workspace.matrix.filter.default', '显示所有'), value: 'default' },
+  { label: t('ui.workspace.matrix.filter.new', '仅看新增'), value: 'new' },
+  { label: t('ui.workspace.matrix.filter.change', '仅看变更'), value: 'change' },
+  { label: t('ui.workspace.matrix.filter.update', '仅看可更新'), value: 'update' },
+  { label: t('ui.workspace.matrix.filter.same', '仅看跨库同项'), value: 'same' },
+  { label: t('ui.workspace.matrix.filter.conflict', '仅看同库冲突'), value: 'conflict' },
+  { label: t('ui.workspace.matrix.filter.replace', '仅看替代项'), value: 'replace' },
+  { label: t('ui.workspace.matrix.filter.disabled', '仅看已禁用'), value: 'disabled' },
+  { label: t('ui.workspace.matrix.filter.missing', '仅看缺失'), value: 'missing' },
+  { label: t('ui.workspace.matrix.filter.deleted', '仅看已删除'), value: 'deleted' },
 ]
 
 export const isMatrixModDeleted = (mod) => !!mod?.is_deleted || mod?.state === 'deleted'

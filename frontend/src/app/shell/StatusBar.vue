@@ -4,27 +4,27 @@
     <div class="flex items-center gap-4">
       <div class="flex items-center gap-1.5 hover:text-text-main transition-colors cursor-pointer">
         <div :class="['w-1.5 h-1.5 rounded-full', modStore.isDirty ? 'bg-accent-warn' : 'bg-accent-success']"></div>
-        <span>{{ modStore.isDirty ? '未保存更改' : '就绪' }}</span>
+        <span>{{ modStore.isDirty ? t('ui.status_bar.unsaved_changes', '未保存更改') : t('common.status.ready', '就绪') }}</span>
       </div>
 
       <div>
-        模组总数: <span class="text-text-main">{{ modStore.allModsMap.size }}</span>
+        {{ t('ui.status_bar.mods_total', '模组总数') }}: <span class="text-text-main">{{ modStore.allModsMap.size }}</span>
       </div>
 
       <div>
-        已启用: <span class="text-accent-success font-bold">{{ modStore.activeIds.length }}</span>
+        {{ t('ui.status_bar.mods_actived', '已启用') }}: <span class="text-accent-success font-bold">{{ modStore.activeIds.length }}</span>
       </div>
 
       <div v-tooltip="historyStateTooltip">
-        历史状态:
+        {{ t('ui.status_bar.history', '历史状态') }}:
         <template v-if="modStore.listHistoryTotal > 0">
           <span class="text-text-main font-bold">{{ modStore.listHistoryPosition }}</span>/<span class="text-text-dim">{{ modStore.listHistoryTotal }}</span>
         </template>
-        <span v-else class="text-text-disabled">无</span>
+        <span v-else class="text-text-disabled">{{ t('ui.status_bar.none', '无') }}</span>
       </div>
 
       <div v-show="modStore.selectedIds.length > 0">
-        已选择: <span class="text-accent-primary font-bold">{{ modStore.selectedIds.length }}</span>
+        {{ t('ui.status_bar.selected', '已选择') }}: <span class="text-accent-primary font-bold">{{ modStore.selectedIds.length }}</span>
       </div>
     </div>
 
@@ -57,7 +57,7 @@
               class="shrink-0 rounded-md p-1 transition-colors disabled:cursor-wait"
               :class="appStore.canCancelTask(activeTask) ? 'text-text-disabled hover:text-accent-danger hover:bg-accent-danger/15' : 'text-accent-warning/70 bg-accent-warning/10'"
               :disabled="!appStore.canCancelTask(activeTask)"
-              :title="appStore.isTaskCancelPending(activeTask?.id) ? '正在尝试取消任务' : '取消任务'"
+              :title="appStore.isTaskCancelPending(activeTask?.id) ? t('tooltip.task.cancelling', '正在尝试取消任务') : t('tooltip.task.cancel', '取消任务')"
               @click.stop="cancelTask(activeTask)"
             >
               <component :is="appStore.isTaskCancelPending(activeTask?.id) ? LoaderCircle : X" class="h-3.5 w-3.5" :class="{ 'animate-spin': appStore.isTaskCancelPending(activeTask?.id) }" />
@@ -66,8 +66,8 @@
 
           <div class="absolute bottom-full left-1/2 mb-2 w-120 max-w-[90vw] -translate-x-1/2 rounded-2xl border border-border-base/10 bg-glass-heavy backdrop-blur-md shadow-2xl p-3 opacity-0 invisible transition-all duration-200 group-hover/status:opacity-100 group-hover/status:visible group-hover/status:translate-y-0">
             <div class="mb-2 flex items-center justify-between">
-              <div class="text-[0.7rem] font-bold tracking-wider text-text-soft">任务队列</div>
-              <div class="text-[0.65rem] text-text-disabled">{{ taskStore.tasks.length }} 个任务</div>
+              <div class="text-[0.7rem] font-bold tracking-wider text-text-soft">{{ t('tasks.queue.title', '任务队列') }}</div>
+              <div class="text-[0.65rem] text-text-disabled">{{ t('tasks.queue.count', '{count} 个任务', { count: taskStore.tasks.length }) }}</div>
             </div>
 
             <div class="max-h-80 overflow-y-auto custom-scrollbar space-y-2">
@@ -83,7 +83,7 @@
                           class="rounded-md p-1 transition-colors disabled:cursor-wait"
                           :class="appStore.canCancelTask(task) ? 'text-text-disabled hover:text-accent-danger hover:bg-accent-danger/15' : 'text-accent-warning/70 bg-accent-warning/10'"
                           :disabled="!appStore.canCancelTask(task)"
-                          :title="appStore.isTaskCancelPending(task?.id) ? '正在尝试取消任务' : '取消任务'"
+                          :title="appStore.isTaskCancelPending(task?.id) ? t('tooltip.task.cancelling', '正在尝试取消任务') : t('tooltip.task.cancel', '取消任务')"
                           @click.stop="cancelTask(task)"
                         >
                           <component :is="appStore.isTaskCancelPending(task?.id) ? LoaderCircle : X" class="h-3.5 w-3.5" :class="{ 'animate-spin': appStore.isTaskCancelPending(task?.id) }" />
@@ -112,9 +112,9 @@
     </Teleport>
 
     <div class="flex items-center gap-2 hover:text-text-main">
-      <span>上次软件运行：{{ formatDate(appStore.settings.last_run_time) || '未运行' }}</span> |
-      <span>上次游戏运行：{{ formatDate(profileStore.currentProfile?.last_played_time) || '未运行' }}</span> |
-      <span>RimWorld {{ profileStore.activeContext.game_version || '未知版本' }}</span>
+      <span>{{ t('ui.status_bar.last_app_run', '上次软件运行') }}：{{ formatDate(appStore.settings.last_run_time) || t('ui.status_bar.never_run', '未运行') }}</span> |
+      <span>{{ t('ui.status_bar.last_game_run', '上次游戏运行') }}：{{ formatDate(profileStore.currentProfile?.last_played_time) || t('ui.status_bar.never_run', '未运行') }}</span> |
+      <span>RimWorld {{ profileStore.activeContext.game_version || t('common.status.unknown_version', '版本未知') }}</span>
     </div>
   </div>
 </template>
@@ -127,6 +127,7 @@ import { useAppStore } from '../stores/appStore'
 import { useProfileStore } from '../../features/profiles/profileStore'
 import { useTaskStore } from '../stores/taskStore'
 import { formatDate } from '../../shared/lib/format'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
 
 const modStore = useModStore()
 const appStore = useAppStore()
@@ -136,23 +137,24 @@ const taskStore = useTaskStore()
 const activeTask = computed(() => taskStore.latestTask)
 
 const taskTypeMeta = {
-  scan: { title: '模组扫描', icon: Radar, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  download: { title: '下载任务', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
-  update: { title: '软件更新', icon: Download, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  'steamcmd-download': { title: 'SteamCMD 下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
-  'steam-subscribe': { title: 'Steam 订阅', icon: Flag, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
-  'steam-unsubscribe': { title: 'Steam 取消订阅', icon: FlagOff, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
-  'steam-workshop-download': { title: 'Steam 工坊下载', icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
-  'texture-opt': { title: '贴图优化', icon: Image, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
-  'texture-opt-analyze': { title: '贴图分析', icon: ScanSearch, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
-  'ai-task': { title: 'AI 生成任务', icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
-  localize: { title: '本地共存任务', icon: Box, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
-  'mod-import': { title: '导入模组包', icon: Package, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  'mod-export': { title: '导出模组包', icon: Package, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
-  'file-delete': { title: '删除文件', icon: Trash2, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
-  'file-transfer': { title: '转移文件', icon: ArrowRightLeft, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
-  'steamcmd-init': { title: 'SteamCMD 初始化', icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
-  'file-search': { title: '文件内容搜索', icon: Search, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  scan: { title: () => t('tasks.type.scan', '模组扫描'), icon: Radar, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  download: { title: () => t('tasks.type.download', '下载任务'), icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  update: { title: () => t('tasks.type.update', '软件更新'), icon: Download, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  'steamcmd-download': { title: () => t('tasks.type.steamcmd_download', 'SteamCMD 下载'), icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  'steamcmd-workshop-repair': { title: () => t('tasks.type.steamcmd_workshop_repair', 'SteamCMD 补救下载'), icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
+  'steam-subscribe': { title: () => t('tasks.type.steam_subscribe', 'Steam 订阅'), icon: Flag, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
+  'steam-unsubscribe': { title: () => t('tasks.type.steam_unsubscribe', 'Steam 取消订阅'), icon: FlagOff, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
+  'steam-workshop-download': { title: () => t('tasks.type.steam_workshop_download', 'Steam 工坊下载'), icon: Download, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
+  'texture-opt': { title: () => t('tasks.type.texture_opt', '贴图优化'), icon: Image, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
+  'texture-opt-analyze': { title: () => t('tasks.type.texture_opt_analyze', '贴图分析'), icon: ScanSearch, text: 'text-accent-secondary', bar: 'bg-accent-secondary', border: 'border-accent-secondary/30' },
+  'ai-task': { title: () => t('tasks.type.ai_task', 'AI 生成任务'), icon: Bot, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
+  localize: { title: () => t('tasks.type.localize', '本地共存任务'), icon: Box, text: 'text-accent-success', bar: 'bg-accent-success', border: 'border-accent-success/30' },
+  'mod-import': { title: () => t('tasks.type.mod_import', '导入模组包'), icon: Package, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  'mod-export': { title: () => t('tasks.type.mod_export', '导出模组包'), icon: Package, text: 'text-accent-special', bar: 'bg-accent-special', border: 'border-accent-special/30' },
+  'file-delete': { title: () => t('tasks.type.file_delete', '删除文件'), icon: Trash2, text: 'text-accent-danger', bar: 'bg-accent-danger', border: 'border-accent-danger/30' },
+  'file-transfer': { title: () => t('tasks.type.file_transfer', '转移文件'), icon: ArrowRightLeft, text: 'text-accent-primary', bar: 'bg-accent-primary', border: 'border-accent-primary/30' },
+  'steamcmd-init': { title: () => t('tasks.type.steamcmd_init', 'SteamCMD 初始化'), icon: Download, text: 'text-accent-warning', bar: 'bg-accent-warning', border: 'border-accent-warning/30' },
+  'file-search': { title: () => t('tasks.type.file_search', '文件内容搜索'), icon: Search, text: 'text-accent-cool', bar: 'bg-accent-cool', border: 'border-accent-cool/30' },
 }
 
 const resolveTaskMeta = (task) => taskTypeMeta[task?.type] || taskTypeMeta.download
@@ -169,14 +171,15 @@ const cancelTask = async (task) => {
 
 const taskTitle = (task) => {
   const type = String(task?.type || '')
-  if (type === 'download') return '下载'
-  if (type === 'update') return '更新'
-  return String(task?.metrics?.title || resolveTaskMeta(task).title)
+  if (type === 'download') return t('tasks.type.download_short', '下载')
+  if (type === 'update') return t('tasks.type.update_short', '更新')
+  const meta = resolveTaskMeta(task)
+  return String(task?.metrics?.title || meta.title())
 }
 
 const taskMessage = (task) => {
-  const raw = String(task?.message || '')
-  if (!raw) return '处理中...'
+  const raw = String(translateMessagePayload(task, task?.message) || '')
+  if (!raw) return t('tasks.message.processing', '处理中...')
   if (task?.type === 'scan' && (raw.includes('/') || raw.includes('\\'))) {
     return raw.split(/[/\\]/).pop() || raw
   }
@@ -199,8 +202,8 @@ const taskSizeProgress = (task) => {
 
 const taskExtra = (task) => {
   const phase = String(task?.metrics?.phase || '')
-  if (appStore.isTaskCancelPending(task?.id) || phase === 'cancelling') return '正在取消'
-  if (phase === 'verifying') return '校验中'
+  if (appStore.isTaskCancelPending(task?.id) || phase === 'cancelling') return t('tasks.phase.cancelling', '正在取消')
+  if (phase === 'verifying') return t('tasks.phase.verifying', '校验中')
   const parts = []
   const sizeProgress = taskSizeProgress(task)
   if (sizeProgress) parts.push(sizeProgress)
@@ -209,7 +212,10 @@ const taskExtra = (task) => {
   return parts.join(' ')
 }
 
-const historyStateTooltip = `当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 扫描后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。`
+const historyStateTooltip = computed(() => t(
+  'tooltip.status_bar.history_state',
+  '当前会话内的列表历史位置。\n显示格式为“当前位置 / 总历史数”。\n\n统计可能改变列表状态的操作，例如：\n- 列表间移动\n- 列表内排序\n- 批量添加或移除\n- 自动排序\n- 导入或应用列表结果\n- 扫描后同步列表状态\n\n不统计搜索、筛选、滚动、折叠等视图状态。\n快捷键：Ctrl+Z 撤销，Ctrl+Y 重做。'
+))
 </script>
 
 <style scoped>

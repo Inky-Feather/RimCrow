@@ -1,7 +1,24 @@
 import { normalizeKeybindingList } from './keybindingParser'
+import { t } from '../i18n.js'
 
 const commands = new Map()
 let registerIndex = 0
+
+const normalizeCommandIdSegment = (segment = '') => String(segment || '')
+  .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+  .replace(/[\s-]+/g, '_')
+  .toLowerCase()
+
+const commandLocaleKey = (id = '', field = '') => {
+  const base = String(id || '').split('.').map(normalizeCommandIdSegment).filter(Boolean).join('.')
+  return base && field ? `command.${base}.${field}` : ''
+}
+
+const resolveLocalizedCommandText = (key, fallback = '') => {
+  const safeKey = String(key || '').trim()
+  const safeFallback = String(fallback || '').trim()
+  return safeKey ? t(safeKey, safeFallback) : safeFallback
+}
 
 const normalizeCommand = (command = {}) => {
   // 命令声明是插件和内置功能共同使用的最小契约，先归一化再进入注册表。
@@ -9,11 +26,22 @@ const normalizeCommand = (command = {}) => {
   if (!id) throw new Error('命令 ID 不能为空')
   const displayOnly = !!command.displayOnly
   if (!displayOnly && typeof command.run !== 'function') throw new Error(`命令 ${id} 缺少执行函数`)
+  const titleKey = String(command.titleKey || commandLocaleKey(id, 'title')).trim()
+  const titleDefault = String(command.titleDefault || command.title || id).trim()
+  const categoryMeta = command.category && typeof command.category === 'object' ? command.category : null
+  const categoryKey = String(command.categoryKey || categoryMeta?.key || '').trim()
+  const categoryDefault = String(command.categoryDefault || categoryMeta?.defaultText || command.category || t('command.category.other', '其他')).trim()
+  const descriptionKey = String(command.descriptionKey || commandLocaleKey(id, 'description')).trim()
+  const descriptionDefault = String(command.descriptionDefault || command.description || '').trim()
 
   return {
     id,
-    title: String(command.title || id).trim(),
-    category: String(command.category || '其他').trim(),
+    titleKey,
+    titleDefault,
+    get title() { return resolveLocalizedCommandText(titleKey, titleDefault) },
+    categoryKey,
+    categoryDefault,
+    get category() { return resolveLocalizedCommandText(categoryKey, categoryDefault) },
     scope: String(command.scope || 'global').trim() || 'global',
     defaultKeys: normalizeKeybindingList(command.defaultKeys || []),
     lockedKeys: normalizeKeybindingList(command.lockedKeys || []),
@@ -25,7 +53,9 @@ const normalizeCommand = (command = {}) => {
     displayOnly,
     keybindingReadonly: !!(command.keybindingReadonly || displayOnly),
     priority: Number(command.priority || 0),
-    description: String(command.description || '').trim(),
+    descriptionKey,
+    descriptionDefault,
+    get description() { return resolveLocalizedCommandText(descriptionKey, descriptionDefault) },
     enabled: typeof command.enabled === 'function' ? command.enabled : () => true,
     run: typeof command.run === 'function' ? command.run : () => {},
     _registerIndex: registerIndex++,

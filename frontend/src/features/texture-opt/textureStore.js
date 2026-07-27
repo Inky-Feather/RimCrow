@@ -2,8 +2,37 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
-import { toast, checkResult, toUserMessage } from '../../shared/lib/common'
+import { toast, checkResult, showUserErrorToast } from '../../shared/lib/common'
 import { useTaskStore } from '../../app/stores/taskStore'
+import { t, translateMessagePayload } from '../../shared/i18n.js'
+
+const toInt = (value, fallback = 0) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : fallback
+}
+
+export const getTextureScaleBreakdownItems = (stat = {}, kind = '') => (
+  (Array.isArray(stat?.scale_breakdown) ? stat.scale_breakdown : [])
+    .filter(item => String(item?.kind || 'keep_original') === kind && toInt(item?.count) > 0)
+)
+
+export const sumTextureScaleBreakdownItems = (items = []) => (
+  Array.isArray(items) ? items.reduce((total, item) => total + toInt(item?.count), 0) : 0
+)
+
+export const getTextureKeepOriginalReasonItems = (stat = {}, labels = {}) => {
+  const total = toInt(stat?.keep_original_count)
+  const mask = toInt(stat?.keep_original_mask_count)
+  const range = toInt(stat?.keep_original_range_count ?? stat?.skip_small_count)
+  const normal = stat?.keep_original_normal_count == null
+    ? Math.max(0, total - mask - range)
+    : toInt(stat.keep_original_normal_count)
+  return [
+    { label: labels.normal || '不缩放', count: normal },
+    { label: labels.mask || '遮罩贴图不缩放', count: mask },
+    { label: labels.range || '超范围不缩放', count: range },
+  ].filter(item => item.count > 0)
+}
 
 export const useTextureStore = defineStore('texture', () => {
   const appStore = useAppStore()
@@ -35,9 +64,13 @@ export const useTextureStore = defineStore('texture', () => {
     skipped_mask_count: 0,
     unsupported_source_count: 0,
     unreadable_source_count: 0,
+    scan_failed_count: 0,
     scaled_count: 0,
     fallback_scaled_count: 0,
     keep_original_count: 0,
+    keep_original_normal_count: 0,
+    keep_original_mask_count: 0,
+    keep_original_range_count: 0,
     source_vram_bytes_est: 0,
     output_vram_bytes_est: 0,
     vram_saving_bytes_est: 0,
@@ -52,11 +85,6 @@ export const useTextureStore = defineStore('texture', () => {
     engine_unsupported_preview: [],
     mod_count: 0,
   })
-
-  const toInt = (value, fallback = 0) => {
-    const num = Number(value)
-    return Number.isFinite(num) ? num : fallback
-  }
 
   const normalizeTextureStat = (raw = {}, { includeModCount = false } = {}) => {
     const base = createEmptyTextureStat()
@@ -94,9 +122,13 @@ export const useTextureStore = defineStore('texture', () => {
       skipped_mask_count: toInt(raw.skipped_mask_count ?? base.skipped_mask_count),
       unsupported_source_count: toInt(raw.unsupported_source_count ?? raw.unsupported_count ?? base.unsupported_source_count),
       unreadable_source_count: toInt(raw.unreadable_source_count ?? base.unreadable_source_count),
+      scan_failed_count: toInt(raw.scan_failed_count ?? base.scan_failed_count),
       scaled_count: toInt(raw.scaled_count ?? base.scaled_count),
       fallback_scaled_count: toInt(raw.fallback_scaled_count ?? base.fallback_scaled_count),
       keep_original_count: toInt(raw.keep_original_count ?? base.keep_original_count),
+      keep_original_normal_count: toInt(raw.keep_original_normal_count ?? base.keep_original_normal_count),
+      keep_original_mask_count: toInt(raw.keep_original_mask_count ?? base.keep_original_mask_count),
+      keep_original_range_count: toInt(raw.keep_original_range_count ?? base.keep_original_range_count),
       source_vram_bytes_est: toInt(raw.source_vram_bytes_est ?? base.source_vram_bytes_est),
       output_vram_bytes_est: toInt(raw.output_vram_bytes_est ?? base.output_vram_bytes_est),
       vram_saving_bytes_est: toInt(
@@ -126,13 +158,18 @@ export const useTextureStore = defineStore('texture', () => {
     Array.isArray(rows) ? rows.map(item => normalizeTextureStat(item)) : []
   )
 
+  const getScaleLabelSortValue = (label) => {
+    const match = String(label || '').match(/(\d+(?:\.\d+)?)\s*%/)
+    return match ? Number(match[1]) : Number.POSITIVE_INFINITY
+  }
+
   const sumScaleBreakdown = (rows = []) => {
     const counts = new Map()
     rows.forEach(row => {
       ;(Array.isArray(row.scale_breakdown) ? row.scale_breakdown : []).forEach(item => {
         if (!item || typeof item !== 'object') return
         const kind = String(item.kind || 'keep_original')
-        const label = String(item.label || '原尺寸')
+        const label = String(item.label || t('ui.texture_opt.scale.original_size', '原尺寸'))
         const key = `${kind}\n${label}`
         counts.set(key, {
           kind,
@@ -146,7 +183,7 @@ export const useTextureStore = defineStore('texture', () => {
       .filter(item => item.count > 0)
       .sort((a, b) => (
         (order[a.kind] ?? 99) - (order[b.kind] ?? 99)
-        || b.count - a.count
+        || getScaleLabelSortValue(a.label) - getScaleLabelSortValue(b.label)
         || a.label.localeCompare(b.label)
       ))
   }
@@ -177,6 +214,7 @@ export const useTextureStore = defineStore('texture', () => {
     mod_path: String(raw.mod_path || ''),
     mod_name: String(raw.mod_name || ''),
     rel_path: String(raw.rel_path || ''),
+    file_path: String(raw.file_path || ''),
     error: String(raw.error || ''),
     todds_log_path: String(raw.todds_log_path || ''),
   })
@@ -189,6 +227,7 @@ export const useTextureStore = defineStore('texture', () => {
     summary: normalizeTextureStat(raw.summary || {}, { includeModCount: true }),
     mods: normalizeTextureRows(raw.mods || []),
     failed_items: Array.isArray(raw.failed_items) ? raw.failed_items.map(normalizeFailedItem) : [],
+    failed_count: toInt(raw.failed_count ?? raw.failed ?? raw.failed_items?.length ?? 0),
     mod_paths: Array.isArray(raw.mod_paths) ? raw.mod_paths.map(item => String(item || '')) : [],
     mod_targets: Array.isArray(raw.mod_targets) ? raw.mod_targets.map(item => normalizeTextureStat(item || {})) : [],
     todds_log_path: String(raw.todds_log_path || ''),
@@ -227,7 +266,7 @@ export const useTextureStore = defineStore('texture', () => {
     if (!task) {
       return {
         percent: 0,
-        message: '就绪',
+        message: t('common.status.ready', '就绪'),
         details: {
           local_started_at: 0,
           local_finished_at: 0,
@@ -243,7 +282,7 @@ export const useTextureStore = defineStore('texture', () => {
       : Math.max(0, Date.now() - startedAt)
     return {
       percent: Number(task.progress || 0),
-      message: task.message || '处理中...',
+      message: translateMessagePayload(task, task.message) || t('tasks.message.processing', '处理中...'),
       details: {
         ...(task.metrics || {}),
         local_started_at: startedAt,
@@ -275,7 +314,9 @@ export const useTextureStore = defineStore('texture', () => {
   const toolStatus = ref({
     available: false,
     resolved_path: '',
-    message: ''
+    message: '',
+    message_key: '',
+    message_params: {},
   })
 
   // === 动作 Actions ===
@@ -299,6 +340,8 @@ export const useTextureStore = defineStore('texture', () => {
       status: payload.status || 'pending',
       progress: payload.progress || 0,
       message: payload.message || '',
+      message_key: payload.message_key || '',
+      message_params: payload.message_params || {},
       metrics: payload.metrics || {},
       timestamp: payload.updated_at || Date.now(),
     })
@@ -313,7 +356,9 @@ export const useTextureStore = defineStore('texture', () => {
     taskStore.upsertTask({
       ...task,
       status: 'running',
-      message: '正在尝试中止任务...',
+      message: t('tasks.message.cancelling_request', '正在尝试中止任务...'),
+      message_key: 'tasks.message.cancelling_request',
+      message_params: {},
       metrics: {
         ...(task.metrics || {}),
         phase: 'cancelling',
@@ -501,8 +546,11 @@ export const useTextureStore = defineStore('texture', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.texture_get_env_status(appStore.settings.texture_opt)
-      if (checkResult(res, "检查贴图工具", false)) {
-        toolStatus.value = res.data
+      if (checkResult(res, t('check.texture.tool_status', '检查贴图工具'), false)) {
+        toolStatus.value = {
+          ...(res.data || {}),
+          message: translateMessagePayload(res.data || {}, res.data?.message || ''),
+        }
       }
     } catch (e) {
       console.error('检查贴图工具状态失败:', e)
@@ -517,14 +565,14 @@ export const useTextureStore = defineStore('texture', () => {
       const res = await window.pywebview.api.texture_prepare_download(appStore.settings.texture_opt)
       if (res.status === 'success') {
         if (!res.data.already_ready) {
-          toast.info("已启动 todds 下载任务，请留意底部状态栏。")
+          toast.info(t('toast.texture.tool_download_started_watch_status', '已启动 todds 下载任务，请留意底部状态栏。'))
           scheduleToolStatusRefresh(0)
         } else {
-          toast.success("todds 已就绪，无需下载")
+          toast.success(t('toast.texture.tool_ready_no_download', 'todds 已就绪，无需下载'))
           await checkToolStatus()
         }
       } else {
-        toast.error(toUserMessage(res?.message, '准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间，详细原因已写入系统日志。'))
+        showUserErrorToast(res, t('errors.texture.prepare_tool_failed', '准备贴图工具失败。请检查网络连接、代理设置、工具目录权限和磁盘空间。'))
       }
     } finally {
       appStore.isLoading = false
@@ -549,7 +597,7 @@ export const useTextureStore = defineStore('texture', () => {
         ...extraOptions,
         target_scope: targetScope,
       })
-      if (checkResult(res, "启动贴图分析", false)) {
+      if (checkResult(res, t('check.texture.start_analysis', '启动贴图分析'), false)) {
         bindTaskId(res.data, 'analyze')
         applyReturnedTaskState(res.data)
         applySnapshotPayload(res.data)
@@ -557,6 +605,8 @@ export const useTextureStore = defineStore('texture', () => {
         isAnalyzing.value = false
       }
     } catch (e) {
+      console.error('启动贴图分析失败:', e)
+      showUserErrorToast(e, t('errors.texture.start_analysis_failed', '启动贴图分析失败。请检查模组路径、文件权限和后台日志后重试。'))
       isAnalyzing.value = false
     }
   }
@@ -577,7 +627,7 @@ export const useTextureStore = defineStore('texture', () => {
         ...extraOptions,
         target_scope: targetScope,
       })
-      if (checkResult(res, "启动优化任务", false)) {
+      if (checkResult(res, t('check.texture.start_task', '启动优化任务'), false)) {
         bindTaskId(res.data, 'optimize')
         applyReturnedTaskState(res.data)
         applySnapshotPayload(res.data)
@@ -585,6 +635,13 @@ export const useTextureStore = defineStore('texture', () => {
         isOptimizing.value = false
       }
     } catch (e) {
+      console.error('启动贴图任务失败:', e)
+      showUserErrorToast(
+        e,
+        action === 'clean_generated'
+          ? t('errors.texture.start_clean_failed', '启动贴图清理失败。请检查模组路径、文件权限和后台日志后重试。')
+          : t('errors.texture.start_optimize_failed', '启动贴图生成失败。请检查工具配置、模组路径、文件权限和后台日志后重试。'),
+      )
       isOptimizing.value = false
     }
   }
@@ -628,7 +685,7 @@ export const useTextureStore = defineStore('texture', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.texture_get_result_history(3)
-      if (!checkResult(res, "读取贴图结果历史", false)) return
+      if (!checkResult(res, t('check.texture.load_result_history', '读取贴图结果历史'), false)) return
       resultHistory.value = Array.isArray(res.data) ? res.data.map(normalizeResultHistoryItem) : []
       if (!selectedResultPath.value || !resultHistory.value.some(item => item.result_path === selectedResultPath.value)) {
         selectedResultPath.value = resultHistory.value[0]?.result_path || ''
@@ -642,7 +699,7 @@ export const useTextureStore = defineStore('texture', () => {
     if (!window.pywebview) return
     try {
       const res = await window.pywebview.api.texture_get_exclusions()
-      if (!checkResult(res, "读取贴图排除规则", false)) return
+      if (!checkResult(res, t('check.texture.load_exclusions', '读取贴图排除规则'), false)) return
       applyExclusionsPayload(res.data)
     } catch (e) {
       console.error('读取贴图排除规则失败:', e)
@@ -666,7 +723,8 @@ export const useTextureStore = defineStore('texture', () => {
   const toggleModExclusion = async (packageId, exclude) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.texture_toggle_mod_exclusion(packageId, !!exclude)
-    if (!checkResult(res, exclude ? "添加模组排除" : "移除模组排除", false)) return false
+    const actionLabel = exclude ? t('check.texture.exclude_mod', '添加模组排除') : t('check.texture.include_mod', '移除模组排除')
+    if (!checkResult(res, actionLabel, false)) return false
     applyExclusionsPayload(res.data)
     return true
   }
@@ -674,7 +732,8 @@ export const useTextureStore = defineStore('texture', () => {
   const toggleFileExclusion = async (modPath, relPath, exclude) => {
     if (!window.pywebview) return false
     const res = await window.pywebview.api.texture_toggle_file_exclusion(modPath, relPath, !!exclude)
-    if (!checkResult(res, exclude ? "添加文件排除" : "移除文件排除", false)) return false
+    const actionLabel = exclude ? t('check.texture.exclude_file', '添加文件排除') : t('check.texture.include_file', '移除文件排除')
+    if (!checkResult(res, actionLabel, false)) return false
     applyExclusionsPayload(res.data)
     return true
   }
@@ -697,13 +756,6 @@ export const useTextureStore = defineStore('texture', () => {
 
     if (metrics.current_entry) {
       upsertCurrentEntry(metrics.current_entry)
-    }
-    if (Array.isArray(metrics.final_mods)) {
-      if (lastSingleModTargetKey.value) {
-        mergeTextureRows(metrics.final_mods)
-      } else {
-        modsData.value = normalizeTextureRows(metrics.final_mods)
-      }
     }
 
     // 处理分析进度

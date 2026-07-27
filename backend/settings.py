@@ -2,8 +2,10 @@
 
 import json
 import os
+import platform
 import shutil
 import threading
+from copy import deepcopy
 from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
 import sys
@@ -12,7 +14,8 @@ from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR, normalize_languag
 from backend.migrations.app_relocation import apply_config_relocation
 from backend.utils.json_io import write_json_atomic
 from backend.utils.secret_store import SECRET_FIELDS, SecretStoreError, secret_store
-from backend.utils.tools import normalize_path_for_storage, same_path
+from backend.paths.game_locations import normalize_steam_root
+from backend.utils.tools import normalize_path_for_storage, normalize_string_list, normalize_text, same_path
 from backend.window_state import WindowStateConfig
 
 
@@ -208,6 +211,7 @@ class UIConfig:
     default_collapse_active_sections: bool = False  # 在没有历史折叠状态时，是否让启用列表分割组首次默认折叠
     default_collapse_inactive_sections: bool = False  # 在没有历史折叠状态时，是否让停用列表分割组首次默认折叠
     persist_temp_mod_list: bool = False  # 是否按环境保存临时列表
+    mod_list_simple_view: Dict[str, bool] = field(default_factory=dict)  # 主界面 Mod 列表视图状态
     show_list_index: bool = True  # 是否显示列表索引列
     show_list_icon: bool = True  # 是否显示 Mod 图标
     show_list_mod_icon: bool = True  # 是否显示 Mod 图标
@@ -265,6 +269,7 @@ class AppConfig:
     load_order_export_dir_mode: str = "default"    # 导出文件选择器初始目录策略: default / remember / custom
     load_order_export_custom_path: str = ""        # 导出文件选择器自定义目录（全局）
     load_order_export_last_path: str = ""          # 导出文件选择器上次成功目录（全局）
+    load_order_export_use_raw_package_ids: bool = False  # 排序导出是否去掉来源后缀
     
     # --- 游戏设置 ---
     # game_version: str = ""               # RimWorld 版本
@@ -272,25 +277,34 @@ class AppConfig:
     # run_commands: List[str] = field(default_factory=list)   # 启动时运行的命令
     enable_tool_mods: bool = False           # 是否启用 ToolMods 目录下的伴生模组
     link_deployment_mode_full: bool = False # 链接部署模式: true=完全重建, false=增量部署
+    prefer_steam_url_for_no_args: bool = False  # 无启动参数时优先使用 Steam URL
     
     # --- 高级设置 ---
     backup_retention_days: int = 30           # 备份保留天数
     bundle_compress_level: int = 6            # 打包压缩级别：0 最快，9 最省空间
     bundle_mod_folder_name_type: str = "default"  # 模组包内文件夹命名方式
+    
     enable_auto_scan: bool = True             # 启动时自动扫描
     enable_launch_profile_quick_scan: bool = True  # 环境列表直启前是否执行检查同步
     enable_file_size_scan: bool = False         # 扫描时是否检查文件大小
     enable_mod_residue_scan: bool = True      # 扫描完成后是否识别卸载残留
-    startup_inventory_prompt_new_only: bool = False  # 启动库存提醒是否只显示新发现的问题
+    startup_inventory_first_seen_mod_changes: bool = True  # 启动库存提醒是否只显示新发现的问题
     strict_disabled_mode: bool = False          # 扫描时是否按数据库记录自动恢复被外部解除的禁用状态
+    
     delete_missing_mods_data: bool = False     # 是否删除数据库中缺失的 Mod 数据
     open_url_on_system: bool = False          # 是否在系统默认浏览器打开链接
     auto_sort_strategy: str = "edge_enhanced_sort_logic" # 自动排序策略: classic_sort_logic, edge_enhanced_sort_logic
     sort_mods_by: str = "name"                # 排序方式: name, id, alias
     coexist_mod_folder_name_type: str = "workshop_id" # 共存Mod生成方式: workshop_id, package_id, name, alias
-    show_coexistence_message: bool = True      # 是否显示共存Mod提示
+    show_coexistence_message: bool = False      # 是否显示共存Mod提示
     check_language_support: bool = True        # 是否检查语言支持
+    wide_language_pack_detection: bool = False # 是否启用宽泛语言包判定
     enable_action_prechecks: bool = True       # 是否启用操作前检查功能
+    reset_active_list: Dict[str, Any] = field(default_factory=lambda: {
+        "user_ids": [],
+        "excluded_builtin_ids": [],
+        "excluded_derived_ids": [],
+    })  # 重置启用列表时的用户预设与排除项
     skip_language_pack_alias_generation: bool = True  # 批量生成别名备注时是否跳过语言包
     regular_mods_follow_dependencies: bool = False # 是否让普通模组贴紧其最后一个依赖目标
     language_packs_follow_targets: bool = False # 是否让语言包贴紧其最后一个前置/依赖目标
@@ -565,13 +579,13 @@ class SettingsManager:
             self.last_relocation = relocation
         self.config.home_path = str(HOME_DIR)
         self.config.current_profile_id = str(self.config.current_profile_id or "").strip() or "default"
-        self.config.steam_path = normalize_path_for_storage(self.config.steam_path)
+        self.config.steam_path = normalize_steam_root(self.config.steam_path, system_name=platform.system())
         self.config.workshop_mods_path = normalize_path_for_storage(self.config.workshop_mods_path)
         self.config.steamcmd_path = normalize_path_for_storage(self.config.steamcmd_path) or str(TOOLS_DIR / "steamcmd")
         self.config.self_mods_path = normalize_path_for_storage(self.config.self_mods_path) or str(MODS_DIR)
         if self.config.workshop_mods_path and same_path(self.config.self_mods_path, self.config.workshop_mods_path):
             self.config.self_mods_path = str(MODS_DIR)
-            warnings.append("管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。")
+            warnings.append("self_mods_path_reset")
         self.config.ripgrep_path = normalize_path_for_storage(self.config.ripgrep_path) or str(TOOLS_DIR / "ripgrep")
         self.config.load_order_import_custom_path = normalize_path_for_storage(self.config.load_order_import_custom_path)
         self.config.load_order_import_last_path = normalize_path_for_storage(self.config.load_order_import_last_path)
@@ -584,6 +598,37 @@ class SettingsManager:
         self.config.mp_compat_package_ids_path = normalize_path_for_storage(self.config.mp_compat_package_ids_path) or str(MP_COMPAT_PACKAGE_IDS_PATH)
         self.config.user_rules_path = normalize_path_for_storage(self.config.user_rules_path) or str(USER_RULES_PATH)
         self.config.texture_opt.texture_tools_path = normalize_path_for_storage(self.config.texture_opt.texture_tools_path) or str(TOOLS_DIR / "texture_tools")
+        for url_key in (
+            "community_workshop_db_url",
+            "community_instead_db_url",
+            "community_rules_url",
+            "multiplayer_compatibility_url",
+            "mp_compat_package_ids_url",
+            "git_provider_catalog_url",
+        ):
+            setattr(self.config, url_key, normalize_text(getattr(self.config, url_key, "")))
+
+        proxy = self.config.network.proxy
+        proxy.host = normalize_text(proxy.host)
+        proxy.type = normalize_text(proxy.type, default="http").lower()
+        if proxy.type not in {"http", "socks5"}:
+            proxy.type = "http"
+        raw_bypass_list = proxy.bypass_list
+        proxy.bypass_list = normalize_string_list(
+            raw_bypass_list if isinstance(raw_bypass_list, (list, tuple)) else []
+        )
+        raw_hosts = self.config.network.hosts
+        if isinstance(raw_hosts, dict):
+            normalized_hosts = {}
+            for host, address in raw_hosts.items():
+                host_text = normalize_text(host)
+                address_text = normalize_text(address)
+                if host_text and address_text:
+                    normalized_hosts[host_text] = address_text
+            self.config.network.hosts = normalized_hosts
+        else:
+            self.config.network.hosts = {}
+
         self.config.language = normalize_language_code(self.config.language, default="zh-CN") or "zh-CN"
         valid_modes = {"default", "remember", "custom"}
         if str(self.config.load_order_import_dir_mode or "").strip().lower() not in valid_modes:
@@ -594,6 +639,12 @@ class SettingsManager:
             self.config.load_order_export_dir_mode = "default"
         else:
             self.config.load_order_export_dir_mode = str(self.config.load_order_export_dir_mode).strip().lower()
+        raw_export_package_id_setting = getattr(self.config, "load_order_export_use_raw_package_ids", False)
+        self.config.load_order_export_use_raw_package_ids = (
+            raw_export_package_id_setting.strip().lower() in {"1", "true", "yes", "on"}
+            if isinstance(raw_export_package_id_setting, str)
+            else bool(raw_export_package_id_setting)
+        )
         try:
             self.config.bundle_compress_level = max(0, min(9, int(self.config.bundle_compress_level or 0)))
         except (TypeError, ValueError):
@@ -603,6 +654,7 @@ class SettingsManager:
         self.config.bundle_mod_folder_name_type = mod_folder_name_type if mod_folder_name_type in valid_mod_folder_name_types else "default"
         ai_cfg = self.config.ai
         if isinstance(ai_cfg, AIConfig):
+            ai_cfg.base_url = normalize_text(ai_cfg.base_url)
             try:
                 ai_cfg.max_output_tokens = max(0, int(ai_cfg.max_output_tokens or 0))
             except (TypeError, ValueError):
@@ -616,6 +668,15 @@ class SettingsManager:
             except (TypeError, ValueError):
                 ai_cfg.context_window_tokens = 0
         self.config.skip_language_pack_alias_generation = bool(self.config.skip_language_pack_alias_generation)
+        self.config.wide_language_pack_detection = bool(self.config.wide_language_pack_detection)
+        if not isinstance(self.config.ui.mod_list_simple_view, dict):
+            self.config.ui.mod_list_simple_view = {}
+        else:
+            self.config.ui.mod_list_simple_view = {
+                str(key).strip(): bool(value)
+                for key, value in self.config.ui.mod_list_simple_view.items()
+                if str(key).strip()
+            }
         translation_cfg = self.config.translation
         default_translation = default_translation_settings()
         if not isinstance(translation_cfg, dict):
@@ -690,6 +751,9 @@ class SettingsManager:
             return getattr(self.config, key)
         return None
 
+    def _snapshot_config(self) -> "AppConfig":
+        return deepcopy(self.config)
+
     def set(self, key: str, value: Any):
         """
         设置配置项并自动处理路径同步逻辑
@@ -697,34 +761,39 @@ class SettingsManager:
         if not hasattr(self.config, key):
             print(f"Warning: Unknown key {key}")
             return
+        old_config = self._snapshot_config()
         before_state = asdict(self.config)
-        current_attr = getattr(self.config, key)
-        if is_dataclass(current_attr) and isinstance(value, dict):
-            self._recursive_update(current_attr, value)
-        else:
-            setattr(self.config, key, value)
-        self._normalize_config()
-        self._sync_derived_paths()
-        after_state = asdict(self.config)
-        if after_state == before_state: return
-        old_self_mods_path = before_state.get('self_mods_path', '')
-        old_steamcmd_path = before_state.get('steamcmd_path', '')
-        new_self_mods_path = after_state.get('self_mods_path', '')
-        new_steamcmd_path = after_state.get('steamcmd_path', '')
-        # --- 逻辑触发区 ---
-        # 1. 重新计算衍生路径
-        # 2. 如果 self_mods_path 变了，触发同步
-        if old_self_mods_path != new_self_mods_path:
-            from backend.managers.mgr_files import FileManager
-            FileManager.sync_steamcmd_root_link(
-                old_mods_path=old_self_mods_path,
-                move_old_data=self.config.move_old_self_mods
-            )
-        # 3. 如果 steamcmd_path 变了，也触发同步
-        if old_steamcmd_path != new_steamcmd_path:
-            from backend.managers.mgr_files import FileManager
-            FileManager.sync_steamcmd_root_link()
-        self.save()
+        try:
+            current_attr = getattr(self.config, key)
+            if is_dataclass(current_attr) and isinstance(value, dict):
+                self._recursive_update(current_attr, value)
+            else:
+                setattr(self.config, key, value)
+            self._normalize_config()
+            self._sync_derived_paths()
+            after_state = asdict(self.config)
+            if after_state == before_state: return
+            old_self_mods_path = before_state.get('self_mods_path', '')
+            old_steamcmd_path = before_state.get('steamcmd_path', '')
+            new_self_mods_path = after_state.get('self_mods_path', '')
+            new_steamcmd_path = after_state.get('steamcmd_path', '')
+            # --- 逻辑触发区 ---
+            # 1. 重新计算衍生路径
+            # 2. 如果 self_mods_path 变了，触发同步
+            if old_self_mods_path != new_self_mods_path:
+                from backend.managers.mgr_files import FileManager
+                FileManager.sync_steamcmd_root_link(
+                    old_mods_path=old_self_mods_path,
+                    move_old_data=self.config.move_old_self_mods
+                )
+            # 3. 如果 steamcmd_path 变了，也触发同步
+            if old_steamcmd_path != new_steamcmd_path:
+                from backend.managers.mgr_files import FileManager
+                FileManager.sync_steamcmd_root_link()
+            self.save()
+        except Exception:
+            self.config = old_config
+            raise
 
     def save(self):
         """保存当前配置到磁盘"""
@@ -735,12 +804,13 @@ class SettingsManager:
             # print("Settings saved.")
         except Exception as e:
             print(f"Error saving settings: {e}")
+            raise
 
-    def apply_secret_inputs(self, data_dict: Dict[str, Any]) -> bool:
-        """保存设置提交中的密钥：有值则更新，空值则清除，保留列表中的空值不处理。"""
+    def apply_secret_inputs(self, data_dict: Dict[str, Any], *, save: bool = True) -> bool:
+        """应用设置提交中的密钥：只有显式清除标记才删除已保存密钥。"""
         try:
             changed = secret_store.apply_secret_inputs(self.config, data_dict)
-            if changed:
+            if changed and save:
                 self.save()
             return changed
         except SecretStoreError as e:
@@ -773,7 +843,9 @@ class SettingsManager:
         payload = self.to_storage_dict()
         payload["_secret_status"] = self.get_secret_status()
         if secret_store.fallback_keys:
-            payload["_secret_storage_warning"] = "部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。"
+            payload["_secret_storage_warning"] = "secret_storage_warning"
+            payload["_secret_storage_warning_key"] = "toast.settings.secret_storage_warning"
+            payload["_secret_storage_warning_params"] = {}
         return payload
 
     def _clear_secret_fields(self, payload: Dict[str, Any], preserve_keys: Set[str] | None = None) -> None:
@@ -788,33 +860,39 @@ class SettingsManager:
             if isinstance(current, dict):
                 current[path[-1]] = ""
 
-    # 强烈建议新增这个方法供 api.save_all_settings 使用
     def update_from_dict(self, data_dict: Dict[str, Any]) -> list[str]:
         """
         全量更新，同样需要处理逻辑触发
         """
+        old_config = self._snapshot_config()
         before_state = asdict(self.config)
-        self.apply_secret_inputs(data_dict)
-        self._recursive_update(self.config, data_dict)
-        normalization_warnings = self._normalize_config()
-        self._sync_derived_paths()
-        after_state = asdict(self.config)
-        if after_state == before_state:
+        try:
+            self.apply_secret_inputs(data_dict, save=False)
+            self._recursive_update(self.config, data_dict)
+            normalization_warnings = self._normalize_config()
+            self._sync_derived_paths()
+            after_state = asdict(self.config)
+            if after_state == before_state:
+                return normalization_warnings
+            old_self_mods_path = before_state.get('self_mods_path', '')
+            old_steamcmd_path = before_state.get('steamcmd_path', '')
+            new_self_mods_path = after_state.get('self_mods_path', '')
+            new_steamcmd_path = after_state.get('steamcmd_path', '')
+            # 检查并同步
+            if old_self_mods_path != new_self_mods_path or \
+               old_steamcmd_path != new_steamcmd_path:
+                from backend.managers.mgr_files import FileManager
+                sync_ok = FileManager.sync_steamcmd_root_link(
+                    old_mods_path=old_self_mods_path,
+                    move_old_data=self.config.move_old_self_mods
+                )
+                if not sync_ok:
+                    normalization_warnings.append("steamcmd_junction_sync_failed")
+            self.save()
             return normalization_warnings
-        old_self_mods_path = before_state.get('self_mods_path', '')
-        old_steamcmd_path = before_state.get('steamcmd_path', '')
-        new_self_mods_path = after_state.get('self_mods_path', '')
-        new_steamcmd_path = after_state.get('steamcmd_path', '')
-        # 检查并同步
-        if old_self_mods_path != new_self_mods_path or \
-           old_steamcmd_path != new_steamcmd_path:
-            from backend.managers.mgr_files import FileManager
-            FileManager.sync_steamcmd_root_link(
-                old_mods_path=old_self_mods_path,
-                move_old_data=self.config.move_old_self_mods
-            )
-        self.save()
-        return normalization_warnings
+        except Exception:
+            self.config = old_config
+            raise
 
     def update_paths(self, paths_dict: Dict[str, str]):
         """批量更新路径"""

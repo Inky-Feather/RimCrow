@@ -35,8 +35,8 @@ class TestGameLogPathResolution(unittest.TestCase):
     def test_windows_default_player_log_paths_are_fixed_under_locallow(self):
         fake_home = self.temp_dir / "winhome"
         with patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
-             patch("backend.managers.mgr_game.os.getenv", return_value=str(fake_home)), \
-             patch("backend.managers.mgr_game.os.path.expanduser", return_value=str(fake_home)):
+             patch("backend.paths.game_locations.os.getenv", return_value=str(fake_home)), \
+             patch("backend.paths.game_locations.os.path.expanduser", return_value=str(fake_home)):
             paths = GameManager.get_default_player_log_paths("Player.log")
 
         self.assertEqual(paths, [
@@ -46,7 +46,7 @@ class TestGameLogPathResolution(unittest.TestCase):
     def test_macos_default_player_log_paths_cover_unity_and_company_locations(self):
         fake_home = self.temp_dir / "machome"
         with patch("backend.managers.mgr_game.platform.system", return_value="Darwin"), \
-             patch("backend.managers.mgr_game.os.path.expanduser", return_value=str(fake_home)):
+             patch("backend.paths.game_locations.os.path.expanduser", return_value=str(fake_home)):
             paths = GameManager.get_default_player_log_paths("Player.log")
 
         self.assertEqual(paths, [
@@ -57,7 +57,7 @@ class TestGameLogPathResolution(unittest.TestCase):
     def test_linux_default_user_data_paths_include_flatpak_fallback(self):
         fake_home = self.temp_dir / "linuxhome"
         with patch("backend.managers.mgr_game.platform.system", return_value="Linux"), \
-             patch("backend.managers.mgr_game.os.path.expanduser", return_value=str(fake_home)):
+             patch("backend.paths.game_locations.os.path.expanduser", return_value=str(fake_home)):
             roots = GameManager.get_default_user_data_paths()
 
         self.assertEqual(roots, [
@@ -94,9 +94,26 @@ class TestGameLogPathResolution(unittest.TestCase):
 
         context = block["context"]
         self.assertEqual(context["inferredType"], "NullReference")
+        self.assertEqual(context["inferredTypeKey"], "game_log.inferred_type.null_reference")
+        self.assertEqual(context["inferredTypeLabel"], "空引用异常")
         self.assertEqual(context["knownPattern"], "null_reference_exception")
+        self.assertEqual(context["diagnosisKey"], "game_log.diagnosis.null_reference_exception")
         self.assertIn("代码访问了不存在的对象", context["diagnosisExplanation"])
         self.assertEqual(context["relatedNamespaces"], ["ExampleMod.Core.Worker"])
+
+    def test_log_analyzer_filters_companion_warning_prefix_namespace(self):
+        block = {
+            "level": "ERROR",
+            "message": "System.NullReferenceException: Object reference not set to an instance of an object",
+            "details": "\n".join([
+                "  at RimCrowCompanion.RimCrowCompanionMod.LogWarningPrefix.Prefix ()",
+                "  at ExampleMod.Core.Worker.Tick ()",
+            ]),
+        }
+
+        LogAnalyzer().analyze(block)
+
+        self.assertEqual(block["context"]["relatedNamespaces"], ["ExampleMod.Core.Worker"])
 
     def test_player_log_analysis_marks_startup_and_runtime_phase(self):
         default_root = self.temp_dir / "default-userdata"

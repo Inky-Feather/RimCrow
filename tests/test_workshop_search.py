@@ -1,9 +1,11 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from backend.database.dao_ext import ExtDAO
+from backend.database.models import MOD_ASSET_STATE_MISSING, ModAsset, db
 from backend.database.models_ext import ModReplacement, WorkshopAuthorCache, WorkshopManifest, WorkshopOnlineCache, ext_db
 from backend.api import API
 from backend.managers.mgr_steam_api import SteamWebAPI
@@ -16,6 +18,12 @@ class TestWorkshopSearch(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
+        if not db.is_closed():
+            db.close()
+        db.init(str(Path(self.temp_dir.name) / "runtime.db"))
+        db.connect(reuse_if_open=True)
+        db.create_tables([ModAsset])
+
         if not ext_db.is_closed():
             ext_db.close()
         ext_db.init(str(Path(self.temp_dir.name) / "workshop-cache.db"))
@@ -80,6 +88,8 @@ class TestWorkshopSearch(unittest.TestCase):
         ).execute()
 
     def tearDown(self):
+        if not db.is_closed():
+            db.close()
         if not ext_db.is_closed():
             ext_db.close()
 
@@ -151,6 +161,57 @@ class TestWorkshopSearch(unittest.TestCase):
         self.assertEqual([item["workshop_id"] for item in dependents["items"]], ["4444444444"])
         self.assertEqual(same_author["source"], "cache_same_author")
         self.assertEqual([item["workshop_id"] for item in same_author["items"]], ["4444444444"])
+
+    def test_install_sources_fall_back_to_cached_git_catalog_when_workshop_missing(self):
+        git_sources = {
+            "git.only": [
+                {
+                    "package_id": "git.only",
+                    "url": "https://gitgud.io/team/git-only",
+                    "title": "Git Only",
+                    "supported_versions": ["1.5"],
+                    "source_kind": "git",
+                    "install_type": "source",
+                    "source_origin": "git_catalog",
+                }
+            ],
+            "alpha.tools": [
+                {
+                    "package_id": "alpha.tools",
+                    "url": "https://gitgud.io/team/alpha-tools",
+                    "title": "Alpha Tools Git",
+                    "supported_versions": ["1.5"],
+                    "source_kind": "git",
+                    "install_type": "source",
+                    "source_origin": "git_catalog",
+                }
+            ],
+        }
+
+        with patch("backend.database.dao_ext._load_git_catalog_source_candidates_by_package_ids", return_value=git_sources):
+            result = ExtDAO.get_install_sources_by_package_ids(["git.only", "alpha.tools"], current_game_version="1.5")
+
+        self.assertEqual(result["git.only"]["original_sources"][0]["kind"], "git")
+        self.assertEqual(result["git.only"]["original_sources"][0]["install_type"], "source")
+        self.assertEqual(result["git.only"]["original_sources"][0]["url"], "https://gitgud.io/team/git-only")
+        self.assertEqual(result["git.only"]["original_sources"][0]["source_origin"], "git_catalog")
+        self.assertEqual([source["kind"] for source in result["alpha.tools"]["original_sources"]], ["workshop"])
+        self.assertEqual(result["alpha.tools"]["original_sources"][0]["workshop_id"], "1111111111")
+
+    def test_install_sources_ignore_missing_local_record_and_use_workshop_cache(self):
+        ModAsset.create(
+            path_hash="missing-alpha",
+            package_id="alpha.tools",
+            name="Old Local Alpha",
+            workshop_id="9999999999",
+            path="D:/missing/alpha",
+            state=MOD_ASSET_STATE_MISSING,
+        )
+
+        result = ExtDAO.get_install_sources_by_package_ids(["alpha.tools"], current_game_version="1.5")
+
+        self.assertEqual([source["source_origin"] for source in result["alpha.tools"]["original_sources"]], ["meta"])
+        self.assertEqual(result["alpha.tools"]["original_sources"][0]["workshop_id"], "1111111111")
 
     def test_online_search_maps_queryfiles_filters_and_elanguage(self):
         captured = {}
@@ -563,6 +624,31 @@ class TestWorkshopSearch(unittest.TestCase):
         self.assertIn("缺少这些 key", ai_mgr.contexts[1])
         self.assertEqual(translated["title"], "现代阿尔法")
         self.assertEqual(translated["description"], "完整译文")
+
+    def test_translation_manager_splits_document_in_backend(self):
+        class DummyAIManager:
+            def __init__(self):
+                self.calls = []
+
+            def build_token_limited_chunks(self, items, **_kwargs):
+                return [items[:2], items[2:]]
+
+            def execute_structured_task(self, task_key, payload, override_config=None):
+                data = json.loads(payload["variables"]["translation_input_json"])
+                keys = [segment["key"] for segment in data["segments"]]
+                self.calls.append(keys)
+                return {"segments": [{"key": key, "text": f"译文-{key}"} for key in keys]}
+
+        document = TranslationDocument.from_segments([
+            {"key": "a", "text": "Alpha"},
+            {"key": "b", "text": "Beta"},
+            {"key": "c", "text": "Gamma"},
+        ])
+        ai_mgr = DummyAIManager()
+        translated = TranslationManager(ai_mgr).translate_document(document, "zh-CN").segment_map()
+
+        self.assertEqual(ai_mgr.calls, [["a", "b"], ["c"]])
+        self.assertEqual(translated, {"a": "译文-a", "b": "译文-b", "c": "译文-c"})
 
     def test_author_summaries_are_cached_and_attached_to_items(self):
         captured = {}

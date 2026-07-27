@@ -4,6 +4,7 @@ import time
 import re
 import signal
 from pathlib import Path
+from backend.i18n.messages import tr
 from backend.utils.logger import logger
 from backend.settings import settings
 
@@ -109,9 +110,9 @@ class SteamCMDController:
                     if time.time() - start_time > timeout:
                         logger.error(f"SteamCMD {task_name} 超时被强制终止")
                         self.kill_all()
-                        return False, "执行超时"
+                        return False, tr("errors.steamcmd.timeout", "SteamCMD 执行超时，请稍后重试。")
                     time.sleep(0.2)
-                return self.current_process.returncode == 0, "执行完成"
+                return self.current_process.returncode == 0, tr("tasks.steamcmd.execution_complete", "执行完成")
             
             # 实时读取输出
             for line in iter(self.current_process.stdout.readline, ''): # type: ignore
@@ -123,7 +124,7 @@ class SteamCMDController:
                 if time.time() - start_time > timeout:
                     logger.error(f"SteamCMD {task_name} 超时被强制终止")
                     self.kill_all()
-                    return False, "执行超时"
+                    return False, tr("errors.steamcmd.timeout", "SteamCMD 执行超时，请稍后重试。")
 
                 # 2. 忽略无关紧要的报错（比如多语言文件缺失）
                 if "ILocalize::AddFile() failed" in line:
@@ -133,7 +134,7 @@ class SteamCMDController:
                 if "Can't use HTTPS because steamcommon" in line:
                     logger.error(f"拦截到致命错误: {line}")
                     self.kill_all()
-                    return False, "网络/代理配置导致初始化失败(缺少SSL组件)"
+                    return False, tr("errors.steamcmd.ssl_init_failed", "网络或代理配置导致初始化失败，请检查 SteamCMD 下载环境。")
 
                 # 4. 解析进度并推给前端
                 match = self.progress_pattern.search(line)
@@ -149,12 +150,12 @@ class SteamCMDController:
 
             # 等待进程正常结束
             self.current_process.wait()
-            return self.current_process.returncode == 0, "执行完成"
+            return self.current_process.returncode == 0, tr("tasks.steamcmd.execution_complete", "执行完成")
 
         except Exception as e:
             logger.error(f"SteamCMD 执行异常: {e}", exc_info=True)
             self.kill_all()
-            return False, str(e)
+            return False, tr("errors.steamcmd.execution_failed", "SteamCMD 执行失败，请检查 Steam 安装、网络连接和下载环境。")
         finally:
             self.current_process = None
 

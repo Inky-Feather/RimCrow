@@ -5,75 +5,29 @@ import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { useProfileStore } from '../profiles/profileStore'
 import { ISSUE_TYPE } from '../../shared/lib/constants'
-import { dedupeNormalizedPackageIds, mapUniqueDisplayNames, normalizePackageId, pushUnique } from '../mod/lib/modIdentity'
+import {
+  dedupeNormalizedPackageIds, dedupeNormalizedPackageTokens,
+  hasUsableLanguagePackOwnership, isLanguagePackType, mapUniqueDisplayNames,
+  normalizePackageId, normalizePackageToken, pushUnique
+} from '../mod/lib/modIdentity'
 import { DEFAULT_TOOL_PACKAGE_IDS, isCorePackageId, isOfficialDlcPackageId } from '../mod/lib/packageScope'
 import { getVersionInfo as getVersionInfoByVersions, normalizeVersion } from '../mod/lib/versioning'
+import { t } from '../../shared/i18n.js'
 
-const CATEGORY_ORDER = [
-  'core',
-  'official_dlc',
-  'tool_mod',
-  'dependency',
-  'language_pack',
-  'version_replacement',
-  'optional_replacement',
+const CATEGORY_DEFS = [
+  ['core', 'danger'],
+  ['official_dlc', 'danger'],
+  ['tool_mod', 'danger'],
+  ['dependency', 'danger'],
+  ['language_pack', 'warn'],
+  ['version_replacement', 'warn'],
+  ['optional_replacement', 'info'],
 ]
-
-const CATEGORY_META = {
-  core: {
-    title: 'Core',
-    description: '游戏核心模组未启用。',
-    severity: 'danger',
-  },
-  official_dlc: {
-    title: '官方 DLC',
-    description: '当前序列引用了未启用的官方扩展。',
-    severity: 'danger',
-  },
-  tool_mod: {
-    title: '工具模组',
-    description: '当前设置允许的工具模组未启用。',
-    severity: 'danger',
-  },
-  dependency: {
-    title: '依赖项',
-    description: '这些模组是当前启用模组的依赖。',
-    severity: 'danger',
-  },
-  language_pack: {
-    title: '语言包',
-    description: '存在可用但未启用的当前语言语言包。',
-    severity: 'warn',
-  },
-  version_replacement: {
-    title: '替代建议',
-    description: '当前版本可优先启用更合适的替代模组。',
-    severity: 'warn',
-  },
-  optional_replacement: {
-    title: '可选启用',
-    description: '当前模组已可用，如有需要也可启用其它已安装替代项。',
-    severity: 'info',
-  },
-}
-
-const SEVERITY_META = {
-  danger: {
-    tone: 'danger',
-    label: '必要',
-  },
-  warn: {
-    tone: 'warn',
-    label: '建议',
-  },
-  info: {
-    tone: 'muted',
-    label: '可选',
-  },
-}
+const CATEGORY_ORDER = CATEGORY_DEFS.map(([key]) => key)
+const CATEGORY_SEVERITY = Object.fromEntries(CATEGORY_DEFS)
 
 const dedupeValues = (values = []) => [...new Set((values || []).filter(Boolean))]
-const isLanguagePackMod = (mod) => (mod?.user_mod_type || mod?.mod_type) === 'LanguagePack'
+const isLanguagePackMod = (mod) => isLanguagePackType(mod)
 
 const clearReactiveObject = (target) => {
   Object.keys(target).forEach(key => {
@@ -90,13 +44,33 @@ const mergeText = (...values) => [...new Set(
     .filter(Boolean)
 )].join('；')
 
+const categoryTitleText = (category = '') => ({
+  core: 'Core',
+  official_dlc: t('dialog.supplement.category.official_dlc.title', '官方 DLC'),
+  tool_mod: t('dialog.supplement.category.tool_mod.title', '工具模组'),
+  dependency: t('dialog.supplement.category.dependency.title', '依赖项'),
+  language_pack: t('dialog.supplement.category.language_pack.title', '语言包'),
+  version_replacement: t('dialog.supplement.category.version_replacement.title', '替代建议'),
+  optional_replacement: t('dialog.supplement.category.optional_replacement.title', '可选启用'),
+}[category] || category)
+
+const categoryDescriptionText = (category = '') => ({
+  core: t('dialog.supplement.category.core.description', '游戏核心模组未启用。'),
+  official_dlc: t('dialog.supplement.category.official_dlc.description', '当前序列引用了未启用的官方扩展。'),
+  tool_mod: t('dialog.supplement.category.tool_mod.description', '当前设置允许的工具模组未启用。'),
+  dependency: t('dialog.supplement.category.dependency.description', '这些模组是当前启用模组的依赖。'),
+  language_pack: t('dialog.supplement.category.language_pack.description', '存在可用但未启用的当前语言语言包。'),
+  version_replacement: t('dialog.supplement.category.version_replacement.description', '当前版本可优先启用更合适的替代模组。'),
+  optional_replacement: t('dialog.supplement.category.optional_replacement.description', '当前模组已可用，如有需要也可启用其它已安装替代项。'),
+}[category] || '')
+
 const buildReplacementOptionDetail = (ownerName = '', replacementName = '') => {
   const left = String(ownerName || '').trim()
   const right = String(replacementName || '').trim()
-  if (left && right) return `启用后替换 ${left}`
-  if (left) return `启用后替换当前模组`
-  if (right) return `启用后切换到 ${right}`
-  return '启用后替换当前模组'
+  if (left && right) return t('dialog.supplement.replacement_detail.replace_named', '启用后替换 {name}', { name: left })
+  if (left) return t('dialog.supplement.replacement_detail.replace_current', '启用后替换当前模组')
+  if (right) return t('dialog.supplement.replacement_detail.switch_to', '启用后切换到 {name}', { name: right })
+  return t('dialog.supplement.replacement_detail.replace_current', '启用后替换当前模组')
 }
 
 const getResolvedLanguagePackOwnerIds = (mod) => (
@@ -106,10 +80,7 @@ const getResolvedLanguagePackOwnerIds = (mod) => (
       .filter(Boolean)
   )]
 )
-const canUseLanguagePackForSupplement = (mod) => {
-  const confidence = String(mod?.language_pack_owner_result?.summary_confidence || '').trim().toLowerCase()
-  return confidence === 'high' || confidence === 'medium'
-}
+const canUseLanguagePackForSupplement = (mod) => hasUsableLanguagePackOwnership(mod)
 const isLanguagePackDeclaredForCurrentLanguage = (mod, targetLanguage) => (
   (mod?.supported_languages || []).includes(String(targetLanguage || '').trim())
 )
@@ -158,8 +129,8 @@ export const useSupplementStore = defineStore('supplement', () => {
   const state = reactive({
     title: '',
     message: '',
-    confirmText: '应用选中项',
-    cancelText: '取消',
+    confirmText: t('dialog.supplement.apply_selected', '应用选中项'),
+    cancelText: t('common.action.cancel', '取消'),
     continueText: '',
     groups: [],
     summary: {
@@ -195,10 +166,10 @@ export const useSupplementStore = defineStore('supplement', () => {
   const getLanguagePackTargetMap = () => {
     const strictTargetMap = new Map()
     const fallbackTargetMap = new Map()
-    if (!appStore.settings.check_language_support || !currentLanguage.value) {
+    if (!currentLanguage.value) {
       return { strictTargetMap, fallbackTargetMap }
     }
-    for (const mod of modStore.allModsMap.values()) {
+    for (const mod of modStore.getAvailableModInstances()) {
       if (!mod || mod.isMissing || !mod.path || !isLanguagePackMod(mod)) continue
       if (!canUseLanguagePackForSupplement(mod)) continue
       const relatedTargets = new Set(getResolvedLanguagePackOwnerIds(mod))
@@ -215,10 +186,12 @@ export const useSupplementStore = defineStore('supplement', () => {
 
   // ctx 是一次补缺计算共享的只读上下文，递归构图时都复用这一份派生数据。
   const createContext = (activeIds = modStore.activeIds) => {
-    const normalizedActiveIds = dedupeNormalizedPackageIds(activeIds)
+    // 规则 owner 必须保留实例 token；依赖是否已满足仍按裸包名判断。
+    const activeTokens = dedupeNormalizedPackageTokens(activeIds)
+    const canonicalActiveIds = dedupeNormalizedPackageIds(activeTokens)
     return {
-      activeIds: normalizedActiveIds,
-      activeSet: new Set(normalizedActiveIds),
+      activeIds: activeTokens,
+      activeSet: new Set(canonicalActiveIds),
       ...getLanguagePackTargetMap(),
     }
   }
@@ -255,7 +228,7 @@ export const useSupplementStore = defineStore('supplement', () => {
           entryType: 'choice',
           key,
           category,
-          severity: CATEGORY_META[category]?.severity || 'info',
+          severity: CATEGORY_SEVERITY[category] || 'info',
           title: ownerName,
           reason: '',
           detail: '',
@@ -268,7 +241,7 @@ export const useSupplementStore = defineStore('supplement', () => {
             title: replacementName,
             detail: buildReplacementOptionDetail(ownerName, replacementName),
             removeIds: [ownerId],
-            relationLabel: '替代版',
+            relationLabel: t('dialog.supplement.relation.replacement', '替代版'),
           }],
         })
         return
@@ -282,7 +255,7 @@ export const useSupplementStore = defineStore('supplement', () => {
           title: replacementName,
           detail: buildReplacementOptionDetail(ownerName, replacementName),
           removeIds: [ownerId],
-          relationLabel: '替代版',
+          relationLabel: t('dialog.supplement.relation.replacement', '替代版'),
         },
       ]
     })
@@ -293,11 +266,11 @@ export const useSupplementStore = defineStore('supplement', () => {
       return {
         ...entry,
         reason: hasVersionMismatchOwner
-          ? '当前版本可切换到已安装替代模组'
-          : '当前模组可切换到已安装替代模组',
+          ? t('dialog.supplement.reason.version_can_switch_replacement', '当前版本可切换到已安装替代模组')
+          : t('dialog.supplement.reason.mod_can_switch_replacement', '当前模组可切换到已安装替代模组'),
         detail: hasVersionMismatchOwner
-          ? mergeText(`可切换到：${replacementNames.join('、')}`, '当前版本可能不适配')
-          : `可切换到：${replacementNames.join('、')}`,
+          ? mergeText(t('dialog.supplement.detail.can_switch_to', '可切换到：{names}', { names: replacementNames.join('、') }), t('dialog.supplement.detail.version_may_not_fit', '当前版本可能不适配'))
+          : t('dialog.supplement.detail.can_switch_to', '可切换到：{names}', { names: replacementNames.join('、') }),
       }
     })
   }
@@ -306,6 +279,19 @@ export const useSupplementStore = defineStore('supplement', () => {
   // satisfiedSet 表示当前路径已满足的包，trailSet 用于阻断递归回环。
   const collectDependencyEntries = (ownerIds = [], ctx, satisfiedSet = ctx.activeSet, trailSet = new Set()) => {
     const entryMap = new Map()
+    const availableInstances = modStore.getAvailableModInstances()
+    const takeInstalledOptions = (optionId = '') => availableInstances
+      .filter(mod => {
+        const packageId = normalizePackageId(mod?.package_id)
+        return packageId === optionId && !mod?.isMissing && !!mod?.path
+      })
+      .map(mod => {
+        const packageToken = normalizePackageToken(mod.active_package_token || mod.package_id)
+        const sourceLabel = packageToken.endsWith('_steam')
+          ? t('common.store.workshop', '工坊')
+          : t('common.store.local', '本地')
+        return { packageId: packageToken, canonicalId: normalizePackageId(packageToken), mod, sourceLabel }
+      })
 
     ownerIds.forEach(ownerId => {
       const owner = modStore.takeModById(ownerId)
@@ -319,38 +305,42 @@ export const useSupplementStore = defineStore('supplement', () => {
         if (optionIds.length === 0) return
         if (optionIds.some(optionId => satisfiedSet.has(optionId))) return
 
-        const installedOptionIds = optionIds.filter(optionId => modStore.hasRealModById(optionId))
-        if (installedOptionIds.length === 0) return
+        const installedOptions = optionIds.flatMap(takeInstalledOptions)
+        if (installedOptions.length === 0) return
         const category = isCorePackageId(targetId)
           ? 'core'
           : isOfficialDlcPackageId(targetId)
             ? 'official_dlc'
             : 'dependency'
 
-        const key = `dependency:${targetId}:${installedOptionIds.join('|')}`
+        const key = `dependency:${targetId}:${installedOptions.map(option => option.packageId).join('|')}`
         if (!entryMap.has(key)) {
-          const onlyOptionId = installedOptionIds.length === 1 ? installedOptionIds[0] : ''
-          const usesAlternativeOnly = !!onlyOptionId && onlyOptionId !== targetId
+          const onlyOption = installedOptions.length === 1 ? installedOptions[0] : null
+          const usesAlternativeOnly = !!onlyOption && onlyOption.canonicalId !== targetId
+          const preferredOption = installedOptions.find(option => option.canonicalId === targetId) || installedOptions[0]
           entryMap.set(key, {
-            entryType: installedOptionIds.length > 1 ? 'choice' : 'toggle',
+            entryType: installedOptions.length > 1 ? 'choice' : 'toggle',
             key,
             category,
-            severity: CATEGORY_META[category]?.severity || 'danger',
-            title: usesAlternativeOnly ? modStore.displayModName(onlyOptionId) : modStore.displayModName(targetId),
+            severity: CATEGORY_SEVERITY[category] || 'danger',
+            title: usesAlternativeOnly ? modStore.displayModName(onlyOption.packageId) : modStore.displayModName(targetId),
             reason: '',
             detail: '',
             owners: [],
-            packageId: onlyOptionId,
+            packageId: onlyOption?.packageId || '',
             removeIds: [],
-            relationLabel: usesAlternativeOnly ? '备选依赖' : '依赖',
+            relationLabel: usesAlternativeOnly ? t('dialog.supplement.relation.alternative_dependency', '备选依赖') : t('dialog.supplement.relation.dependency', '依赖'),
             allowSkip: true,
-            defaultOptionPackageId: installedOptionIds.includes(targetId) ? targetId : installedOptionIds[0],
-            options: installedOptionIds.map(optionId => ({
-              packageId: optionId,
-              title: modStore.displayModName(optionId),
-              detail: optionId === targetId ? '原始依赖项' : '可用于满足依赖的备选模组',
+            defaultOptionPackageId: preferredOption?.packageId || '',
+            options: installedOptions.map(option => ({
+              packageId: option.packageId,
+              title: modStore.displayModName(option.packageId),
+              detail: mergeText(
+                option.canonicalId === targetId ? t('dialog.supplement.detail.original_dependency', '原始依赖项') : t('dialog.supplement.detail.alternative_dependency', '可用于满足依赖的备选模组'),
+                option.sourceLabel,
+              ),
               removeIds: [],
-              relationLabel: optionId === targetId ? '依赖' : '备选依赖',
+              relationLabel: option.canonicalId === targetId ? t('dialog.supplement.relation.dependency', '依赖') : t('dialog.supplement.relation.alternative_dependency', '备选依赖'),
             })),
             hasAlternatives: alternativeIds.length > 0,
           })
@@ -361,10 +351,10 @@ export const useSupplementStore = defineStore('supplement', () => {
 
     return Array.from(entryMap.values()).map(entry => {
       const ownerCount = entry.owners.length
-      const ownerDetail = buildOwnersDetail(entry.owners, ownerCount > 0 ? ' 的依赖' : '依赖')
+      const ownerDetail = buildOwnersDetail(entry.owners, ownerCount > 0 ? t('dialog.supplement.suffix.dependency_of', ' 的依赖') : t('dialog.supplement.relation.dependency', '依赖'))
       return {
         ...entry,
-        reason: ownerCount > 1 ? `被 ${ownerCount} 个模组同时依赖` : '当前序列缺少依赖项',
+        reason: ownerCount > 1 ? t('dialog.supplement.reason.required_by_many', '被 {count} 个模组同时依赖', { count: ownerCount }) : t('dialog.supplement.reason.missing_dependency', '当前序列缺少依赖项'),
         detail: ownerDetail,
       }
     })
@@ -373,7 +363,7 @@ export const useSupplementStore = defineStore('supplement', () => {
   // 语言包补缺与“问题提示”保持同一口径：
   // 仅当原模组不支持当前语言、且当前路径上没有已满足的对应语言包时，才补出首个候选语言包。
   const collectLanguageEntries = (ownerIds = [], ctx, satisfiedSet = ctx.activeSet, trailSet = new Set()) => {
-    if (!appStore.settings.check_language_support || !currentLanguage.value) return []
+    if (!currentLanguage.value) return []
     const entryMap = new Map()
 
     ownerIds.forEach(ownerId => {
@@ -413,7 +403,8 @@ export const useSupplementStore = defineStore('supplement', () => {
       if (!candidate) return
 
       const candidateId = normalizePackageId(candidate.package_id)
-      const key = `language:${candidateId}`
+      const candidateToken = String(candidate.active_package_token || candidate.package_id || candidateId).trim().toLowerCase()
+      const key = `language:${candidateToken}`
       if (!entryMap.has(key)) {
         const isFallback = strictCandidates.length === 0
         entryMap.set(key, {
@@ -425,9 +416,10 @@ export const useSupplementStore = defineStore('supplement', () => {
           reason: '',
           detail: '',
           owners: [],
-          packageId: candidateId,
+          // 语言包自身也可能存在本地/工坊共存，补齐时保留候选实例 token。
+          packageId: candidateToken,
           removeIds: [],
-          relationLabel: '语言包',
+          relationLabel: t('dialog.supplement.relation.language_pack', '语言包'),
           isLanguageFallback: isFallback,
         })
       }
@@ -438,10 +430,10 @@ export const useSupplementStore = defineStore('supplement', () => {
       const ownerCount = entry.owners.length
       return {
         ...entry,
-        reason: ownerCount > 1 ? `可为 ${ownerCount} 个模组提供当前语言支持` : '可补充当前语言包',
+        reason: ownerCount > 1 ? t('dialog.supplement.reason.language_pack_for_many', '可为 {count} 个模组提供当前语言支持', { count: ownerCount }) : t('dialog.supplement.reason.language_pack_for_current', '可补充当前语言包'),
         detail: entry.isLanguageFallback
-          ? mergeText(buildOwnersDetail(entry.owners, ' 的可能相关语言包'), '该语言包未标注当前语言')
-          : buildOwnersDetail(entry.owners, ' 的语言包'),
+          ? mergeText(buildOwnersDetail(entry.owners, t('dialog.supplement.suffix.possible_language_pack', ' 的可能相关语言包')), t('dialog.supplement.detail.language_not_declared', '该语言包未标注当前语言'))
+          : buildOwnersDetail(entry.owners, t('dialog.supplement.suffix.language_pack', ' 的语言包')),
       }
     })
   }
@@ -457,8 +449,8 @@ export const useSupplementStore = defineStore('supplement', () => {
         category: 'core',
         severity: 'danger',
         title: modStore.displayModName('ludeon.rimworld'),
-        reason: '当前启用序列缺少 Core',
-        detail: '保存或启动游戏前建议补齐。',
+        reason: t('dialog.supplement.reason.missing_core', '当前启用序列缺少 Core'),
+        detail: t('dialog.supplement.detail.complete_before_save_or_launch', '保存或启动游戏前建议补齐。'),
         owners: [],
         packageId: 'ludeon.rimworld',
         removeIds: [],
@@ -475,12 +467,12 @@ export const useSupplementStore = defineStore('supplement', () => {
           category: 'tool_mod',
           severity: 'danger',
           title: modStore.displayModName(toolId),
-          reason: '当前设置启用了工具模组支持',
-          detail: '工具模组已安装但未启用。',
+          reason: t('dialog.supplement.reason.tool_mod_enabled', '当前设置启用了工具模组支持'),
+          detail: t('dialog.supplement.detail.tool_mod_inactive', '工具模组已安装但未启用。'),
           owners: [],
           packageId: toolId,
           removeIds: [],
-          relationLabel: '工具',
+          relationLabel: t('dialog.supplement.relation.tool', '工具'),
         })
       })
     }
@@ -499,7 +491,8 @@ export const useSupplementStore = defineStore('supplement', () => {
 
   // choice option 需要跨不同来源合并，这里先统一成标准结构。
   const createChoiceOption = (rowId, option = {}) => {
-    const packageId = normalizePackageId(option.packageId)
+    // 选项可能指向共存实例；保留 token 供最终启用，删除项仍按规范包名处理。
+    const packageId = normalizePackageToken(option.packageId)
     return {
       id: `${rowId}:${packageId}`,
       packageId,
@@ -641,9 +634,9 @@ const createEmptySummary = () => ({
         if (groupRows.length === 0) return null
         return {
           key: category,
-          title: CATEGORY_META[category]?.title || category,
-          description: CATEGORY_META[category]?.description || '',
-          severity: CATEGORY_META[category]?.severity || 'info',
+	          title: categoryTitleText(category),
+	          description: categoryDescriptionText(category),
+          severity: CATEGORY_SEVERITY[category] || 'info',
           rows: sortRows(groupRows),
         }
       })
@@ -705,31 +698,32 @@ const createEmptySummary = () => ({
       if (entry.entryType === 'choice') {
         const rowId = entry.key
         const options = (entry.options || []).map(option => {
-          const packageId = normalizePackageId(option.packageId)
+          const packageToken = normalizePackageToken(option.packageId)
+          const packageId = normalizePackageId(packageToken)
           const nextTrailSet = new Set([...Array.from(trailSet), packageId])
           const nextSatisfiedSet = new Set([...Array.from(satisfiedSet), packageId])
           const childEntries = [
-            ...collectDependencyEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
-            ...collectLanguageEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
+            ...collectDependencyEntries([packageToken], ctx, nextSatisfiedSet, nextTrailSet),
+            ...collectLanguageEntries([packageToken], ctx, nextSatisfiedSet, nextTrailSet),
           ]
           const childNodeIds = childEntries
             .map(childEntry => buildNode(childEntry, nextSatisfiedSet, nextTrailSet))
             .filter(Boolean)
 
           return {
-            id: `${rowId}:${packageId}`,
-            packageId,
-            title: option.title || modStore.displayModName(packageId),
+            id: `${rowId}:${packageToken}`,
+            packageId: packageToken,
+            title: option.title || modStore.displayModName(packageToken),
             detail: option.detail || '',
             removeIds: dedupeNormalizedPackageIds(option.removeIds || []),
             relationLabel: option.relationLabel || '',
             relationLabels: option.relationLabel ? [option.relationLabel] : [],
-            versionInfo: getVersionInfo(packageId),
+            versionInfo: getVersionInfo(packageToken),
             childNodeIds,
           }
         })
 
-        const preferredPackageId = normalizePackageId(entry.defaultOptionPackageId)
+        const preferredPackageId = normalizePackageToken(entry.defaultOptionPackageId)
         const preferredOption = options.find(option => option.packageId === preferredPackageId) || options[0]
         const node = {
           id: nextNodeId('choice'),
@@ -751,14 +745,16 @@ const createEmptySummary = () => ({
         return node.id
       }
 
-      const packageId = normalizePackageId(entry.packageId)
+      // packageToken 决定实际启用哪个共存实例，packageId 只用于依赖满足和回环检测。
+      const packageToken = normalizePackageToken(entry.packageId)
+      const packageId = normalizePackageId(packageToken)
       if (!packageId) return null
-      const rowId = `toggle:${packageId}`
+      const rowId = `toggle:${packageToken}`
       const nextTrailSet = new Set([...Array.from(trailSet), packageId])
       const nextSatisfiedSet = new Set([...Array.from(satisfiedSet), packageId])
       const childEntries = [
-        ...collectDependencyEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
-        ...collectLanguageEntries([packageId], ctx, nextSatisfiedSet, nextTrailSet),
+        ...collectDependencyEntries([packageToken], ctx, nextSatisfiedSet, nextTrailSet),
+        ...collectLanguageEntries([packageToken], ctx, nextSatisfiedSet, nextTrailSet),
       ]
       const childNodeIds = childEntries
         .map(childEntry => buildNode(childEntry, nextSatisfiedSet, nextTrailSet))
@@ -770,15 +766,15 @@ const createEmptySummary = () => ({
         kind: 'toggle',
         category: entry.category,
         severity: entry.severity || 'info',
-        packageId,
-        title: entry.title || modStore.displayModName(packageId),
+        packageId: packageToken,
+        title: entry.title || modStore.displayModName(packageToken),
         reason: entry.reason || '',
         detail: entry.detail || '',
         defaultSelected: entry.defaultSelected,
         owners: dedupeNormalizedPackageIds(entry.owners || []),
         removeIds: dedupeNormalizedPackageIds(entry.removeIds || []),
         relationLabel: entry.relationLabel || '',
-        versionInfo: getVersionInfo(packageId),
+        versionInfo: getVersionInfo(packageToken),
         childNodeIds,
       }
       nodes.set(node.id, node)
@@ -903,8 +899,8 @@ const createEmptySummary = () => ({
   const applyResolvedPlan = (plan, {
     title = '',
     message = '',
-    confirmText = '应用选中项',
-    cancelText = '取消',
+    confirmText = t('dialog.supplement.apply_selected', '应用选中项'),
+    cancelText = t('common.action.cancel', '取消'),
     continueText = '',
   } = {}) => {
     state.title = title
@@ -925,8 +921,8 @@ const createEmptySummary = () => ({
   const resetDialogState = () => {
     state.title = ''
     state.message = ''
-    state.confirmText = '应用选中项'
-    state.cancelText = '取消'
+    state.confirmText = t('dialog.supplement.apply_selected', '应用选中项')
+    state.cancelText = t('common.action.cancel', '取消')
     state.continueText = ''
     state.groups = []
     state.summary = createEmptySummary()
@@ -964,16 +960,16 @@ const createEmptySummary = () => ({
   // prepared 允许外部复用同一份预计算结果，减少重复构图与闭包求解。
   const openPreparedPlan = async ({
     activeIds = modStore.activeIds,
-    title = '补齐启用项',
+	    title = t('dialog.supplement.title', '补齐启用项'),
     message = '',
-    confirmText = '启用选中项',
-    cancelText = '取消',
+	    confirmText = t('dialog.supplement.enable_selected', '启用选中项'),
+	    cancelText = t('common.action.cancel', '取消'),
     continueText = '',
     prepared = null,
   } = {}) => {
     resetDialogState()
     defaultSelectionMode.value = 'custom'
-    const resolvedActiveIds = dedupeNormalizedPackageIds(activeIds)
+    const resolvedActiveIds = dedupeNormalizedPackageTokens(activeIds)
     const resolvedPrepared = prepared || await prepareDialogPlan(resolvedActiveIds)
     graphState.value = resolvedPrepared.graph
     applyResolvedPlan(resolvedPrepared.plan, { title, message, confirmText, cancelText, continueText })
@@ -981,6 +977,25 @@ const createEmptySummary = () => ({
     return new Promise(resolve => {
       resolvePromise = resolve
     })
+  }
+  const resolveSupplementPayloadForList = async (activeIds = modStore.activeIds, { selectionMode = 'danger' } = {}) => {
+    const previousMode = defaultSelectionMode.value
+    const previousToggleOverrides = { ...toggleOverrides }
+    const previousChoiceOverrides = { ...choiceOverrides }
+    try {
+      clearSelectionOverrides()
+      defaultSelectionMode.value = normalizeSelectionMode(selectionMode)
+      const resolvedActiveIds = dedupeNormalizedPackageTokens(activeIds)
+      const prepared = await prepareDialogPlan(resolvedActiveIds)
+      const plan = resolveProjectedPlan(prepared.graph)
+      return plan.payload || { addIds: [], removeIds: [] }
+    } finally {
+      defaultSelectionMode.value = previousMode
+      clearReactiveObject(toggleOverrides)
+      clearReactiveObject(choiceOverrides)
+      Object.assign(toggleOverrides, previousToggleOverrides)
+      Object.assign(choiceOverrides, previousChoiceOverrides)
+    }
   }
 
   const cancel = () => {
@@ -1038,15 +1053,18 @@ const createEmptySummary = () => ({
   // 真正应用时只更新当前启用列表并写入历史栈，不会直接触发保存。
   // removeIds 主要服务于替代模组这类“启用新项同时移除旧项”的场景。
   const applySelectionPayload = async (payload = { addIds: [], removeIds: [] }, { silent = false } = {}) => {
-    const idsToEnable = dedupeNormalizedPackageIds(payload.addIds || [])
-    const idsToRemove = dedupeNormalizedPackageIds(payload.removeIds || []).filter(removeId => !idsToEnable.includes(removeId))
+    // addIds 必须保留来源 token；否则补齐工坊实例时，智能插入会重新读取本地原生规则。
+    const idsToEnable = dedupeNormalizedPackageTokens(payload.addIds || [])
+    const enabledCanonicalIds = new Set(idsToEnable.map(normalizePackageId))
+    const idsToRemove = dedupeNormalizedPackageIds(payload.removeIds || [])
+      .filter(removeId => !enabledCanonicalIds.has(removeId))
     if (idsToEnable.length === 0 && idsToRemove.length === 0) return false
 
     const success = await modStore.runListHistoryTransaction({
       type: 'supplement-enable',
       label: idsToRemove.length > 0
-        ? `补充启用 ${idsToEnable.length} 项并替换 ${idsToRemove.length} 项`
-        : `补充启用 ${idsToEnable.length} 项`,
+        ? t('dialog.supplement.history.enable_and_replace', '补充启用 {enableCount} 项并替换 {removeCount} 项', { enableCount: idsToEnable.length, removeCount: idsToRemove.length })
+        : t('dialog.supplement.history.enable', '补充启用 {count} 项', { count: idsToEnable.length }),
       trackedModIds: [...idsToEnable, ...idsToRemove],
     }, async () => {
       modStore.removeIdsOnAllList([...idsToEnable, ...idsToRemove])
@@ -1061,8 +1079,8 @@ const createEmptySummary = () => ({
     })
 
     if (success && !silent) {
-      const suffix = idsToRemove.length > 0 ? `，并移除了 ${idsToRemove.length} 个原项` : ''
-      toast.success(`已补充启用 ${idsToEnable.length} 个模组${suffix}`)
+      const suffix = idsToRemove.length > 0 ? t('dialog.supplement.enabled_success_removed_suffix', '，并移除了 {count} 个原项', { count: idsToRemove.length }) : ''
+      toast.success(t('dialog.supplement.enabled_success', '已补充启用 {count} 个模组{suffix}', { count: idsToEnable.length, suffix }))
     }
     return success
   }
@@ -1070,20 +1088,20 @@ const createEmptySummary = () => ({
   // 常规入口：用户主动打开补缺弹窗。
   const openForActiveList = async ({
     activeIds = modStore.activeIds,
-    title = '补齐启用项',
-    message = '选择要启用的模组。',
+	    title = t('dialog.supplement.title', '补齐启用项'),
+	    message = t('dialog.supplement.message', '选择要启用的模组。'),
   } = {}) => {
     const prepared = await prepareDialogPlan(activeIds)
     if (prepared.plan.summary.count === 0) {
-      toast.info('当前没有可补齐的未启用模组', { timeout: 1800 })
+	      toast.info(t('dialog.supplement.no_items', '当前没有可补齐的未启用模组'), { timeout: 1800 })
       return false
     }
     const payload = await openPreparedPlan({
       activeIds,
       title,
       message,
-      confirmText: '加入当前列表',
-      cancelText: '取消',
+	      confirmText: t('dialog.supplement.add_to_current_list', '加入当前列表'),
+	      cancelText: t('common.action.cancel', '取消'),
       prepared,
     })
     if (!payload) return false
@@ -1093,7 +1111,7 @@ const createEmptySummary = () => ({
   // 保存前只强提示必需项；用户仍可明确确认后跳过。
   const ensureRequiredBeforeSave = async ({
     activeIds = modStore.activeIds,
-    actionLabel = '保存',
+	    actionLabel = t('common.action.save', '保存'),
   } = {}) => {
     if (appStore.settings.enable_action_prechecks === false) return true
     const prepared = await prepareDialogPlan(activeIds)
@@ -1101,11 +1119,11 @@ const createEmptySummary = () => ({
 
     const result = await openPreparedPlan({
       activeIds,
-      title: `${actionLabel}前发现未启用项`,
-      message: `有些已安装模组建议先启用再${actionLabel}。`,
-      confirmText: `启用选中项后继续${actionLabel}`,
-      cancelText: `取消${actionLabel}`,
-      continueText: `不处理继续${actionLabel}`,
+	      title: t('dialog.supplement.precheck_title', '{action}前发现未启用项', { action: actionLabel }),
+	      message: t('dialog.supplement.precheck_message', '有些已安装模组建议先启用再{action}。', { action: actionLabel }),
+	      confirmText: t('dialog.supplement.enable_selected_and_continue', '启用选中项后继续{action}', { action: actionLabel }),
+	      cancelText: t('dialog.supplement.cancel_action', '取消{action}', { action: actionLabel }),
+	      continueText: t('dialog.supplement.continue_without_fix', '不处理继续{action}', { action: actionLabel }),
       prepared,
     })
     if (!result) return false
@@ -1117,7 +1135,7 @@ const createEmptySummary = () => ({
 
     const nextSummary = buildSummary(modStore.activeIds).summary
     if (nextSummary.dangerCount === 0) return true
-    toast.warning(`已取消${actionLabel}，还有 ${nextSummary.dangerCount} 项未处理。`, { timeout: 2600 })
+	    toast.warning(t('dialog.supplement.action_cancelled_remaining', '已取消{action}，还有 {count} 项未处理。', { action: actionLabel, count: nextSummary.dangerCount }), { timeout: 2600 })
     return false
   }
 
@@ -1131,11 +1149,11 @@ const createEmptySummary = () => ({
 
     const result = await openPreparedPlan({
       activeIds,
-      title: '排序前发现未启用项',
-      message: '有些已安装模组建议先启用再排序。',
-      confirmText: '启用选中项后继续排序',
-      cancelText: '取消排序',
-      continueText: '不处理继续排序',
+	      title: t('dialog.supplement.autosort_precheck_title', '排序前发现未启用项'),
+	      message: t('dialog.supplement.autosort_precheck_message', '有些已安装模组建议先启用再排序。'),
+	      confirmText: t('dialog.supplement.enable_selected_and_continue_sort', '启用选中项后继续排序'),
+	      cancelText: t('dialog.supplement.cancel_sort', '取消排序'),
+	      continueText: t('dialog.supplement.continue_sort_without_fix', '不处理继续排序'),
       prepared,
     })
     if (!result) return false
@@ -1145,7 +1163,7 @@ const createEmptySummary = () => ({
     const nextSummary = buildSummary(modStore.activeIds).summary
     if (nextSummary.dangerCount === 0) return true
 
-    toast.warning(`自动排序已取消，还有 ${nextSummary.dangerCount} 项未处理。`, { timeout: 2600 })
+	    toast.warning(t('dialog.supplement.autosort_cancelled_remaining', '自动排序已取消，还有 {count} 项未处理。', { count: nextSummary.dangerCount }), { timeout: 2600 })
     return false
   }
 
@@ -1187,13 +1205,11 @@ const createEmptySummary = () => ({
     // 弹窗状态
     isVisible, state, toggleSelections, choiceSelections, selectedCount, totalCount,
     // 摘要与打开入口
-    getSuggestionSummary, openForActiveList, ensureRequiredBeforeSave, ensureRequiredBeforeAutosort,
+    getSuggestionSummary, openForActiveList, resolveSupplementPayloadForList, ensureRequiredBeforeSave, ensureRequiredBeforeAutosort,
     // 选择控制
     isRootChecked, getChoiceSelection, toggleRoot, chooseRootOption,
     selectAll, selectRequiredOnly, clearSelection,
     // 提交流程
     confirm, continueCurrentAction, cancel,
-    // 展示元信息
-    severityMeta: SEVERITY_META,
   }
 })

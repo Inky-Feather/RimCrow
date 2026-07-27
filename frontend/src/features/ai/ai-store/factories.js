@@ -1,4 +1,5 @@
 import { normalizeText } from '../../../shared/lib/common'
+import { t } from '../../../shared/i18n.js'
 
 export const normalizeTimestamp = (value, fallback = Date.now()) => {
   /** 把任意时间戳输入规整成可比较的毫秒值。 */
@@ -96,7 +97,7 @@ export const createAssistantSession = ({
   assistantId,
   ownerType,
   ownerKey,
-  title: normalizeText(title, '新会话'),
+  title: normalizeText(title, t('ai.session.new_session', '新会话')),
   sourceType: normalizeText(sourceType, 'game'),
   filename: normalizeText(filename),
   createdAt: Date.now(),

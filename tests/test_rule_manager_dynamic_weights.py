@@ -151,6 +151,30 @@ class TestRuleManagerDynamicWeights(unittest.TestCase):
         self.assertEqual(result["weight_info"]["final_weight"], 1000)
         self.assertEqual(result["weight_info"]["absolute_type"], "bottom")
 
+    def test_dynamic_order_rule_keeps_rule_id_for_conflict_resolution(self):
+        manager = self._make_manager([
+            {"rule_id": "dyn_order", "name": "动态前置", "action": {"type": "load_after", "value": "mod.target"}},
+        ])
+
+        result = manager.get_effective_mod_rules("mod.source", {"package_id": "mod.source"})
+
+        self.assertEqual(result["load_after"][0]["source"]["detail"]["rule_id"], "dyn_order")
+
+    def test_duplicate_order_rules_keep_shadowed_sources(self):
+        manager = self._make_manager([])
+        manager.settings["community_mod_rules_enabled"] = True
+        manager.settings["user_mod_rules_enabled"] = True
+        manager.community_rules = {"mod.source": {"loadAfter": {"mod.target": {"comment": "community"}}}}
+        manager.user_mod_rules = {"mod.source": {"loadAfter": {"mod.target": {"comment": "user"}}}}
+
+        result = manager.get_effective_mod_rules("mod.source", {"package_id": "mod.source"})
+
+        rule = result["load_after"][0]
+        self.assertEqual(rule["source"]["type"], "user")
+        self.assertEqual(rule["shadowed_rules"][0]["source"]["type"], "community")
+        self.assertFalse(rule["shadowed_rules"][0]["effective"])
+        self.assertEqual(rule["shadowed_rules"][0]["shadowed_by"]["type"], "user")
+
     def test_false_absolute_position_value_is_ignored(self):
         manager = self._make_manager([])
         manager.settings["community_mod_rules_enabled"] = True
