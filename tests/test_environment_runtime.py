@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_monitor import GameMonitor
+from backend.paths.rimworld_layout import resolve_rimworld_layout
 from backend.utils.restart import _build_restart_environment, _resolve_restart_command
 
 
@@ -114,6 +115,8 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
     def test_is_target_process_matches_supported_rimworld_names(self):
         monitor = GameMonitor.__new__(GameMonitor)
 
+        self.assertTrue(monitor._is_target_process("RimWorld.exe"))
+        self.assertTrue(monitor._is_target_process("rimworld.exe"))
         self.assertTrue(monitor._is_target_process("RimWorldWin64.exe"))
         self.assertTrue(monitor._is_target_process("rimworldwin.exe"))
         self.assertTrue(monitor._is_target_process("RimWorldLinux.x86_64"))
@@ -172,6 +175,42 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
         api.wait_for_api_idle.assert_called_once_with(timeout=2.0, exclude_current_thread=True)
         monitor._load_url_deferred.assert_called_once_with("file://idle.html")
         thread_cls.assert_called_once()
+
+    def test_windows_detect_executable_prefers_waylith_binary(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            # RimWorld 1.7 (Waylith) ships RimWorld.exe; a stale 1.6 binary may still be around.
+            (install_root / "RimWorld.exe").write_text("", encoding="utf-8")
+            legacy_path = install_root / "RimWorldWin64.exe"
+            legacy_path.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Windows"):
+                self.assertEqual(
+                    GameManager.detect_executable(str(install_root)),
+                    str(install_root / "RimWorld.exe"),
+                )
+
+    def test_windows_detect_executable_falls_back_to_legacy_names(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            exe_path = install_root / "RimWorldWin64.exe"
+            exe_path.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Windows"):
+                self.assertEqual(GameManager.detect_executable(str(install_root)), str(exe_path))
+
+    def test_windows_resolve_layout_reports_waylith_executable(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            (install_root / "Mods").mkdir()
+            (install_root / "Data" / "Core").mkdir(parents=True)
+            exe_path = install_root / "RimWorld.exe"
+            exe_path.write_text("", encoding="utf-8")
+
+            layout = resolve_rimworld_layout(str(install_root), "Windows")
+
+            self.assertEqual(layout.executable_path, str(exe_path))
+            self.assertEqual(layout.layout_kind, "windows")
 
     def test_linux_detect_executable_accepts_proton_windows_binary(self):
         with TemporaryDirectory() as tmp:

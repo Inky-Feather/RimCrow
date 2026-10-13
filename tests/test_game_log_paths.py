@@ -32,15 +32,19 @@ class TestGameLogPathResolution(unittest.TestCase):
         self.temp_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.temp_dir, ignore_errors=True)
 
-    def test_windows_default_player_log_paths_are_fixed_under_locallow(self):
+    def test_windows_default_player_log_paths_prefer_waylith_logs_dir(self):
         fake_home = self.temp_dir / "winhome"
         with patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
              patch("backend.paths.game_locations.os.getenv", return_value=str(fake_home)), \
              patch("backend.paths.game_locations.os.path.expanduser", return_value=str(fake_home)):
             paths = GameManager.get_default_player_log_paths("Player.log")
 
+        user_data = fake_home / "AppData" / "LocalLow" / "Ludeon Studios" / "RimWorld by Ludeon Studios"
         self.assertEqual(paths, [
-            str(fake_home / "AppData" / "LocalLow" / "Ludeon Studios" / "RimWorld by Ludeon Studios" / "Player.log")
+            # RimWorld 1.7 (Waylith engine) writes the player log into Logs/ ...
+            str(user_data / "Logs" / "Player.log"),
+            # ... while 1.6 and earlier used the user data root.
+            str(user_data / "Player.log"),
         ])
 
     def test_macos_default_player_log_paths_cover_unity_and_company_locations(self):
