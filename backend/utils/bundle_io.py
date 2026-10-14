@@ -146,7 +146,7 @@ def extract_prefix_to_dir(
     return matched_names
 
 
-def replace_dir_atomically(target_path: str | Path, prepared_path: str | Path) -> None:
+def replace_dir_atomically(target_path: str | Path, prepared_path: str | Path, on_replace: Callable[[], None] | None = None, *, backup_path: str | Path | None = None) -> None:
     """
     用 staging 目录整体替换目标目录。
 
@@ -158,14 +158,22 @@ def replace_dir_atomically(target_path: str | Path, prepared_path: str | Path) -
         raise ValueError(f"预备目录不存在，无法替换: {prepared_root}")
 
     target_root.parent.mkdir(parents=True, exist_ok=True)
-    backup_root: Path | None = None
+    backup_root = Path(backup_path) if backup_path else None
+    if backup_root and (backup_root.parent.resolve() != target_root.parent.resolve() or backup_root.exists()):
+        raise ValueError("备份目录必须是未占用的同级目录")
+    replaced = False
 
     try:
         if target_root.exists():
-            backup_root = target_root.parent / f".bundle-backup-{target_root.name}-{uuid.uuid4().hex}"
+            backup_root = backup_root or target_root.parent / f".bundle-backup-{target_root.name}-{uuid.uuid4().hex}"
             target_root.replace(backup_root)
         prepared_root.replace(target_root)
+        replaced = True
+        if on_replace:
+            on_replace()
     except Exception:
+        if replaced:
+            target_root.replace(prepared_root)
         if backup_root and backup_root.exists() and not target_root.exists():
             backup_root.replace(target_root)
         raise

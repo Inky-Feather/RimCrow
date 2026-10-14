@@ -9,7 +9,7 @@
       <canvas ref="canvasRef" class="block"></canvas>
     </div>
 
-    <button class="group absolute left-0.5 top-1 z-20 flex items-center gap-0 rounded-xl border border-accent-primary/22 bg-bg-deep/82 px-1 py-1 text-[0.62rem] font-black text-accent-primary shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-accent-primary/34 hover:pr-2.5 hover:text-text-main"
+    <button class="group absolute left-0.5 top-1 flex items-center gap-0 rounded-xl border border-accent-primary/22 bg-bg-deep/82 px-1 py-1 text-[0.62rem] font-black text-accent-primary shadow-lg backdrop-blur-sm transition-all duration-300 hover:border-accent-primary/34 hover:pr-2.5 hover:text-text-main"
       v-tooltip="managerButtonTooltip"
       @mousedown.stop
       @click.stop="toggleManagerPanel">

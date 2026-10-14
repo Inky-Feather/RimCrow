@@ -232,6 +232,9 @@ def _collect_workshop_item_state(steam: Any, workshop_id: str) -> dict[str, Any]
         raw_state = int(raw_value if isinstance(raw_value, int) else state_enum)
     except Exception:
         raw_state = 0
+        is_subscribed = None
+    else:
+        is_subscribed = bool(raw_state & 1)
 
     try:
         install_info = steam.Workshop.GetItemInstallInfo(int(workshop_id)) or {}
@@ -245,7 +248,7 @@ def _collect_workshop_item_state(steam: Any, workshop_id: str) -> dict[str, Any]
     return {
         "workshop_id": workshop_id,
         "state": raw_state,
-        "is_subscribed": bool(raw_state & 1),
+        "is_subscribed": is_subscribed,
         "is_installed": bool(raw_state & 4),
         "needs_update": bool(raw_state & 8),
         "is_downloading": bool(raw_state & 16),
@@ -2242,6 +2245,12 @@ class SteamManager:
                 current_tasks = dict(self._active_tasks)
             try:
                 data_dict = self.workshop_merged_data()
+                unsubscribe_ids = list({mid for task in current_tasks.values() if task["action"] == "unsubscribe" for mid in task["targets"]})
+                subscription_states = {}
+                if unsubscribe_ids:
+                    state_result = self.query_workshop_item_states(unsubscribe_ids)
+                    if state_result.get("ready"):
+                        subscription_states = state_result.get("states") or {}
                 tasks_to_remove =[]
                 for tid, task in current_tasks.items():
                     targets = task["targets"]
@@ -2292,21 +2301,14 @@ class SteamManager:
                                     errors.append(f"Mod {mid}: {item.get('error_detail')}")
 
                             elif action == "unsubscribe":
-                                is_installed_acf = detail["is_installed"]
-                                is_subscribed = detail["is_subscribed"]
-                                # 取消订阅的完成标准优先看 Steam 订阅状态；文件夹可能因为残留文件或锁定而暂时不消失。
-                                if not is_installed_acf and not folder_exists:
+                                # 确认真实退订，并等待 ACF 收敛，避免清理后再次生成缺失记录。
+                                is_subscribed = subscription_states.get(mid, {}).get("is_subscribed")
+                                if is_subscribed is False and (not item or item.get("is_subscribed") is False):
                                     finished_count += 1
-                                    detail["complete_reason"] = "folder_and_record_removed"
-                                elif not folder_exists and elapsed_seconds > 3:
-                                    finished_count += 1
-                                    detail["complete_reason"] = "folder_removed"
-                                elif item and is_subscribed is False:
-                                    finished_count += 1
-                                    detail["complete_reason"] = "unsubscribed_but_folder_exists"
+                                    detail["complete_reason"] = "unsubscribed"
                                 elif elapsed_seconds > 30:
-                                    finished_count += 1
-                                    detail["complete_reason"] = "timeout"
+                                    errors.append(f"Mod {mid}: 未能确认 Steam 已取消订阅，请稍后重试")
+                                    detail["complete_reason"] = "request_failed"
                                 else:
                                     detail["complete_reason"] = "waiting_file_cleanup"
 

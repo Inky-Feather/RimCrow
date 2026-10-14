@@ -133,13 +133,26 @@
 │   │   ├──  Preview.png
 │   │   └──  主界面.png
 │   │   
-│   └──  贴图优化说明.md
+│   ├── ·[en]
+│   │   ├──  01-quick-start.md
+│   │   ├──  02-environment-and-paths.md
+│   │   ├──  03-workshop-and-download-sources.md
+│   │   ├──  04-mod-list-and-load-order.md
+│   │   ├──  05-auto-sort-and-rules.md
+│   │   ├──  06-backup-import-export.md
+│   │   ├──  07-texture-optimization.md
+│   │   └──  08-logs-and-ai-diagnosis.md
+│   │   
+│   ├──  01-快速上手.md
+│   ├──  02-环境管理与路径说明.md
+│   ├──  03-工坊与下载来源说明.md
+│   ├──  04-模组列表与加载顺序说明.md
+│   ├──  05-自动排序与规则说明.md
+│   ├──  06-备份与导入导出说明.md
+│   ├──  07-贴图优化说明.md
+│   ├──  08-日志排错与AI诊断说明.md
+│   └──  启动流程图.md
 │   
-├── ·[docs]
-│   └── ·[superpowers]
-│   
-│       └── ·[plans]
-│       
 ├── ·[frontend]
 │   ├── ·[public]
 │   │   ├── ·[project-assets]
@@ -313,6 +326,7 @@
 │   │       │   ├── ·[tag-search]
 │   │       │   ├── ·[translation]
 │   │       │   ├──  GlobalColorPicker.vue
+│   │       │   ├──  GlobalFileDrop.vue
 │   │       │   ├──  StatItem.vue
 │   │       │   └──  WorkshopItemActions.vue
 │   │       │   
@@ -365,11 +379,13 @@
 ├──  icon.svg
 ├──  LICENSE
 ├──  main.py
+├──  pack.local.example.json
 ├──  pack_gitignore_zip.py
 ├──  pack_nuitka.py
 ├──  pack_pyinstaller.py
 ├──  pyproject.toml
 ├──  README.md
+├──  README_EN.md
 ├──  splash.png
 ├──  uv.lock
 └──  validate_environment.py

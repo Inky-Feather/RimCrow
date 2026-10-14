@@ -94,6 +94,7 @@
               />
               <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
               <SettingsDevTab v-if="currentTab === 'dev'" :form-data="formData" />
+              <SettingsDataTab v-if="currentTab === 'data'" :form-data="formData" />
               <SettingsAboutTab v-if="currentTab === 'about'" :form-data="formData" />
 
             </div>
@@ -114,7 +115,7 @@
 
 <script setup>
 import { ref, watch, h, computed } from 'vue'
-import { FolderTree, AppWindow, Globe, Cpu, Terminal, Component, Settings, Keyboard, Info } from 'lucide-vue-next'
+import { FolderTree, AppWindow, Globe, Cpu, Terminal, Component, Settings, Keyboard, Info, Database } from 'lucide-vue-next'
 import { shakeComponent } from '../../shared/lib/domEffects'
 import { deepClone, showUserErrorToast, toast } from '../../shared/lib/common'
 import { createDefaultKeybindingConfig } from '../../shared/commands/keybindingConflicts'
@@ -129,6 +130,7 @@ import SettingsExternalTab from './panel/SettingsExternalTab.vue'
 import SettingsNetworkTab from './panel/SettingsNetworkTab.vue'
 import SettingsAiTab from './panel/SettingsAiTab.vue'
 import SettingsDevTab from './panel/SettingsDevTab.vue'
+import SettingsDataTab from './panel/SettingsDataTab.vue'
 import SettingsAboutTab from './panel/SettingsAboutTab.vue'
 import { DEFAULT_THEME_ID, applyTheme } from './theme/themeManager'
 import { useAppStore } from '../../app/stores/appStore'
@@ -157,6 +159,7 @@ const tabs = computed(() => [
   { id: 'community', label: t('ui.settings.external.title', '外部依赖'), icon: Steam },
   { id: 'network', label: t('ui.settings.panel.tab.network', '网络连接'), icon: Globe },
   { id: 'ai', label: t('ui.settings.panel.tab.ai', 'AI 集成'), icon: Cpu },
+  { id: 'data', label: t('ui.settings.data.title', '数据管理'), icon: Database },
   { id: 'dev', label: t('ui.settings.panel.tab.dev', '开发调试'), icon: Terminal },
   { id: 'about', label: t('ui.settings.about.title', '关于项目'), icon: Info },
 ])

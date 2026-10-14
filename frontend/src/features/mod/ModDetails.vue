@@ -243,7 +243,7 @@
               <div v-for="(dep, index) in showAllDependencies ? selectedMod.dependencies_mods : selectedMod.dependencies_mods.slice(0, 5)" :key="dep.package_id"
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-highlight hover:bg-accent-highlight/10">
                 <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                  <span v-preview="modStore.takeModById(dep.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameByMod(dep) }}</span>
+                  <span v-preview="relationPreview(dep)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameByRelation(dep) }}</span>
                   <span v-if="relationVersionInactive(dep)" v-tooltip="relationVersionTooltip(dep)"
                     class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
                     {{ t('ui.mod_details.relation.inactive', '未生效') }}
@@ -277,7 +277,7 @@
               <div v-for="inc in showAllIncompatible ? selectedMod.incompatible_mods : selectedMod.incompatible_mods.slice(0, 5)" :key="inc.package_id"
                   class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-danger hover:bg-accent-danger/10">
                 <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                  <span v-preview="modStore.takeModById(inc.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameById(inc.package_id) }}</span>
+                  <span v-preview="relationPreview(inc)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameByRelation(inc) }}</span>
                   <span v-if="relationVersionInactive(inc)" v-tooltip="relationVersionTooltip(inc)"
                     class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
                     {{ t('ui.mod_details.relation.inactive', '未生效') }}
@@ -307,7 +307,7 @@
               <div v-for="aft in showAllLoadAfter ? selectedMod.load_after_mods : selectedMod.load_after_mods.slice(0, 5)" :key="aft"
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-warn hover:bg-accent-warn/10">
                 <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                  <span v-preview="modStore.takeModById(aft.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameById(aft.package_id) }}</span>
+                  <span v-preview="relationPreview(aft)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameByRelation(aft) }}</span>
                   <span v-if="relationVersionInactive(aft)" v-tooltip="relationVersionTooltip(aft)"
                     class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
                     {{ t('ui.mod_details.relation.inactive', '未生效') }}
@@ -337,7 +337,7 @@
               <div v-for="bef in showAllLoadBefore ? selectedMod.load_before_mods : selectedMod.load_before_mods.slice(0, 5)" :key="bef"
                 class="flex items-center justify-between gap-2 p-1.5 rounded-sm bg-bg-deep/95 border-l-2 transition-colors text-xs border-accent-primary hover:bg-accent-primary/10">
                 <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                  <span v-preview="modStore.takeModById(bef.package_id)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameById(bef.package_id) }}</span>
+                  <span v-preview="relationPreview(bef)" class="min-w-0 flex-1 text-text-soft truncate">{{ displayNameByRelation(bef) }}</span>
                   <span v-if="relationVersionInactive(bef)" v-tooltip="relationVersionTooltip(bef)"
                     class="shrink-0 px-1 py-0.5 rounded bg-bg-overlay/10 text-text-dim text-[0.65rem] border border-border-base/18" >
                     {{ t('ui.mod_details.relation.inactive', '未生效') }}
@@ -777,11 +777,13 @@ const tooltipModType = computed(() => {
   return t('tooltip.mod_details.mod_type', '模组类型：{type}\n__(粗略判断)__', { type: getModTypeLabel(modType.value) })
 })
 
-const displayNameByMod = (mod) => {
-  return modStore.displayModName(mod);
+const relationFallbackName = (relation) => relation?.alias_name || relation?.display_name || relation?.name
+const displayNameByRelation = (relation) => {
+  return modStore.displayModName(relation?.package_id, relationFallbackName(relation) || undefined)
 }
-const displayNameById = (id) => {
-  return modStore.displayModName(id);
+const relationPreview = (relation) => {
+  const fallbackName = relationFallbackName(relation)
+  return modStore.takeModById(relation?.package_id, fallbackName || undefined)
 }
 
 const getCurrentGameShortVersion = () => (

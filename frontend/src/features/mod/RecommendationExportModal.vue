@@ -130,7 +130,7 @@ const coverDescription = computed(() => (
     ? t('dialog.recommendation_export.cover_plain_desc', '纯文本和 TXT 不包含图片。')
     : t('dialog.recommendation_export.cover_rich_desc', 'Markdown 会复制图片，DOCX/PDF/纯图片会嵌入封面。')
 ))
-const footerTip = computed(() => t('dialog.recommendation_export.footer_tip', 'Markdown 会在导出目录内创建 <span class="font-bold text-accent-special">img</span> 文件夹；纯图片会按导出名称新建文件夹，每个模组一张图。'))
+const footerTip = computed(() => t('dialog.recommendation_export.footer_tip', 'Markdown 会在导出目录内创建 <span class="font-bold text-accent-special">img</span> 文件夹；纯图片会按导出名称新建文件夹，每个模组一张图。这是分享用的推荐清单，不支持导回软件数据。'))
 
 const normalizeTextList = (values) => {
   // 导出内容里分组和作者都按列表处理，先清理空值和重复项，避免生成结果出现多余分隔符。

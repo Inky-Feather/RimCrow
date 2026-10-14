@@ -1,4 +1,7 @@
+import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +14,7 @@ from backend.ai.def_attachments import AttachmentResolver, get_attachment_defini
 from backend.api import API
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_logs import GameLogManager, LogAnalyzer
+from backend.managers.mgr_game_monitor import RuntimeSession
 from backend.utils.logger import AppLogReader, BaseLogReader
 
 
@@ -32,15 +36,48 @@ class TestGameLogPathResolution(unittest.TestCase):
         self.temp_dir = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.temp_dir, ignore_errors=True)
 
-    def test_windows_default_player_log_paths_are_fixed_under_locallow(self):
+    def test_xml_path_matching_handles_long_line_without_paths(self):
+        pattern = LogAnalyzer().file_pattern
+        self.assertEqual(pattern.findall(r'Failed to load C:\Mods\Example\Defs\Item.xml and /mods/Other.XML'),
+                         [r'\Mods\Example\Defs\Item.xml', '/mods/Other.XML'])
+        result = subprocess.run(
+            [sys.executable, '-c', 'import re,sys; assert not re.findall(sys.argv[1], "A" * 100000, re.IGNORECASE)', pattern.pattern],
+            capture_output=True, text=True, timeout=3,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_text_and_json_log_limits_keep_latest_blocks_and_full_history(self):
+        manager = GameLogManager(SimpleNamespace(user_data_path=str(self.temp_dir)))
+        manager.max_blocks = 5
+        for filename in ('Player.log', 'RimCrow_Realtime.log'):
+            with self.subTest(filename=filename):
+                path = self.temp_dir / filename
+                text = '\n'.join(f'line {idx}\n  at stack {idx}' for idx in range(30)) if filename == 'Player.log' else '\n'.join(
+                    f'{{"level":"INFO","message":"line {idx}","details":""}}' for idx in range(30))
+                path.write_text(text + '\n', encoding='utf-8')
+                self.assertEqual(len(manager._parse_file_to_blocks(str(path))), 5)
+                blocks = manager._parse_file_to_blocks(str(path), keep_all=True, max_keep_blocks=3)
+                self.assertEqual([b['message'] for b in blocks], ['line 27', 'line 28', 'line 29'])
+                self.assertEqual(len(manager._parse_file_to_blocks(str(path), keep_all=True)), 30)
+                if filename == 'Player.log':
+                    self.assertEqual(blocks[-1]['details'], '\n  at stack 29')
+                    self.assertEqual(blocks[-1]['raw_lines'], [59, 60])
+                with patch.object(manager, '_analyze_page'):
+                    self.assertEqual(manager.get_raw_logs_by_lines(str(path), [1])[0]['message'], 'line 0')
+
+    def test_windows_default_player_log_paths_prefer_waylith_logs_dir(self):
         fake_home = self.temp_dir / "winhome"
         with patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
              patch("backend.paths.game_locations.os.getenv", return_value=str(fake_home)), \
              patch("backend.paths.game_locations.os.path.expanduser", return_value=str(fake_home)):
             paths = GameManager.get_default_player_log_paths("Player.log")
 
+        user_data = fake_home / "AppData" / "LocalLow" / "Ludeon Studios" / "RimWorld by Ludeon Studios"
         self.assertEqual(paths, [
-            str(fake_home / "AppData" / "LocalLow" / "Ludeon Studios" / "RimWorld by Ludeon Studios" / "Player.log")
+            # RimWorld 1.7 (Waylith engine) writes the player log into Logs/ ...
+            str(user_data / "Logs" / "Player.log"),
+            # ... while 1.6 and earlier used the user data root.
+            str(user_data / "Player.log"),
         ])
 
     def test_macos_default_player_log_paths_cover_unity_and_company_locations(self):
@@ -82,6 +119,81 @@ class TestGameLogPathResolution(unittest.TestCase):
         self.assertEqual(files[0]["path"], str(default_root / "Player.log"))
         self.assertEqual(page["status"], "success")
         self.assertIn("default failure line", page["blocks"][0]["message"])
+
+    def test_player_logs_use_version_layout(self):
+        default_root = self.temp_dir / "default-userdata"
+        (default_root / "Logs").mkdir(parents=True)
+        manager = GameLogManager(SimpleNamespace(user_data_path="", game_version="1.6.4871 rev590"))
+        for filename in ("Player.log", "Player-prev.log"):
+            old_path = default_root / filename
+            new_path = default_root / "Logs" / filename
+            old_path.write_text("legacy log", encoding="utf-8")
+            new_path.write_text("new log", encoding="utf-8")
+            for version, expected in (
+                ("1.6.4871 rev590", old_path),
+                ("1.7.4976 rev1043", new_path),
+                ("1.10.1234", new_path),
+            ):
+                with self.subTest(filename=filename, version=version), \
+                     patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
+                     patch("backend.paths.game_locations.get_default_user_data_paths", return_value=[str(default_root)]):
+                    manager.context.game_version = version
+                    self.assertEqual(manager.resolve_log_file_path(filename), str(expected))
+                    expected.unlink()
+                    self.assertEqual(manager.resolve_log_file_path(filename), "")
+                    self.assertEqual(manager.resolve_log_file_path(filename, must_exist=False), str(expected))
+                    expected.write_text("restored", encoding="utf-8")
+
+    def test_unknown_version_selects_newest_existing_player_log(self):
+        default_root = self.temp_dir / "default-userdata"
+        (default_root / "Logs").mkdir(parents=True)
+        old_path = default_root / "Player.log"
+        new_path = default_root / "Logs" / "Player.log"
+        old_path.touch()
+        new_path.touch()
+        manager = GameLogManager(SimpleNamespace(user_data_path="", game_version=""))
+        with patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
+             patch("backend.paths.game_locations.get_default_user_data_paths", return_value=[str(default_root)]):
+            for newest, stale in ((old_path, new_path), (new_path, old_path)):
+                os.utime(stale, (1000, 1000))
+                os.utime(newest, (2000, 2000))
+                self.assertEqual(manager.resolve_log_file_path("Player.log"), str(newest))
+            new_path.unlink()
+            self.assertEqual(manager.resolve_log_file_path("Player.log"), str(old_path))
+            old_path.unlink()
+            self.assertEqual(manager.resolve_log_file_path("Player.log"), "")
+
+    def test_runtime_player_log_list_and_read_use_runtime_version(self):
+        default_root = self.temp_dir / "default-userdata"
+        (default_root / "Logs").mkdir(parents=True)
+        old_path = default_root / "Player.log"
+        new_path = default_root / "Logs" / "Player.log"
+        old_path.write_text("active 1.6 log", encoding="utf-8")
+        new_path.write_text("runtime 1.7 log", encoding="utf-8")
+        active_context = SimpleNamespace(user_data_path="", game_version="1.6")
+        api = API.__new__(API)
+        api.active_context = active_context
+        api.game_log_mgr = GameLogManager(active_context)
+        api.game_log_mgr._analyze_page = Mock()
+        api.profile_mgr = SimpleNamespace(build_profile_context=Mock(
+            return_value=SimpleNamespace(user_data_path="", game_version="1.7.4976 rev1043")))
+        api.game_monitor = SimpleNamespace(get_runtime_session=Mock(
+            return_value=RuntimeSession(profile_id="runtime", state="running", source="manager")))
+        with patch("backend.managers.mgr_game.platform.system", return_value="Windows"), \
+             patch("backend.managers.mgr_game_logs.GameManager.get_default_user_data_paths", return_value=[str(default_root)]), \
+             patch("backend.paths.game_locations.get_default_user_data_paths", return_value=[str(default_root)]):
+            files = api.get_log_files("game", "runtime")
+            self.assertEqual(files["status"], "success")
+            self.assertEqual(files["data"][0]["path"], str(new_path))
+            page = api.read_log_page("game", "Player.log", profile_scope="runtime")
+            self.assertEqual(page["status"], "success")
+            self.assertIn("runtime 1.7 log", page["data"]["blocks"][0]["message"])
+            self.assertEqual(api.game_log_mgr.resolve_log_file_path("Player.log"), str(old_path))
+            api.profile_mgr.build_profile_context.return_value.game_version = ""
+            os.utime(old_path, (1000, 1000))
+            os.utime(new_path, (2000, 2000))
+            files = api.get_log_files("game", "runtime")
+            self.assertEqual(files["data"][0]["path"], str(new_path))
 
     def test_log_analyzer_adds_known_rule_explanation_and_namespace(self):
         block = {

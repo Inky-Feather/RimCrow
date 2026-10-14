@@ -75,17 +75,17 @@
             {{ isHeaderActionPending('import-file') ? t('ui.header.load_order.importing', '导入中') : t('ui.header.load_order.import', '导入加载序列') }}
           </button>
           <button @click="runHeaderAction('export-modsconfig', () => exportOrder())" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('export-modsconfig') ? t('tooltip.header.load_order.exporting_modsconfig', '正在导出 ModsConfig') : t('tooltip.header.load_order.export_modsconfig', '导出为 ModsConfig.xml（仅含包名）')">
+            v-tooltip="isHeaderActionPending('export-modsconfig') ? t('tooltip.header.load_order.exporting_modsconfig', '正在导出 ModsConfig') : t('tooltip.header.load_order.export_modsconfig', '导出为 ModsConfig.xml（仅含包名）。导入请用“导入加载序列”或拖入主窗口。')">
             <LoaderCircle v-if="isHeaderActionPending('export-modsconfig')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('export-modsconfig') ? t('ui.header.load_order.exporting', '导出中') : t('ui.header.load_order.export_modsconfig', '导出加载序列') }}
           </button>
           <button @click="runHeaderAction('export-modlist', () => exportOrder(null,'modlist'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('export-modlist') ? t('tooltip.header.load_order.exporting_modlist', '正在导出 ModList') : t('tooltip.header.load_order.export_modlist', '导出为 ModList.xml（含包名和工坊ID）')" >
+            v-tooltip="isHeaderActionPending('export-modlist') ? t('tooltip.header.load_order.exporting_modlist', '正在导出 ModList') : t('tooltip.header.load_order.export_modlist', '导出为 ModList.xml（含包名和工坊ID）。导入请用“导入加载序列”或拖入主窗口。')" >
             <LoaderCircle v-if="isHeaderActionPending('export-modlist')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('export-modlist') ? t('ui.header.load_order.exporting', '导出中') : t('ui.header.load_order.export_modlist', '导出分享列表') }}
           </button>
           <button @click="runHeaderAction('export-rml', () => exportOrder(null,'rml'))" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('export-rml') ? t('tooltip.header.load_order.exporting_rml', '正在导出 RML') : t('tooltip.header.load_order.export_rml', '导出为 RML（游戏原生导出格式）')" >
+            v-tooltip="isHeaderActionPending('export-rml') ? t('tooltip.header.load_order.exporting_rml', '正在导出 RML') : t('tooltip.header.load_order.export_rml', '导出为 RML（游戏原生格式）。导入请用“导入加载序列”或拖入主窗口。')" >
             <LoaderCircle v-if="isHeaderActionPending('export-rml')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('export-rml') ? t('ui.header.load_order.exporting', '导出中') : t('ui.header.load_order.export_rml', '导出原生分享') }}
           </button>
@@ -95,7 +95,7 @@
             {{ isHeaderActionPending('import-share-code') ? t('ui.header.load_order.importing', '导入中') : t('ui.header.load_order.import_share_code', '导入分享码') }}
           </button>
           <button @click="runHeaderAction('export-share-code', exportShareCode)" :disabled="isHeaderBusy" :class="isHeaderBusy ? 'app-action-disabled' : ''" class="m-0.5 p-1 rounded-md hover:bg-accent-primary/10 text-text-dim hover:text-text-main transition bg-transparent inline-flex items-center gap-1 whitespace-nowrap"
-            v-tooltip="isHeaderActionPending('export-share-code') ? t('tooltip.header.load_order.generating_share_code', '正在生成分享码') : t('tooltip.header.load_order.export_share_code', '生成 RC- 分享码并复制到剪贴板')" >
+            v-tooltip="isHeaderActionPending('export-share-code') ? t('tooltip.header.load_order.generating_share_code', '正在生成分享码') : t('tooltip.header.load_order.export_share_code', '生成 RC- 分享码并复制到剪贴板；在“导入分享码”中粘贴导入。')" >
             <LoaderCircle v-if="isHeaderActionPending('export-share-code')" class="size-3 animate-spin" />
             {{ isHeaderActionPending('export-share-code') ? t('ui.header.load_order.generating', '生成中') : t('ui.header.load_order.export_share_code', '复制分享码') }}
           </button>

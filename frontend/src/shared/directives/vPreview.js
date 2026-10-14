@@ -5,13 +5,14 @@ export const vPreview = {
   // 当元素挂载到 DOM 时
   mounted(el, binding) {
     const hoverStore = useHoverStore()
+    el._vPreviewValue = binding.value
     
     // 定义处理函数
     const handleEnter = (e) => {
       // 记录当前触发指令的元素，方便 unmounted 时判断
       el._isHovering = true 
-      // binding.value 就是传给指令的数据 (例如: modData)
-      hoverStore.show(binding.value, e)
+      // 虚拟列表会复用 DOM，进入时必须读取最新绑定值，不能使用 mounted 时的闭包值。
+      hoverStore.show(el._vPreviewValue, e)
     }
     
     const handleMove = (e) => {
@@ -35,6 +36,7 @@ export const vPreview = {
   // (可选) 如果传入的数据动态改变了，且鼠标正停留在上面，可以实时更新
   updated(el, binding) {
     const hoverStore = useHoverStore()
+    el._vPreviewValue = binding.value
     
     // 检查元素是否变得不可见了
     const isVisible = !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
@@ -45,10 +47,10 @@ export const vPreview = {
     }
 
     // 只有当数据真变了，且当前正在 hover 这个元素时才更新 store
-    if (binding.value !== binding.oldValue && hoverStore.isHovering && hoverStore.data === binding.oldValue) {
+    if (binding.value !== binding.oldValue && hoverStore.isHovering && el._isHovering) {
       // 延迟更新，避免闪烁
       setTimeout(() => {
-        hoverStore.data = binding.value
+        if (el._isHovering) hoverStore.data = el._vPreviewValue
       }, 200)
     }
   },
@@ -67,5 +69,6 @@ export const vPreview = {
       el.removeEventListener('mouseleave', handleLeave)
     }
     delete el._vPreviewHandlers
+    delete el._vPreviewValue
   }
 }

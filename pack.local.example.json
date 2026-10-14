@@ -1,0 +1,21 @@
+{
+  "steps": {
+    "frontend": true,
+    "app": true,
+    "docs": true,
+    "tree": true,
+    "zip": true
+  },
+  "app": {
+    "upx_dir": ""
+  },
+  "docs": {
+    "output_dir": "docs",
+    "command": [],
+    "command_python_executable": "",
+    "required": false
+  },
+  "zip": {
+    "include_docs": true
+  }
+}

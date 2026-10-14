@@ -242,96 +242,96 @@
                       <div class="pb-2">
                         <div class="flex gap-2 p-2 rounded-xl bg-bg-surface/80 border border-border-base/5 hover:brightness-125 transition-colors">
                   
-                  <!-- Mod 信息 -->
-                  <div class="w-64 shrink-0 flex gap-3 items-start" v-preview="modStore.takeModById(item.id)">
-                    <div class="w-10 h-10 rounded-lg bg-bg-inset/70 border border-border-base/10 flex items-center justify-center overflow-hidden shrink-0">
-                      <img v-if="item.icon" :src="item.icon" class="w-full h-full object-cover">
-                      <div v-else class="text-xs text-text-dim">{{ item.id.substring(0,2) }}</div>
-                    </div>
-                    <div class="min-w-0 flex flex-col gap-1"> 
-                      <div class="text-sm font-bold text-text-main truncate">{{ item.name }}</div>
-                      <div class="flex items-center gap-1 min-w-0">
-                        <div class="text-xs text-text-dim font-mono truncate opacity-60">{{ item.id }}</div>
-                        <span v-if="!item.isInstalled" class="shrink-0 rounded px-1.5 py-0.5 text-[0.62rem] border border-border-base/10 bg-bg-inset/70 text-text-disabled">
-                          {{ t('ui.rule_panel.rule.not_installed', '未安装') }}
-                        </span>
-                      </div>
+                          <!-- Mod 信息 -->
+                          <div class="w-64 shrink-0 flex gap-3 items-start" v-preview="modStore.takeModById(item.id)">
+                            <div class="w-10 h-10 rounded-lg bg-bg-inset/70 border border-border-base/10 flex items-center justify-center overflow-hidden shrink-0">
+                              <img v-if="item.icon" :src="item.icon" class="w-full h-full object-cover">
+                              <div v-else class="text-xs text-text-dim">{{ item.id.substring(0,2) }}</div>
+                            </div>
+                            <div class="min-w-0 flex flex-col gap-1"> 
+                              <div class="text-sm font-bold text-text-main truncate">{{ item.name }}</div>
+                              <div class="flex items-center gap-1 min-w-0">
+                                <div class="text-xs text-text-dim font-mono truncate opacity-60">{{ item.id }}</div>
+                                <span v-if="!item.isInstalled" class="shrink-0 rounded px-1.5 py-0.5 text-[0.62rem] border border-border-base/10 bg-bg-inset/70 text-text-disabled">
+                                  {{ t('ui.rule_panel.rule.not_installed', '未安装') }}
+                                </span>
+                              </div>
 
-                      <span v-if="item.rules.loadTop?.value"
-                        v-tooltip="formatTooltip(item.id, item.rules.loadTop)"
-                        class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 w-fit bg-accent-tip/10 text-text-main text-[0.8rem] border border-accent-tip/20 truncate cursor-help">
-                        {{ t('ui.rule.dynamic.action.top', '强制置顶') }}
-                      </span>
-                      <span v-else-if="item.rules.loadBottom?.value"
-                        v-tooltip="formatTooltip(item.id, item.rules.loadBottom)"
-                        class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 w-fit bg-accent-highlight/10 text-text-main text-[0.8rem] border border-accent-highlight/20 truncate cursor-help">
-                        {{ t('ui.rule.dynamic.action.bottom', '强制置底') }}
-                      </span>
+                              <span v-if="item.rules.loadTop?.value"
+                                v-tooltip="formatTooltip(item.id, item.rules.loadTop)"
+                                class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 w-fit bg-accent-tip/10 text-text-main text-[0.8rem] border border-accent-tip/20 truncate cursor-help">
+                                {{ t('ui.rule.dynamic.action.top', '强制置顶') }}
+                              </span>
+                              <span v-else-if="item.rules.loadBottom?.value"
+                                v-tooltip="formatTooltip(item.id, item.rules.loadBottom)"
+                                class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 w-fit bg-accent-highlight/10 text-text-main text-[0.8rem] border border-accent-highlight/20 truncate cursor-help">
+                                {{ t('ui.rule.dynamic.action.bottom', '强制置底') }}
+                              </span>
 
-                    </div>
+                            </div>
 
-                  </div>
+                          </div>
 
-                  <!-- 规则详情 -->
-                  <div class="flex-1 min-w-0 space-y-2 border-l border-border-base/5 pl-4">
-                    <!-- Dependencies -->
-                    <div v-if="item.rules.dependencies && Object.keys(item.rules.dependencies).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
-                      <span class="text-xs font-bold text-accent-highlight uppercase mt-0.5">{{ t('ui.rule_panel.relation.dependencies', '依赖:') }}</span>
-                      <div class="flex flex-wrap gap-1 w-full min-w-0">
-                        <span v-for="(info, targetId) in item.rules.dependencies" :key="targetId" 
-                          v-tooltip="formatTooltip(targetId, info)"
-                          class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 bg-accent-highlight/10 text-text-main text-[0.8rem] border border-accent-highlight/20 truncate cursor-help">
-                          {{ getDisplayName(targetId, info.name) }}
-                        </span>
-                      </div>
-                    </div>
-                    <!-- Load After -->
-                    <div v-if="item.rules.loadAfter && Object.keys(item.rules.loadAfter).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
-                      <span class="text-xs font-bold text-accent-warn uppercase mt-0.5">{{ t('ui.rule_panel.relation.load_after', '前置:') }}</span>
-                      <div class="flex flex-wrap gap-1 w-full min-w-0">
-                        <span v-for="(info, targetId) in item.rules.loadAfter" :key="targetId" 
-                          v-tooltip="formatTooltip(targetId, info)"
-                          class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 bg-accent-warn/10 text-text-main text-[0.8rem] border border-accent-warn/20 truncate cursor-help">
-                          {{ getDisplayName(targetId, info.name) }}
-                        </span>
-                      </div>
-                    </div>
-                    <!-- Load Before -->
-                    <div v-if="item.rules.loadBefore && Object.keys(item.rules.loadBefore).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
-                      <span class="text-xs font-bold text-accent-primary uppercase mt-0.5">{{ t('ui.rule_panel.relation.load_before', '后置:') }}</span>
-                      <div class="flex flex-wrap gap-1 w-full min-w-0 ">
-                        <span v-for="(info, targetId) in item.rules.loadBefore" :key="targetId"
-                          v-tooltip="formatTooltip(targetId, info)" 
-                          class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 bg-accent-primary/10 text-text-main text-[0.8rem] border border-accent-primary/20 truncate cursor-help">
-                          {{ getDisplayName(targetId, info.name) }}
-                        </span>
-                      </div>
-                    </div>
-                    <!-- Incompatible -->
-                    <div v-if="item.rules.incompatibleWith && Object.keys(item.rules.incompatibleWith).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
-                      <span class="text-xs font-bold text-accent-danger uppercase mt-0.5">{{ t('ui.rule_panel.relation.incompatible', '冲突:') }}</span>
-                      <div class="flex flex-wrap gap-1 w-full min-w-0 ">
-                        <span v-for="(info, targetId) in item.rules.incompatibleWith" :key="targetId"
-                          v-tooltip="formatTooltip(targetId, info)"
-                          class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 bg-accent-danger/10 text-text-main text-[0.8rem] border border-accent-danger/20 truncate cursor-help">
-                          {{ getDisplayName(targetId, info.name) }}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                          <!-- 规则详情 -->
+                          <div class="flex-1 min-w-0 space-y-2 border-l border-border-base/5 pl-4">
+                            <!-- Dependencies -->
+                            <div v-if="item.rules.dependencies && Object.keys(item.rules.dependencies).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
+                              <span class="text-xs font-bold text-accent-highlight uppercase mt-0.5">{{ t('ui.rule_panel.relation.dependencies', '依赖:') }}</span>
+                              <div class="flex flex-wrap gap-1 w-full min-w-0">
+                                <span v-for="(info, targetId) in item.rules.dependencies" :key="targetId" 
+                                  v-tooltip="formatTooltip(targetId, info)"
+                                  class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 bg-accent-highlight/10 text-text-main text-[0.8rem] border border-accent-highlight/20 truncate cursor-help">
+                                  {{ getDisplayName(targetId, info.name) }}
+                                </span>
+                              </div>
+                            </div>
+                            <!-- Load After -->
+                            <div v-if="item.rules.loadAfter && Object.keys(item.rules.loadAfter).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
+                              <span class="text-xs font-bold text-accent-warn uppercase mt-0.5">{{ t('ui.rule_panel.relation.load_after', '前置:') }}</span>
+                              <div class="flex flex-wrap gap-1 w-full min-w-0">
+                                <span v-for="(info, targetId) in item.rules.loadAfter" :key="targetId" 
+                                  v-tooltip="formatTooltip(targetId, info)"
+                                  class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 bg-accent-warn/10 text-text-main text-[0.8rem] border border-accent-warn/20 truncate cursor-help">
+                                  {{ getDisplayName(targetId, info.name) }}
+                                </span>
+                              </div>
+                            </div>
+                            <!-- Load Before -->
+                            <div v-if="item.rules.loadBefore && Object.keys(item.rules.loadBefore).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
+                              <span class="text-xs font-bold text-accent-primary uppercase mt-0.5">{{ t('ui.rule_panel.relation.load_before', '后置:') }}</span>
+                              <div class="flex flex-wrap gap-1 w-full min-w-0 ">
+                                <span v-for="(info, targetId) in item.rules.loadBefore" :key="targetId"
+                                  v-tooltip="formatTooltip(targetId, info)" 
+                                  class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 bg-accent-primary/10 text-text-main text-[0.8rem] border border-accent-primary/20 truncate cursor-help">
+                                  {{ getDisplayName(targetId, info.name) }}
+                                </span>
+                              </div>
+                            </div>
+                            <!-- Incompatible -->
+                            <div v-if="item.rules.incompatibleWith && Object.keys(item.rules.incompatibleWith).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
+                              <span class="text-xs font-bold text-accent-danger uppercase mt-0.5">{{ t('ui.rule_panel.relation.incompatible', '冲突:') }}</span>
+                              <div class="flex flex-wrap gap-1 w-full min-w-0 ">
+                                <span v-for="(info, targetId) in item.rules.incompatibleWith" :key="targetId"
+                                  v-tooltip="formatTooltip(targetId, info)"
+                                  class="px-1.5 py-0.5 rounded max-w-[49%] min-w-0 bg-accent-danger/10 text-text-main text-[0.8rem] border border-accent-danger/20 truncate cursor-help">
+                                  {{ getDisplayName(targetId, info.name) }}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
 
-                  <!-- 操作 (仅用户规则有删除) -->
-                  <div class="shrink-0 flex items-center flex-col">
-                    <button @click="toggleModRule(item.id)" v-tooltip="isModExcluded(item.id) ? t('tooltip.rule_panel.enable_rule', '启用规则') : t('tooltip.rule_panel.disable_rule', '禁用规则')"
-                      class="p-2 rounded-lg hover:bg-bg-overlay/10" :class="!isModExcluded(item.id) ? 'text-accent-success' : 'text-accent-danger'">
-                      <CircleCheckBig v-if="!isModExcluded(item.id)" class="w-4 h-4" />
-                      <CircleOff v-else class="w-4 h-4" />
-                    </button>
+                          <!-- 操作 (仅用户规则有删除) -->
+                          <div class="shrink-0 flex items-center flex-col">
+                            <button @click="toggleModRule(item.id)" v-tooltip="isModExcluded(item.id) ? t('tooltip.rule_panel.enable_rule', '启用规则') : t('tooltip.rule_panel.disable_rule', '禁用规则')"
+                              class="p-2 rounded-lg hover:bg-bg-overlay/10" :class="!isModExcluded(item.id) ? 'text-accent-success' : 'text-accent-danger'">
+                              <CircleCheckBig v-if="!isModExcluded(item.id)" class="w-4 h-4" />
+                              <CircleOff v-else class="w-4 h-4" />
+                            </button>
 
-                    <button v-if="currentTab === 'user'" @click="deleteUserModRule(item.id, $event)" class="p-2 text-text-dim hover:text-accent-danger hover:bg-accent-danger/10 rounded-lg transition-colors">
-                      <Trash2 class="w-4 h-4" />
-                    </button>
-                  </div>
+                            <button v-if="currentTab === 'user'" @click="deleteUserModRule(item.id, $event)" class="p-2 text-text-dim hover:text-accent-danger hover:bg-accent-danger/10 rounded-lg transition-colors">
+                              <Trash2 class="w-4 h-4" />
+                            </button>
+                          </div>
 
                         </div>
                       </div>

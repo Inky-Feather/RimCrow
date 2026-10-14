@@ -157,9 +157,11 @@ class GithubModRecord(BaseModel):
     owner = CharField()
     repo_name = CharField()
     install_type = CharField(default="source")
-    target_branch = CharField(default="main")
+    target_branch = CharField(default="")
     installed_version = CharField(null=True)
     local_folder = CharField(null=True)
+    install_options = cast(dict, UTF8JSONField(default=dict))
+    installed_info = cast(dict, UTF8JSONField(default=dict))
     online_info_cache = cast(dict, UTF8JSONField(default=dict))
     last_sync_time = cast(int, BigIntegerField(default=0))
 

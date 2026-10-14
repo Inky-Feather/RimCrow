@@ -1,7 +1,8 @@
 
 try:
-    import pip_system_certs # type: ignore
-    # 该模块一旦被导入，就会自动为 ssl, requests, httpx, urllib3 打补丁
+    from pip_system_certs.wrapt_requests import inject_truststore
+    # 打包环境不执行 .pth，必须在网络模块导入前启用系统证书。
+    inject_truststore()
 except ImportError:
     pass
 

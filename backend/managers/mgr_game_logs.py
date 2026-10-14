@@ -121,7 +121,8 @@ class LogAnalyzer:
         # 提取 Mod 包名 (通常格式为 Author.ModName，或者被[] 包裹)
         self.mod_id_pattern = re.compile(r'\[([a-zA-Z0-9\-_]{2,}\.[a-zA-Z0-9\-_]{2,})\]')
         # 提取相关 XML 文件路径
-        self.file_pattern = re.compile(r'([A-Za-z0-9_\-\/\\]+\.xml)', re.IGNORECASE)
+        # 只从路径起点匹配，避免长文本无 .xml 时从每个字符重新回溯。
+        self.file_pattern = re.compile(r'(?<![A-Za-z0-9_\-\/\\])([A-Za-z0-9_\-\/\\]+\.xml)', re.IGNORECASE)
         self.namespace_pattern = re.compile(r'^\s*at(?:\s+\([^)]*\))*\s+([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*)\.', re.MULTILINE)
         self.ignored_namespaces = {
             'system', 'microsoft', 'mono', 'mscorlib', 'unityengine',
@@ -354,19 +355,20 @@ class GameLogManager(BaseLogReader): # 继承基类
             candidates.extend(os.path.join(root, item) for item in filenames)
         return list(dict.fromkeys(candidates))
 
-    def _build_log_path_candidates(self, filename: str) -> list[str]:
+    def _build_log_path_candidates(self, filename: str, *, game_version: str | None = None) -> list[str]:
         normalized_name = os.path.basename(str(filename or "").strip())
         if not normalized_name:
             return []
         if normalized_name.startswith('Player'):
-            return GameManager.get_default_player_log_paths(normalized_name)
+            version = getattr(self.context, "game_version", "") if game_version is None else game_version
+            return GameManager.get_default_player_log_paths(normalized_name, game_version=version)
         if self._is_realtime_log_name(normalized_name):
             return self._build_realtime_log_paths(normalized_name)
         return []
 
-    def resolve_log_file_path(self, filename: str, *, must_exist: bool = True) -> str:
+    def resolve_log_file_path(self, filename: str, *, must_exist: bool = True, game_version: str | None = None) -> str:
         """解析游戏日志路径：Player 固定默认目录，RimCrow_Realtime 跟随当前环境。"""
-        for filepath in self._build_log_path_candidates(filename):
+        for filepath in self._build_log_path_candidates(filename, game_version=game_version):
             if not must_exist or os.path.exists(filepath):
                 return filepath
         return ""
@@ -388,7 +390,7 @@ class GameLogManager(BaseLogReader): # 继承基类
         player_candidates = GameManager.get_default_player_log_paths('Player.log')
         return os.path.dirname(player_candidates[0]) if player_candidates else ""
 
-    def get_log_files_for_root(self, user_data_root: str = "", *, player_only: bool = False):
+    def get_log_files_for_root(self, user_data_root: str = "", *, player_only: bool = False, game_version: str | None = None):
         """
         按指定用户数据根目录解析日志文件。
         主前端仍使用当前活动环境；静默页会把运行环境根目录显式传进来。
@@ -403,7 +405,7 @@ class GameLogManager(BaseLogReader): # 继承基类
             if self._is_realtime_log_name(filename) and normalized_root:
                 filepath = next((path for path in (os.path.join(normalized_root, item) for item in self._realtime_log_aliases(filename)) if os.path.exists(path)), "")
             else:
-                filepath = self.resolve_log_file_path(filename)
+                filepath = self.resolve_log_file_path(filename, game_version=game_version)
             if filepath and os.path.exists(filepath):
                 stat = os.stat(filepath)
                 result.append({
@@ -415,14 +417,14 @@ class GameLogManager(BaseLogReader): # 继承基类
         result.sort(key=lambda x: x['mtime'], reverse=True)
         return result
 
-    def read_log_page_for_root(self, filename, user_data_root: str = "", page=1, page_size=1000):
+    def read_log_page_for_root(self, filename, user_data_root: str = "", page=1, page_size=1000, *, game_version: str | None = None):
         normalized_name = os.path.basename(str(filename or "").strip())
         normalized_root = str(user_data_root or "").strip()
         if self._is_realtime_log_name(normalized_name) and normalized_root:
             self._migrate_legacy_realtime_logs_for_root(normalized_root)
             filepath = next((path for path in (os.path.join(normalized_root, item) for item in self._realtime_log_aliases(normalized_name)) if os.path.exists(path)), "")
         else:
-            filepath = self.resolve_log_file_path(normalized_name)
+            filepath = self.resolve_log_file_path(normalized_name, game_version=game_version)
         if not filepath or not os.path.exists(filepath):
             return {'error': '文件不存在'}
 
@@ -535,7 +537,7 @@ class GameLogManager(BaseLogReader): # 继承基类
         """按块反查游戏日志，兼容 JSON 与 Player.log 纯文本块。"""
         if not os.path.exists(filepath) or not target_lines: return []
 
-        blocks = self._ensure_cache(filepath, self._parse_file_to_blocks)
+        blocks = self._ensure_cache(filepath, lambda path: self._parse_file_to_blocks(path, keep_all=True), cache_key=f"{filepath}::browse")
 
         target_line_set = set(target_lines)
         matched_blocks = [
@@ -591,6 +593,7 @@ class GameLogManager(BaseLogReader): # 继承基类
             
         # --- 下面保留原有的纯文本流式读取逻辑 (Player.log) ---
         blocks = []
+        limit = max_keep_blocks or (None if keep_all else self.max_blocks)
         try:
             with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
                 current_block = None
@@ -604,11 +607,14 @@ class GameLogManager(BaseLogReader): # 继承基类
                         current_phase = 'runtime'
                     
                     if line_content.startswith((' ', '\t', 'at ', '(Filename:')) and current_block:
-                        current_block['details'] += '\n' + line_content
+                        current_block['details'].append(line_content)
                         current_block['raw_lines'].append(idx + 1)
                     else:
                         if current_block: 
+                            current_block['details'] = '\n'.join(current_block['details'])
                             self._add_or_merge_block(blocks, current_block)
+                            if limit and len(blocks) > 2 * limit:
+                                del blocks[:-limit]
                         
                         level = 'INFO'
                         if self._patterns['error'].search(line_content): level = 'ERROR'
@@ -616,16 +622,17 @@ class GameLogManager(BaseLogReader): # 继承基类
                         
                         current_block = {
                             'id': generate_log_id(f'playerlog_{idx}', level, line_content),
-                            'timestamp': '', 'level': level, 'message': line_content, 'details': '', 'count': 1,
+                            'timestamp': '', 'level': level, 'message': line_content, 'details': [''], 'count': 1,
                             'raw_lines': [idx + 1], # 文本模式同样注入行号
                             '_log_phase': current_phase,
                         }
                 if current_block:
+                    current_block['details'] = '\n'.join(current_block['details'])
                     self._add_or_merge_block(blocks, current_block)
         except Exception as e:
             logger.error(f"读取文本日志失败：{filepath}，错误：{e}", exc_info=True)
             
-        return blocks if keep_all else blocks[-self.max_blocks:]
+        return blocks[-limit:] if limit else blocks
 
 
 class LogCondenser:

@@ -4216,7 +4216,7 @@ class TestApiSaveSettings(unittest.TestCase):
         res = API.get_log_files(api, "game", "runtime")
 
         self.assertEqual(res["status"], "success")
-        api.game_log_mgr.get_log_files_for_root.assert_called_once_with(user_data_root="", player_only=True)
+        api.game_log_mgr.get_log_files_for_root.assert_called_once_with(user_data_root="", player_only=True, game_version="")
 
     def test_read_game_log_uses_runtime_profile_root(self):
         api = API.__new__(API)
@@ -4235,6 +4235,7 @@ class TestApiSaveSettings(unittest.TestCase):
             user_data_root="D:/Profiles/runtime",
             page=1,
             page_size=500,
+            game_version="",
         )
 
 

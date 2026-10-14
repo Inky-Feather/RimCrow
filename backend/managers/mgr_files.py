@@ -1095,7 +1095,7 @@ class FileManager:
         这里复用既有同步逻辑，避免手写删除规则误伤 Self/Tool 链接。
         返回：(是否成功，预检失败时的用户提示)。
         """
-        failure_message = FileManager._get_link_deployment_failure(local_mods_path)
+        failure_message = FileManager._get_link_deployment_failure(local_mods_path) if deploy_paths else None
         if failure_message:
             logger.error("模组链接部署失败：%s", failure_message)
             return False, failure_message

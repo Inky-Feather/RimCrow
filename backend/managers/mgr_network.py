@@ -5,7 +5,8 @@ import atexit
 import platform
 
 try:
-    import pip_system_certs  # type: ignore  # noqa: F401
+    from pip_system_certs.wrapt_requests import inject_truststore
+    inject_truststore()
 except ImportError:
     pass
 

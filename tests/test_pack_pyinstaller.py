@@ -1,4 +1,6 @@
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -82,6 +84,100 @@ class TestPackPyInstaller(unittest.TestCase):
         self.assertEqual(zip_path.name, "RimCrow-v1.2.3-macos.zip")
         with zipfile.ZipFile(zip_path) as archive:
             self.assertIn("RimCrow/RimCrow.app/Contents/MacOS/RimCrow", archive.namelist())
+
+    def test_create_release_zip_can_include_generated_docs(self):
+        dist_dir = self.temp_dir / "dist"
+        app_path = dist_dir / "RimCrow.exe"
+        app_path.parent.mkdir(parents=True)
+        app_path.write_text("bin", encoding="utf-8")
+        docs_dir = self.temp_dir / "docs"
+        (docs_dir / "zh-CN").mkdir(parents=True)
+        (docs_dir / "RimCrow 使用说明.pdf").write_text("pdf", encoding="utf-8")
+        (docs_dir / "zh-CN" / "01-快速上手.pdf").write_text("pdf", encoding="utf-8")
+
+        fake_script = self.temp_dir / "pack_pyinstaller.py"
+        fake_script.write_text("", encoding="utf-8")
+
+        with patch.object(pack_pyinstaller, "__file__", str(fake_script)), \
+             patch("pack_pyinstaller._iter_toolmods_files", return_value=[]), \
+             patch("pack_pyinstaller._iter_tools_files", return_value=[]), \
+             patch("pack_pyinstaller._iter_data_files", return_value=[]), \
+             patch("pack_pyinstaller.sys.platform", "win32"):
+            zip_path = pack_pyinstaller.create_release_zip("RimCrow", "1.2.3", docs_dir=docs_dir, include_docs=True)
+
+        with zipfile.ZipFile(zip_path) as archive:
+            names = archive.namelist()
+            self.assertIn("RimCrow/docs/RimCrow 使用说明.pdf", names)
+            self.assertIn("RimCrow/docs/zh-CN/01-快速上手.pdf", names)
+
+    def test_build_release_docs_keeps_existing_pdfs_without_command(self):
+        docs_dir = self.temp_dir / "docs"
+        docs_dir.mkdir()
+        existing_pdf = docs_dir / "manual.pdf"
+        existing_pdf.write_text("pdf", encoding="utf-8")
+
+        result = pack_pyinstaller.build_release_docs(
+            project_root=self.temp_dir,
+            output_dir=docs_dir,
+        )
+
+        self.assertIsNone(result)
+        self.assertTrue(existing_pdf.exists())
+
+    def test_build_release_docs_runs_configured_command(self):
+        docs_dir = self.temp_dir / "docs"
+
+        def fake_run(command, **kwargs):
+            self.assertEqual(command, [sys.executable, "./local_tools/build_docs_pdf.py", "--output-dir", "docs"])
+            docs_dir.mkdir(parents=True)
+            (docs_dir / "manual.pdf").write_text("pdf", encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="ok\n")
+
+        with patch("pack_pyinstaller.subprocess.run", side_effect=fake_run):
+            result = pack_pyinstaller.build_release_docs(
+                project_root=self.temp_dir,
+                output_dir=docs_dir,
+                docs_config={
+                    "command": [
+                        "./local_tools/build_docs_pdf.py",
+                        "--output-dir", "docs",
+                    ],
+                },
+            )
+
+        self.assertIsNone(result)
+        self.assertTrue((docs_dir / "manual.pdf").exists())
+
+    def test_build_release_docs_uses_configured_command_python(self):
+        def fake_run(command, **kwargs):
+            self.assertEqual(command, ["custom-python.exe", "./local_tools/build_docs_pdf.py"])
+            return subprocess.CompletedProcess(command, 0, stdout="ok\n")
+
+        with patch("pack_pyinstaller.subprocess.run", side_effect=fake_run):
+            pack_pyinstaller.build_release_docs(
+                project_root=self.temp_dir,
+                output_dir=self.temp_dir / "docs",
+                docs_config={
+                    "command_python_executable": "custom-python.exe",
+                    "command": ["./local_tools/build_docs_pdf.py"],
+                },
+            )
+
+    def test_resolve_upx_dir_uses_configured_path(self):
+        upx_dir = self.temp_dir / "upx"
+        upx_dir.mkdir()
+
+        self.assertEqual(pack_pyinstaller.resolve_upx_dir(str(upx_dir)), str(upx_dir))
+
+    def test_load_pack_config_merges_local_overrides(self):
+        config_path = self.temp_dir / "pack.local.json"
+        config_path.write_text('{"steps": {"docs": false}, "app": {"upx_dir": "D:/upx"}}', encoding="utf-8")
+
+        config = pack_pyinstaller.load_pack_config(config_path)
+
+        self.assertFalse(config["steps"]["docs"])
+        self.assertTrue(config["steps"]["app"])
+        self.assertEqual(config["app"]["upx_dir"], "D:/upx")
 
     def test_windows_release_zip_name_unchanged(self):
         with patch("pack_pyinstaller.sys.platform", "win32"):

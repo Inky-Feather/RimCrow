@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Optional, Callable, Any
 from urllib.parse import urlparse, unquote
+from pathlib import Path
 
 from backend.i18n.messages import tr
 from backend.utils.error_contract import classify_exception
@@ -122,6 +123,8 @@ class DownloadManager:
         # 文件名解析逻辑
         if not filename:
             filename = self._resolve_filename(real_url)
+        if Path(filename).name != filename or Path(filename).anchor or filename in {".", ".."} or re.search(r'[<>:"/\\|?*\x00-\x1f]', filename):
+            raise ValueError("下载文件名包含非法路径或字符")
         
         final_path = os.path.join(dest_dir, filename)
 
@@ -336,6 +339,7 @@ class DownloadManager:
                     self._set_task_phase(task, None)
                     task.status = TaskStatus.CANCELLED
                     task.speed = "已取消"
+                    self._cleanup_task_directory(task)
                     self._emit_progress(task)
                     logger.info(f"下载任务在开始前已取消: task_id={task_id}")
                     return
@@ -370,6 +374,7 @@ class DownloadManager:
             self._set_task_phase(task, None)
             task.status = TaskStatus.CANCELLED
             task.speed = "已取消"
+            self._cleanup_task_directory(task)
             self._emit_progress(task)
             return
 
@@ -379,6 +384,7 @@ class DownloadManager:
         
         # 使用临时文件：filename.downloading
         temp_path = task.dest_path + ".downloading"
+        session = None
         start_time = time.time()
         last_emit_time = 0
         
@@ -492,6 +498,15 @@ class DownloadManager:
             if os.path.exists(task.dest_path):
                 os.remove(task.dest_path) # 覆盖旧文件
             shutil.move(temp_path, task.dest_path)
+
+            if task.on_complete and task.metadata.get("complete_after_callback"):
+                if task._cancel_event.is_set():
+                    raise InterruptedError("Task cancelled by user")
+                task.status = TaskStatus.RUNNING
+                self._set_task_phase(task, "installing")
+                task.speed = "正在安装"
+                self._emit_progress(task)
+                task.on_complete(task)
             
             # 最后发送 COMPLETED，确保 100%
             self._set_task_phase(task, None)
@@ -501,7 +516,7 @@ class DownloadManager:
             logger.info(f"下载任务完成: path={task.dest_path}")
             
             # 执行回调
-            if task.on_complete:
+            if task.on_complete and not task.metadata.get("complete_after_callback"):
                 try:
                     task.on_complete(task)
                 except Exception as cb_e:
@@ -560,7 +575,18 @@ class DownloadManager:
             if task.on_error:
                 try:
                     task.on_error(task)
-                except: pass
+                except Exception:
+                    logger.warning("下载失败回调执行失败: task_id=%s", task.task_id, exc_info=True)
+        finally:
+            if session:
+                session.close()
+            self._cleanup_task_directory(task)
+
+    @staticmethod
+    def _cleanup_task_directory(task: DownloadTask) -> None:
+        temporary_dir = task.metadata.get("temporary_dir")
+        if temporary_dir and Path(temporary_dir).name.startswith("git-task-") and Path(temporary_dir).resolve() == Path(task.dest_path).parent.resolve():
+            shutil.rmtree(temporary_dir, ignore_errors=True)
 
     def _verify_hash(self, file_path: str, expected: str, algo: str = "md5") -> bool:
         """校验文件 Hash"""

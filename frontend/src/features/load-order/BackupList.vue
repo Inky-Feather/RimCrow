@@ -1,26 +1,5 @@
 <template>
-  <div id="backup-drop-zone" class="relative flex flex-col h-full bg-bg-surface/40 border-2 border-border-base/5 rounded-2xl overflow-hidden shadow-2xl"
-    @dragenter="handleDragEnter"
-    @dragover="handleDragOver"
-    @dragleave="handleDragLeave"
-    @drop="handleDrop" >
-    <Transition name="fade-drop">
-      <div v-if="showDropOverlay" class="absolute inset-0 z-30 flex items-center justify-center bg-bg-deep/70 backdrop-blur-sm" >
-        <div class="mx-4 w-full max-w-md rounded-2xl border border-accent-primary/30 bg-accent-primary/10 px-6 py-8 text-center shadow-[0_0_40px_rgba(var(--rgb-accent-primary),0.18)]">
-          <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-accent-primary/35 bg-accent-primary/15 text-accent-primary shadow-[0_0_25px_rgba(var(--rgb-accent-primary),0.18)]">
-            <svg class="size-7" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-          </div>
-          <div class="text-base font-bold tracking-wide text-text-main">{{ t('ui.backup_list.drop.title', '拖入加载序列文件') }}</div>
-          <div class="mt-2 text-sm leading-relaxed text-text-dim">
-            {{ t('ui.backup_list.drop.description', '松手后将自动尝试导入到对比视图') }}
-          </div>
-          <div class="mt-3 text-xs text-text-dim">
-            {{ t('ui.backup_list.drop.formats', '支持 `xml` / `rws` / `rml` / `json` / `txt` / `list`') }}
-          </div>
-        </div>
-      </div>
-    </Transition>
-
+  <div class="relative flex flex-col h-full bg-bg-surface/40 border-2 border-border-base/5 rounded-2xl overflow-hidden shadow-2xl">
     <!-- 标题栏 -->
     <div class="px-3 h-8 border-b rounded-t-2xl border-border-base/5 flex justify-between items-center bg-bg-muted/50">
       <span :class="`text-sm font-bold text-accent-primary uppercase tracking-wider flex items-center gap-2`">
@@ -77,7 +56,7 @@
           hover:bg-accent-primary/30 hover:text-accent-primary hover:scale-110 active:scale-100
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20"
           :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
-          @click="exportOrder()" v-tooltip="isToolbarActionPending('export-order') ? t('tooltip.backup_list.export_modsconfig.loading', '正在导出 ModsConfig') : t('tooltip.backup_list.export_modsconfig.ready', '导出为 ModsConfig.xml（仅含包名）')">
+          @click="exportOrder()" v-tooltip="isToolbarActionPending('export-order') ? t('tooltip.backup_list.export_modsconfig.loading', '正在导出 ModsConfig') : t('tooltip.backup_list.export_modsconfig.ready', '导出为 ModsConfig.xml（仅含包名）。导入请用“导入加载序列”或拖入主窗口。')">
             <span class="relative transition duration-300 only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('export-order')" class="size-5 animate-spin" />
               <svg v-else class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M11 14h10"/><path d="M16 4h2a2 2 0 0 1 2 2v1.344"/><path d="m17 18 4-4-4-4"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
@@ -90,7 +69,7 @@
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
             :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
-            @click="exportRml()" v-tooltip="isToolbarActionPending('export-rml') ? t('tooltip.backup_list.export_rml.loading', '正在导出 RML') : t('tooltip.backup_list.export_rml.ready', '导出为 RML 游戏原生格式（含包名和工坊ID）')" >
+          @click="exportRml()" v-tooltip="isToolbarActionPending('export-rml') ? t('tooltip.backup_list.export_rml.loading', '正在导出 RML') : t('tooltip.backup_list.export_rml.ready', '导出为 RML 游戏原生格式（含包名和工坊ID）。导入请用“导入加载序列”或拖入主窗口。')" >
             <span class="relative only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('export-rml')" class="size-5 animate-spin" />
               <svg v-else class="size-5.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="currentColor"><path d="m648-140 112-112v92h40v-160H640v40h92L620-168l28 28Zm-448 20q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v268q-19-9-39-15.5t-41-9.5v-243H200v560h242q3 22 9.5 42t15.5 38H200Zm0-120v40-560 243-3 280Zm80-40h163q3-21 9.5-41t14.5-39H280v80Zm0-160h244q32-30 71.5-50t84.5-27v-3H280v80Zm0-160h400v-80H280v80ZM720-40q-83 0-141.5-58.5T520-240q0-83 58.5-141.5T720-440q83 0 141.5 58.5T920-240q0 83-58.5 141.5T720-40Z"/></svg>
@@ -103,7 +82,7 @@
           group-hover:bg-accent-primary/10 group-hover:text-text-dim group-hover:shadow-2xl/20
             group-hover:h-6 group-hover:w-6 group-hover:translate-x-0 group-hover:opacity-100"
             :disabled="isToolbarBusy" :class="isToolbarBusy ? 'app-action-disabled' : ''"
-            @click="exportShareCode()" v-tooltip="isToolbarActionPending('export-share-code') ? t('tooltip.backup_list.export_share_code.loading', '正在生成分享码') : t('tooltip.backup_list.export_share_code.ready', '生成当前启用序列的分享码并复制到剪贴板')" >
+            @click="exportShareCode()" v-tooltip="isToolbarActionPending('export-share-code') ? t('tooltip.backup_list.export_share_code.loading', '正在生成分享码') : t('tooltip.backup_list.export_share_code.ready', '生成当前启用序列的分享码并复制到剪贴板；在“导入分享码”中粘贴导入。')" >
             <span class="relative only:-mx-6">
               <LoaderCircle v-if="isToolbarActionPending('export-share-code')" class="size-5 animate-spin" />
               <Copy v-else class="size-5" />
@@ -225,7 +204,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { checkResult, toast } from '../../shared/lib/common.js'
 import { useOrderStore } from './orderStore.js'
 import { useAppStore } from '../../app/stores/appStore.js'
@@ -259,12 +238,6 @@ const runBackupToolbarAction = async (action, runner) => {
     toolbarActionPending.value = ''
   }
 }
-const showDropOverlay = ref(false)
-const dragDepth = ref(0)
-const activeDroppedFile = ref('')
-const lastDroppedFile = ref({ key: '', time: 0 })
-let nativeDropBindAttempts = 0
-let nativeDropBindTimer = null
 const selectedPath = computed(() => orderStore.currentBackupFile)
 const currentProfileId = computed(() => profileStore.currentProfileId || appStore.settings.current_profile_id || 'default')
 const isBrowserRuntime = computed(() => detectBrowserRuntime())
@@ -573,154 +546,6 @@ const clearOutOfScopeBackupSelection = (profileId = selectedBackupProfileId.valu
   }
 }
 
-const isFileDragEvent = (event) => {
-  const dataTransfer = event?.dataTransfer
-  if (!dataTransfer) return false
-  const types = Array.from(dataTransfer.types || [])
-  // 某些 pywebview / WebView 环境里，拖入本地文件时 types 会是空数组。
-  // 这里只要存在 dataTransfer，就先允许覆盖层显示，避免“拖进来几秒后才亮”的迟滞体验。
-  return types.length === 0 || types.includes('Files')
-}
-
-const resetDropState = () => {
-  dragDepth.value = 0
-  showDropOverlay.value = false
-}
-
-const extractDroppedFilePath = (event) => {
-  const items = Array.from(event?.dataTransfer?.items || [])
-  for (const item of items) {
-    if (item.kind !== 'file') continue
-    const file = item.getAsFile?.()
-    if (file?.path) return file.path
-  }
-
-  const files = Array.from(event?.dataTransfer?.files || [])
-  for (const file of files) {
-    if (file?.path) return file.path
-  }
-
-  return ''
-}
-
-const buildBrowserDropKey = (file) => {
-  if (!file) return ''
-  return [
-    String(file.name || '').trim(),
-    Number(file.size || 0),
-    Number(file.lastModified || 0),
-  ].join(':')
-}
-
-const shouldSkipDuplicateDrop = (dropKey) => {
-  const normalizedKey = String(dropKey || '').trim()
-  if (!normalizedKey) return true
-  if (activeDroppedFile.value === normalizedKey) return true
-
-  const now = Date.now()
-  const isRecentlyProcessed =
-    lastDroppedFile.value.key === normalizedKey &&
-    now - lastDroppedFile.value.time < 2500
-
-  return isRecentlyProcessed
-}
-
-const importDroppedFile = async (filePath, source = 'dom') => {
-  const normalizedPath = String(filePath || '').trim()
-  if (!normalizedPath || shouldSkipDuplicateDrop(normalizedPath)) return false
-
-  if (activeDroppedFile.value && activeDroppedFile.value !== normalizedPath) {
-    toast.info(t('toast.backup_list.drop_busy', '上一个拖入文件仍在处理中，请稍候'))
-    return false
-  }
-
-  activeDroppedFile.value = normalizedPath
-  lastDroppedFile.value = {
-    path: normalizedPath,
-    time: Date.now(),
-  }
-
-  try {
-    await loadOrder(normalizedPath)
-    return true
-  } finally {
-    activeDroppedFile.value = ''
-  }
-}
-
-const importDroppedBrowserFile = async (file) => {
-  const dropKey = buildBrowserDropKey(file)
-  if (!dropKey || shouldSkipDuplicateDrop(dropKey)) return false
-
-  if (activeDroppedFile.value && activeDroppedFile.value !== dropKey) {
-    toast.info(t('toast.backup_list.drop_busy', '上一个拖入文件仍在处理中，请稍候'))
-    return false
-  }
-
-  activeDroppedFile.value = dropKey
-  lastDroppedFile.value = {
-    key: dropKey,
-    time: Date.now(),
-  }
-
-  try {
-    const data = await orderStore.importPayloadFile(file, selectedBackupProfileId.value)
-    if (!data) return false
-    if ((data.errors || []).length > 0) {
-      console.warn('导入文件包含解析错误:', data.errors)
-    }
-    appStore.uiState.showDiffDrawer = true
-    await refresh(selectedBackupProfileId.value)
-    return true
-  } finally {
-    activeDroppedFile.value = ''
-  }
-}
-
-const handleNativeBackupDrop = async (paths = []) => {
-  resetDropState()
-  const normalizedPaths = Array.isArray(paths)
-    ? paths.map(path => String(path || '').trim()).filter(Boolean)
-    : []
-
-  if (normalizedPaths.length === 0) {
-    toast.warning(t('toast.backup_list.native_drop_no_path', '原生拖放未返回有效文件路径'))
-    return
-  }
-
-  if (normalizedPaths.length > 1) {
-    toast.warning(t('toast.backup_list.only_one_file', '一次只能导入一个文件，已自动使用第一个文件'))
-  }
-
-  await importDroppedFile(normalizedPaths[0], 'native')
-}
-
-const bindNativeDropZone = async () => {
-  if (isBrowserRuntime.value) return
-  if (!window.pywebview?.api?.bind_backup_drop_zone) return
-
-  try {
-    const res = await window.pywebview.api.bind_backup_drop_zone('backup-drop-zone')
-    if (res?.status === 'success') {
-      nativeDropBindAttempts = 0
-      return
-    }
-
-    if (res?.status === 'error') {
-      return
-    }
-
-    if (nativeDropBindAttempts < 4) {
-      nativeDropBindAttempts += 1
-      nativeDropBindTimer = window.setTimeout(() => {
-        bindNativeDropZone()
-      }, 250)
-    }
-  } catch (error) {
-    console.warn('绑定原生拖放区域失败:', error)
-  }
-}
-
 // 刷新备份列表
 const refresh = async (profileId = selectedBackupProfileId.value) => {
   loading.value = true
@@ -735,51 +560,6 @@ const handleBackupProfileChange = async (option) => {
   orderStore.setBackupProfile(nextProfileId)
   clearOutOfScopeBackupSelection(nextProfileId)
   await refresh(nextProfileId)
-}
-const handleDragEnter = (event) => {
-  if (!isFileDragEvent(event)) return
-  event.preventDefault()
-  dragDepth.value += 1
-  showDropOverlay.value = true
-}
-const handleDragOver = (event) => {
-  if (!isFileDragEvent(event)) return
-  event.preventDefault()
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = 'copy'
-  }
-  showDropOverlay.value = true
-}
-const handleDragLeave = (event) => {
-  if (!isFileDragEvent(event)) return
-  event.preventDefault()
-  dragDepth.value = Math.max(0, dragDepth.value - 1)
-  if (dragDepth.value === 0) {
-    showDropOverlay.value = false
-  }
-}
-const handleDrop = async (event) => {
-  if (!isFileDragEvent(event)) return
-  event.preventDefault()
-  resetDropState()
-  const files = Array.from(event?.dataTransfer?.files || [])
-  if (files.length === 0) {
-    toast.warning(t('toast.backup_list.no_drop_file', '未检测到可导入文件'))
-    return
-  }
-  if (files.length > 1) {
-    toast.warning(t('toast.backup_list.only_one_file', '一次只能导入一个文件，已自动使用第一个文件'))
-  }
-
-  const filePath = extractDroppedFilePath(event)
-  if (!filePath) {
-    if (isBrowserRuntime.value) {
-      await importDroppedBrowserFile(files[0])
-    }
-    return
-  }
-
-  await importDroppedFile(filePath, 'dom')
 }
 // 选择备份项
 const selectItem = async (item) => {
@@ -872,36 +652,9 @@ watch(currentProfileId, async (newProfileId) => {
   await refresh(newProfileId)
 }, { immediate: true })
 
-onMounted(() => {
-  window.__handleNativeBackupDrop = handleNativeBackupDrop
-  nativeDropBindAttempts = 0
-  if (!isBrowserRuntime.value) {
-    nativeDropBindTimer = window.setTimeout(() => {
-      bindNativeDropZone()
-    }, 0)
-  }
-})
-
-onUnmounted(() => {
-  if (nativeDropBindTimer) {
-    window.clearTimeout(nativeDropBindTimer)
-    nativeDropBindTimer = null
-  }
-  if (window.__handleNativeBackupDrop === handleNativeBackupDrop) {
-    delete window.__handleNativeBackupDrop
-  }
-})
 </script>
 
 <style scoped>
-.fade-drop-enter-active,
-.fade-drop-leave-active {
-  transition: opacity 0.18s ease;
-}
-.fade-drop-enter-from,
-.fade-drop-leave-to {
-  opacity: 0;
-}
 .spin-once-reverse {
   animation: spin-reverse 0.8s linear 1; /* 1表示只执行1次，0.8s旋转速度，可改 */
 }

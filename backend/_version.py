@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.24.7"  # 主版本.次版本.补丁
+__version__ = "0.24.12"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -7,6 +7,39 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # 每个版本只保留一个顶层对象，版本内的阶段性记录拆分到 entries 中
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
+    {
+        "version": "0.24.12",
+        "date": "2026-07-26",
+        "entries": [
+            {
+                "title": "数据管理、备份恢复与GitHub集成增强",
+                "changes": [
+                    { "type": "feature", "text": "拆分独立的数据管理设置页面，支持主页全局文件拖入、自动识别导入文件类型，支持排序文件与软件数据包" },
+                    { "type": "feature", "text": "支持软件数据导入前的备份与恢复、完整性校验及安全还原，并提供恢复弹窗与备份快捷恢复入口" },
+                    { "type": "feature", "text": "增强 GitHub 仓库多引用类型解析、资产选择与冲突恢复能力，全面重构仓库浏览器与视图组件支持全功能管理" },
+                    { "type": "optimize", "text": "优化数据库操作维护锁并发控制与后端接口逻辑，增强下载文件路径与临时目录清理安全性，并完善订阅状态检查" },
+                    { "type": "fix", "text": "校验订阅目标分支存在性，确保数据交互稳定性" }
+                ]
+            },
+            {
+                "title": "1.7 游戏兼容性修复与其它修复",
+                "changes": [
+                    { "type": "feature", "text": "支持引导面板拖拽边界限制及窗口缩放自动重置，优化分享列表与各类导出格式的导入指引说明" },
+                    { "type": "optimize", "text": "增加 SOCKS 代理支持并优化系统证书注入时机，更新相关网络依赖以保障通信安全" },
+                    { "type": "fix", "text": "修复取消订阅状态校验及超时处理、日志解析正则回溯性能与日志块截断、同步链接预检错误触发等问题" },
+                    { "type": "feature", "text": "支持 RimWorld 1.7 (Waylith engine) 可执行文件名及日志路径，提升游戏兼容性" }
+                ]
+            },
+            {
+                "title": "打包流程改进与模组预览优化",
+                "changes": [
+                    { "type": "feature", "text": "引入基于 JSON 配置文件的模块化打包流程，支持命令行参数覆盖及本地打包配置模板" },
+                    { "type": "feature", "text": "支持模组关系名称解析并更新预览逻辑，改进虚拟列表中的动态绑定与数据同步机制" },
+                    { "type": "optimize", "text": "补充完善各项说明文档与多语言翻译支持" }
+                ]
+            }
+        ]
+    },
     {
         "version": "0.24.7",
         "date": "2026-07-26",

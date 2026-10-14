@@ -713,7 +713,9 @@
       "steam_still_running": "Steam 仍在运行，继续等待其退出。"
     },
     "github": {
+      "branch_required": "未找到目标分支，请探测并选择有效分支后重试。",
       "deploy_started": "Git 订阅部署任务已启动",
+      "invalid_url": "无效的 Git 仓库链接",
       "provider_catalog_failed": "获取 Git 推荐列表失败。请检查网络连接、代理设置和推荐源地址，稍后重试。",
       "readme_fetch_failed": "获取 Git 仓库 README 失败。请检查网络连接、仓库地址和分支名称后重试。",
       "subscription_removed": "已移除订阅记录",
@@ -2438,6 +2440,7 @@
     "package_transfer": {
       "apply_environment_data": "同时应用环境数据",
       "apply_environment_data_desc": "覆盖现有环境时，只会替换这个环境的实际使用数据，不会改名称、说明和绑定关系。新建环境时，会尽量保留原来的环境信息。",
+      "auto_backup_hint": "导入前会自动备份软件数据到 data/backups/all-data-backup.rimcrowdata.zip，每次覆盖上一份备份。",
       "batch_handling": "批量处理",
       "bundle_size": "压缩包大小",
       "bundle_summary": "包摘要",
@@ -2472,8 +2475,7 @@
       "folder_name_type": "包内Mod文件夹命名",
       "folder_name_type_desc": "只影响导出包里的文件夹名称，不会改动原始Mod目录。遇到不适合作为文件名的字符会自动替换，重名会自动追加序号。",
       "footer": {
-        "data_import": "环境重名时会按你的选择处理，其它数据仍按原流程导入。",
-        "mod_export": "如果同一个模组有多个来源，会优先带上你当前正在使用的版本，重复副本会自动跳过。",
+        "mod_export": "如果同一个模组有多个来源，会优先带上你当前正在使用的版本，重复副本会自动跳过。导入位置：设置 → 数据管理 → 导入模组包。",
         "mod_import": "导入到当前环境目录或管理器目录时会自动刷新当前模组列表。缺少本地文件的模组会跳过并提醒你。"
       },
       "format": "格式",
@@ -2535,6 +2537,9 @@
         "skip": "跳过"
       },
       "rename_placeholder": "留空会自动补一个新名字",
+      "restore_desc": "从备份包恢复软件数据，保留现有环境、存档和游戏配置。",
+      "restore_title": "恢复软件数据",
+      "restore_warning": "恢复操作说明：把软件设置、AI 定义、用户规则、自定义信息、分组以及订阅项还原为备份时的状态，同时删除该范围内备份文件里不存在的数据。环境、存档和游戏配置不会被恢复。本次恢复不会生成新的备份，原有备份包将保留。",
       "select_game_install": "请选择一个可用游戏本体",
       "select_profile_to_overwrite": "请选择要覆盖的环境",
       "selected_mod_count": "已选 {count} 个模组。",
@@ -2544,6 +2549,7 @@
       "size_change": "体积变化",
       "start_export": "开始导出",
       "start_import": "开始导入",
+      "start_restore": "开始恢复",
       "strategy": {
         "create_all": "全部新建",
         "overwrite_all": "全部覆盖",
@@ -2603,7 +2609,7 @@
       "export_name": "导出名称",
       "export_name_placeholder": "例如：RimWorld 必备模组推荐",
       "exporting": "导出中...",
-      "footer_tip": "Markdown 会在导出目录内创建 <span class=\"font-bold text-accent-special\">img</span> 文件夹；纯图片会按导出名称新建文件夹，每个模组一张图。",
+      "footer_tip": "Markdown 会在导出目录内创建 <span class=\"font-bold text-accent-special\">img</span> 文件夹；纯图片会按导出名称新建文件夹，每个模组一张图。这是分享用的推荐清单，不支持导回软件数据。",
       "format": {
         "clipboard": "复制纯文本",
         "image": "纯图片"
@@ -4573,16 +4579,12 @@
     },
     "backup_list": {
       "backup_no_exportable_order": "该备份没有可导出的包名序列",
-      "drop_busy": "上一个拖入文件仍在处理中，请稍候",
       "empty_share_code": "后端没有返回有效的分享码",
       "exported_modlist": "备份已导出为 ModList",
       "exported_rml": "备份已导出为 RML",
       "name_sanitized": "文件名中的特殊字符已替换为下划线",
-      "native_drop_no_path": "原生拖放未返回有效文件路径",
-      "no_drop_file": "未检测到可导入文件",
       "no_exportable_order": "该条目没有可导出的包名序列",
       "no_share_code_order": "该备份没有可生成分享码的包名序列",
-      "only_one_file": "一次只能导入一个文件，已自动使用第一个文件",
       "rename_empty": "请输入新的备份名称"
     },
     "command": {
@@ -4623,6 +4625,12 @@
       "deploy_done": "{repo} 部署完成",
       "deploy_failed": "{repo} 部署失败",
       "install_source_submitted": "已提交 {count} 个 Git 来源订阅，正在开始下载。"
+    },
+    "global_drop": {
+      "data_bundle_browser": "浏览器模式无法直接读取拖入的软件数据包，请到“设置 → 数据管理 → 导入数据包”选择文件。",
+      "first_file_only": "一次只能导入一个文件，已使用第一个文件。",
+      "no_file": "未检测到可导入文件",
+      "unsupported_file": "无法识别该文件。支持排序文件和软件数据包。"
     },
     "group": {
       "add_mods_failed": "添加模组到分组失败，正在还原列表状态。请稍后重试。",
@@ -4827,6 +4835,7 @@
       },
       "dev": {
         "database_recreated": "未找到本地数据库，已重新创建。",
+        "invalid_data_backup": "该文件不是软件数据备份包，请使用“导入数据包”读取。",
         "remote_image_cache_cleared": "已清理 {count} 张缓存图片，释放 {size}",
         "repair_complete_restart_later": "修复已完成，重启软件后生效。"
       },
@@ -4938,15 +4947,15 @@
     "backup_list": {
       "export_modsconfig": {
         "loading": "正在导出 ModsConfig",
-        "ready": "导出为 ModsConfig.xml（仅含包名）"
+        "ready": "导出为 ModsConfig.xml（仅含包名）。导入请用“导入加载序列”或拖入主窗口。"
       },
       "export_rml": {
         "loading": "正在导出 RML",
-        "ready": "导出为 RML 游戏原生格式（含包名和工坊ID）"
+        "ready": "导出为 RML 游戏原生格式（含包名和工坊ID）。导入请用“导入加载序列”或拖入主窗口。"
       },
       "export_share_code": {
         "loading": "正在生成分享码",
-        "ready": "生成当前启用序列的分享码并复制到剪贴板"
+        "ready": "生成当前启用序列的分享码并复制到剪贴板；在“导入分享码”中粘贴导入。"
       },
       "import_file": {
         "loading": "正在导入加载序列",
@@ -5054,10 +5063,10 @@
       "debug_page": "测试页面",
       "file_search": "文件内容搜索",
       "load_order": {
-        "export_modlist": "导出为 ModList.xml（含包名和工坊ID）",
-        "export_modsconfig": "导出为 ModsConfig.xml（仅含包名）",
-        "export_rml": "导出为 RML（游戏原生导出格式）",
-        "export_share_code": "生成 RC- 分享码并复制到剪贴板",
+        "export_modlist": "导出为 ModList.xml（含包名和工坊ID）。导入请用“导入加载序列”或拖入主窗口。",
+        "export_modsconfig": "导出为 ModsConfig.xml（仅含包名）。导入请用“导入加载序列”或拖入主窗口。",
+        "export_rml": "导出为 RML（游戏原生格式）。导入请用“导入加载序列”或拖入主窗口。",
+        "export_share_code": "生成 RC- 分享码并复制到剪贴板；在“导入分享码”中粘贴导入。",
         "exporting_modlist": "正在导出 ModList",
         "exporting_modsconfig": "正在导出 ModsConfig",
         "exporting_rml": "正在导出 RML",
@@ -5280,6 +5289,9 @@
       "data_export": {
         "dependencies": "依赖：{dependencies}"
       },
+      "dev": {
+        "restore_data_backup": "恢复上次导入前的软件数据：软件设置、AI 定义、用户规则、自定义信息、分组和订阅。\n不包含环境、存档及游戏配置；恢复会覆盖上述软件数据，不会再次备份。\n文件：{path}\n大小：{size}\n备份时间：{time}"
+      },
       "external": {
         "git_provider_catalog_sources": "每行一个来源，格式：名称|URL。留空时使用默认推荐清单。",
         "reading_default_paths": "正在读取默认路径",
@@ -5449,11 +5461,6 @@
       }
     },
     "backup_list": {
-      "drop": {
-        "description": "松手后将自动尝试导入到对比视图",
-        "formats": "支持 `xml` / `rws` / `rml` / `json` / `txt` / `list`",
-        "title": "拖入加载序列文件"
-      },
       "empty": "暂无备份记录",
       "profile": {
         "description": "切换其它环境备份",
@@ -5553,6 +5560,11 @@
         "empty": "选择左侧文件或命中项后，这里显示只读文件内容。",
         "loading": "正在读取文件..."
       }
+    },
+    "global_drop": {
+      "description": "松手后会自动识别排序文件或软件数据包。",
+      "formats": "排序文件：xml / rws / rml / json / txt / list；软件数据包：rimcrowdata.zip",
+      "title": "拖入文件"
     },
     "group_list": {
       "action": {
@@ -6108,6 +6120,11 @@
         "title": "人工智能",
         "view_raw_response": "查看原始返回内容"
       },
+      "data": {
+        "help": "使用说明：先导出软件数据包保存到安全位置；需要恢复时，在本页选择数据包并按提示导入。也可以把排序文件或软件数据包直接拖到主窗口，软件会自动识别类型。",
+        "import_data_bundle_title": "导入软件数据包",
+        "title": "数据管理"
+      },
       "data_export": {
         "description": "勾选要打包的数据；如果选择环境数据，会打包对应环境的完整目录。",
         "excluded_data": "路径绑定、敏感信息、当前激活环境 ID",
@@ -6115,6 +6132,7 @@
         "export_selected": "导出当前选择",
         "import_conflicts": "环境导入冲突",
         "import_conflicts_notice": "会在导入面板统一处理新建/覆盖。",
+        "import_location": "导入位置：设置 → 数据管理 → 导入软件数据包。",
         "no_user_data_dir": "未检测到可打包的用户数据目录",
         "pack_full_profile_dir": "将打包整个环境目录",
         "profile_data": "环境数据",
@@ -6163,6 +6181,7 @@
         "remote_image_cache": "网络图片缓存",
         "remote_image_cache_desc": "远程封面图、截图和富文本图片会先写入本地缓存，再由前端通过本地资源服务读取。",
         "reset_database_now": "立即重置本地数据库",
+        "restore_data_backup": "恢复备份",
         "scope": {
           "profile_active": "当前环境启用模组（{count}）",
           "profile_active_desc": "只导出当前环境里已经启用的模组。",
@@ -6923,9 +6942,6 @@
       },
       "github": {
         "action": {
-          "create_catalog_subscription": "建立清单订阅",
-          "create_subscription": "建立订阅",
-          "parse_recommended_repo": "解析推荐仓库",
           "parse_repo": "解析 Git 仓库链接",
           "request_transfer": "请求数据传输"
         },
@@ -6934,27 +6950,31 @@
           "open_original": "打开原始地址"
         },
         "active": {
-          "current_mode": "当前模式: {mode}",
-          "deploy_latest": "获取并部署最新",
           "deploy_now": "立即部署",
-          "deploy_tooltip": "获取并部署当前订阅",
-          "installed_version": "已部署版本: {version}",
           "local_audit_log": "本地执行追踪 (Local Audit Log)",
           "no_logs": "暂无追踪记录"
         },
+        "branch": {
+          "detect": "探测远端分支",
+          "empty": "该仓库没有可用分支",
+          "label": "分支",
+          "switch": "切换分支"
+        },
         "catalog": {
-          "add_git_subscription": "添加为 Git 订阅",
-          "add_zip_subscription": "添加为 Git 订阅并部署 zip",
           "branch": "分支：{branch}",
           "cache_badge": "缓存",
+          "category": "分类",
           "empty": "没有匹配的推荐项",
           "filter_placeholder": "筛选名称、包名、作者或版本",
           "git_subscribed": "已添加 Git 订阅",
           "loading": "正在读取推荐列表...",
+          "no_deploy_source": "该推荐项没有可用的 Git 仓库或压缩包部署方式。",
           "not_recommended": "当前不建议使用",
           "not_recommended_tooltip": "该项目可能暂时不兼容，建议确认说明后再添加",
           "official": "官方内容",
           "official_tooltip": "游戏本体或官方 DLC 不需要订阅",
+          "open_workshop": "打开创意工坊页面",
+          "source": "推荐源",
           "source_all": "全部",
           "source_catalog": "清单",
           "source_summary": "推荐来源: {total} 项 / {sourceCount} 个来源",
@@ -6963,27 +6983,24 @@
           "workshop_badge": "工坊",
           "workshop_subscribed": "已订阅创意工坊"
         },
-        "dependency": {
-          "add_git": "添加 Git 订阅",
-          "can_add_git": "可添加 Git 订阅",
-          "can_subscribe_workshop": "可订阅创意工坊",
-          "git_already_added": "该依赖已添加 Git 订阅",
-          "missing_source": "没有找到可直接添加的来源",
-          "official": "游戏本体或官方 DLC，不需要订阅",
-          "subscribe_workshop": "订阅创意工坊依赖",
-          "unsubscribe_workshop": "取消订阅创意工坊依赖"
-        },
         "deploy": {
-          "no_release_cache": "无法获取 Release 版本信息，当前也没有可用缓存",
-          "skip_metadata_refresh": "Git 仓库信息查询失败，已跳过元数据刷新，直接按当前分支继续部署",
+          "active": "当前部署方式",
+          "current": "已是最新",
+          "redeploy": "重新部署",
+          "release": "部署发行版",
+          "release_button_hint": "发行版部署会使用选定版本的打包文件。",
+          "release_hint": "使用项目发布的打包文件部署，适合普通用户快速安装。",
+          "source": "部署源码",
+          "source_button_hint": "源码部署会跟随当前分支的最新提交。",
+          "source_hint": "从选定分支读取源码并部署到本地模组目录。",
           "started": "已开始获取数据流，请在底部状态栏查看进度",
-          "use_cached_release": "Git 仓库信息查询失败，已改用本地缓存的 Release 版本继续部署"
+          "update": "更新部署"
         },
         "detail": {
-          "default_branch": "默认分支",
-          "dependencies": "依赖项",
-          "install_type": "安装类型",
-          "rimworld_versions": "RimWorld："
+          "install_type": "部署来源",
+          "package_id": "包名",
+          "rimworld_versions": "RimWorld：",
+          "version": "本地版本"
         },
         "empty": {
           "select_or_add": "选择或添加仓库"
@@ -6993,47 +7010,41 @@
           "placeholder": "粘贴公开 Git 仓库地址 如: https://github.com/user/repo (支持 GitHub / GitLab / GitGud)",
           "supported_tooltip": "支持以下仓库：GitHub、GitLab、GitGud。"
         },
-        "install_type": {
-          "git_repo": "Git 仓库",
-          "zip_link": "Zip 直链"
-        },
-        "preview": {
-          "latest_release": "最新：{version}",
-          "meta": "作者: {owner} | 默认分支: {branch}",
-          "release": {
-            "description": "获取作者打包的稳定版。",
-            "none": "该仓库尚未发布任何 Release",
-            "title": "获取发行版 (Release)"
-          },
-          "source": {
-            "description": "获取分支最新代码。适合频繁更新或未发布 Release 的测试版模组。",
-            "title": "同步源码分支 (Source)"
-          }
+        "loading": "正在读取仓库信息...",
+        "local": {
+          "status": "更新状态",
+          "tab": "本地信息"
         },
         "readme": {
-          "error": "读取 README 失败。请检查网络连接、仓库地址和分支名称后重试。",
+          "empty": "该仓库没有可读取的 README",
           "loading": "正在读取 README..."
         },
         "refresh": {
           "tooltip": "刷新当前列表"
+        },
+        "remote": {
+          "tab": "仓库解析"
         },
         "remove": {
           "confirm": "移除",
           "message": "确定要移除 Git 订阅「{name}」吗？\n本地已下载文件不会被删除。",
           "title": "移除订阅"
         },
+        "selection": {
+          "asset": "发行包文件",
+          "asset_required": "请选择发行包文件后重新部署",
+          "directory": "模组目录",
+          "directory_required": "请选择模组目录后重新部署",
+          "release_version": "发行版本"
+        },
         "status": {
-          "branch_changed": "跟踪分支不同",
+          "branch_changed": "部署设置不同",
           "current": "已是最新",
           "installed": "已安装",
           "missing": "本地文件缺失",
           "not_deployed": "未部署",
           "unknown": "状态未知",
           "upgrade": "可升级"
-        },
-        "subscribe": {
-          "catalog_success": "清单项已成功订阅",
-          "repo_success": "仓库已成功订阅"
         },
         "tabs": {
           "recommend": "推荐列表"

@@ -233,7 +233,8 @@ def test_github_mod_update_check_uses_cached_versions(monkeypatch):
             "repo_name": "release-mod",
             "install_type": "release",
             "installed_version": "v1.0.0",
-            "online_info_cache": {"latest_release_tag": "v1.1.0"},
+            "installed_info": {"release_tag": "v1.0.0"},
+            "online_info_cache": {"latest_release_tag": "v1.1.0", "release_status": "available"},
         },
         {
             "repo_url": "https://github.com/example/source-mod",
@@ -241,7 +242,8 @@ def test_github_mod_update_check_uses_cached_versions(monkeypatch):
             "install_type": "source",
             "target_branch": "main",
             "installed_version": "main@1000",
-            "online_info_cache": {"latest_source_version": "main@2000", "latest_source_branch": "main"},
+            "installed_info": {"ref": "main", "commit_sha": "a" * 40},
+            "online_info_cache": {"latest_source_version": "main@" + "b" * 40, "latest_source_commit_sha": "b" * 40, "latest_source_branch": "main", "source_status": "available"},
         },
         {
             "repo_url": "https://github.com/example/current-mod",
@@ -288,7 +290,7 @@ def test_github_source_update_check_skips_when_local_is_newer(monkeypatch):
     manager = MaintenanceManager.__new__(MaintenanceManager)
     updates = manager._check_github_mod_updates()
 
-    assert [item["repo_url"] for item in updates] == ["https://github.com/example/outdated-source-mod"]
+    assert updates == []
 
 
 def test_managed_mod_update_check_combines_steamcmd_and_github(monkeypatch):
@@ -298,7 +300,8 @@ def test_managed_mod_update_check_combines_steamcmd_and_github(monkeypatch):
             "repo_name": "mod",
             "install_type": "release",
             "installed_version": "v1.0.0",
-            "online_info_cache": {"latest_release_tag": "v1.2.0"},
+            "installed_info": {"release_tag": "v1.0.0"},
+            "online_info_cache": {"latest_release_tag": "v1.2.0", "release_status": "available"},
         }
     ]
     monkeypatch.setattr(mgr_maintenance, "GithubModRecord", _FakeGithubRecord)

@@ -174,7 +174,7 @@ export const useMaintenanceActions = ({
   const triggerGithubManagedModUpdate = async (item = {}) => {
     if (!window.pywebview || !item?.repo_url) return false
     const targetVersion = String(item.target_version || item.latest_version || '').trim()
-    const res = await window.pywebview.api.github_trigger_download(item.repo_url, item.install_type || 'source', targetVersion)
+    const res = await window.pywebview.api.github_trigger_download(item.repo_url, item.install_type || 'source', targetVersion, item.install_options || {})
     if (!checkResult(res, t('check.maintenance.update_git_mod', '更新 Git 仓库模组 {title}', { title: item.title || '' }).trim())) return false
     toast.info(t('toast.maintenance.git_deploy_started', 'Git 仓库部署任务已启动，请留意底部状态栏。'), { timeout: 4000 })
     const workspaceStore = useWorkspaceStore()

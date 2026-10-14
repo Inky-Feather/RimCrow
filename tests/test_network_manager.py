@@ -1,8 +1,23 @@
 import unittest
 import os
+import subprocess
+import sys
+import sysconfig
 
 from backend.managers.mgr_network import NetworkManager, PROXY_ENV_KEYS
 from backend.settings import settings
+
+
+class TestNetworkTransportStartup(unittest.TestCase):
+    def test_socks_proxy_adapter_is_available(self):
+        from requests.adapters import SOCKSProxyManager
+        self.assertIsNotNone(SOCKSProxyManager('socks5://127.0.0.1:9'))
+
+    def test_system_certificates_are_enabled_without_site_startup(self):
+        site_packages = sysconfig.get_path('purelib')
+        code = f'import sys; sys.path.insert(0, {site_packages!r}); import ssl; assert ssl.SSLContext.__module__ == "ssl"; import backend.managers.mgr_network; assert "truststore" in ssl.SSLContext.__module__'
+        result = subprocess.run([sys.executable, '-S', '-c', code], capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class TestNetworkManagerHostsCleanup(unittest.TestCase):

@@ -237,6 +237,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     repoTimelines: [],    // 当前选中仓库的日志
     previewInfo: null,    // 解析新链接时的预览信息
   })
+  const normalizeGithubRepoUrl = (url) => String(url || '').trim().replace(/\/$/, '').replace(/\.git$/i, '')
   const githubTimelinePollTimer = ref(null)
   const githubTimelinePollSeq = ref(0)
 
@@ -336,17 +337,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     return String(repo.online_info.latest_source_version || '').trim()
   }
-  const parseGithubSourceVersion = (value) => {
-    const raw = String(value || '').trim()
-    const [branch, marker = ''] = raw.split('@')
-    const time = Date.parse(marker)
-    return {
-      raw,
-      branch: branch || '',
-      marker,
-      time: Number.isFinite(time) ? time : 0,
-    }
-  }
   const githubRepoNeedsUpdate = (repo) => {
     const status = getGithubRepoStatus(repo)
     return status.key === 'upgrade'
@@ -355,33 +345,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     if (key === 'missing') return t('ui.workspace.github.status.missing', '本地文件缺失')
     if (key === 'not_deployed') return t('ui.workspace.github.status.not_deployed', '未部署')
     if (key === 'installed') return t('ui.workspace.github.status.installed', '已安装')
-    if (key === 'branch_changed') return t('ui.workspace.github.status.branch_changed', '跟踪分支不同')
+    if (key === 'branch_changed') return t('ui.workspace.github.status.branch_changed', '部署设置不同')
     if (key === 'upgrade') return t('ui.workspace.github.status.upgrade', '可升级')
     if (key === 'current') return t('ui.workspace.github.status.current', '已是最新')
     return t('ui.workspace.github.status.unknown', '状态未知')
   }
   const getGithubRepoStatus = (repo) => {
-    if (!repo) return { key: 'unknown', label: getGithubStatusLabel('unknown'), tone: 'text-text-dim', version: '' }
-    const localVersion = String(repo?.installed_version || '').trim()
-    const onlineVersion = getGithubOnlineVersion(repo)
-    if (repo.local_folder && repo.local_exists === false) {
-      return { key: 'missing', label: getGithubStatusLabel('missing'), tone: 'text-accent-danger', version: localVersion }
-    }
-    if (!localVersion) return { key: 'not_deployed', label: getGithubStatusLabel('not_deployed'), tone: 'text-text-dim', version: onlineVersion }
-    if (!onlineVersion) return { key: 'installed', label: getGithubStatusLabel('installed'), tone: 'text-accent-success', version: localVersion }
-    if (repo?.install_type === 'source') {
-      const localSource = parseGithubSourceVersion(localVersion)
-      const onlineSource = parseGithubSourceVersion(onlineVersion)
-      if (localSource.branch && onlineSource.branch && localSource.branch !== onlineSource.branch) {
-        return { key: 'branch_changed', label: getGithubStatusLabel('branch_changed'), tone: 'text-accent-warn', version: onlineVersion }
-      }
-      if (localSource.time && onlineSource.time) {
-        if (onlineSource.time > localSource.time) return { key: 'upgrade', label: getGithubStatusLabel('upgrade'), tone: 'text-accent-warn', version: onlineVersion }
-        return { key: 'current', label: getGithubStatusLabel('current'), tone: 'text-accent-success', version: onlineVersion }
-      }
-    }
-    if (localVersion !== onlineVersion) return { key: 'upgrade', label: getGithubStatusLabel('upgrade'), tone: 'text-accent-warn', version: onlineVersion }
-    return { key: 'current', label: getGithubStatusLabel('current'), tone: 'text-accent-success', version: onlineVersion }
+    const key = repo?.backend_status || repo?.online_info?.subscription_status || 'unknown'
+    const tone = key === 'missing' ? 'text-accent-danger' : ['upgrade', 'branch_changed'].includes(key) ? 'text-accent-warn' : key === 'current' ? 'text-accent-success' : 'text-text-dim'
+    return { key, label: getGithubStatusLabel(key), tone, version: getGithubOnlineVersion(repo) || repo?.installed_version || '' }
   }
   const applyGithubRepoComputedState = (repo) => {
     if (!repo) return repo
@@ -899,12 +871,20 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       github.subscribedRepos.forEach(repo => {
         if (updatedReposMap[repo.repo_url]) {
           const freshInfo = updatedReposMap[repo.repo_url]
+          if (freshInfo.tracking_ref !== repo.target_branch || freshInfo.tracking_ref_type !== (repo.install_options?.ref_type || 'branch')) return
           repo.online_info = freshInfo
+          repo.backend_status = freshInfo.subscription_status || 'unknown'
           applyGithubRepoComputedState(repo)
         }
       })
       if (github.activeRepo?.repo_url && updatedReposMap[github.activeRepo.repo_url]) {
         applyGithubRepoComputedState(github.activeRepo)
+      }
+    })
+    window.addEventListener('github-deployed', async (e) => {
+      await fetchGithubRepos()
+      if (e.detail?.installed_path) {
+        await window.pywebview.api.scan_mods([e.detail.installed_path], true)
       }
     })
     // 监听合集更新
@@ -2358,7 +2338,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (checkResult(res, t('check.workspace.github_subscriptions', '获取 Git 仓库订阅'))) {
         github.subscribedRepos = (res.data || []).map(repo => applyGithubRepoComputedState(repo))
         github.activeRepo = activeRepoUrl
-          ? github.subscribedRepos.find(repo => repo.repo_url === activeRepoUrl) || null
+          ? github.subscribedRepos.find(repo => normalizeGithubRepoUrl(repo.repo_url) === normalizeGithubRepoUrl(activeRepoUrl)) || null
           : null
         if (!github.activeRepo) {
           stopGithubTimelinePolling()

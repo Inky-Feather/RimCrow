@@ -70,7 +70,11 @@
             </div>
           </section>
 
-          <section v-if="dialogMode === 'data-import' && dataImportModuleRows.length" class="modal-section p-4">
+          <section v-if="isSoftwareBackup" class="modal-section p-4 text-sm leading-relaxed text-accent-warn">
+            {{ t('dialog.package_transfer.restore_warning', '恢复操作说明：把软件设置、AI 定义、用户规则、自定义信息、分组以及订阅项还原为备份时的状态，同时删除该范围内备份文件里不存在的数据。环境、存档和游戏配置不会被恢复。本次恢复不会生成新的备份，原有备份包将保留。') }}
+          </section>
+
+          <section v-if="dialogMode === 'data-import' && !isSoftwareBackup && dataImportModuleRows.length" class="modal-section p-4">
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div class="text-sm font-bold text-text-main">{{ t('dialog.package_transfer.included_data', '包含数据') }}</div>
               <div class="text-xs text-text-dim">{{ dataImportSummary }}</div>
@@ -252,7 +256,7 @@
               </section>
           </template>
 
-          <section v-if="dialogMode === 'data-import' && inspectData && hasSelectedProfileImport" class="modal-section p-4">
+          <section v-if="dialogMode === 'data-import' && !isSoftwareBackup && inspectData && hasSelectedProfileImport" class="modal-section p-4">
             <div class="mb-3 text-sm font-bold text-text-main">{{ t('dialog.package_transfer.profile_import_conflict_handling', '环境导入冲突处理') }}</div>
             <div class="mb-3 rounded-xl border border-accent-danger/20 bg-accent-danger/8 px-3 py-3 text-xs leading-relaxed text-text-dim">
               {{ t('dialog.package_transfer.profile_import_conflict_desc', '这里统一处理所有同名环境。覆盖时只替换环境里的实际使用数据；新建时会尽量保留导入包里的环境信息。') }}
@@ -377,10 +381,10 @@
             {{ t('dialog.package_transfer.footer.mod_import', '导入到当前环境目录或管理器目录时会自动刷新当前模组列表。缺少本地文件的模组会跳过并提醒你。') }}
           </template>
           <template v-else-if="dialogMode === 'data-import'">
-            {{ t('dialog.package_transfer.footer.data_import', '环境重名时会按你的选择处理，其它数据仍按原流程导入。') }}
+            <template v-if="!isSoftwareBackup">{{ t('dialog.package_transfer.auto_backup_hint', '导入前会自动备份软件数据到 data/backups/all-data-backup.rimcrowdata.zip，每次覆盖上一份备份。') }}</template>
           </template>
           <template v-else>
-            {{ t('dialog.package_transfer.footer.mod_export', '如果同一个模组有多个来源，会优先带上你当前正在使用的版本，重复副本会自动跳过。') }}
+            {{ t('dialog.package_transfer.footer.mod_export', '如果同一个模组有多个来源，会优先带上你当前正在使用的版本，重复副本会自动跳过。导入位置：设置 → 数据管理 → 导入模组包。') }}
           </template>
         </div>
         <div class="flex items-center gap-2">
@@ -404,6 +408,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
 import { useModStore } from '../mod/stores/modStore'
 import { useProfileStore } from '../profiles/profileStore'
+import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { formatFileSize } from '../../shared/lib/format'
 import { toast } from '../../shared/lib/common'
 import CommonInput from '../../shared/components/input/CommonInput.vue'
@@ -422,6 +427,7 @@ const isImportMode = computed(() => dialogMode.value === 'mod-import' || dialogM
 const modPackageSchema = ref(null)
 const dataBundleSchema = ref(null)
 const inspectData = ref(null)
+const isSoftwareBackup = computed(() => dialogMode.value === 'data-import' && !!inspectData.value?.is_software_backup)
 const selectedBundlePath = ref('')
 const lastPreparedImportTargetKey = ref('')
 const dataImportModuleSelection = ref({})
@@ -593,12 +599,14 @@ const dataImportSummary = computed(() => {
 })
 
 const dialogTitle = computed(() => {
+  if (isSoftwareBackup.value) return t('dialog.package_transfer.restore_title', '恢复软件数据')
   if (dialogMode.value === 'mod-export') return dialogPreset.value?.title || t('dialog.package_transfer.title.mod_export', '导出模组打包')
   if (dialogMode.value === 'data-import') return t('dialog.package_transfer.title.data_import', '导入软件数据包')
   return t('dialog.package_transfer.title.mod_import', '导入模组打包')
 })
 
 const dialogDesc = computed(() => {
+  if (isSoftwareBackup.value) return t('dialog.package_transfer.restore_desc', '从备份包恢复软件数据，保留现有环境、存档和游戏配置。')
   if (dialogMode.value === 'mod-export') return dialogPreset.value?.description || t('dialog.package_transfer.desc.mod_export', '把模组文件打成一个包，按需把当前环境数据一起带上。')
   if (dialogMode.value === 'data-import') return t('dialog.package_transfer.desc.data_import', '导入软件数据，遇到重名环境时按你的选择处理。')
   return t('dialog.package_transfer.desc.mod_import', '导入模组包，目标可选游戏目录或管理器模组目录。')
@@ -692,6 +700,7 @@ const canSubmit = computed(() => {
     return resolvedExportModIds.value.length > 0
   }
   if (!selectedBundlePath.value || !inspectData.value) return false
+  if (isSoftwareBackup.value) return true
   if (dialogMode.value === 'data-import') {
     if (selectedDataImportModuleKeys.value.length === 0) return false
     return !hasSelectedProfileImport.value || validateProfileRows()
@@ -707,6 +716,7 @@ const canSubmit = computed(() => {
 })
 
 const submitLabel = computed(() => {
+  if (isSoftwareBackup.value) return t('dialog.package_transfer.start_restore', '开始恢复')
   if (dialogMode.value === 'mod-export') return t('dialog.package_transfer.start_export', '开始导出')
   return t('dialog.package_transfer.start_import', '开始导入')
 })
@@ -954,9 +964,14 @@ const handleSubmit = async () => {
     }
 
     if (dialogMode.value === 'data-import') {
+      if (isSoftwareBackup.value && !await useConfirmStore().confirmAction(
+        t('dialog.package_transfer.restore_title', '恢复软件数据'),
+        t('dialog.package_transfer.restore_warning', '恢复操作说明：把软件设置、AI 定义、用户规则、自定义信息、分组以及订阅项还原为备份时的状态，同时删除该范围内备份文件里不存在的数据。环境、存档和游戏配置不会被恢复。本次恢复不会生成新的备份，原有备份包将保留。'),
+        { type: 'warning' }
+      )) return
       const imported = await appStore.importDataBundle(selectedBundlePath.value, {
-        module_keys: selectedDataImportModuleKeys.value,
-        profile_import_plan: buildProfileImportPlan(),
+        module_keys: isSoftwareBackup.value ? [] : selectedDataImportModuleKeys.value,
+        profile_import_plan: isSoftwareBackup.value ? [] : buildProfileImportPlan(),
       })
       if (imported) closeDialog()
       return

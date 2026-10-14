@@ -204,7 +204,7 @@
                         <span v-for="item in section.items" :key="item.id" v-tooltip="relationItemTooltip(item.id, item.info)"
                           class="inline-flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 text-[0.75rem] text-text-main"
                           :class="relationSectionChipClass(section.type)" >
-                          <span v-preview="modPreview(item.id)" class="truncate">{{ relationTargetName(item.id, item.info) }}</span>
+                          <span v-preview="modPreview(item.id, item.info)" class="truncate">{{ relationTargetName(item.id, item.info) }}</span>
                           <button v-if="card.source === 'user'" type="button"
                             v-tooltip="t('dialog.sort_conflict.delete_user_relation', '删除这条模组关系规则')"
                             class="rounded p-0.5 text-text-disabled transition-colors hover:bg-accent-danger/10 hover:text-accent-danger"
@@ -402,7 +402,8 @@ const edgeKey = (edge, index) => `${edge.from_id}>${edge.to_id}:${index}`
 const modName = (id) => modStore.displayModName(id)
 const shortText = (text, max = 18) => String(text || '').length > max ? `${String(text).slice(0, max - 1)}…` : String(text || '')
 const normalizeEdgeId = (id = '') => stripPackageTokenSuffix(id)
-const modPreview = (id) => modStore.takeModById(id)
+const relationInfoName = (info) => Array.isArray(info?.name) ? info.name[0] : info?.name
+const modPreview = (id, info = null) => modStore.takeModById(id, relationInfoName(info) || undefined)
 const isDependencyRule = (rule) => {
   const text = [
     rule?.rule_source?.name,
@@ -837,7 +838,7 @@ const relationSectionMeta = {
 const relationSectionLabel = (type) => relationSectionMeta[type]?.label() || type
 const relationSectionLabelClass = (type) => relationSectionMeta[type]?.labelClass || 'text-text-dim'
 const relationSectionChipClass = (type) => relationSectionMeta[type]?.chipClass || 'border-border-base/10 bg-bg-overlay/5'
-const relationTargetName = (id, info) => modStore.displayModName(id, Array.isArray(info?.name) ? info.name[0] : info?.name)
+const relationTargetName = (id, info) => modStore.displayModName(id, relationInfoName(info))
 const relationItemTooltip = (targetId, info) => {
   let text = `ID: ${targetId}`
   if (!info) return text

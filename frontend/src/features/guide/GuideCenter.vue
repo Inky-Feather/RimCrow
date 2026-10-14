@@ -87,7 +87,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, reactive, ref } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+import { onClickOutside, useEventListener } from '@vueuse/core'
 import { useGuideStore, getAllGuides } from './guideStore'
 import { useAppStore } from '../../app/stores/appStore'
 import { Check, Play, ChevronRight } from 'lucide-vue-next'
@@ -179,9 +179,13 @@ const handlePointerMove = (event) => {
   if (!dragState.moved && Math.hypot(deltaX, deltaY) < DRAG_THRESHOLD) return
 
   dragState.moved = true
+  const rect = rootRef.value.getBoundingClientRect()
+  const bounds = rootRef.value.parentElement.getBoundingClientRect()
+  const baseX = rect.left - dragOffset.value.x
+  const baseY = rect.top - dragOffset.value.y
   dragOffset.value = {
-    x: dragState.offsetX + deltaX,
-    y: dragState.offsetY + deltaY,
+    x: Math.max(bounds.left - baseX, Math.min(dragState.offsetX + deltaX, bounds.right - rect.width - baseX)),
+    y: Math.max(bounds.top - baseY, Math.min(dragState.offsetY + deltaY, bounds.bottom - rect.height - baseY)),
   }
   if (isPanelOpen.value) updatePanelPosition()
 }
@@ -242,6 +246,11 @@ onClickOutside(rootRef, () => {
 
 onBeforeUnmount(() => {
   stopDragging()
+})
+
+useEventListener(window, 'resize', () => {
+  dragOffset.value = { x: 0, y: 0 }
+  nextTick(updatePanelPosition)
 })
 </script>
 

@@ -713,7 +713,9 @@
       "steam_still_running": "Steam is still running. Waiting for it to exit."
     },
     "github": {
+      "branch_required": "Target branch not found. Detect and select a valid branch, then try again.",
       "deploy_started": "Git subscription deployment task started",
+      "invalid_url": "Invalid Git repository URL",
       "provider_catalog_failed": "Failed to get the Git recommendation list. Check the network connection, proxy settings, and recommendation source URL, then try again.",
       "readme_fetch_failed": "Failed to get the Git repository README. Check the network connection, repository URL, and branch name, then try again.",
       "subscription_removed": "Subscription record removed",
@@ -2272,7 +2274,7 @@
       "description": "Review tasks: {taskCount} groups, pending entries: {itemCount}.",
       "empty": "There are no batch results waiting for review",
       "failed_count": "Failed: {count}",
-      "footer_tip": "Until applied, results stay here so you can return and continue reviewing later.",
+      "footer_tip": "Markdown exports create an <span class=\"font-bold text-accent-special\">img</span> folder in the export directory. Image-only exports create a folder named after the export, with one image per mod. This shareable recommendation list cannot be imported as software data.",
       "generation_failed_badge": "Generation failed. Fill manually or retry",
       "input_count": "Input: {count}",
       "later": "Handle later",
@@ -2438,6 +2440,7 @@
     "package_transfer": {
       "apply_environment_data": "Apply environment data too",
       "apply_environment_data_desc": "When overwriting an existing environment, only its actual data is replaced. Name, description, and bindings stay unchanged. New environments try to keep the original package information.",
+      "auto_backup_hint": "Before importing, app data is backed up to data/backups/all-data-backup.rimcrowdata.zip, replacing the previous backup.",
       "batch_handling": "Batch handling",
       "bundle_size": "Package size",
       "bundle_summary": "Package summary",
@@ -2472,8 +2475,7 @@
       "folder_name_type": "Mod folder names inside package",
       "folder_name_type_desc": "Only affects folder names inside the exported package. Original mod directories are not changed. Invalid filename characters are replaced and duplicates get a suffix.",
       "footer": {
-        "data_import": "Same-name environments will be handled according to your choices. Other data follows the normal import flow.",
-        "mod_export": "If the same mod has multiple sources, the version currently in use is preferred and duplicate copies are skipped.",
+        "mod_export": "If a mod has multiple sources, the version currently in use is included first and duplicates are skipped. Import at Settings → Data Management → Import mod package.",
         "mod_import": "Importing into the current environment or manager directory refreshes the current mod list automatically. Mods missing local files are skipped and reported."
       },
       "format": "Format",
@@ -2535,6 +2537,9 @@
         "skip": "Skip"
       },
       "rename_placeholder": "Leave empty to generate a new name automatically",
+      "restore_desc": "Restore app data from the backup while keeping existing profiles, saves and game settings.",
+      "restore_title": "Restore software data",
+      "restore_warning": "Restoration details: app settings, AI definitions, user rules, custom information, groups and subscriptions will return to their backed-up state. Data in these categories that is absent from the backup will be deleted. Profiles, saves and game settings will not be restored. No new backup will be created; the original backup archive will be kept.",
       "select_game_install": "Select an available game install",
       "select_profile_to_overwrite": "Select environment to overwrite",
       "selected_mod_count": "{count} mods selected.",
@@ -2544,6 +2549,7 @@
       "size_change": "Size change",
       "start_export": "Start export",
       "start_import": "Start import",
+      "start_restore": "Start restore",
       "strategy": {
         "create_all": "Create all",
         "overwrite_all": "Overwrite all",
@@ -2603,7 +2609,7 @@
       "export_name": "Export name",
       "export_name_placeholder": "Example: Essential RimWorld mod recommendations",
       "exporting": "Exporting...",
-      "footer_tip": "Markdown creates an <span class=\"font-bold text-accent-special\">img</span> folder in the export folder; image-only export creates a folder named after the export, with one image per mod.",
+      "footer_tip": "Markdown exports create an img folder in the export directory. Image-only exports create a folder named after the export, with one image per mod. This shareable recommendation list cannot be imported as software data.",
       "format": {
         "clipboard": "Copy plain text",
         "image": "Images only"
@@ -4573,16 +4579,12 @@
     },
     "backup_list": {
       "backup_no_exportable_order": "This backup has no package ID sequence to export",
-      "drop_busy": "The previous dropped file is still being processed. Please wait.",
       "empty_share_code": "No valid share code returned",
       "exported_modlist": "Backup exported as ModList",
       "exported_rml": "Backup exported as RML",
       "name_sanitized": "Special characters in the file name were replaced with underscores",
-      "native_drop_no_path": "Native drag-and-drop did not return a valid file path",
-      "no_drop_file": "No importable file detected",
       "no_exportable_order": "This entry has no package ID sequence to export",
       "no_share_code_order": "This backup has no package ID sequence for a share code",
-      "only_one_file": "Only one file can be imported at a time. The first file was used.",
       "rename_empty": "Enter a new backup name"
     },
     "command": {
@@ -4623,6 +4625,12 @@
       "deploy_done": "{repo} deployed",
       "deploy_failed": "{repo} deployment failed",
       "install_source_submitted": "Submitted {count} Git source subscriptions. Starting downloads."
+    },
+    "global_drop": {
+      "data_bundle_browser": "Browser mode cannot read dropped software data packages directly. Choose the file at Settings → Data Management → Import software data package.",
+      "first_file_only": "Only one file can be imported at a time. The first file was selected.",
+      "no_file": "No importable file was detected.",
+      "unsupported_file": "Unrecognized file type. Supported: load-order files and software data packages."
     },
     "group": {
       "add_mods_failed": "Failed to add Mods to the group. Restoring the list. Try again later.",
@@ -4827,6 +4835,7 @@
       },
       "dev": {
         "database_recreated": "Local database was not found and has been recreated.",
+        "invalid_data_backup": "This file is not an app data backup. Use “Import data package” to open it.",
         "remote_image_cache_cleared": "Cleared {count} cached images and freed {size}",
         "repair_complete_restart_later": "Repair is complete and will take effect after restart."
       },
@@ -4938,15 +4947,15 @@
     "backup_list": {
       "export_modsconfig": {
         "loading": "Exporting ModsConfig",
-        "ready": "Export as ModsConfig.xml (package IDs only)"
+        "ready": "Export as ModsConfig.xml with package IDs only. Import with Import Load Order or drop the file into the main window."
       },
       "export_rml": {
         "loading": "Exporting RML",
-        "ready": "Export as RML, the native RimWorld format (package IDs and Workshop IDs)"
+        "ready": "Export as native game RML, including package and Workshop IDs. Import with Import Load Order or drop the file into the main window."
       },
       "export_share_code": {
         "loading": "Generating share code",
-        "ready": "Generate a share code for the current active list and copy it to clipboard"
+        "ready": "Create a share code for the enabled load order and copy it. Paste it into Import Share Code to import."
       },
       "import_file": {
         "loading": "Importing load order",
@@ -5054,10 +5063,10 @@
       "debug_page": "Test page",
       "file_search": "File content search",
       "load_order": {
-        "export_modlist": "Export as ModList.xml (includes package IDs and Workshop IDs)",
-        "export_modsconfig": "Export as ModsConfig.xml (package IDs only)",
-        "export_rml": "Export as RML (game-native export format)",
-        "export_share_code": "Generate an RC- share code and copy it to the clipboard",
+        "export_modlist": "Export as ModList.xml, including package and Workshop IDs. Import with Import Load Order or drop the file into the main window.",
+        "export_modsconfig": "Export as ModsConfig.xml with package IDs only. Import with Import Load Order or drop the file into the main window.",
+        "export_rml": "Export as native game RML. Import with Import Load Order or drop the file into the main window.",
+        "export_share_code": "Create an RC share code and copy it. Paste it into Import Share Code to import.",
         "exporting_modlist": "Exporting ModList",
         "exporting_modsconfig": "Exporting ModsConfig",
         "exporting_rml": "Exporting RML",
@@ -5280,6 +5289,9 @@
       "data_export": {
         "dependencies": "Dependencies: {dependencies}"
       },
+      "dev": {
+        "restore_data_backup": "Restore app data from before the last import: app settings, AI definitions, user rules, custom information, groups and subscriptions.\nProfiles, saves and game settings are excluded. Restoring replaces the listed app data without creating another backup.\nFile: {path}\nSize: {size}\nBackup time: {time}"
+      },
       "external": {
         "git_provider_catalog_sources": "One source per line, format: Name|URL. Leave empty to use the default recommendation list.",
         "reading_default_paths": "Reading default paths",
@@ -5449,11 +5461,6 @@
       }
     },
     "backup_list": {
-      "drop": {
-        "description": "Release to import it into the comparison view",
-        "formats": "Supports `xml` / `rws` / `rml` / `json` / `txt` / `list`",
-        "title": "Drop a load order file"
-      },
       "empty": "No backup records",
       "profile": {
         "description": "Switch to backups from another profile",
@@ -5553,6 +5560,11 @@
         "empty": "Select a file or match on the left to preview read-only file contents here.",
         "loading": "Reading file..."
       }
+    },
+    "global_drop": {
+      "description": "File type is detected automatically when dropped.",
+      "formats": "Load-order files: xml / rws / rml / json / txt / list; software data packages: rimcrowdata.zip",
+      "title": "Drop files here"
     },
     "group_list": {
       "action": {
@@ -6108,6 +6120,11 @@
         "title": "Artificial intelligence",
         "view_raw_response": "View raw response"
       },
+      "data": {
+        "help": "How to use: Export a software data package and save it somewhere safe. To restore it, select the package on this page and follow the prompts. You can also drag a load order file or software data package onto the main window; RimCrow will recognize its type.",
+        "import_data_bundle_title": "Import software data package",
+        "title": "Data Management"
+      },
       "data_export": {
         "description": "Select the data to package. If profile data is selected, the full directory of each selected profile is included.",
         "excluded_data": "Path bindings, sensitive information, and current active profile ID",
@@ -6115,6 +6132,7 @@
         "export_selected": "Export selected",
         "import_conflicts": "Profile import conflicts",
         "import_conflicts_notice": "are handled in the import panel with create/overwrite options.",
+        "import_location": "Import at Settings → Data Management → Import software data package.",
         "no_user_data_dir": "No packageable user data directory was found",
         "pack_full_profile_dir": "The whole profile directory will be packaged",
         "profile_data": "Profile data",
@@ -6163,6 +6181,7 @@
         "remote_image_cache": "Remote image cache",
         "remote_image_cache_desc": "Remote cover images, screenshots, and rich text images are written to local cache first, then read by the frontend through the local asset service.",
         "reset_database_now": "Reset local database now",
+        "restore_data_backup": "Restore backup",
         "scope": {
           "profile_active": "Active Mods in current profile ({count})",
           "profile_active_desc": "Export only active Mods in the current profile.",
@@ -6923,9 +6942,6 @@
       },
       "github": {
         "action": {
-          "create_catalog_subscription": "Create catalog subscription",
-          "create_subscription": "Create subscription",
-          "parse_recommended_repo": "Parse recommended repository",
           "parse_repo": "Parse Git repository URL",
           "request_transfer": "Request data transfer"
         },
@@ -6934,27 +6950,31 @@
           "open_original": "Open original URL"
         },
         "active": {
-          "current_mode": "Current mode: {mode}",
-          "deploy_latest": "Fetch and deploy latest",
           "deploy_now": "Deploy now",
-          "deploy_tooltip": "Fetch and deploy current subscription",
-          "installed_version": "Deployed version: {version}",
           "local_audit_log": "Local audit log",
           "no_logs": "No audit records"
         },
+        "branch": {
+          "detect": "Detect remote branches",
+          "empty": "This repository has no available branches",
+          "label": "Branch",
+          "switch": "Switch branch"
+        },
         "catalog": {
-          "add_git_subscription": "Add as Git subscription",
-          "add_zip_subscription": "Add as Git subscription and deploy zip",
           "branch": "Branch: {branch}",
           "cache_badge": "Cached",
+          "category": "Category",
           "empty": "No matching recommended items",
           "filter_placeholder": "Filter by name, package ID, author, or version",
           "git_subscribed": "Git subscription added",
           "loading": "Reading recommended list...",
+          "no_deploy_source": "This recommendation has no supported Git or archive deployment method.",
           "not_recommended": "Not recommended currently",
           "not_recommended_tooltip": "This item may be temporarily incompatible. Check the description before adding it.",
           "official": "Official content",
           "official_tooltip": "Base game or official DLC does not need subscription",
+          "open_workshop": "Open Workshop page",
+          "source": "Recommendation source",
           "source_all": "All",
           "source_catalog": "Catalog",
           "source_summary": "Recommended sources: {total} items / {sourceCount} sources",
@@ -6963,27 +6983,24 @@
           "workshop_badge": "Workshop",
           "workshop_subscribed": "Workshop subscribed"
         },
-        "dependency": {
-          "add_git": "Add Git subscription",
-          "can_add_git": "Can add Git subscription",
-          "can_subscribe_workshop": "Can subscribe to Workshop",
-          "git_already_added": "This dependency already has a Git subscription",
-          "missing_source": "No directly addable source found",
-          "official": "Base game or official DLC; no subscription needed",
-          "subscribe_workshop": "Subscribe Workshop dependency",
-          "unsubscribe_workshop": "Unsubscribe Workshop dependency"
-        },
         "deploy": {
-          "no_release_cache": "Could not fetch Release version info, and no usable cache is available",
-          "skip_metadata_refresh": "Git repository info query failed. Skipping metadata refresh and deploying the current branch directly.",
+          "active": "Active deployment method",
+          "current": "Up to date",
+          "redeploy": "Redeploy",
+          "release": "Deploy release",
+          "release_button_hint": "Deploys the selected release package.",
+          "release_hint": "Deploy a package published by the project for a straightforward installation.",
+          "source": "Deploy source",
+          "source_button_hint": "Deploys the latest commit from the selected branch.",
+          "source_hint": "Deploy source from the selected branch to the local mods folder.",
           "started": "Data transfer started. Check progress in the bottom status bar.",
-          "use_cached_release": "Git repository info query failed. Continuing deployment with cached Release version."
+          "update": "Update deployment"
         },
         "detail": {
-          "default_branch": "Default branch",
-          "dependencies": "Dependencies",
-          "install_type": "Install type",
-          "rimworld_versions": "RimWorld:"
+          "install_type": "Deployment source",
+          "package_id": "Package ID",
+          "rimworld_versions": "RimWorld:",
+          "version": "Local version"
         },
         "empty": {
           "select_or_add": "Select or Add a Repository"
@@ -6993,47 +7010,41 @@
           "placeholder": "Paste public Git repository URL, e.g. https://github.com/user/repo (supports GitHub / GitLab / GitGud)",
           "supported_tooltip": "Supported repositories: GitHub, GitLab, GitGud."
         },
-        "install_type": {
-          "git_repo": "Git repository",
-          "zip_link": "Zip direct link"
-        },
-        "preview": {
-          "latest_release": "Latest: {version}",
-          "meta": "Author: {owner} | Default branch: {branch}",
-          "release": {
-            "description": "Fetch the stable package published by the author.",
-            "none": "This repository has no Release yet",
-            "title": "Fetch release build (Release)"
-          },
-          "source": {
-            "description": "Fetch the latest branch code. Good for test mods that update frequently or have no Release.",
-            "title": "Sync source branch (Source)"
-          }
+        "loading": "Loading repository information...",
+        "local": {
+          "status": "Update status",
+          "tab": "Local information"
         },
         "readme": {
-          "error": "Failed to read README. Check network connection, repository URL, and branch name, then try again.",
+          "empty": "No README is available for this repository",
           "loading": "Reading README..."
         },
         "refresh": {
           "tooltip": "Refresh current list"
+        },
+        "remote": {
+          "tab": "Repository details"
         },
         "remove": {
           "confirm": "Remove",
           "message": "Remove Git subscription “{name}”?\nDownloaded local files will not be deleted.",
           "title": "Remove subscription"
         },
+        "selection": {
+          "asset": "Release package",
+          "asset_required": "Select a release file, then deploy again",
+          "directory": "Mod folder",
+          "directory_required": "Select a mod directory, then deploy again",
+          "release_version": "Release version"
+        },
         "status": {
-          "branch_changed": "Tracked branch changed",
+          "branch_changed": "Deployment settings differ",
           "current": "Up to date",
           "installed": "Installed",
           "missing": "Local files missing",
           "not_deployed": "Not deployed",
           "unknown": "Status unknown",
           "upgrade": "Upgrade available"
-        },
-        "subscribe": {
-          "catalog_success": "Catalog item subscribed successfully",
-          "repo_success": "Repository subscribed successfully"
         },
         "tabs": {
           "recommend": "Recommended"

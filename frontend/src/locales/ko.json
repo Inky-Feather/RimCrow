@@ -713,7 +713,9 @@
       "steam_still_running": "Steam가 아직 실행 중입니다. 종료되기를 기다리고 있습니다."
     },
     "github": {
+      "branch_required": "대상 브랜치를 찾을 수 없습니다. 유효한 브랜치를 조회하여 선택한 후 다시 시도하세요.",
       "deploy_started": "Git 구독 배포 작업이 시작되었습니다.",
+      "invalid_url": "유효하지 않은 Git 저장소 주소",
       "provider_catalog_failed": "Git 추천 목록을 가져오지 못했습니다. 네트워크 연결, 프록시 설정, 추천 소스 URL을 확인한 후 다시 시도하세요.",
       "readme_fetch_failed": "Git 저장소 README를 가져오지 못했습니다. 네트워크 연결, 저장소 URL, 브랜치 이름을 확인한 후 다시 시도하세요.",
       "subscription_removed": "구독 기록이 삭제됨",
@@ -2272,7 +2274,7 @@
       "description": "검토 작업: {taskCount} 그룹, 보류 중인 항목: {itemCount}.",
       "empty": "검토 대기 중인 일괄 결과가 없습니다.",
       "failed_count": "실패: {count}",
-      "footer_tip": "적용될 때까지 결과는 여기에 유지되므로 나중에 돌아와서 계속 검토할 수 있습니다.",
+      "footer_tip": "Markdown 내보내기는 내보내기 폴더에 <span class=\"font-bold text-accent-special\">img</span> 폴더를 만듭니다. 이미지 전용 내보내기는 내보내기 이름의 폴더를 만들고 모드마다 이미지 하나를 저장합니다. 공유용 추천 목록이며 소프트웨어 데이터로 가져올 수 없습니다.",
       "generation_failed_badge": "생성에 실패했습니다. 수동으로 채우거나 다시 시도하세요.",
       "input_count": "입력: {count}",
       "later": "나중에 처리",
@@ -2438,6 +2440,7 @@
     "package_transfer": {
       "apply_environment_data": "환경 데이터도 적용",
       "apply_environment_data_desc": "기존 환경을 덮어쓰면 실제 데이터만 교체됩니다. 이름, 설명, 바인딩은 변경되지 않습니다. 새로운 환경에서는 원래 패키지 정보를 유지하려고 합니다.",
+      "auto_backup_hint": "가져오기 전에 앱 데이터를 data/backups/all-data-backup.rimcrowdata.zip에 백업하며 이전 백업을 덮어씁니다.",
       "batch_handling": "일괄 처리",
       "bundle_size": "패키지 크기",
       "bundle_summary": "패키지 요약",
@@ -2472,8 +2475,7 @@
       "folder_name_type": "패키지 내부의 Mod 폴더 이름",
       "folder_name_type_desc": "내보낸 패키지 내의 폴더 이름에만 영향을 미칩니다. 원래 모드 디렉토리는 변경되지 않습니다. 잘못된 파일 이름 문자는 대체되고 중복 항목에는 접미사가 붙습니다.",
       "footer": {
-        "data_import": "동일한 이름의 환경은 귀하의 선택에 따라 처리됩니다. 다른 데이터는 일반적인 가져오기 흐름을 따릅니다.",
-        "mod_export": "동일한 모드에 여러 소스가 있는 경우 현재 사용 중인 버전이 선호되며 중복 복사본은 건너뜁니다.",
+        "mod_export": "모드에 여러 출처가 있으면 현재 사용 중인 버전을 우선 포함하고 중복은 건너뜁니다. 가져오기: 설정 → 데이터 관리 → 모드 패키지 가져오기.",
         "mod_import": "현재 환경이나 관리자 디렉터리로 가져오면 현재 모드 목록이 자동으로 새로 고쳐집니다. 로컬 파일이 누락된 모드는 건너뛰고 보고됩니다."
       },
       "format": "체재",
@@ -2535,6 +2537,9 @@
         "skip": "건너뛰다"
       },
       "rename_placeholder": "새 이름을 자동으로 생성하려면 비워 두세요.",
+      "restore_desc": "기존 환경, 저장 파일과 게임 설정을 유지하면서 백업에서 앱 데이터를 복원합니다.",
+      "restore_title": "소프트웨어 데이터 복원",
+      "restore_warning": "복원 안내: 앱 설정, AI 정의, 사용자 규칙, 사용자 지정 정보, 그룹 및 구독을 백업 당시 상태로 되돌립니다. 이 범위에서 백업에 없는 데이터는 삭제됩니다. 환경, 저장 파일과 게임 설정은 복원하지 않습니다. 새 백업을 생성하지 않으며 기존 백업 파일은 보존됩니다.",
       "select_game_install": "사용 가능한 게임 설치 선택",
       "select_profile_to_overwrite": "덮어쓸 환경 선택",
       "selected_mod_count": "{count} 모드가 선택되었습니다.",
@@ -2544,6 +2549,7 @@
       "size_change": "사이즈 변경",
       "start_export": "내보내기 시작",
       "start_import": "가져오기 시작",
+      "start_restore": "복원 시작",
       "strategy": {
         "create_all": "모두 만들기",
         "overwrite_all": "모두 덮어쓰기",
@@ -2603,7 +2609,7 @@
       "export_name": "내보내기 이름",
       "export_name_placeholder": "예: 필수 RimWorld 모드 권장 사항",
       "exporting": "내보내는 중...",
-      "footer_tip": "Markdown은 내보내기 폴더에 <span class=\"font-bold text-accent-special\">img</span> 폴더를 생성합니다. 이미지 전용 내보내기는 모드당 하나의 이미지로 내보내기 이름을 딴 폴더를 생성합니다.",
+      "footer_tip": "Markdown 내보내기는 내보내기 폴더에 img 폴더를 만듭니다. 이미지 전용 내보내기는 내보내기 이름의 폴더를 만들고 모드마다 이미지 하나를 저장합니다. 공유용 추천 목록이며 소프트웨어 데이터로 가져올 수 없습니다.",
       "format": {
         "clipboard": "일반 텍스트 복사",
         "image": "이미지만"
@@ -4573,16 +4579,12 @@
     },
     "backup_list": {
       "backup_no_exportable_order": "이 백업에는 내보낼 패키지 ID 시퀀스가 ​​없습니다.",
-      "drop_busy": "이전에 삭제된 파일이 아직 처리 중입니다. 기다리세요.",
       "empty_share_code": "유효한 공유 코드가 반환되지 않았습니다.",
       "exported_modlist": "ModList로 내보낸 백업",
       "exported_rml": "RML로 내보낸 백업",
       "name_sanitized": "파일 이름의 특수 문자가 밑줄로 대체되었습니다.",
-      "native_drop_no_path": "기본 드래그 앤 드롭이 유효한 파일 경로를 반환하지 않았습니다.",
-      "no_drop_file": "가져올 수 있는 파일이 감지되지 않았습니다.",
       "no_exportable_order": "이 항목에는 내보낼 패키지 ID 시퀀스가 ​​없습니다.",
       "no_share_code_order": "이 백업에는 공유 코드에 대한 패키지 ID 시퀀스가 ​​없습니다.",
-      "only_one_file": "한 번에 하나의 파일만 가져올 수 있습니다. 첫 번째 파일이 사용되었습니다.",
       "rename_empty": "새 백업 이름을 입력하세요."
     },
     "command": {
@@ -4623,6 +4625,12 @@
       "deploy_done": "{repo} 배포 완료",
       "deploy_failed": "{repo} 배포 실패",
       "install_source_submitted": "{count}개의 Git 소스 구독을 제출했습니다. 다운로드를 시작합니다."
+    },
+    "global_drop": {
+      "data_bundle_browser": "브라우저 모드에서는 끌어 놓은 소프트웨어 데이터 패키지를 바로 읽을 수 없습니다. 설정 → 데이터 관리 → 소프트웨어 데이터 패키지 가져오기에서 선택하세요.",
+      "first_file_only": "한 번에 파일 하나만 가져올 수 있습니다. 첫 번째 파일을 선택했습니다.",
+      "no_file": "가져올 수 있는 파일을 찾지 못했습니다.",
+      "unsupported_file": "인식할 수 없는 파일 형식입니다. 정렬 파일과 소프트웨어 데이터 패키지를 지원합니다."
     },
     "group": {
       "add_mods_failed": "Mod를 그룹에 추가하지 못했습니다. 목록 상태를 되돌리는 중입니다. 잠시 후 다시 시도하세요.",
@@ -4827,6 +4835,7 @@
       },
       "dev": {
         "database_recreated": "로컬 데이터베이스를 찾을 수 없어 다시 생성되었습니다.",
+        "invalid_data_backup": "이 파일은 앱 데이터 백업이 아닙니다. “데이터 패키지 가져오기”로 열어 주세요.",
         "remote_image_cache_cleared": "{count} 캐시된 이미지를 삭제하고 {size}를 해제했습니다.",
         "repair_complete_restart_later": "복구가 완료되었으며 다시 시작한 후에 적용됩니다."
       },
@@ -4938,15 +4947,15 @@
     "backup_list": {
       "export_modsconfig": {
         "loading": "ModsConfig 내보내기",
-        "ready": "ModsConfig.xml로 내보내기(패키지 ID만)"
+        "ready": "패키지 ID만 포함한 ModsConfig.xml로 내보냅니다. ‘정렬 가져오기’를 사용하거나 파일을 메인 창에 끌어 놓으세요."
       },
       "export_rml": {
         "loading": "RML 내보내기",
-        "ready": "기본 RimWorld 형식(패키지 ID 및 Workshop ID)인 RML로 내보내기"
+        "ready": "패키지 및 Workshop ID를 포함한 게임 기본 RML 형식으로 내보냅니다. ‘정렬 가져오기’를 사용하거나 파일을 메인 창에 끌어 놓으세요."
       },
       "export_share_code": {
         "loading": "공유 코드 생성 중",
-        "ready": "현재 활성 목록에 대한 공유 코드를 생성하고 클립보드에 복사합니다."
+        "ready": "활성 정렬의 공유 코드를 만들고 복사합니다. ‘공유 코드 가져오기’에 붙여 넣으세요."
       },
       "import_file": {
         "loading": "로드 순서 가져오기",
@@ -5054,10 +5063,10 @@
       "debug_page": "테스트 페이지",
       "file_search": "파일 콘텐츠 검색",
       "load_order": {
-        "export_modlist": "ModList.xml로 내보내기(패키지 ID 및 Workshop ID 포함)",
-        "export_modsconfig": "ModsConfig.xml로 내보내기(패키지 ID만)",
-        "export_rml": "RML(게임 기본 내보내기 형식)로 내보내기",
-        "export_share_code": "RC 공유 코드를 생성하고 클립보드에 복사하세요.",
+        "export_modlist": "패키지 및 Workshop ID를 포함한 ModList.xml로 내보냅니다. ‘정렬 가져오기’를 사용하거나 파일을 메인 창에 끌어 놓으세요.",
+        "export_modsconfig": "패키지 ID만 포함한 ModsConfig.xml로 내보냅니다. ‘정렬 가져오기’를 사용하거나 파일을 메인 창에 끌어 놓으세요.",
+        "export_rml": "게임 기본 RML 형식으로 내보냅니다. ‘정렬 가져오기’를 사용하거나 파일을 메인 창에 끌어 놓으세요.",
+        "export_share_code": "RC 공유 코드를 만들고 복사합니다. ‘공유 코드 가져오기’에 붙여 넣으세요.",
         "exporting_modlist": "ModList 내보내기",
         "exporting_modsconfig": "ModsConfig 내보내기",
         "exporting_rml": "RML 내보내기",
@@ -5280,6 +5289,9 @@
       "data_export": {
         "dependencies": "종속성: {dependencies}"
       },
+      "dev": {
+        "restore_data_backup": "마지막 가져오기 직전의 앱 데이터를 복원합니다: 앱 설정, AI 정의, 사용자 규칙, 사용자 지정 정보, 그룹 및 구독.\n환경, 저장 파일과 게임 설정은 제외됩니다. 새 백업을 만들지 않고 위 앱 데이터를 덮어씁니다.\n파일: {path}\n크기: {size}\n백업 시간: {time}"
+      },
       "external": {
         "git_provider_catalog_sources": "한 줄에 하나의 소스, 형식: 이름|URL. 기본 추천 목록을 사용하려면 비워 두세요.",
         "reading_default_paths": "기본 경로 읽기",
@@ -5449,11 +5461,6 @@
       }
     },
     "backup_list": {
-      "drop": {
-        "description": "비교 보기로 가져오려면 놓습니다.",
-        "formats": "`xml` / `rws` / `rml` / `json` / `txt` / `list` 지원",
-        "title": "로드 순서 파일 삭제"
-      },
       "empty": "백업 기록 없음",
       "profile": {
         "description": "다른 프로필의 백업으로 전환",
@@ -5553,6 +5560,11 @@
         "empty": "여기에서 읽기 전용 파일 내용을 미리 보려면 왼쪽에서 파일이나 일치 항목을 선택하세요.",
         "loading": "파일을 읽는 중..."
       }
+    },
+    "global_drop": {
+      "description": "파일을 놓으면 형식을 자동 감지합니다.",
+      "formats": "정렬 파일: xml / rws / rml / json / txt / list; 소프트웨어 데이터 패키지: rimcrowdata.zip",
+      "title": "파일을 여기에 놓으세요"
     },
     "group_list": {
       "action": {
@@ -6108,6 +6120,11 @@
         "title": "인공지능",
         "view_raw_response": "원시 응답 보기"
       },
+      "data": {
+        "help": "사용 방법: 소프트웨어 데이터 패키지를 내보내 안전한 위치에 저장하세요. 복원하려면 이 페이지에서 패키지를 선택하고 안내에 따라 가져오세요. 정렬 파일이나 소프트웨어 데이터 패키지를 메인 창으로 끌어다 놓아도 RimCrow가 유형을 자동으로 인식합니다.",
+        "import_data_bundle_title": "소프트웨어 데이터 패키지 가져오기",
+        "title": "데이터 관리"
+      },
       "data_export": {
         "description": "패키징할 데이터를 선택합니다. 프로필 데이터를 선택하면 선택한 각 프로필의 전체 디렉터리가 포함됩니다.",
         "excluded_data": "경로 바인딩, 민감한 정보, 현재 활성 프로필 ID",
@@ -6115,6 +6132,7 @@
         "export_selected": "선택한 내보내기",
         "import_conflicts": "프로필 가져오기 충돌",
         "import_conflicts_notice": "생성/덮어쓰기 옵션을 사용하여 가져오기 패널에서 처리됩니다.",
+        "import_location": "가져오기: 설정 → 데이터 관리 → 소프트웨어 데이터 패키지 가져오기.",
         "no_user_data_dir": "패키지 가능한 사용자 데이터 디렉터리를 찾을 수 없습니다.",
         "pack_full_profile_dir": "전체 프로필 디렉터리가 패키지됩니다.",
         "profile_data": "프로필 데이터",
@@ -6163,6 +6181,7 @@
         "remote_image_cache": "원격 이미지 캐시",
         "remote_image_cache_desc": "원격 표지 이미지, 스크린샷, 서식 있는 텍스트 이미지는 먼저 로컬 캐시에 기록된 다음 로컬 자산 서비스를 통해 프런트엔드에서 읽습니다.",
         "reset_database_now": "지금 로컬 데이터베이스 재설정",
+        "restore_data_backup": "백업 복원",
         "scope": {
           "profile_active": "현재 프로필의 활성 모드({count})",
           "profile_active_desc": "현재 프로필의 활성 모드만 내보냅니다.",
@@ -6923,9 +6942,6 @@
       },
       "github": {
         "action": {
-          "create_catalog_subscription": "카탈로그 구독 만들기",
-          "create_subscription": "구독 만들기",
-          "parse_recommended_repo": "권장 저장소 구문 분석",
           "parse_repo": "Git 저장소 URL 구문 분석",
           "request_transfer": "데이터 전송 요청"
         },
@@ -6934,27 +6950,31 @@
           "open_original": "원본 URL 열기"
         },
         "active": {
-          "current_mode": "현재 모드: {mode}",
-          "deploy_latest": "최신 가져오기 및 배포",
           "deploy_now": "지금 배포",
-          "deploy_tooltip": "현재 구독 가져오기 및 배포",
-          "installed_version": "배포 버전: {version}",
           "local_audit_log": "로컬 감사 로그",
           "no_logs": "감사 기록 ​​없음"
         },
+        "branch": {
+          "detect": "원격 브랜치 조회",
+          "empty": "이 저장소에는 사용 가능한 브랜치가 없습니다",
+          "label": "브랜치",
+          "switch": "브랜치 전환"
+        },
         "catalog": {
-          "add_git_subscription": "Git 구독으로 추가",
-          "add_zip_subscription": "Git 구독으로 추가하고 zip 배포",
           "branch": "분기: {branch}",
           "cache_badge": "캐시됨",
+          "category": "분류",
           "empty": "일치하는 추천 항목이 없습니다.",
           "filter_placeholder": "이름, 패키지 ID, 작성자 또는 버전별로 필터링",
           "git_subscribed": "Git 구독이 추가되었습니다.",
           "loading": "추천 목록을 읽는 중...",
+          "no_deploy_source": "이 추천 항목은 지원되는 Git 또는 압축 파일 배포 방식을 제공하지 않습니다.",
           "not_recommended": "현재 권장되지 않음",
           "not_recommended_tooltip": "이 항목은 일시적으로 호환되지 않을 수 있습니다. 추가하기 전에 설명을 확인하세요.",
           "official": "공식 콘텐츠",
           "official_tooltip": "기본 게임 또는 공식 DLC에는 구독이 필요하지 않습니다.",
+          "open_workshop": "창작마당 페이지 열기",
+          "source": "추천 출처",
           "source_all": "All",
           "source_catalog": "목록",
           "source_summary": "추천 소스: {total} 아이템 / {sourceCount} 소스",
@@ -6963,27 +6983,24 @@
           "workshop_badge": "Workshop",
           "workshop_subscribed": "Workshop 구독했습니다"
         },
-        "dependency": {
-          "add_git": "Git 구독 추가",
-          "can_add_git": "Git 구독을 추가할 수 있습니다.",
-          "can_subscribe_workshop": "Workshop를 구독할 수 있습니다",
-          "git_already_added": "이 종속 항목에는 이미 Git 구독이 있습니다.",
-          "missing_source": "직접 추가할 수 있는 소스가 없습니다.",
-          "official": "기본 게임 또는 공식 DLC 구독이 필요하지 않습니다",
-          "subscribe_workshop": "Workshop 종속성 구독",
-          "unsubscribe_workshop": "Workshop 종속성 구독 취소"
-        },
         "deploy": {
-          "no_release_cache": "릴리스 버전 정보를 가져올 수 없으며 사용 가능한 캐시가 없습니다.",
-          "skip_metadata_refresh": "Git 저장소 정보 쿼리에 실패했습니다. 메타데이터 새로 고침을 건너뛰고 현재 분기를 직접 배포합니다.",
+          "active": "현재 배포 방식",
+          "current": "최신 상태",
+          "redeploy": "다시 배포",
+          "release": "릴리스 배포",
+          "release_button_hint": "선택한 릴리스 패키지를 배포합니다.",
+          "release_hint": "프로젝트가 공개한 패키지를 사용해 간편하게 설치합니다.",
+          "source": "소스 배포",
+          "source_button_hint": "선택한 브랜치의 최신 커밋을 배포합니다.",
+          "source_hint": "선택한 브랜치의 소스를 로컬 모드 폴더에 배포합니다.",
           "started": "데이터 전송이 시작되었습니다. 하단 상태 표시줄에서 진행 상황을 확인하세요.",
-          "use_cached_release": "Git 저장소 정보 쿼리에 실패했습니다. 캐시된 릴리스 버전으로 계속 배포합니다."
+          "update": "배포 업데이트"
         },
         "detail": {
-          "default_branch": "기본 지점",
-          "dependencies": "종속성",
-          "install_type": "설치 유형",
-          "rimworld_versions": "RimWorld:"
+          "install_type": "배포 방식",
+          "package_id": "패키지 ID",
+          "rimworld_versions": "RimWorld:",
+          "version": "로컬 버전"
         },
         "empty": {
           "select_or_add": "저장소 선택 또는 추가"
@@ -6993,37 +7010,35 @@
           "placeholder": "공개 Git 저장소 URL을 붙여넣으세요. 예: https://github.com/user/repo (GitHub / GitLab / GitGud 지원)",
           "supported_tooltip": "지원되는 리포지토리: GitHub, GitLab, GitGud."
         },
-        "install_type": {
-          "git_repo": "힘내 저장소",
-          "zip_link": "우편번호 직접 링크"
-        },
-        "preview": {
-          "latest_release": "최신: {version}",
-          "meta": "저자: {owner} | 기본 분기: {branch}",
-          "release": {
-            "description": "작성자가 게시한 안정적인 패키지를 가져옵니다.",
-            "none": "이 저장소에는 아직 릴리스가 없습니다.",
-            "title": "릴리스 빌드 가져오기(Release)"
-          },
-          "source": {
-            "description": "최신 지점 코드를 가져옵니다. 자주 업데이트되거나 릴리스가 없는 테스트 모드에 적합합니다.",
-            "title": "동기화 소스 브랜치(소스)"
-          }
+        "loading": "저장소 정보를 불러오는 중...",
+        "local": {
+          "status": "업데이트 상태",
+          "tab": "로컬 정보"
         },
         "readme": {
-          "error": "README를 읽지 못했습니다. 네트워크 연결, 저장소 URL, 브랜치 이름을 확인한 후 다시 시도하세요.",
+          "empty": "이 저장소에서 읽을 수 있는 README가 없습니다",
           "loading": "추가 정보를 읽는 중..."
         },
         "refresh": {
           "tooltip": "현재 목록 새로 고침"
+        },
+        "remote": {
+          "tab": "저장소 정보"
         },
         "remove": {
           "confirm": "제거하다",
           "message": "Git 구독 '{name}'를 삭제하시겠습니까?\n다운로드한 로컬 파일은 삭제되지 않습니다.",
           "title": "구독 삭제"
         },
+        "selection": {
+          "asset": "릴리스 패키지 파일",
+          "asset_required": "릴리스 파일을 선택한 후 다시 배포하세요",
+          "directory": "모드 폴더",
+          "directory_required": "모드 폴더를 선택한 후 다시 배포하세요",
+          "release_version": "릴리스 버전"
+        },
         "status": {
-          "branch_changed": "추적된 분기가 변경되었습니다.",
+          "branch_changed": "배포 설정이 다릅니다",
           "current": "최신",
           "installed": "설치됨",
           "missing": "로컬 파일이 누락되었습니다.",
@@ -7031,16 +7046,12 @@
           "unknown": "상태를 알 수 없음",
           "upgrade": "업그레이드 가능"
         },
-        "subscribe": {
-          "catalog_success": "카탈로그 항목이 성공적으로 구독되었습니다.",
-          "repo_success": "저장소가 성공적으로 구독되었습니다."
-        },
         "tabs": {
           "recommend": "추천"
         },
         "time": {
-          "published": "게시됨: {time}",
-          "updated": "업데이트됨: {time}"
+          "published": "게시일: {time}",
+          "updated": "업데이트: {time}"
         },
         "timeline": {
           "desc": {

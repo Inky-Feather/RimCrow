@@ -713,7 +713,9 @@
       "steam_still_running": "Steam 仍在運行，繼續等待其退出。"
     },
     "github": {
+      "branch_required": "未找到目標分支，請探測並選擇有效分支後重試。",
       "deploy_started": "Git 訂閱部署任務已啟動",
+      "invalid_url": "無效的 Git 倉庫連結",
       "provider_catalog_failed": "獲取 Git 推薦列表失敗。請檢查網路連接、代理設定和推薦源地址，稍後重試。",
       "readme_fetch_failed": "獲取 Git 倉庫 README 失敗。請檢查網路連接、倉庫地址和分支名稱後重試。",
       "subscription_removed": "已移除訂閱記錄",
@@ -2272,7 +2274,7 @@
       "description": "待檢閱任務 {taskCount} 組，待檢閱條目 {itemCount} 項。",
       "empty": "目前沒有待檢閱的批量結果",
       "failed_count": "失敗: {count}",
-      "footer_tip": "未確認應用前，結果會一直保留在這裡，可隨時回來繼續檢閱。",
+      "footer_tip": "Markdown 會在匯出目錄建立 <span class=\"font-bold text-accent-special\">img</span> 資料夾；純圖片匯出會依匯出名稱建立資料夾，每個模組一張圖片。這是分享用的推薦清單，不能匯入為軟體資料。",
       "generation_failed_badge": "生成失敗，請手填或重試",
       "input_count": "輸入: {count}",
       "later": "稍後處理",
@@ -2438,6 +2440,7 @@
     "package_transfer": {
       "apply_environment_data": "同時應用環境資料",
       "apply_environment_data_desc": "覆蓋現有環境時，只會替換這個環境的實際使用資料，不會改名稱、說明和綁定關係。新建環境時，會盡量保留原來的環境資訊。",
+      "auto_backup_hint": "匯入前會自動備份軟體資料到 data/backups/all-data-backup.rimcrowdata.zip，每次覆蓋上一份備份。",
       "batch_handling": "批量處理",
       "bundle_size": "壓縮包大小",
       "bundle_summary": "包摘要",
@@ -2472,8 +2475,7 @@
       "folder_name_type": "包內Mod資料夾命名",
       "folder_name_type_desc": "隻影響導出包裡的資料夾名稱，不會改動原始Mod目錄。遇到不適合作為檔案名的字符會自動替換，重名會自動追加序號。",
       "footer": {
-        "data_import": "環境重名時會按你的選擇處理，其它資料仍按原流程導入。",
-        "mod_export": "如果同一個模組有多個來源，會優先帶上你目前正在使用的版本，重複副本會自動跳過。",
+        "mod_export": "若同一模組有多個來源，會優先匯出目前使用的版本，並略過重複項目。匯入位置：設定 → 資料管理 → 匯入模組包。",
         "mod_import": "導入到目前環境目錄或管理器目錄時會自動重新整理目前模組列表。缺少本地檔案的模組會跳過並提醒你。"
       },
       "format": "格式",
@@ -2535,6 +2537,9 @@
         "skip": "跳過"
       },
       "rename_placeholder": "留空會自動補一個新名字",
+      "restore_desc": "從備份包還原軟體資料，保留現有環境、存檔和遊戲設定。",
+      "restore_title": "還原軟體資料",
+      "restore_warning": "還原操作說明：把軟體設定、AI 定義、使用者規則、自訂資訊、分組以及訂閱項還原為備份時的狀態，同時刪除該範圍內備份檔案裡不存在的資料。環境、存檔和遊戲設定不會被還原。本次還原不會產生新的備份，原有備份包將保留。",
       "select_game_install": "請選擇一個可用遊戲本體",
       "select_profile_to_overwrite": "請選擇要覆蓋的環境",
       "selected_mod_count": "已選 {count} 個模組。",
@@ -2544,6 +2549,7 @@
       "size_change": "體積變化",
       "start_export": "開始導出",
       "start_import": "開始導入",
+      "start_restore": "開始還原",
       "strategy": {
         "create_all": "全部新建",
         "overwrite_all": "全部覆蓋",
@@ -2603,7 +2609,7 @@
       "export_name": "導出名稱",
       "export_name_placeholder": "例如：RimWorld 必備模組推薦",
       "exporting": "導出中...",
-      "footer_tip": "Markdown 會在導出目錄內創建 <span class=\"font-bold text-accent-special\">img</span> 資料夾；純圖片會按導出名稱新建資料夾，每個模組一張圖。",
+      "footer_tip": "Markdown 會在匯出目錄建立 img 資料夾；純圖片匯出會依匯出名稱建立資料夾，每個模組一張圖片。這是分享用的推薦清單，不能匯入為軟體資料。",
       "format": {
         "clipboard": "複製純文字",
         "image": "純圖片"
@@ -4573,16 +4579,12 @@
     },
     "backup_list": {
       "backup_no_exportable_order": "該備份沒有可導出的包名序列",
-      "drop_busy": "上一個拖入檔案仍在處理中，請稍候",
       "empty_share_code": "後端沒有返回有效的分享碼",
       "exported_modlist": "備份已導出為 ModList",
       "exported_rml": "備份已導出為 RML",
       "name_sanitized": "檔案名中的特殊字符已替換為下劃線",
-      "native_drop_no_path": "原生拖放未返回有效檔案路徑",
-      "no_drop_file": "未檢測到可導入檔案",
       "no_exportable_order": "該條目沒有可導出的包名序列",
       "no_share_code_order": "該備份沒有可生成分享碼的包名序列",
-      "only_one_file": "一次只能導入一個檔案，已自動使用第一個檔案",
       "rename_empty": "請輸入新的備份名稱"
     },
     "command": {
@@ -4623,6 +4625,12 @@
       "deploy_done": "{repo} 部署完成",
       "deploy_failed": "{repo} 部署失敗",
       "install_source_submitted": "已提交 {count} 個 Git 來源訂閱，即將開始下載。"
+    },
+    "global_drop": {
+      "data_bundle_browser": "瀏覽器模式無法直接讀取拖入的軟體資料包，請前往「設定 → 資料管理 → 匯入軟體資料包」選取檔案。",
+      "first_file_only": "一次只能匯入一個檔案，已使用第一個檔案。",
+      "no_file": "未偵測到可匯入的檔案。",
+      "unsupported_file": "無法識別此檔案。支援排序檔案和軟體資料包。"
     },
     "group": {
       "add_mods_failed": "新增模組到分組失敗，正在還原清單狀態。請稍後重試。",
@@ -4827,6 +4835,7 @@
       },
       "dev": {
         "database_recreated": "未找到本地資料庫，已重新創建。",
+        "invalid_data_backup": "該檔案不是軟體資料備份包，請使用「匯入資料包」讀取。",
         "remote_image_cache_cleared": "已清理 {count} 張快取圖片，釋放 {size}",
         "repair_complete_restart_later": "修復已完成，重啟軟體後生效。"
       },
@@ -4938,15 +4947,15 @@
     "backup_list": {
       "export_modsconfig": {
         "loading": "正在導出 ModsConfig",
-        "ready": "導出為 ModsConfig.xml（僅含包名）"
+        "ready": "匯出為 ModsConfig.xml（僅含套件名稱）。請使用「匯入載入順序」或將檔案拖入主視窗匯入。"
       },
       "export_rml": {
         "loading": "正在導出 RML",
-        "ready": "導出為 RML 遊戲原生格式（含包名和工坊ID）"
+        "ready": "匯出為遊戲原生 RML 格式（含套件名稱和工坊 ID）。請使用「匯入載入順序」或將檔案拖入主視窗匯入。"
       },
       "export_share_code": {
         "loading": "正在生成分享碼",
-        "ready": "生成目前啟用序列的分享碼並複製到剪貼板"
+        "ready": "產生目前啟用順序的分享碼並複製；請在「匯入分享碼」中貼上。"
       },
       "import_file": {
         "loading": "正在導入載入序列",
@@ -5054,10 +5063,10 @@
       "debug_page": "測試頁面",
       "file_search": "檔案內容搜尋",
       "load_order": {
-        "export_modlist": "導出為 ModList.xml（含包名和工坊ID）",
-        "export_modsconfig": "導出為 ModsConfig.xml（僅含包名）",
-        "export_rml": "導出為 RML（遊戲原生導出格式）",
-        "export_share_code": "生成 RC- 分享碼並複製到剪貼板",
+        "export_modlist": "匯出為 ModList.xml（含套件名稱和工坊 ID）。請使用「匯入載入順序」或將檔案拖入主視窗匯入。",
+        "export_modsconfig": "匯出為 ModsConfig.xml（僅含套件名稱）。請使用「匯入載入順序」或將檔案拖入主視窗匯入。",
+        "export_rml": "匯出為遊戲原生 RML 格式。請使用「匯入載入順序」或將檔案拖入主視窗匯入。",
+        "export_share_code": "產生 RC 分享碼並複製；請在「匯入分享碼」中貼上。",
         "exporting_modlist": "正在導出 ModList",
         "exporting_modsconfig": "正在導出 ModsConfig",
         "exporting_rml": "正在導出 RML",
@@ -5280,6 +5289,9 @@
       "data_export": {
         "dependencies": "依賴：{dependencies}"
       },
+      "dev": {
+        "restore_data_backup": "還原上次匯入前的軟體資料：軟體設定、AI 定義、使用者規則、自訂資訊、分組和訂閱。\n不包含環境、存檔及遊戲設定；還原會覆蓋上述軟體資料，不會再次備份。\n檔案：{path}\n大小：{size}\n備份時間：{time}"
+      },
       "external": {
         "git_provider_catalog_sources": "每行一個來源，格式：名稱|URL。留空時使用預設推薦清單。",
         "reading_default_paths": "正在讀取預設路徑",
@@ -5449,11 +5461,6 @@
       }
     },
     "backup_list": {
-      "drop": {
-        "description": "鬆手後將自動嘗試導入到對比視圖",
-        "formats": "支持 `xml` / `rws` / `rml` / `json` / `txt` / `list`",
-        "title": "拖入載入序列檔案"
-      },
       "empty": "暫無備份記錄",
       "profile": {
         "description": "切換其它環境備份",
@@ -5553,6 +5560,11 @@
         "empty": "選擇左側檔案或命中項後，這裡顯示只讀檔案內容。",
         "loading": "正在讀取檔案..."
       }
+    },
+    "global_drop": {
+      "description": "放開滑鼠後會自動識別檔案類型。",
+      "formats": "排序檔案：xml / rws / rml / json / txt / list；軟體資料包：rimcrowdata.zip",
+      "title": "將檔案拖曳到這裡"
     },
     "group_list": {
       "action": {
@@ -6108,6 +6120,11 @@
         "title": "人工智能",
         "view_raw_response": "查看原始返回內容"
       },
+      "data": {
+        "help": "使用說明：先匯出軟體資料包並儲存到安全的位置；需要還原時，在本頁選擇資料包並依照提示匯入。也可以將排序檔案或軟體資料包直接拖曳到主視窗，RimCrow 會自動辨識類型。",
+        "import_data_bundle_title": "匯入軟體資料包",
+        "title": "資料管理"
+      },
       "data_export": {
         "description": "勾選要打包的資料；如果選擇環境資料，會打包對應環境的完整目錄。",
         "excluded_data": "路徑綁定、敏感資訊、目前激活環境 ID",
@@ -6115,6 +6132,7 @@
         "export_selected": "導出目前選擇",
         "import_conflicts": "環境導入衝突",
         "import_conflicts_notice": "會在導入面板統一處理新建/覆蓋。",
+        "import_location": "匯入位置：設定 → 資料管理 → 匯入軟體資料包。",
         "no_user_data_dir": "未檢測到可打包的使用者資料目錄",
         "pack_full_profile_dir": "將打包整個環境目錄",
         "profile_data": "環境資料",
@@ -6163,6 +6181,7 @@
         "remote_image_cache": "網路圖片快取",
         "remote_image_cache_desc": "遠程封面圖、截圖和富文字圖片會先寫入本地快取，再由前端通過本地資源服務讀取。",
         "reset_database_now": "立即重置本地資料庫",
+        "restore_data_backup": "還原備份",
         "scope": {
           "profile_active": "目前環境啟用模組（{count}）",
           "profile_active_desc": "只導出目前環境裡已經啟用的模組。",
@@ -6923,9 +6942,6 @@
       },
       "github": {
         "action": {
-          "create_catalog_subscription": "建立清單訂閱",
-          "create_subscription": "建立訂閱",
-          "parse_recommended_repo": "解析推薦倉庫",
           "parse_repo": "解析 Git 倉庫連結",
           "request_transfer": "請求資料傳輸"
         },
@@ -6934,27 +6950,31 @@
           "open_original": "打開原始地址"
         },
         "active": {
-          "current_mode": "目前模式: {mode}",
-          "deploy_latest": "獲取並部署最新",
           "deploy_now": "立即部署",
-          "deploy_tooltip": "獲取並部署目前訂閱",
-          "installed_version": "已部署版本: {version}",
           "local_audit_log": "本地執行追蹤 (Local Audit Log)",
           "no_logs": "暫無追蹤記錄"
         },
+        "branch": {
+          "detect": "探測遠端分支",
+          "empty": "該倉庫沒有可用分支",
+          "label": "分支",
+          "switch": "切換分支"
+        },
         "catalog": {
-          "add_git_subscription": "添加為 Git 訂閱",
-          "add_zip_subscription": "添加為 Git 訂閱並部署 zip",
           "branch": "分支：{branch}",
           "cache_badge": "快取",
+          "category": "分類",
           "empty": "沒有匹配的推薦項",
           "filter_placeholder": "篩選名稱、包名、作者或版本",
           "git_subscribed": "已添加 Git 訂閱",
           "loading": "正在讀取推薦列表...",
+          "no_deploy_source": "此推薦項目沒有可用的 Git 儲存庫或壓縮檔部署方式。",
           "not_recommended": "目前不建議使用",
           "not_recommended_tooltip": "該項目可能暫時不兼容，建議確認說明後再添加",
           "official": "官方內容",
           "official_tooltip": "遊戲本體或官方 DLC 不需要訂閱",
+          "open_workshop": "開啟創意工坊頁面",
+          "source": "推薦來源",
           "source_all": "全部",
           "source_catalog": "清單",
           "source_summary": "推薦來源: {total} 項 / {sourceCount} 個來源",
@@ -6963,27 +6983,24 @@
           "workshop_badge": "工坊",
           "workshop_subscribed": "已訂閱創意工坊"
         },
-        "dependency": {
-          "add_git": "添加 Git 訂閱",
-          "can_add_git": "可添加 Git 訂閱",
-          "can_subscribe_workshop": "可訂閱創意工坊",
-          "git_already_added": "該依賴已添加 Git 訂閱",
-          "missing_source": "沒有找到可直接添加的來源",
-          "official": "遊戲本體或官方 DLC，不需要訂閱",
-          "subscribe_workshop": "訂閱創意工坊依賴",
-          "unsubscribe_workshop": "取消訂閱創意工坊依賴"
-        },
         "deploy": {
-          "no_release_cache": "無法獲取 Release 版本資訊，目前也沒有可用快取",
-          "skip_metadata_refresh": "Git 倉庫資訊查詢失敗，已跳過元資料重新整理，直接按目前分支繼續部署",
+          "active": "目前部署方式",
+          "current": "已是最新版本",
+          "redeploy": "重新部署",
+          "release": "部署發行版",
+          "release_button_hint": "使用所選版本的發行套件部署。",
+          "release_hint": "使用專案發布的套件部署，適合一般使用者快速安裝。",
+          "source": "部署原始碼",
+          "source_button_hint": "原始碼部署會跟隨目前分支的最新提交。",
+          "source_hint": "從所選分支讀取原始碼並部署至本機模組資料夾。",
           "started": "已開始獲取資料流，請在底部狀態欄查看進度",
-          "use_cached_release": "Git 倉庫資訊查詢失敗，已改用本地快取的 Release 版本繼續部署"
+          "update": "更新部署"
         },
         "detail": {
-          "default_branch": "預設分支",
-          "dependencies": "依賴項",
-          "install_type": "安裝類型",
-          "rimworld_versions": "RimWorld："
+          "install_type": "部署來源",
+          "package_id": "套件名稱",
+          "rimworld_versions": "RimWorld：",
+          "version": "本機版本"
         },
         "empty": {
           "select_or_add": "選擇或添加倉庫"
@@ -6993,37 +7010,35 @@
           "placeholder": "粘貼公開 Git 倉庫地址 如: https://github.com/user/repo (支持 GitHub / GitLab / GitGud)",
           "supported_tooltip": "支持以下倉庫：GitHub、GitLab、GitGud。"
         },
-        "install_type": {
-          "git_repo": "Git 倉庫",
-          "zip_link": "Zip 直鏈"
-        },
-        "preview": {
-          "latest_release": "最新：{version}",
-          "meta": "作者: {owner} | 預設分支: {branch}",
-          "release": {
-            "description": "獲取作者打包的穩定版。",
-            "none": "該倉庫尚未發佈任何 Release",
-            "title": "獲取發行版 (Release)"
-          },
-          "source": {
-            "description": "獲取分支最新代碼。適合頻繁更新或未發佈 Release 的測試版模組。",
-            "title": "同步源碼分支 (Source)"
-          }
+        "loading": "正在讀取倉庫資訊...",
+        "local": {
+          "status": "更新狀態",
+          "tab": "本機資訊"
         },
         "readme": {
-          "error": "讀取 README 失敗。請檢查網路連接、倉庫地址和分支名稱後重試。",
+          "empty": "該倉庫沒有可讀取的 README",
           "loading": "正在讀取 README..."
         },
         "refresh": {
           "tooltip": "重新整理目前列表"
+        },
+        "remote": {
+          "tab": "儲存庫資訊"
         },
         "remove": {
           "confirm": "移除",
           "message": "確定要移除 Git 訂閱「{name}」嗎？\n本地已下載檔案不會被刪除。",
           "title": "移除訂閱"
         },
+        "selection": {
+          "asset": "發行套件檔案",
+          "asset_required": "請選擇發行包檔案後重新部署",
+          "directory": "模組資料夾",
+          "directory_required": "請選擇模組目錄後重新部署",
+          "release_version": "發行版本"
+        },
         "status": {
-          "branch_changed": "跟蹤分支不同",
+          "branch_changed": "部署設定不同",
           "current": "已是最新",
           "installed": "已安裝",
           "missing": "本地檔案缺失",
@@ -7031,15 +7046,11 @@
           "unknown": "狀態未知",
           "upgrade": "可升級"
         },
-        "subscribe": {
-          "catalog_success": "清單項已成功訂閱",
-          "repo_success": "倉庫已成功訂閱"
-        },
         "tabs": {
           "recommend": "推薦列表"
         },
         "time": {
-          "published": "發佈: {time}",
+          "published": "發布: {time}",
           "updated": "更新: {time}"
         },
         "timeline": {

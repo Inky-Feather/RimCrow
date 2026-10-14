@@ -21,7 +21,8 @@
     </div>
   </div>
 
-  <div v-else class="relative h-screen w-full flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
+  <div v-else id="app-shell" class="relative h-screen w-full flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
+    <GlobalFileDrop />
     <RimHeader class="z-500" />
 
     <!-- 主工作区 -->
@@ -337,6 +338,7 @@ import { useCommandStore } from '../shared/commands/commandStore'
 import { startKeybindingRuntime } from '../shared/commands/keybindingRuntime'
 import { registerBuiltinCommands } from './commands/builtinCommands'
 import RimHeader from './shell/RimHeader.vue'
+import GlobalFileDrop from '../shared/components/GlobalFileDrop.vue'
 import StatusBar from './shell/StatusBar.vue'
 import ModDetails from '../features/mod/ModDetails.vue'
 import DisabledModList from '../features/mod/DisabledModList.vue'
@@ -633,7 +635,7 @@ const Resizer = (props, { emit }) => {
   return h('div', {
     // 容器：透明，宽热区，z-index高，负margin抵消宽度以保持布局紧凑
     class: [
-      'w-4 h-full cursor-col-resize z-20 flex justify-center items-center flex-shrink-0 -mx-2 select-none outline-none touch-none',
+      'w-4 h-full cursor-col-resize z-10 flex justify-center items-center flex-shrink-0 -mx-2 select-none outline-none touch-none',
       'group' // 用于 hover 状态控制子元素
     ],
     onMousedown: (e) => emit('mousedown', e)

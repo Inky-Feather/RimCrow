@@ -26,7 +26,8 @@ class GameManager:
     """
 
     PROCESS_NAMES_BY_SYSTEM = {
-        'Windows': ("RimWorldWin64.exe", "RimWorldWin.exe"),
+        # RimWorld 1.7 (Waylith engine) runs as RimWorld.exe; legacy names are kept.
+        'Windows': ("RimWorld.exe", "RimWorldWin64.exe", "RimWorldWin.exe"),
         'Darwin': ("RimWorldMac",),
         'Linux': ("RimWorldLinux", "RimWorldLinux.x86_64", "RimWorldWin64.exe", "RimWorldWin.exe"),
     }
@@ -37,9 +38,9 @@ class GameManager:
         return get_default_user_data_paths(system_name=platform.system())
 
     @classmethod
-    def get_default_player_log_paths(cls, filename: str = "Player.log") -> list[str]:
+    def get_default_player_log_paths(cls, filename: str = "Player.log", *, game_version: str = "") -> list[str]:
         """返回各平台默认 Player 日志文件候选位置。"""
-        return get_default_player_log_paths(filename=filename, system_name=platform.system())
+        return get_default_player_log_paths(filename=filename, system_name=platform.system(), game_version=game_version)
 
     @classmethod
     def resolve_default_user_data_path(cls) -> str:

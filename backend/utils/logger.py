@@ -163,6 +163,7 @@ class BaseLogReader:
         line_processor_cb: 回调函数，用于各子类处理特有逻辑（如游戏日志的正则匹配）
         """
         blocks = []
+        limit = max_keep_blocks or (None if keep_all else self.max_blocks)
         filename = os.path.basename(filepath)
         realtime_json_names = {
             'RimCrow_Realtime.log', 'RimCrow_Realtime-prev.log',
@@ -204,8 +205,8 @@ class BaseLogReader:
                             if first_skip is None:
                                 first_skip = (line_idx + 1, str(e), line_str[:200])
                             continue
-                        if keep_all and max_keep_blocks and len(blocks) > max_keep_blocks:
-                            blocks.pop(0)
+                        if limit and len(blocks) > 2 * limit:
+                            del blocks[:-limit]
                     if skipped_count:
                         first_line, reason, sample = first_skip or ("", "", "")
                         logger.warning(
@@ -225,7 +226,7 @@ class BaseLogReader:
         except Exception as e:
             logger.error(f"读取日志失败：{filepath}，错误：{e}", exc_info=True)
             
-        return blocks if keep_all else blocks[-self.max_blocks:]
+        return blocks[-limit:] if limit else blocks
     
     
 

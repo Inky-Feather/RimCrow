@@ -2,8 +2,11 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 from zipfile import ZipFile
+
+import requests
 
 from backend.managers.mgr_download import DownloadTask
 from backend.managers.mgr_github import (
@@ -32,6 +35,20 @@ class TestGithubManager(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.temp_root, ignore_errors=True)
         self.manager = GithubManager()
         GithubManager._response_cache.clear()
+        patcher = patch.object(self.manager, "fetch_ref_commit", side_effect=self._mock_ref_commit)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = patch("backend.managers.mgr_github.GithubModRecord.get_or_none", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = patch.object(self.manager, "fetch_release_assets_web", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _mock_ref_commit(self, identity, ref, ref_type="branch", **kwargs):
+        if identity.provider == GIT_PROVIDER_GITLAB:
+            return self.manager.fetch_gitlab_commit(identity, ref=ref, missing_ok=True)
+        return self.manager.fetch_commit(identity.owner, identity.repo, ref=ref, missing_ok=True)
 
     def _create_zip(self, zip_path: Path, entries: dict[str, str]) -> None:
         with ZipFile(zip_path, "w") as archive:
@@ -89,6 +106,153 @@ class TestGithubManager(unittest.TestCase):
         self.assertEqual(identity.owner, "user")
         self.assertEqual(identity.repo, "repo")
 
+    def test_resolve_repo_link_matches_complete_branches_and_subdirectories(self):
+        cases = [
+            ("https://github.com/user/repo/tree/feature/rimworld?tab=readme", "feature/rimworld"),
+            ("https://github.com/user/repo/tree/feature%2Frimworld/About", "feature/rimworld"),
+            ("https://github.com/tree/repo/tree/dev/About", "dev"),
+            ("https://github.com/user/tree/tree/dev/About", "dev"),
+            ("gitgud.io/group/subgroup/repo/-/tree/dev/About", "dev"),
+            ("https://gitlab.com/group/subgroup/repo/-/tree/feature/rimworld/Defs", "feature/rimworld"),
+        ]
+        with patch.object(self.manager, "fetch_repo_branches", return_value=["dev", "feature/rimworld"]):
+            for url, expected in cases:
+                with self.subTest(url=url):
+                    identity, branch = self.manager.resolve_repo_link(url)
+                    self.assertEqual(branch, expected)
+                    self.assertEqual(identity.url, f"https://{identity.host}/{identity.path}")
+
+    def test_resolve_repo_link_keeps_explicit_branch_and_does_not_guess_ambiguous_paths(self):
+        with patch.object(self.manager, "fetch_repo_branches", return_value=["dev", "dev/tools"]) as fetch:
+            self.assertEqual(self.manager.resolve_repo_link("https://github.com/user/repo", "")[1], "")
+            self.assertEqual(self.manager.resolve_repo_link("https://github.com/user/repo/tree/old", "release/1.7")[1], "release/1.7")
+            fetch.assert_not_called()
+            self.assertEqual(self.manager.resolve_repo_link("https://github.com/user/repo/tree/dev/tools")[1], "dev/tools")
+            with self.assertRaises(ValueError):
+                self.manager.resolve_repo_link("https://github.com/user/repo/tree/dev/tools/About")
+            with self.assertRaises(ValueError):
+                self.manager.resolve_repo_link("https://github.com/user/repo/tree/nonexistent")
+
+    def test_fetch_repo_info_uses_link_branch_and_returns_canonical_url(self):
+        with patch.object(self.manager, "fetch_repo_branches", side_effect=lambda _url, ref_type="branch": ["dev"] if ref_type == "branch" else []), \
+             patch.object(self.manager, "fetch_gitlab_project", return_value={"default_branch": "master"}), \
+             patch.object(self.manager, "fetch_gitlab_release", return_value=None), \
+             patch.object(self.manager, "fetch_gitlab_commit", return_value={"id": "abc"}) as commit:
+            info = self.manager.fetch_repo_info("https://gitgud.io/team/repo/-/tree/dev/About")
+        self.assertEqual(info["repo_url"], "https://gitgud.io/team/repo")
+        self.assertEqual(info["latest_source_branch"], "dev")
+        self.assertEqual(commit.call_args.kwargs["ref"], "dev")
+        self.assertEqual(info["release_status"], "missing")
+
+    def test_fetch_repo_branches_reads_all_pages_for_both_providers(self):
+        for url, endpoint in [
+            ("https://github.com/user/repo", "https://api.github.com/repos/user/repo/branches"),
+            ("https://gitgud.io/group/sub/repo", "https://gitgud.io/api/v4/projects/group%2Fsub%2Frepo/repository/branches"),
+        ]:
+            with self.subTest(url=url):
+                responses = [MagicMock(status_code=200), MagicMock(status_code=200)]
+                responses[0].json.return_value = [{"name": f"branch-{i}"} for i in range(100)]
+                responses[1].json.return_value = [{"name": "feature/rimworld"}]
+                with patch("backend.managers.mgr_github.build_retry_session") as build:
+                    session = build.return_value.__enter__.return_value
+                    session.get.side_effect = responses
+                    branches = self.manager.fetch_repo_branches(url)
+                self.assertEqual(len(branches), 101)
+                self.assertEqual(branches[-1], "feature/rimworld")
+                self.assertEqual(session.get.call_args.args[0], endpoint)
+                self.assertEqual(session.get.call_args.kwargs["params"]["page"], 2)
+                self.assertEqual(session.get.call_args.kwargs["timeout"], (5, 20))
+
+    def test_fetch_repo_branches_does_not_return_partial_results_on_failure(self):
+        response = MagicMock(status_code=200)
+        response.json.return_value = [{"name": f"branch-{i}"} for i in range(100)]
+        with patch("backend.managers.mgr_github.build_retry_session") as build:
+            build.return_value.__enter__.return_value.get.side_effect = [response, requests.HTTPError("403")]
+            with self.assertRaises(requests.HTTPError):
+                self.manager.fetch_repo_branches("https://gitgud.io/team/repo")
+
+    def test_release_failure_preserves_cached_release_and_refreshes_source(self):
+        cached = {"has_release": True, "latest_release_tag": "v1", "latest_source_branch": "master", "latest_source_commit_sha": "old"}
+        with patch.object(self.manager, "fetch_gitlab_project", return_value={"default_branch": "master"}), \
+             patch.object(self.manager, "fetch_gitlab_release", side_effect=requests.HTTPError("403 Forbidden")), \
+             patch.object(self.manager, "fetch_gitlab_commit", return_value={"id": "new", "committed_date": "2026-04-16T03:22:11Z"}), \
+             patch("backend.managers.mgr_github.GithubModRecord.get_or_none", return_value=SimpleNamespace(online_info_cache=cached)):
+            info = self.manager.fetch_repo_info("https://gitgud.io/team/repo")
+        self.assertEqual(info["release_status"], "error")
+        self.assertEqual(info["latest_release_tag"], "v1")
+        self.assertEqual(info["source_status"], "available")
+        self.assertEqual(info["latest_source_commit_sha"], "new")
+        self.assertTrue(info["is_degraded"])
+
+    def test_source_failure_does_not_block_release_or_inherit_another_branch_commit(self):
+        cached = {"latest_source_branch": "old", "latest_source_commit_sha": "oldsha", "latest_source_version": "old@2026-04-01"}
+        with patch.object(self.manager, "fetch_repo", return_value={"default_branch": "main"}), \
+             patch.object(self.manager, "fetch_latest_release", return_value={"tag_name": "v2"}), \
+             patch.object(self.manager, "fetch_commit", side_effect=requests.Timeout("timeout")), \
+             patch("backend.managers.mgr_github.GithubModRecord.get_or_none", return_value=SimpleNamespace(online_info_cache=cached)):
+            info = self.manager.fetch_repo_info("https://github.com/user/repo", source_branch="new")
+        self.assertEqual(info["release_status"], "available")
+        self.assertEqual(info["latest_release_tag"], "v2")
+        self.assertEqual(info["source_status"], "error")
+        self.assertEqual(info["latest_source_branch"], "new")
+        self.assertEqual(info["latest_source_commit_sha"], "")
+
+    def test_missing_release_is_different_from_release_api_failure(self):
+        with patch.object(self.manager, "fetch_repo", return_value={"default_branch": "dev"}), \
+             patch.object(self.manager, "fetch_latest_release", return_value=None), \
+             patch.object(self.manager, "fetch_commit", return_value={"sha": "new"}), \
+             patch("backend.managers.mgr_github.GithubModRecord.get_or_none") as cache:
+            info = self.manager.fetch_repo_info("https://github.com/user/repo")
+        self.assertEqual(info["release_status"], "missing")
+        self.assertFalse(info["has_release"])
+        cache.assert_not_called()
+
+    def test_branch_slashes_are_encoded_in_download_url_and_not_used_as_filename_paths(self):
+        for provider, host in [(GIT_PROVIDER_GITHUB, "github.com"), (GIT_PROVIDER_GITLAB, "gitgud.io")]:
+            with self.subTest(provider=provider):
+                request = GithubInstallRequest(
+                    owner="user", repo="repo", provider=provider, host=host, project_path="user/repo",
+                    artifact=GithubArtifactRequest(kind=GITHUB_ARTIFACT_SOURCE_ARCHIVE, source_ref="feature/1.7"),
+                )
+                with patch.object(self.manager, "fetch_commit", return_value={"sha": "a" * 40}), \
+                     patch.object(self.manager, "fetch_gitlab_commit", return_value={"id": "a" * 40}):
+                    resolved = self.manager._resolve_source_archive(request)
+                self.assertEqual(resolved.filename, "repo_aaaaaaaaaaaa_source.zip")
+                self.assertIn("a" * 40, resolved.download_url)
+
+    def test_gitlab_release_api_failure_uses_existing_tag_archive_fallback(self):
+        request = GithubInstallRequest(
+            owner="user", repo="repo", provider=GIT_PROVIDER_GITLAB, host="gitgud.io", project_path="user/repo",
+            artifact=GithubArtifactRequest(
+                kind=GITHUB_ARTIFACT_RELEASE_ASSET, release_tag="v1",
+                fallback_download_url="https://gitgud.io/api/v4/projects/user%2Frepo/repository/archive.zip?sha=v1",
+                fallback_filename="repo_v1.zip", fallback_version="v1",
+            ),
+        )
+        with patch.object(self.manager, "fetch_gitlab_release", side_effect=requests.HTTPError("403")), \
+             patch.object(self.manager, "fetch_gitlab_commit", return_value={"id": "a" * 40}):
+            resolved = self.manager._resolve_gitlab_release_asset(request)
+        self.assertIn("a" * 40, resolved.download_url)
+        self.assertEqual(resolved.version, "v1")
+
+    def test_github_release_without_assets_uses_tag_archive(self):
+        artifact = self.manager._build_repo_artifact_request("user", "repo", repo_url="https://github.com/user/repo", is_release_mode=True, target_version="release/1.7")
+        self.assertIn("release%2F1.7", artifact.fallback_download_url)
+        self.assertEqual(artifact.fallback_filename, "repo_release_1.7.zip")
+        request = GithubInstallRequest(
+            owner="user", repo="repo",
+            artifact=GithubArtifactRequest(
+                kind=GITHUB_ARTIFACT_RELEASE_ASSET, release_tag="v1",
+                fallback_download_url="https://github.com/user/repo/archive/refs/tags/v1.zip",
+                fallback_filename="repo_v1.zip", fallback_version="v1",
+            ),
+        )
+        with patch.object(self.manager, "fetch_release", return_value={"tag_name": "v1", "assets": []}), \
+             patch.object(self.manager, "fetch_commit", return_value={"sha": "a" * 40}):
+            resolved = self.manager._resolve_release_asset(request)
+        self.assertIn("a" * 40, resolved.download_url)
+        self.assertEqual(resolved.version, "v1")
+
     def test_resolve_source_archive_uses_default_branch_when_missing_ref(self):
         request = GithubInstallRequest(
             owner="user",
@@ -100,13 +264,13 @@ class TestGithubManager(unittest.TestCase):
              patch.object(
                  self.manager,
                  "fetch_commit",
-                 return_value={"commit": {"author": {"date": "2026-04-16T03:22:11Z"}}},
+                 return_value={"sha": "a" * 40, "commit": {"author": {"date": "2026-04-16T03:22:11Z"}}},
              ):
             resolved = self.manager._resolve_source_archive(request)
 
-        self.assertEqual(resolved.version, "dev@2026-04-16T03:22:11Z")
-        self.assertTrue(resolved.download_url.endswith("/archive/refs/heads/dev.zip"))
-        self.assertEqual(resolved.filename, "repo_dev_source.zip")
+        self.assertEqual(resolved.version, "dev@" + "a" * 40)
+        self.assertTrue(resolved.download_url.endswith("/archive/" + "a" * 40 + ".zip"))
+        self.assertEqual(resolved.filename, "repo_aaaaaaaaaaaa_source.zip")
 
     def test_fetch_repo_info_includes_source_version_for_target_branch(self):
         with patch.object(self.manager, "fetch_repo", return_value={"default_branch": "main"}), \
@@ -115,16 +279,16 @@ class TestGithubManager(unittest.TestCase):
                  self.manager,
                  "fetch_commit",
                  return_value={
-                     "sha": "abcdef123456",
+                     "sha": "a" * 40,
                      "commit": {"author": {"date": "2026-04-16T03:22:11Z"}},
                  },
              ):
             info = self.manager.fetch_repo_info("https://github.com/user/repo", source_branch="dev")
 
         self.assertEqual(info["latest_source_branch"], "dev")
-        self.assertEqual(info["latest_source_commit_sha"], "abcdef123456")
+        self.assertEqual(info["latest_source_commit_sha"], "a" * 40)
         self.assertEqual(info["latest_source_commit_at"], "2026-04-16T03:22:11Z")
-        self.assertEqual(info["latest_source_version"], "dev@2026-04-16T03:22:11Z")
+        self.assertEqual(info["latest_source_version"], "dev@" + "a" * 40)
         self.assertEqual(info["latest_release_published_at"], "2026-04-15T10:00:00Z")
         self.assertEqual(info["info_source"], "api")
         self.assertFalse(info["is_degraded"])
@@ -163,7 +327,7 @@ class TestGithubManager(unittest.TestCase):
                  self.manager,
                  "fetch_gitlab_commit",
                  return_value={
-                     "id": "abcdef123456",
+                     "id": "a" * 40,
                      "committed_date": "2026-04-16T03:22:11Z",
                  },
              ):
@@ -176,7 +340,7 @@ class TestGithubManager(unittest.TestCase):
         self.assertEqual(info["default_branch"], "Dev")
         self.assertEqual(info["latest_release_tag"], "v1.2.3")
         self.assertEqual(info["latest_release_published_at"], "2026-04-15T10:00:00Z")
-        self.assertEqual(info["latest_source_version"], "Dev@2026-04-16T03:22:11Z")
+        self.assertEqual(info["latest_source_version"], "Dev@" + "a" * 40)
 
     def test_provider_catalog_normalizes_rjw_git_and_zip_items(self):
         catalog = self.manager._normalize_provider_catalog_payload(
@@ -516,7 +680,7 @@ class TestGithubManager(unittest.TestCase):
         self._create_zip(
             zip_path,
             {
-                "repo-main/ExampleMod/About/About.xml": "<ModMetaData />",
+                "repo-main/ExampleMod/About/About.xml": "<ModMetaData><packageId>test.mod</packageId></ModMetaData>",
                 "repo-main/ExampleMod/Textures/a.png": "png",
             },
         )
@@ -565,7 +729,7 @@ class TestGithubManager(unittest.TestCase):
             ),
         )
 
-        self.assertEqual(source, mod_root)
+        self.assertEqual(source, mod_root.resolve())
 
     def test_refresh_catalog_zip_signature_uses_remote_headers(self):
         class FakeResponse:
@@ -746,12 +910,12 @@ class TestGithubManager(unittest.TestCase):
                     "sources": [{"format": "zip", "url": "https://example.invalid/source.zip"}],
                 },
             },
-        ):
+        ), patch.object(self.manager, "fetch_gitlab_commit", return_value={"id": "a" * 40}):
             resolved = self.manager._resolve_release_asset(request)
 
         self.assertEqual(resolved.version, "v2")
-        self.assertEqual(resolved.filename, "repo_v2.zip")
-        self.assertIn("repository/archive.zip?sha=v2", resolved.download_url)
+        self.assertEqual(resolved.filename, "repo_aaaaaaaaaaaa_source.zip")
+        self.assertIn("repository/archive.zip?sha=" + "a" * 40, resolved.download_url)
 
     def test_install_repo_mod_builds_release_asset_request_for_release_mode(self):
         captured: dict[str, GithubInstallRequest] = {}
@@ -777,7 +941,7 @@ class TestGithubManager(unittest.TestCase):
         self.assertEqual(request.artifact.asset_name_suffix, ".zip")
         self.assertIn("/archive/refs/tags/v1.2.3.zip", request.artifact.fallback_download_url)
         self.assertEqual(request.artifact.fallback_filename, "repo_v1.2.3.zip")
-        self.assertEqual(request.install.final_name, "_GH_repo")
+        self.assertTrue(request.install.final_name.startswith("_GH_repo_"))
 
     def test_fetch_repo_info_raises_when_no_fallback_source_available(self):
         with patch.object(self.manager, "_fetch_repo_info_via_api", side_effect=GithubRateLimitError("rate limited")), \
@@ -786,7 +950,7 @@ class TestGithubManager(unittest.TestCase):
             with self.assertRaises(GithubRateLimitError):
                 self.manager.fetch_repo_info("https://github.com/user/repo")
 
-    def test_resolve_source_archive_does_not_block_download_when_commit_lookup_fails(self):
+    def test_resolve_source_archive_blocks_unidentified_download_when_commit_lookup_fails(self):
         request = GithubInstallRequest(
             repo_url="https://github.com/user/repo",
             owner="user",
@@ -800,10 +964,8 @@ class TestGithubManager(unittest.TestCase):
         with patch.object(self.manager, "fetch_commit", side_effect=GithubRateLimitError("rate limited")), \
              patch.object(self.manager, "fetch_commit_web", return_value=None), \
              patch.object(self.manager, "_fetch_repo_info_from_record_cache", return_value=None):
-            resolved = self.manager._resolve_source_archive(request)
-
-        self.assertEqual(resolved.version, "dev")
-        self.assertTrue(resolved.download_url.endswith("/archive/refs/heads/dev.zip"))
+            with self.assertRaises(GithubRateLimitError):
+                self.manager._resolve_source_archive(request)
 
 
 class TestTextureOptGithubIntegration(unittest.TestCase):

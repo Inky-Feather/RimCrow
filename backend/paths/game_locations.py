@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - 仅在非 Windows 平台触发
 
 from backend.paths.core import normalize_path_for_storage, unique_paths
 from backend.utils.constants import RIMWORLD_APPMANIFEST_NAME, RIMWORLD_STEAM_APP_ID_STR
+from backend.utils.versioning import extract_major_game_version
 
 
 def _resolved_system_name(system_name: str | None = None) -> str:
@@ -64,7 +65,7 @@ def get_default_user_data_paths(system_name: str | None = None) -> list[str]:
     ], system_name=resolved_system_name)
 
 
-def get_default_player_log_paths(filename: str = "Player.log", system_name: str | None = None) -> list[str]:
+def get_default_player_log_paths(filename: str = "Player.log", system_name: str | None = None, *, game_version: str = "") -> list[str]:
     target_name = os.path.basename(str(filename or "").strip()) or "Player.log"
     resolved_system_name = _resolved_system_name(system_name)
     if resolved_system_name == "Darwin":
@@ -74,10 +75,24 @@ def get_default_player_log_paths(filename: str = "Player.log", system_name: str 
             _join_path(resolved_system_name, home, "Library", "Logs", "Unity", target_name),
         ], system_name=resolved_system_name)
 
-    return unique_paths([
-        os.path.join(root, target_name)
+    major_version = extract_major_game_version(game_version)
+    version = tuple(int(part) for part in major_version.split(".")) if "." in major_version else None
+    # RimWorld 1.7 (Waylith engine) 变更了日志目录结构，另外为避免从1.7切回旧版本后依旧读取遗留的1.7日志，加入了版本判定。
+    log_dirs = ("Logs", "") if version is None else (("Logs",) if version >= (1, 7) else ("",))
+    candidates = unique_paths([
+        os.path.join(root, directory, target_name)
         for root in get_default_user_data_paths(system_name=resolved_system_name)
+        for directory in log_dirs
     ], system_name=resolved_system_name)
+    if version is None:
+        mtimes = {}
+        for path in candidates:
+            try:
+                mtimes[path] = os.stat(path).st_mtime_ns
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+        candidates.sort(key=lambda path: mtimes.get(path, -1), reverse=True)
+    return candidates
 
 
 def get_default_steam_root_candidates(system_name: str | None = None) -> list[str]:
@@ -144,7 +159,8 @@ def find_app_bundle_path(executable_or_install_path: str) -> str:
 def detect_rimworld_executable(install_path: str, system_name: str | None = None) -> str:
     resolved_system_name = _resolved_system_name(system_name)
     candidates_by_system = {
-        "Windows": ["RimWorldWin64.exe", "RimWorldWin.exe"],
+        # RimWorld 1.7 (Waylith engine) ships RimWorld.exe on Windows; legacy names are kept.
+        "Windows": ["RimWorld.exe", "RimWorldWin64.exe", "RimWorldWin.exe"],
         "Darwin": ["RimWorldMac.app", "RimWorldMac"],
         "Linux": ["RimWorldLinux", "RimWorldLinux.x86_64", "start_RimWorld.sh"],
     }

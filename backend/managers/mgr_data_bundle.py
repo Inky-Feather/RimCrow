@@ -1,16 +1,19 @@
 import json
 import os
 import shutil
+import tempfile
 import uuid
 import zipfile
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from backend._version import __version__
 from backend.database.dao import CollectionDAO
-from backend.database.models import GameProfile, GithubModRecord, db
+from peewee import chunked
+from backend.database.models import GameProfile, GithubModRecord, GroupData, GroupMod, ModInterlock, SubscribedCollection, UserModData, db
 from backend.utils.bundle_io import (
     create_sibling_stage_dir,
     extract_prefix_to_dir,
@@ -23,8 +26,10 @@ from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_install import GameInstallRegistry
 from backend.managers.mgr_profile import ProfileManager
 from backend.utils.profile_runtime import normalize_profile_runtime_flags
-from backend.settings import DATA_DIR, settings
+from backend.settings import DATA_DIR, AppConfig, settings
 from backend.i18n.messages import localized_key, tr
+from backend.utils.logger import logger
+from backend.utils.secret_store import SECRET_FIELDS
 from backend.utils.tools import normalize_path_for_compare, normalize_path_for_storage
 
 if TYPE_CHECKING:
@@ -42,6 +47,9 @@ class DataBundleManager:
     """
 
     FORMAT = "rimcrow.data.bundle"
+    BACKUP_FORMAT = "rimcrow.software-data-backup"
+    BACKUP_FILENAME = "all-data-backup.rimcrowdata.zip"
+    _BACKUP_MODELS = (ModInterlock, UserModData, GroupData, GroupMod, GithubModRecord, SubscribedCollection)
     SCHEMA_VERSION = 1
     FILE_EXTENSION = ".rimcrowdata.zip"
     LEGACY_FILE_EXTENSIONS = (".rmmdata.zip", ".rmmdata")
@@ -181,6 +189,8 @@ class DataBundleManager:
         return resolved
 
     def get_schema(self) -> dict[str, Any]:
+        backup_path = DATA_DIR / "backups" / self.BACKUP_FILENAME
+        backup_stat = backup_path.stat() if backup_path.is_file() else None
         profiles = []
         for profile in self.profile_mgr.get_all_profiles():
             user_data_path = str(profile.get("user_data_path") or "").strip()
@@ -199,6 +209,8 @@ class DataBundleManager:
             "file_extension": self.FILE_EXTENSION,
             "legacy_file_extensions": list(self.LEGACY_FILE_EXTENSIONS),
             "data_dir": str(DATA_DIR),
+            "software_backup": {"path": str(backup_path), "size_bytes": backup_stat.st_size,
+                                "modified_at": datetime.fromtimestamp(backup_stat.st_mtime).astimezone().isoformat()} if backup_stat else None,
             "modules": self.module_definitions(),
             "presets": {
                 "rules": {
@@ -267,12 +279,15 @@ class DataBundleManager:
         profile_ids: list[str] | None = None,
         preset: str = "custom",
         dynamic_rule_ids: list[str] | None = None,
+        is_backup: bool = False,
     ) -> dict[str, Any]:
+        if is_backup:
+            module_keys = [item["key"] for item in self.MODULE_DEFINITIONS if item["key"] != "profiles"]
         normalized_modules = self.expand_module_dependencies(module_keys)
         if not normalized_modules:
             raise ValueError("未选择任何可导出的数据模块")
 
-        module_payloads = self._collect_modules_payload(normalized_modules, dynamic_rule_ids)
+        module_payloads = self._collect_modules_payload(normalized_modules, dynamic_rule_ids, is_backup=is_backup)
         profile_entries: list[dict[str, Any]] = []
 
         with zipfile.ZipFile(
@@ -292,7 +307,7 @@ class DataBundleManager:
                 profile_entries = self._write_profiles_to_bundle(bundle, profile_ids or [])
 
             manifest = {
-                "format": self.FORMAT,
+                "format": self.BACKUP_FORMAT if is_backup else self.FORMAT,
                 "schema_version": self.SCHEMA_VERSION,
                 "app_version": __version__,
                 "exported_at": datetime.now().astimezone().isoformat(),
@@ -306,6 +321,9 @@ class DataBundleManager:
                 ],
                 "profiles": profile_entries,
             }
+            if is_backup:
+                manifest["files"] = {key: key in module_payloads for key in self._software_backup_files()}
+                manifest["user_rules_path"] = str(Path(settings.config.user_rules_path).resolve())
             bundle.writestr(
                 "manifest.json",
                 json.dumps(manifest, indent=2, ensure_ascii=False),
@@ -327,6 +345,19 @@ class DataBundleManager:
                 manifest = self._read_json_from_zip(bundle, "manifest.json")
                 if not isinstance(manifest, dict):
                     raise ValueError("数据包缺少有效的 manifest.json")
+                self._validate_zip_contents(bundle)
+                if manifest.get("format") == self.BACKUP_FORMAT:
+                    self._validate_software_backup(bundle, manifest)
+                    return {
+                        **manifest,
+                        "is_software_backup": True,
+                        "warnings": [],
+                        "bundle_size_bytes": int(path.stat().st_size),
+                        "archive_stats": summarize_zip_members(bundle),
+                        "profile_conflicts": [],
+                        "available_installs": [],
+                        "legacy_rule_bundle": False,
+                    }
                 archive_stats = summarize_zip_members(bundle)
                 module_payload_stats = summarize_zip_members(bundle, ["modules"])
                 environment_payload_stats = summarize_zip_members(bundle, ["environments"])
@@ -409,6 +440,14 @@ class DataBundleManager:
                 manifest = self._read_json_from_zip(bundle, "manifest.json")
                 if not isinstance(manifest, dict):
                     raise ValueError("数据包缺少有效的 manifest.json")
+                self._validate_zip_contents(bundle)
+                if manifest.get("format") == self.BACKUP_FORMAT:
+                    self._validate_software_backup(bundle, manifest)
+                    return self._restore_software_backup(bundle, manifest)
+                if manifest.get("format") not in (self.FORMAT, "rmm.data.bundle") or manifest.get("schema_version") != self.SCHEMA_VERSION:
+                    raise ValueError("无法识别的数据包格式或版本")
+                if not isinstance(manifest.get("modules"), list):
+                    raise ValueError("数据包缺少有效的 modules 列表")
                 included_modules: list[str] = [
                     str(item.get("key"))
                     for item in manifest.get("modules", [])
@@ -427,7 +466,22 @@ class DataBundleManager:
                     payload = self._read_json_from_zip(bundle, f"modules/{module_key}.json")
                     if payload is None:
                         raise ValueError(f"数据包缺少模块文件: {module_key}")
+                    if not isinstance(payload, dict):
+                        raise ValueError(f"数据模块格式无效: {module_key}")
                     module_payloads[module_key] = payload
+                if "profiles" in active_modules:
+                    profiles = manifest.get("profiles")
+                    if not isinstance(profiles, list):
+                        raise ValueError("数据包缺少有效的 profiles 列表")
+                    for entry in profiles:
+                        if not isinstance(entry, dict) or not str(entry.get("archive_key") or "").strip():
+                            raise ValueError("数据包包含无效的环境条目")
+                        prefix = f"environments/{entry['archive_key']}"
+                        if not isinstance(self._read_json_from_zip(bundle, f"{prefix}/profile.json"), dict):
+                            raise ValueError("数据包缺少有效的环境信息")
+                        if not any(name.startswith(f"{prefix}/user_data/") for name in bundle.namelist()):
+                            raise ValueError("数据包缺少环境目录内容")
+                result["backup_path"] = self._create_software_backup()
                 self._apply_module_payloads(module_payloads, result)
 
                 if "profiles" in active_modules:
@@ -452,15 +506,181 @@ class DataBundleManager:
             raise ValueError("无法识别的数据包格式")
 
         requested = selected_modules or list(self.RULE_PRESET)
+        result["backup_path"] = self._create_software_backup()
         self._import_rule_related_bundle(payload, requested, result)
         result["imported_modules"] = [module for module in requested if module in self.RULE_PRESET]
         return result
+
+    @staticmethod
+    def _validate_zip_contents(bundle: zipfile.ZipFile) -> None:
+        names = bundle.namelist()
+        if len(names) != len(set(names)):
+            raise ValueError("压缩包包含重复文件")
+        normalized_names = [name.replace("\\", "/").casefold() for name in names]
+        if len(normalized_names) != len(set(normalized_names)):
+            raise ValueError("压缩包包含名称冲突的文件")
+        for name in names:
+            parts = name.replace("\\", "/").split("/")
+            if name.startswith(("/", "\\")) or ".." in parts or any(":" in part for part in parts):
+                raise ValueError("检测到非法压缩路径")
+        invalid_member = bundle.testzip()
+        if invalid_member:
+            raise ValueError(f"压缩包文件损坏: {invalid_member}")
+
+    def _software_backup_files(self) -> dict[str, Path]:
+        return {
+            "settings": DATA_DIR / "config.json",
+            "ai_definitions": DATA_DIR / "ai_definitions.json",
+            "rules": Path(settings.config.user_rules_path),
+        }
+
+    def _create_software_backup(self) -> str:
+        """复用数据导出封包，成功校验后原子替换上一份备份。"""
+        target = DATA_DIR / "backups" / self.BACKUP_FILENAME
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="software-backup-", dir=target.parent) as temp_dir:
+            archive = Path(temp_dir) / self.BACKUP_FILENAME
+            self.write_bundle(str(archive), [], is_backup=True)
+            self.inspect_bundle(str(archive))
+            os.replace(archive, target)
+        return str(target)
+
+    def _validate_software_backup(self, bundle: zipfile.ZipFile, manifest: dict[str, Any]) -> None:
+        if manifest.get("schema_version") != self.SCHEMA_VERSION:
+            raise ValueError("不支持的软件数据备份版本")
+        files = manifest.get("files")
+        if not isinstance(files, dict) or set(files) != set(self._software_backup_files()) or files.get("settings") is not True:
+            raise ValueError("软件数据备份文件清单无效")
+        expected_names = {"manifest.json", "modules/database.json"}
+        for key, exists in files.items():
+            name = f"modules/{key}.json"
+            if not isinstance(exists, bool) or exists != (name in bundle.namelist()):
+                raise ValueError(f"软件数据备份缺少文件或清单不符: {key}")
+            if exists:
+                expected_names.add(name)
+                if not isinstance(self._read_json_from_zip(bundle, name), dict):
+                    raise ValueError(f"软件数据备份文件格式无效: {key}")
+        if set(bundle.namelist()) != expected_names:
+            raise ValueError("软件数据备份包含无效文件或缺少数据库数据")
+        database = self._read_json_from_zip(bundle, "modules/database.json")
+        if not isinstance(database, dict) or set(database) != {model._meta.table_name for model in self._BACKUP_MODELS}:
+            raise ValueError("软件数据备份的数据库清单无效")
+        for model in self._BACKUP_MODELS:
+            rows = database[model._meta.table_name]
+            if not isinstance(rows, list) or any(not isinstance(row, dict) or set(row) != set(model._meta.fields) for row in rows):
+                raise ValueError(f"软件数据备份的数据库字段不匹配: {model._meta.table_name}")
+        config = self._read_json_from_zip(bundle, "modules/settings.json")
+        rule_path = str(manifest.get("user_rules_path") or "")
+        if not rule_path or Path(rule_path).resolve() != Path(str(config.get("user_rules_path") or "")).resolve():
+            raise ValueError("软件数据备份的规则路径不一致")
+        allowed_rules = {self._software_backup_files()["rules"].resolve(), (DATA_DIR / "rules/user_rules.json").resolve()}
+        if Path(rule_path).resolve() not in allowed_rules:
+            raise ValueError("备份中的用户规则目录已不属于当前软件配置")
+        files_to_restore = self._software_backup_files()
+        files_to_restore["rules"] = Path(rule_path)
+        if any(path.exists() and not path.is_file() for path in files_to_restore.values()):
+            raise ValueError("软件数据恢复目标不是文件")
+        targets = [path.resolve() for path in files_to_restore.values()]
+        if Path(bundle.filename).resolve() in targets or len(set(targets)) != len(targets):
+            raise ValueError("备份包或软件配置文件路径重叠")
+
+    def _restore_software_backup(self, bundle: zipfile.ZipFile, manifest: dict[str, Any]) -> dict[str, Any]:
+        """仅严格恢复软件数据；数据库事务及文件回滚保留恢复前状态。"""
+        stages: list[Path] = []
+        replacements: list[tuple[Path, Path | None]] = []
+        applied: list[tuple[Path, Path | None]] = []
+        old_config = deepcopy(settings.config)
+        config = self._read_json_from_zip(bundle, "modules/settings.json")
+        config["current_profile_id"] = old_config.current_profile_id
+        database = self._read_json_from_zip(bundle, "modules/database.json")
+        files = self._software_backup_files()
+        files["rules"] = Path(manifest["user_rules_path"])
+        has_ai_definitions = files["ai_definitions"].is_file()
+        ai_mgr = vars(self.ai_mgr).get("_instance", self.ai_mgr) if self.ai_mgr else None
+        rule_mgr = self.rule_mgr_provider()
+        try:
+            for key, target in files.items():
+                stage = create_sibling_stage_dir(target, ".software-restore-")
+                stages.append(stage)
+                source = stage / target.name
+                if manifest["files"][key]:
+                    source.write_bytes(bundle.read(f"modules/{key}.json"))
+                replacements.append((target, source if source.exists() else None))
+            try:
+                with db.atomic():
+                    # 先删除子表，再按依赖顺序还原；不触碰环境和扫描缓存表。
+                    for model in reversed(self._BACKUP_MODELS):
+                        model.delete().execute()
+                    for model in self._BACKUP_MODELS:
+                        for rows in chunked(database[model._meta.table_name], 100):
+                            model.insert_many(rows).execute()
+                    for target, source in replacements:
+                        previous = target.with_name(f".software-rollback-{uuid.uuid4().hex}") if target.exists() else None
+                        if previous:
+                            target.replace(previous)
+                        applied.append((target, previous))
+                        if source:
+                            source.replace(target)
+                    settings.config = AppConfig()
+                    config["_clear_secret_keys"] = list(SECRET_FIELDS)
+                    settings.apply_secret_inputs(config, save=False)
+                    settings._recursive_update(settings.config, config)
+                    settings.save()
+                    if ai_mgr:
+                        ai_mgr.definition_manager.reload()
+                    if not manifest["files"]["ai_definitions"]:
+                        files["ai_definitions"].unlink(missing_ok=True)
+                    if rule_mgr:
+                        rule_mgr.load_all()
+            except Exception:
+                for target, previous in reversed(applied):
+                    target.unlink(missing_ok=True)
+                    if previous:
+                        previous.replace(target)
+                if applied:
+                    settings.config = old_config
+                    secret_config = asdict(old_config)
+                    secret_config["_clear_secret_keys"] = list(SECRET_FIELDS)
+                    settings.apply_secret_inputs(secret_config, save=False)
+                    try:
+                        if ai_mgr:
+                            ai_mgr.definition_manager.reload()
+                            if not has_ai_definitions:
+                                files["ai_definitions"].unlink(missing_ok=True)
+                        if rule_mgr:
+                            rule_mgr.load_all()
+                    except Exception as exc:
+                        logger.error("软件数据已回滚，运行缓存重载失败: %s", exc, exc_info=True)
+                raise
+            for _, previous in applied:
+                if previous:
+                    try:
+                        previous.unlink()
+                    except OSError as exc:
+                        logger.warning("软件数据恢复完成，临时回滚文件清理失败: path=%s error=%s", previous, exc)
+        finally:
+            for stage in stages:
+                shutil.rmtree(stage, ignore_errors=True)
+        return {"is_software_backup": True, "imported_modules": [item["key"] for item in self.MODULE_DEFINITIONS if item["key"] != "profiles"], "warnings": [], "profiles": []}
 
     def _collect_modules_payload(
         self,
         module_keys: list[str],
         dynamic_rule_ids: list[str] | None = None,
+        is_backup: bool = False,
     ) -> dict[str, Any]:
+        if is_backup:
+            # 本机备份保留完整软件设置和数据库字段，环境记录与大目录不参与。
+            config = asdict(settings.config)
+            config.pop("current_profile_id", None)
+            payloads = {"settings": config}
+            for key, path in self._software_backup_files().items():
+                if key != "settings" and path.is_file():
+                    with path.open(encoding="utf-8-sig") as handle:
+                        payloads[key] = json.load(handle)
+            with db.atomic():
+                payloads["database"] = {model._meta.table_name: list(model.select().dicts()) for model in self._BACKUP_MODELS}
+            return payloads
         payloads: dict[str, Any] = {}
         rule_mgr = self.rule_mgr_provider()
         rule_bundle = None
@@ -526,7 +746,8 @@ class DataBundleManager:
                 "owner": record.get("owner"),
                 "repo_name": record.get("repo_name"),
                 "install_type": record.get("install_type") or "source",
-                "target_branch": record.get("target_branch") or "main",
+                "target_branch": record.get("target_branch") or "",
+                "install_options": record.get("install_options") or {},
             })
 
         collections = []
@@ -674,7 +895,8 @@ class DataBundleManager:
                     "owner": str(repo.get("owner") or "").strip(),
                     "repo_name": str(repo.get("repo_name") or "").strip(),
                     "install_type": str(repo.get("install_type") or "source").strip() or "source",
-                    "target_branch": str(repo.get("target_branch") or "main").strip() or "main",
+                    "target_branch": str(repo.get("target_branch") or "").strip(),
+                    "install_options": dict(repo.get("install_options") or {}),
                 }
                 if existing:
                     GithubModRecord.update(
@@ -684,6 +906,7 @@ class DataBundleManager:
                         repo_name=values["repo_name"],
                         install_type=values["install_type"],
                         target_branch=values["target_branch"],
+                        install_options=values["install_options"],
                     ).where(GithubModRecord.repo_url == repo_url).execute()
                 else:
                     GithubModRecord.create(**values)

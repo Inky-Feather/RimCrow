@@ -64,6 +64,7 @@
         <span class="text-accent-primary font-bold">{{ t('ui.settings.data_export.profile_data', '环境数据') }}</span> {{ t('ui.settings.data_export.profile_data_notice', '会打包整个环境目录；') }}
         <span class="text-accent-tip font-bold">{{ t('ui.settings.data_export.excluded_data', '路径绑定、敏感信息、当前激活环境 ID') }}</span> {{ t('ui.settings.data_export.excluded_data_notice', '不会导出。') }}
         <span class="text-accent-warn font-bold">{{ t('ui.settings.data_export.import_conflicts', '环境导入冲突') }}</span> {{ t('ui.settings.data_export.import_conflicts_notice', '会在导入面板统一处理新建/覆盖。') }}
+        {{ t('ui.settings.data_export.import_location', '导入位置：设置 → 数据管理 → 导入软件数据包。') }}
       </p>
       <button @click="handleExportDataBundle" :disabled="exporting"
         class="shrink-0 px-5 py-2 rounded-xl bg-accent-primary hover:bg-accent-primary/85 text-on-accent-primary text-sm font-black shadow-[0_0_18px_rgba(var(--rgb-accent-primary),0.24)] transition-all disabled:cursor-not-allowed disabled:opacity-50"

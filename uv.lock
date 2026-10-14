@@ -1921,6 +1921,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pysocks"
+version = "1.7.1"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/bd/11/293dd436aea955d45fc4e8a35b6ae7270f5b8e00b53cf6c024c83b657a11/PySocks-1.7.1.tar.gz", hash = "sha256:3f8804571ebe159c380ac6de37643bb4685970655d3bba243530d6558b799aa0" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/8d/59/b4572118e098ac8e46e399a1dd0f2d85403ce8bbaad9ec79373ed6badaf9/PySocks-1.7.1-py3-none-any.whl", hash = "sha256:2725bd0a9925919b9b51739eea5f9e2bae91e83288108a9ad338b2e3a4435ee5" },
+]
+
+[[package]]
 name = "pytest"
 version = "9.0.3"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -2245,6 +2254,11 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl", hash = "sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0" },
 ]
 
+[package.optional-dependencies]
+socks = [
+    { name = "pysocks" },
+]
+
 [[package]]
 name = "rich"
 version = "14.3.3"
@@ -2287,7 +2301,7 @@ dependencies = [
     { name = "pywebview" },
     { name = "pywin32", marker = "sys_platform == 'win32'" },
     { name = "reportlab" },
-    { name = "requests" },
+    { name = "requests", extra = ["socks"] },
     { name = "send2trash" },
     { name = "setuptools" },
     { name = "steam-vdf" },
@@ -2320,7 +2334,7 @@ requires-dist = [
     { name = "pywebview", specifier = ">=6.1" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=311" },
     { name = "reportlab", specifier = ">=4.5.1" },
-    { name = "requests", specifier = ">=2.32.5" },
+    { name = "requests", extras = ["socks"], specifier = ">=2.32.5" },
     { name = "send2trash", specifier = ">=2.0.0" },
     { name = "setuptools", specifier = "<70.0.0" },
     { name = "steam-vdf", specifier = ">=0.1.10" },

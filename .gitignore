@@ -8,7 +8,10 @@ nuitka-*
 updates/
 *.md
 !README.md
-!doc/贴图优化说明.md
+!README_EN.md
+!doc/*.md
+!doc/en/
+!doc/en/*.md
 .*/
 .worktrees/
 tools/
@@ -20,7 +23,7 @@ cache/
 downloads/
 backups/
 logs/
-test/
+local_tools/
 steamcmd/
 steam_agent/
 mods/
@@ -58,3 +61,5 @@ temp/
 frontend/src/shared/branding/private-assets/
 
 /files_tree.txt
+/docs/
+/pack.local.json

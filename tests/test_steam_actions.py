@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from backend.managers.mgr_steam import SteamManager
+from backend.managers.mgr_steam import SteamManager, TaskStatus, _collect_workshop_item_state
 from backend.paths.game_locations import (
     get_default_steam_data_root_candidates,
     get_default_steam_root_candidates,
@@ -60,6 +60,44 @@ class TestSteamActionReadiness(unittest.TestCase):
         self.assertIsNone(task_id)
         self.assertEqual(manager._active_tasks, {})
         self.assertFalse(manager._monitor_running)
+
+    def test_unsubscribe_requires_steam_confirmation_and_updated_local_state(self):
+        cases = [
+            # 实际订阅、本地状态、目录存在、经过秒数、期望结果
+            (True, True, False, 0, TaskStatus.RUNNING),
+            (True, True, False, 4, TaskStatus.RUNNING),
+            (True, True, True, 31, TaskStatus.ERROR),
+            (None, False, False, 31, TaskStatus.ERROR),
+            (False, True, False, 4, TaskStatus.RUNNING),
+            (False, False, True, 4, TaskStatus.COMPLETED),
+            (False, None, False, 4, TaskStatus.COMPLETED),
+        ]
+        for subscribed, local_subscribed, folder_exists, elapsed, expected in cases:
+            with self.subTest(subscribed=subscribed, local=local_subscribed, elapsed=elapsed):
+                manager = self.make_manager()
+                manager._active_tasks = {'task': {'targets': ['1001'], 'total': 1, 'action': 'unsubscribe', 'start_time': 0}}
+                manager.workshop_merged_data = Mock(return_value={} if local_subscribed is None else {
+                    '1001': {'is_subscribed': local_subscribed, 'is_installed': folder_exists}})
+                manager.query_workshop_item_states = Mock(return_value={'ready': True, 'states': {'1001': {'is_subscribed': subscribed}}})
+                events = []
+                def emit(**event):
+                    events.append(event)
+                    manager._active_tasks.clear()
+                manager._emit_progress_event = emit
+                with patch('backend.managers.mgr_steam.time.time', return_value=elapsed), \
+                     patch('backend.managers.mgr_steam.time.sleep'), \
+                     patch('backend.managers.mgr_steam.os.path.exists', return_value=folder_exists):
+                    manager._master_monitor_loop()
+                self.assertEqual(events[0]['status'], expected)
+                if expected == TaskStatus.ERROR:
+                    self.assertEqual(events[0]['target_details']['1001']['complete_reason'], 'request_failed')
+
+    def test_item_state_failure_is_not_unsubscribe_confirmation(self):
+        steam = Mock()
+        steam.Workshop.GetItemState.side_effect = RuntimeError('Steam unavailable')
+        steam.Workshop.GetItemInstallInfo.return_value = {}
+        steam.Workshop.GetItemDownloadInfo.return_value = {}
+        self.assertIsNone(_collect_workshop_item_state(steam, '1001')['is_subscribed'])
 
     @patch("backend.managers.mgr_steam.platform.system", return_value="Windows")
     def test_reload_paths_from_settings_refreshes_cached_paths(self, _platform_system):

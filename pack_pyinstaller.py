@@ -1,3 +1,6 @@
+import argparse
+import copy
+import json
 import os
 import sys
 import shutil
@@ -7,7 +10,7 @@ import zipfile
 from contextlib import suppress
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import List
+from typing import Any
 
 # 尝试导入 pathspec 用于 gitignore 匹配
 try:
@@ -16,6 +19,89 @@ try:
 except ImportError:
     HAS_PATHSPEC = False
     print("提示: 未安装 'pathspec' 库，.gitignore 过滤功能将不可用。")
+
+
+APP_MAIN = "main.py"
+APP_NAME = "RimCrow"
+APP_COMPANY = "Inky Feather"
+ICON_PATH = "icon.ico"
+SPLASH_PATH = "splash.png"
+
+DEFAULT_PACK_CONFIG: dict[str, Any] = {
+    "steps": {
+        "frontend": True,
+        "app": True,
+        "docs": True,
+        "tree": True,
+        "zip": True,
+    },
+    "app": {
+        "upx_dir": "",
+    },
+    "docs": {
+        "output_dir": "docs",
+        "command": [],
+        "command_python_executable": "",
+        "required": False,
+    },
+    "tree": {
+        "target_dir": ".",
+        "output_file": "files_tree.txt",
+        "max_depth": 5,
+        "exclude_dirs": ["__init__.py", "tests", "Downloads", "submodules"],
+        "use_gitignore": True,
+    },
+    "zip": {
+        "include_docs": True,
+    },
+}
+
+STEP_NAMES = tuple(DEFAULT_PACK_CONFIG["steps"].keys())
+
+
+def load_pack_config(config_path: Path) -> dict[str, Any]:
+    """读取本地打包配置；配置文件不存在时使用脚本默认值。"""
+    config = copy.deepcopy(DEFAULT_PACK_CONFIG)
+    if not config_path.is_file():
+        print(f"提示: 未找到本地打包配置，使用默认参数: {config_path}")
+        return config
+
+    try:
+        with config_path.open("r", encoding="utf-8") as file:
+            user_config = json.load(file)
+    except Exception as exc:
+        print(f"警告: 读取本地打包配置失败，使用默认参数: {exc}")
+        return config
+
+    if not isinstance(user_config, dict):
+        print(f"警告: 本地打包配置不是 JSON 对象，使用默认参数: {config_path}")
+        return config
+
+    print(f"已读取本地打包配置: {config_path}")
+    for key, value in user_config.items():
+        if isinstance(value, dict) and isinstance(config.get(key), dict):
+            config[key].update(value)
+        else:
+            config[key] = value
+    return config
+
+
+def _apply_pack_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    config = copy.deepcopy(config)
+    steps = dict(config.get("steps", {}))
+
+    skipped_steps = [item.strip().lower() for item in args.skip.split(",") if item.strip()]
+    if skipped_steps:
+        unknown = [name for name in skipped_steps if name not in STEP_NAMES]
+        if unknown:
+            raise ValueError(f"未知步骤: {', '.join(unknown)}，可用步骤: {', '.join(STEP_NAMES)}")
+        for name in skipped_steps:
+            steps[name] = False
+
+    if args.upx_dir is not None:
+        config.setdefault("app", {})["upx_dir"] = args.upx_dir
+    config["steps"] = steps
+    return config
 
 
 def _append_pythonpath(env: dict[str, str], *paths: Path) -> None:
@@ -56,6 +142,14 @@ def _run_command_with_log(cmd: list[str], log_path: Path, env: dict[str, str] | 
             print(line, end="")
             log_file.write(line)
         return process.wait()
+
+
+def _configure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            with suppress(ValueError, OSError):
+                reconfigure(encoding="utf-8")
 
 
 def _npm_command() -> str:
@@ -177,9 +271,10 @@ datas = collect_data_files(
         f.write(hook_content)
     return hook_dir
 
-def resolve_upx_dir(default_dir: str = "") -> str:
-    """解析 UPX_DIR；未显式配置时不启用 UPX，避免换机器打包直接失败。"""
-    raw_path = os.environ.get("UPX_DIR")
+
+def resolve_upx_dir(raw_dir: str = "") -> str:
+    """解析 UPX 目录；未显式配置时不启用 UPX，避免换机器打包直接失败。"""
+    raw_path = str(raw_dir or os.environ.get("UPX_DIR", "")).strip()
     if not raw_path:
         print("提示: 未配置 UPX 目录，已跳过压缩参数。")
         return ""
@@ -354,9 +449,12 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
     finally:
         # 清理临时版本文件
         if version_file_path and os.path.exists(version_file_path):
-            with suppress(OSError): os.remove(version_file_path)
+            with suppress(OSError):
+                os.remove(version_file_path)
         if hook_dir_path and os.path.exists(hook_dir_path):
-            with suppress(OSError): shutil.rmtree(hook_dir_path)
+            with suppress(OSError):
+                shutil.rmtree(hook_dir_path)
+
 
 def _iter_toolmods_files(toolmods_dir: Path):
     """遍历 ToolMods 发布文件，排除任意层级下以 Source 开头的目录内容。"""
@@ -372,6 +470,7 @@ def _iter_toolmods_files(toolmods_dir: Path):
         for filename in filenames:
             file_path = current_path / filename
             yield file_path, archive_root / file_path.relative_to(toolmods_dir)
+
 
 def _should_include_steamcmd_file(relative_path: Path) -> bool:
     if sys.platform == "win32":
@@ -397,6 +496,7 @@ def _iter_tools_files(tools_dir: Path):
             continue
         yield file_path, Path("tools") / relative_path
 
+
 def _iter_data_files(data_dir: Path):
     """遍历 data 发布文件，仅保留发布包运行所需的固定数据文件。"""
     required_files = [
@@ -415,7 +515,72 @@ def _iter_data_files(data_dir: Path):
         else:
             print(f"警告: 发布数据文件缺失，已跳过 {file_path}")
 
-def create_release_zip(app_name: str, version: str):
+
+def _count_release_pdfs(output_dir: Path) -> int:
+    return sum(1 for path in output_dir.rglob("*.pdf") if path.is_file()) if output_dir.exists() else 0
+
+
+def _resolve_docs_command(docs_config: dict[str, Any]) -> list[str]:
+    """执行 Python 脚本时优先使用配置解释器，未配置则沿用当前解释器。"""
+    raw_command = docs_config.get("command", [])
+    if not raw_command:
+        return []
+    if not isinstance(raw_command, list):
+        print("警告: docs.command 应为命令数组，已跳过发布文档生成。")
+        return []
+    command = [str(item) for item in raw_command if str(item).strip()]
+    if command and Path(command[0]).suffix.lower() == ".py":
+        command_python = str(docs_config.get("command_python_executable", "")).strip() or sys.executable
+        command.insert(0, command_python)
+    return command
+
+
+def build_release_docs(
+    project_root: Path,
+    output_dir: Path,
+    docs_config: dict[str, Any] | None = None,
+) -> None:
+    """按本地配置执行发布文档命令。"""
+    docs_config = docs_config or {}
+    if not output_dir.is_absolute():
+        output_dir = project_root / output_dir
+
+    command = _resolve_docs_command(docs_config)
+    if not command:
+        print(f"提示: 未配置发布文档命令，发布文档目录现有 PDF: {_count_release_pdfs(output_dir)} 个。")
+        return
+
+    print(f"执行发布文档命令: {' '.join(command)}")
+    process = subprocess.run(
+        command,
+        cwd=project_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if process.stdout:
+        print(process.stdout, end="" if process.stdout.endswith("\n") else "\n")
+    if process.returncode != 0:
+        message = f"发布文档命令失败，退出码: {process.returncode}"
+        if bool(docs_config.get("required", False)):
+            raise subprocess.CalledProcessError(process.returncode, command, output=process.stdout)
+        print(f"警告: {message}，已继续后续流程。")
+
+    print(f"PDF 文档处理完成，共 {_count_release_pdfs(output_dir)} 个文件。")
+
+
+def _iter_release_docs_files(docs_dir: Path):
+    """遍历发布 PDF 文档。"""
+    if not docs_dir.exists():
+        return
+    for file_path in docs_dir.rglob("*.pdf"):
+        if file_path.is_file():
+            yield file_path, file_path.relative_to(docs_dir)
+
+
+def create_release_zip(app_name: str, version: str, docs_dir: Path | None = None, include_docs: bool = True):
     """基于 dist 中的平台产物生成发布压缩包，并附带运行所需的外部资源。"""
     project_root = Path(__file__).resolve().parent
     dist_dir = project_root / "dist"
@@ -427,6 +592,11 @@ def create_release_zip(app_name: str, version: str):
     release_items.extend(_iter_toolmods_files(project_root / "toolmods" / "RimCrowCompanion") or [])
     release_items.extend(_iter_tools_files(project_root / "tools") or [])
     release_items.extend(_iter_data_files(project_root / "data") or [])
+    if include_docs:
+        resolved_docs_dir = docs_dir or (project_root / "docs")
+        if not resolved_docs_dir.is_absolute():
+            resolved_docs_dir = project_root / resolved_docs_dir
+        release_items.extend(_iter_release_docs_files(resolved_docs_dir) or [])
 
     if zip_path.exists():
         zip_path.unlink()
@@ -447,11 +617,13 @@ def buildFrontend(start_path: str = 'frontend'):
     """
     subprocess.run([_npm_command(), "run", "build"], cwd=start_path, check=True, text=True, encoding='utf-8')
 
+
 # --- 优化后的目录树生成 ---
 
 def get_gitignore_spec(root_path: str):
     """读取并解析 .gitignore 文件"""
-    if not HAS_PATHSPEC: return None
+    if not HAS_PATHSPEC:
+        return None
     
     gitignore_path = os.path.join(root_path, '.gitignore')
     if os.path.exists(gitignore_path):
@@ -459,7 +631,8 @@ def get_gitignore_spec(root_path: str):
             return pathspec.PathSpec.from_lines('gitwildmatch', f)
     return None
 
-def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max_depth: int = -1, use_gitignore: bool = True ) -> str:
+
+def filestree(start_path: str = '.', exclude_dirs: list[str] | None = None, max_depth: int = -1, use_gitignore: bool = True) -> str:
     """
     生成目录树结构字符串（重构版：递归逻辑更清晰，支持 .gitignore）
     
@@ -469,7 +642,8 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max
         max_depth: 最大深度，-1 表示无限
         use_gitignore: 是否读取 .gitignore 进行过滤
     """
-    if exclude_dirs is None: exclude_dirs = []
+    if exclude_dirs is None:
+        exclude_dirs = []
     exclude_patterns = [pattern.replace(os.sep, '/') for pattern in exclude_dirs]
     output_lines = []
     # 准备 gitignore spec
@@ -478,25 +652,31 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max
     root_name = os.path.basename(os.path.abspath(start_path))
     output_lines.append(f"·[{root_name}]")
     def _tree_body(current_path: str, prefix: str = "", depth: int = 0):
-        if max_depth != -1 and depth >= max_depth: return
+        if max_depth != -1 and depth >= max_depth:
+            return
         # 获取当前目录下的所有项目
-        try: entries = os.listdir(current_path)
-        except PermissionError: return
+        try:
+            entries = os.listdir(current_path)
+        except PermissionError:
+            return
 
         # 过滤和排序
         # 1. 基础过滤
         items = []
         for entry in entries:
             # 排除特定目录名
-            if entry in exclude_dirs: continue
+            if entry in exclude_dirs:
+                continue
             full_path = os.path.join(current_path, entry)
             rel_path = os.path.relpath(full_path, start_path)
             rel_match_path = rel_path.replace(os.sep, '/')
             is_dir = os.path.isdir(full_path)
             # 2. .gitignore 过滤
             # pathspec 的目录规则（如 .*/）需要尾部斜杠才能命中。
-            if spec and (spec.match_file(rel_match_path) or (is_dir and spec.match_file(f"{rel_match_path}/"))): continue
-            if exclude_patterns and any(fnmatch(rel_match_path, pattern) or (is_dir and fnmatch(f"{rel_match_path}/", pattern)) for pattern in exclude_patterns): continue
+            if spec and (spec.match_file(rel_match_path) or (is_dir and spec.match_file(f"{rel_match_path}/"))):
+                continue
+            if exclude_patterns and any(fnmatch(rel_match_path, pattern) or (is_dir and fnmatch(f"{rel_match_path}/", pattern)) for pattern in exclude_patterns):
+                continue
             items.append(entry)
 
         # 3. 排序：文件夹在前，然后按字母顺序
@@ -511,7 +691,8 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max
             # 构建显示名称
             display_name = f"·[{entry}]" if is_dir else f" {entry}"
             output_lines.append(f"{prefix}{connector}{display_name}")
-            if is_last: output_lines.append(f"{prefix}")
+            if is_last:
+                output_lines.append(f"{prefix}")
             if is_dir:
                 # 递归下一级
                 # 如果当前是最后一个，子级的前缀是空格；否则是竖线
@@ -522,58 +703,111 @@ def filestree( start_path: str = '.', exclude_dirs: List[str] | None = None, max
     _tree_body(start_path)
     return "\n".join(output_lines)
 
-if __name__ == "__main__":
+
+def build_file_tree(project_root: Path, tree_config: dict[str, Any]) -> Path:
+    """按配置生成项目目录树文本。"""
+    target_dir = Path(str(tree_config.get("target_dir", ".")))
+    if not target_dir.is_absolute():
+        target_dir = project_root / target_dir
+    output_file = Path(str(tree_config.get("output_file", "files_tree.txt")))
+    if not output_file.is_absolute():
+        output_file = project_root / output_file
+    exclude_dirs = list(tree_config.get("exclude_dirs", []))
+    max_depth = int(tree_config.get("max_depth", 5))
+    use_gitignore = bool(tree_config.get("use_gitignore", True))
+
+    tree_text = filestree(str(target_dir), exclude_dirs=exclude_dirs, use_gitignore=use_gitignore, max_depth=max_depth)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(tree_text, encoding="utf-8")
+    print(f"目录树已保存至: {output_file}")
+    return output_file
+
+
+def _parse_pack_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="RimCrow 发布打包脚本")
+    parser.add_argument("--config", default="pack.local.json", help="本地打包配置文件路径，默认 pack.local.json")
+    parser.add_argument("--skip", default="", help=f"跳过指定步骤，逗号分隔。可选: {', '.join(STEP_NAMES)}")
+    parser.add_argument("--upx-dir", default=None, help="临时覆盖 UPX 目录，空字符串表示不启用")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
     from backend._version import __version__
-    # pack_zip = False
-    pack_zip = True
-    # 配置
-    APP_MAIN = 'main.py'
-    APP_NAME = 'RimCrow'
-    APP_VERSION = __version__
-    APP_COMPANY = 'Inky Feather'
-    ICON_PATH = 'icon.ico'
-    SPLASH_PATH = 'splash.png'
-    DEFAULT_UPX_DIR = r'D:\Environment\upx-5.0.0-win64'
+
+    _configure_utf8_stdio()
+    project_root = Path(__file__).resolve().parent
+    args = _parse_pack_args(argv)
+    config_path = Path(args.config)
+    if not config_path.is_absolute():
+        config_path = project_root / config_path
+
+    try:
+        config = _apply_pack_cli_overrides(load_pack_config(config_path), args)
+    except ValueError as exc:
+        print(f"配置错误: {exc}")
+        return 2
+
     os.environ["SETUPTOOLS_USE_DISTUTILS"] = "local"
-    
-    # 0. 构建前端项目
-    buildFrontend(start_path='frontend')
-    
-    # 1. 执行打包
-    print(f'=== 开始打包 {APP_NAME} v{APP_VERSION} ===')
-    packed = packApplication(
-        main_file=APP_MAIN,
-        icon_path=ICON_PATH,
-        name=APP_NAME,
-        splash_path=SPLASH_PATH,
-        version=APP_VERSION,
-        company=APP_COMPANY,
-        upx_dir=DEFAULT_UPX_DIR,
-    )
-    
-    if packed and pack_zip:
-        print(f'=== 生成发布压缩包 {_release_zip_name(APP_NAME, APP_VERSION)} ===')
-        create_release_zip(APP_NAME, APP_VERSION)
-    
-    # 2. 生成目录树
-    print('\n=== 生成项目目录树 ===')
-    target_dir = r'.'
-    
-    # 强制排除的系统/构建目录
-    excludes = [
-        '__init__.py', 'tests', 'Downloads', 'submodules'
-    ]
-    
-    tree_text = filestree(
-        target_dir, 
-        exclude_dirs=excludes, 
-        use_gitignore=True, # 开启 gitignore 支持
-        max_depth=5         # 限制深度，防止太长
-    )
-    
-    output_file = 'files_tree.txt'
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(tree_text)
-    
-    print(f'目录树已保存至: {output_file}')
-    # print(tree_text) # 可选：在控制台打印预览
+    steps = config.get("steps", {})
+    app_config = config.get("app", {})
+    docs_config = config.get("docs", {})
+    tree_config = config.get("tree", {})
+    zip_config = config.get("zip", {})
+
+    app_version = __version__
+    upx_dir = str(app_config.get("upx_dir", ""))
+
+    if steps.get("frontend", True):
+        print("=== 构建前端项目 ===")
+        buildFrontend(start_path="frontend")
+    else:
+        print("提示: 已跳过前端构建。")
+
+    if steps.get("app", True):
+        print(f"=== 开始打包 {APP_NAME} v{app_version} ===")
+        if not packApplication(
+            main_file=APP_MAIN,
+            icon_path=ICON_PATH,
+            name=APP_NAME,
+            splash_path=SPLASH_PATH,
+            version=app_version,
+            company=APP_COMPANY,
+            upx_dir=upx_dir,
+        ):
+            return 1
+    else:
+        print("提示: 已跳过程序打包，将复用已有 dist 产物。")
+
+    docs_output_dir = Path(str(docs_config.get("output_dir", "docs")))
+    if steps.get("docs", True):
+        print("=== 生成/检查发布文档 PDF ===")
+        build_release_docs(
+            project_root=project_root,
+            output_dir=docs_output_dir,
+            docs_config=docs_config,
+        )
+    else:
+        print("提示: 已跳过 PDF 文档生成。")
+
+    if steps.get("tree", True):
+        print("\n=== 生成项目目录树 ===")
+        build_file_tree(project_root, tree_config)
+    else:
+        print("提示: 已跳过目录树生成。")
+
+    if steps.get("zip", True):
+        print(f"=== 生成发布压缩包 {_release_zip_name(APP_NAME, app_version)} ===")
+        create_release_zip(
+            APP_NAME,
+            app_version,
+            docs_dir=docs_output_dir,
+            include_docs=bool(zip_config.get("include_docs", True)),
+        )
+    else:
+        print("提示: 已跳过发布压缩包生成。")
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

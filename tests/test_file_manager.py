@@ -365,11 +365,23 @@ class TestFileManager(unittest.TestCase):
             patch.object(FileManager, "_get_windows_filesystem_type", return_value="exFAT"),
             patch.object(FileManager, "sync_links") as sync_links,
         ):
-            success, failure_message = FileManager.sync_managed_links(r"E:\Profile\Mods", [])
+            success, failure_message = FileManager.sync_managed_links(r"E:\Profile\Mods", [r"E:\Workshop\1001"])
 
         self.assertFalse(success)
         self.assertIn("NTFS", failure_message)
         sync_links.assert_not_called()
+
+    def test_sync_managed_links_allows_empty_deployment_on_exfat(self):
+        for full_mode in (False, True):
+            with (
+                self.subTest(full_mode=full_mode),
+                patch.object(settings.config, "link_deployment_mode_full", full_mode),
+                patch.object(FileManager, "_get_link_deployment_failure") as precheck,
+                patch.object(FileManager, "sync_links_full" if full_mode else "sync_links", return_value=True) as sync_links,
+            ):
+                self.assertEqual(FileManager.sync_managed_links(r"E:\Profile\Mods", []), (True, None))
+                precheck.assert_not_called()
+                sync_links.assert_called_once_with(r"E:\Profile\Mods", [])
 
     def test_check_steamcmd_path_warns_when_windows_junction_is_unsupported(self):
         with tempfile.TemporaryDirectory() as temp_dir:
