@@ -8,6 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import vdf
+
 from backend.managers.mgr_steam import SteamManager, TaskStatus, _collect_workshop_item_state
 from backend.paths.game_locations import (
     get_default_steam_data_root_candidates,
@@ -15,6 +17,31 @@ from backend.paths.game_locations import (
     normalize_steam_root,
 )
 from backend.settings import settings
+
+
+class TestSteamcmdStorageLock(unittest.TestCase):
+    def test_queued_workers_refresh_paths_before_running_batch(self):
+        for run in (SteamManager._run_steamcmd_process, SteamManager._run_steamcmd_workshop_repair_process):
+            with self.subTest(worker=run.__name__):
+                manager = Mock(spec=SteamManager)
+                manager.steamcmd_dir = "old"
+                manager._steamcmd_lock = threading.Lock()
+                manager._steamcmd_processes = {}
+                manager._steamcmd_cancelled = set()
+                manager._is_steamcmd_task_cancelled.return_value = False
+                calls = []
+                def reload():
+                    calls.append("reload")
+                    manager.steamcmd_dir = "new"
+                def batch(**kwargs):
+                    calls.append("batch")
+                    self.assertEqual(kwargs["workshop_log_path"], Path("new/logs/workshop_log.txt"))
+                    raise OSError("stop before process launch")
+                manager.reload_paths_from_settings.side_effect = reload
+                manager._run_single_steamcmd_batch.side_effect = batch
+                run(manager, ["1001"], "probe")
+                self.assertEqual(calls, ["reload", "batch"])
+                manager.reload_paths_from_settings.assert_called_once_with()
 
 
 class TestSteamActionReadiness(unittest.TestCase):
@@ -363,6 +390,179 @@ class TestSteamActionReadiness(unittest.TestCase):
         self.assertEqual(captured["timeout_seconds"], 14.0)
         self.assertEqual(result["detail"], "steamworks_details_ready")
         self.assertEqual(result["details"]["1001"]["title"], "Demo")
+
+
+class TestSteamcmdAcfRepair(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.manager = object.__new__(SteamManager)
+        self.manager.steamcmd_dir = str(self.root)
+        self.manager._steamcmd_lock = threading.Lock()
+        self.manager._steamcmd_processes = {}
+        self.manager._steamcmd_cancelled = set()
+        self.acf = self.manager._get_steamcmd_acf_path()
+        self.acf.parent.mkdir(parents=True)
+        self.content = self.manager._get_steamcmd_content_root()
+        (self.content / "1001").mkdir(parents=True)
+        (self.content / "1001" / "content.txt").write_text("keep", encoding="utf-8")
+
+    def payload(self):
+        return {"AppWorkshop": {
+            "appid": "294100", "NeedsUpdate": "1", "SizeOnDisk": "4",
+            "WorkshopItemsInstalled": {"1001": {"manifest": "18446744073709551615", "size": "4", "timeupdated": "0"}},
+            "WorkshopItemDetails": {"1001": {"manifest": "11", "latest_manifest": "12", "timetouched": "0"}},
+            "FutureField": {"text": 'keep "quotes" and \\paths'},
+        }}
+
+    def write_payload(self, payload=None):
+        self.acf.write_text(vdf.dumps(payload or self.payload(), pretty=True), encoding="utf-8")
+
+    def test_missing_acf_does_not_register_unrecorded_directories(self):
+        self.assertFalse(self.manager.reconcile_steamcmd_acf()["updated"])
+        self.assertFalse(self.acf.exists())
+
+    def test_normalize_preserves_unknown_fields_updates_and_cache_only_entries(self):
+        payload = self.payload()
+        payload["AppWorkshop"]["WorkshopItemDetails"]["1002"] = {"manifest": "13"}
+        source = b"\xef\xbb\xbf" + vdf.dumps(payload, pretty=True).replace("\n", "\r\n").encode("utf-8")
+        self.acf.write_bytes(source)
+        result = self.manager.reconcile_steamcmd_acf()
+        self.assertTrue(result["updated"])
+        self.assertEqual(result["removed_ids"], [])
+        self.assertEqual(self.manager._parse_workshop_acf(self.acf.read_bytes()), payload)
+        self.assertEqual(self.acf.with_suffix(".acf.rimcrow.bak").read_bytes(), source)
+        self.assertFalse(self.manager.reconcile_steamcmd_acf()["updated"])
+        self.assertEqual(self.manager.parse_acf_data(payload["AppWorkshop"])["1001"]["local_manifest"], "18446744073709551615")
+
+    def test_invalid_installed_manifest_is_removed_without_deleting_content(self):
+        for manifest in (None, "", "0", "-1", "1.5", "18446744073709551616", "rimcrow-123-4", "rmm-123-4"):
+            with self.subTest(manifest=manifest):
+                payload = self.payload()
+                entry = payload["AppWorkshop"]["WorkshopItemsInstalled"]["1001"]
+                if manifest is None:
+                    del entry["manifest"]
+                else:
+                    entry["manifest"] = manifest
+                self.write_payload(payload)
+                result = self.manager.reconcile_steamcmd_acf()
+                app = self.manager._parse_workshop_acf(self.acf.read_bytes())["AppWorkshop"]
+                self.assertEqual(result["removed_ids"], ["1001"])
+                self.assertNotIn("1001", app["WorkshopItemsInstalled"])
+                self.assertIn("1001", app["WorkshopItemDetails"])
+                self.assertEqual((self.content / "1001" / "content.txt").read_text(), "keep")
+
+    def test_synthetic_cache_and_bad_numeric_fields_are_not_preserved(self):
+        for section, field, value in (
+            ("WorkshopItemDetails", "manifest", "rimcrow-123-4"),
+            ("WorkshopItemDetails", "latest_manifest", "0"),
+            ("WorkshopItemsInstalled", "size", "-1"),
+            ("WorkshopItemsInstalled", "timeupdated", "not-a-time"),
+        ):
+            with self.subTest(section=section, field=field):
+                payload = self.payload()
+                payload["AppWorkshop"][section]["1001"][field] = value
+                self.write_payload(payload)
+                self.assertTrue(self.manager.reconcile_steamcmd_acf()["updated"])
+                app = self.manager._parse_workshop_acf(self.acf.read_bytes())["AppWorkshop"]
+                self.assertNotIn("1001", app[section])
+
+    def test_orphan_install_is_removed_but_details_and_unrecorded_directory_remain(self):
+        payload = self.payload()
+        payload["AppWorkshop"]["WorkshopItemsInstalled"]["1002"] = {"manifest": "13"}
+        payload["AppWorkshop"]["WorkshopItemDetails"]["1002"] = {"manifest": "14"}
+        (self.content / "1003").mkdir()
+        self.write_payload(payload)
+        self.assertEqual(self.manager.reconcile_steamcmd_acf()["removed_ids"], ["1002"])
+        app = self.manager._parse_workshop_acf(self.acf.read_bytes())["AppWorkshop"]
+        self.assertEqual(set(app["WorkshopItemsInstalled"]), {"1001"})
+        self.assertIn("1002", app["WorkshopItemDetails"])
+        self.assertNotIn("1003", app["WorkshopItemDetails"])
+
+    def test_ambiguous_or_broken_structure_is_not_guessed_or_overwritten(self):
+        source = vdf.dumps(self.payload(), pretty=True).encode("utf-8")
+        for invalid in (
+            b"", source[:-3], source.replace(b'"294100"', b'"123"'),
+            source.replace(b'"AppWorkshop"', b'"Other"'),
+            source.replace(b'"appid" "294100"', b'"appid" "294100"\n"appid" "294100"'),
+            source.replace(b'"WorkshopItemsInstalled"\n', b'"WorkshopItemsInstalled" "bad"\n'),
+            source + b"\xff",
+        ):
+            with self.subTest(invalid=invalid[:70]):
+                self.acf.write_bytes(invalid)
+                result = self.manager.reconcile_steamcmd_acf()
+                self.assertIn("error", result)
+                self.assertFalse(result["updated"])
+                self.assertEqual(self.acf.read_bytes(), invalid)
+                self.assertEqual(self.manager.get_acf_json(self.acf), {})
+
+    def test_backup_or_replace_failure_keeps_original_and_cleans_temp_file(self):
+        for target in ("shutil.copy2", "os.replace"):
+            with self.subTest(target=target):
+                original = b"\xef\xbb\xbf" + vdf.dumps(self.payload(), pretty=True).encode("utf-8")
+                self.acf.write_bytes(original)
+                with patch(f"backend.managers.mgr_steam.{target}", side_effect=PermissionError("locked")):
+                    self.assertIn("error", self.manager.reconcile_steamcmd_acf())
+                self.assertEqual(self.acf.read_bytes(), original)
+                self.assertEqual(list(self.acf.parent.glob("*.tmp")), [])
+
+    def test_changed_file_is_not_replaced(self):
+        self.acf.write_bytes(b"\xef\xbb\xbf" + vdf.dumps(self.payload(), pretty=True).encode("utf-8"))
+        with patch("backend.managers.mgr_steam.os.fsync", side_effect=lambda fd: self.acf.write_bytes(b"external write")):
+            self.assertIn("error", self.manager.reconcile_steamcmd_acf())
+        self.assertEqual(self.acf.read_bytes(), b"external write")
+        self.assertEqual(list(self.acf.parent.glob("*.tmp")), [])
+
+    def test_running_process_skips_repair(self):
+        self.write_payload()
+        original = self.acf.read_bytes()
+        self.manager._steamcmd_processes["task"] = Mock(poll=Mock(return_value=None))
+        self.assertEqual(self.manager.reconcile_steamcmd_acf()["skipped"], "steamcmd_running")
+        self.assertEqual(self.acf.read_bytes(), original)
+
+    def test_external_steamcmd_in_same_directory_also_blocks_repair(self):
+        self.write_payload()
+        process = SimpleNamespace(info={"name": "steamcmd.exe", "exe": str(self.root / "steamcmd.exe")})
+        with patch("backend.managers.mgr_steam.psutil.process_iter", return_value=[process]):
+            self.assertEqual(self.manager.reconcile_steamcmd_acf()["skipped"], "steamcmd_running")
+
+    def test_details_manifest_is_not_a_local_installed_manifest(self):
+        payload = self.payload()["AppWorkshop"]
+        del payload["WorkshopItemsInstalled"]["1001"]["manifest"]
+        self.assertIsNone(self.manager.parse_acf_data(payload)["1001"]["local_manifest"])
+
+    def test_download_stops_before_process_start_if_acf_cannot_be_repaired(self):
+        self.acf.write_bytes(b"broken")
+        self.manager.steamcmd_ready = True
+        with patch("backend.managers.mgr_steam.EventBus.resume"), patch("backend.managers.mgr_steam.threading.Thread") as thread:
+            with self.assertRaises(RuntimeError):
+                self.manager.download_workshop_items(["1001"])
+            thread.assert_not_called()
+
+    def test_workshop_repair_does_not_use_details_as_an_installed_record(self):
+        payload = self.payload()
+        payload["AppWorkshop"]["WorkshopItemsInstalled"] = {}
+        self.write_payload(payload)
+        steam_acf = self.root / "steam.acf"
+        steam_acf.write_bytes(vdf.dumps(self.payload(), pretty=True).encode("utf-8"))
+        original = steam_acf.read_bytes()
+        self.manager._get_acf_path = Mock(return_value=str(steam_acf))
+        self.manager.is_steam_running = Mock(return_value=False)
+        with patch.object(settings.config, "workshop_mods_path", str(self.root / "steam_content")):
+            result = self.manager._apply_steamcmd_repair_items(["1001"], "task", "steamcmd-workshop-repair")
+        self.assertEqual(result["repaired_ids"], [])
+        self.assertEqual(steam_acf.read_bytes(), original)
+        self.assertTrue((self.content / "1001" / "content.txt").exists())
+
+    def test_cleanup_does_not_delete_content_if_acf_write_fails(self):
+        self.write_payload()
+        original = self.acf.read_bytes()
+        with patch.object(self.manager, "_write_workshop_acf", side_effect=OSError("locked")):
+            with self.assertRaises(OSError):
+                self.manager._cleanup_steamcmd_repair_sources(["1001"], self.payload(), self.acf)
+        self.assertEqual(self.acf.read_bytes(), original)
+        self.assertTrue((self.content / "1001" / "content.txt").exists())
 
 
 if __name__ == "__main__":

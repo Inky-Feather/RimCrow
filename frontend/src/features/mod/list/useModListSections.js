@@ -130,13 +130,15 @@ export function useModListSections({
   const correctInterlockInsertIndex = (baseList, insertIndex) => {
     let correctedIndex = Math.max(0, Math.min(insertIndex, baseList.length))
     if (correctedIndex <= 0 || correctedIndex >= baseList.length) return correctedIndex
+    let indexById
     let currentId = baseList[correctedIndex - 1]
     while (true) {
       const mod = modStore.takeModById(currentId)
       if (!mod?.lock_next_mod) break
+      indexById ||= new Map(baseList.map((id, index) => [normalizeCanonicalId(id), index]))
       const nextId = normalizeCanonicalId(mod.lock_next_mod)
-      const nextIndexInBase = baseList.findIndex(id => normalizeCanonicalId(id) === nextId)
-      if (nextIndexInBase === -1 || nextIndexInBase < correctedIndex) break
+      const nextIndexInBase = indexById.get(nextId)
+      if (nextIndexInBase === undefined || nextIndexInBase < correctedIndex) break
       correctedIndex = nextIndexInBase + 1
       currentId = baseList[nextIndexInBase]
     }
@@ -146,36 +148,22 @@ export function useModListSections({
     ids,
     targetListId = props.listId,
     insertIndex = 0,
+    visualIndex = null,
+    preferSectionEnd = false,
     type = 'reorder-list',
     label = t('history.mod_list.reorder', '调整{list}顺序', { list: getListLabel(targetListId) }),
   }) => {
     if (appStore.isLoading || !allowSort.value) return false
     const movingIds = normalizeMoveIds(ids)
     if (movingIds.length === 0) return false
-    const targetList = [...takeListIdsById(targetListId)]
-    const movingIdSet = new Set(movingIds.map(id => normalizeId(id)))
-    const baseList = targetList.filter(id => !movingIdSet.has(normalizeId(id)))
-    const correctedIndex = correctInterlockInsertIndex(baseList, insertIndex)
-    const finalList = [...baseList]
-    finalList.splice(correctedIndex, 0, ...movingIds)
-    const isCrossListMove = props.listId !== targetListId
-    if (!isCrossListMove && JSON.stringify(finalList) === JSON.stringify(targetList)) return false
-
-    await modStore.runListHistoryTransaction({
-      type,
-      label,
-      trackedModIds: movingIds,
-    }, async () => {
-      modStore.removeIdsOnAllList(movingIds)
-      modStore.setListIds(targetListId, finalList)
-      modStore.takeModListByIds(movingIds).forEach(mod => {
-        mod.last_moved_time = Date.now()
-        if (isCrossListMove && targetListId === 'active') {
-          mod.last_active_time = Date.now()
-        }
-      })
+    const movingIdSet = new Set(movingIds.map(id => normalizeCanonicalId(id)))
+    const baseList = takeListIdsById(targetListId).filter(id => !movingIdSet.has(normalizeCanonicalId(id)))
+    const index = visualIndex === null ? insertIndex : resolveInsertionIndex(baseList, movingIdSet, visualIndex, preferSectionEnd)
+    const correctedIndex = preferSectionEnd ? index : correctInterlockInsertIndex(baseList, index)
+    baseList.splice(Math.max(0, Math.min(correctedIndex, baseList.length)), 0, ...movingIds)
+    return await modStore.moveListItems({
+      ids: movingIds, targetListId, targetIds: baseList, type, label,
     })
-    return true
   }
   const resolveSectionInsertIndex = (sourceList, targetGroupId, position = 'bottom', listId = props.listId) => {
     const targetGroup = buildSectionGroupsFromList(sourceList, listId)
@@ -208,7 +196,8 @@ export function useModListSections({
     const targetGroups = takeSectionGroupsByListId(targetListId)
     const targetGroup = targetGroups.find(group => group.groupId === normalizeId(targetGroupId))
     if (!targetGroup) return false
-    const targetBaseList = takeListIdsById(targetListId).filter(id => !movingIds.some(movingId => sameId(movingId, id)))
+    const movingSet = new Set(movingIds.map(normalizeCanonicalId))
+    const targetBaseList = takeListIdsById(targetListId).filter(id => !movingSet.has(normalizeCanonicalId(id)))
     const insertIndex = resolveSectionInsertIndex(targetBaseList, targetGroupId, position, targetListId)
     if (insertIndex < 0) return false
     const groupPositionText = position === 'top' ? t('common.position.top', '顶部') : t('common.position.bottom', '底部')
@@ -429,23 +418,18 @@ export function useModListSections({
     }
   }
 
-  // newIndex 来自“可见列表”，而最终写回的是“真实列表”。
-  // 这里负责把拖拽库给的可见位置，翻译成真实数组中的插入点。
-  const resolveInsertionIndex = (baseList, dirtyIds, movingIds, newIndex, preferSectionEnd = false) => {
-    const movingVisibleSet = new Set(
-      movingIds
-        .filter(id => visibleList.value.some(visibleId => sameId(visibleId, id)))
-        .map(id => normalizeId(id))
-    )
-    const baseVisibleIds = dirtyIds.filter(id => !movingVisibleSet.has(normalizeId(id)))
-    let insertVisibleIndex = 0
-    for (let index = 0; index < newIndex; index++) {
-      if (!movingVisibleSet.has(normalizeId(dirtyIds[index]))) {
-        insertVisibleIndex++
-      }
+  // 直接寻找视觉落点两侧未移动的项，不创建临时重排列表。
+  const resolveInsertionIndex = (baseList, movingSet, visualIndex, preferSectionEnd = false) => {
+    const visible = visibleList.value
+    const index = Math.max(0, Math.min(visualIndex, visible.length))
+    let prevVisibleId = ''
+    let nextVisibleId = ''
+    for (let cursor = index - 1; cursor >= 0; cursor--) {
+      if (!movingSet.has(normalizeCanonicalId(visible[cursor]))) { prevVisibleId = visible[cursor]; break }
     }
-    const prevVisibleId = baseVisibleIds[insertVisibleIndex - 1]
-    const nextVisibleId = baseVisibleIds[insertVisibleIndex]
+    for (let cursor = index; cursor < visible.length; cursor++) {
+      if (!movingSet.has(normalizeCanonicalId(visible[cursor]))) { nextVisibleId = visible[cursor]; break }
+    }
 
     if (prevVisibleId) {
       const prevRange = getSectionRangeForId(baseList, prevVisibleId)
@@ -503,26 +487,7 @@ export function useModListSections({
     persistSectionIds()
   })
 
-  // VirtualDragList 使用对象数组 { id: ... } 作为渲染与拖拽事件载体。
-  // 这里做一个中间层，处理 visibleList 和 modelValue 之间的映射。
-  // 注意：拖拽数量、虚影标题这类“只在拖拽开始时需要”的数据不要放进这里。
-  // 否则每次多选变化都会重建整条虚拟列表，并连带触发 VirtualDragList 的行高/偏移缓存重算。
-  const internalListProxy = computed({
-    get() {
-      return visibleList.value.map(id => {
-        if (isSectionHeaderId(id) && isSectionCollapsed(id)) {
-          return {
-            id,
-            mod_ids: getSectionMemberIds(id, props.modelValue),
-          }
-        }
-        return { id }
-      })
-    },
-    set() {
-      // 排序结果最终由 drop 事件统一回写；这里保留空实现，只满足 v-model 接口要求。
-    }
-  })
+  const internalListProxy = computed(() => visibleList.value.map(id => ({ id })))
 
   return {
     sectionFeatureEnabled,
@@ -544,8 +509,7 @@ export function useModListSections({
     sameId,
     findCurrentSectionGroupById,
     getSectionMemberIds,
-    resolveInsertionIndex,
-    correctInterlockInsertIndex,
+    moveIdsToList,
     moveIdsToListBoundary,
     moveIdsToCurrentSectionBoundary,
     moveIdsToSectionGroup,

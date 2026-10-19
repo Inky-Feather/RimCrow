@@ -9,7 +9,7 @@ import webbrowser
 import zipfile
 import hashlib
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from backend.paths.core import (
     normalize_path_for_compare as core_normalize_path_for_compare,
@@ -161,6 +161,16 @@ def get_folder_size(path: str) -> int:
 def extract_zip(zip_path: str, target_dir: str) -> None:
     with zipfile.ZipFile(zip_path, "r") as archive:
         archive.extractall(target_dir)
+
+
+def validate_zip_archive(source: str | Path | BinaryIO) -> None:
+    """校验压缩包目录和所有成员的 CRC，不解压或修改目标文件。"""
+    with zipfile.ZipFile(source) as archive:
+        if not archive.infolist():
+            raise ValueError("下载的压缩包为空")
+        broken_name = archive.testzip()
+        if broken_name:
+            raise ValueError(f"压缩包文件损坏: {broken_name}")
 
 
 def open_system_uri(uri: Any) -> bool:

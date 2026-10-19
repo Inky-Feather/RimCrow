@@ -1,8 +1,9 @@
 <!-- src/components/common/FixedPopover.vue -->
 <template>
-  <Teleport to="body">
+  <Teleport :to="portalTarget">
     <Transition name="popover-fade">
-      <div v-if="isOpen" ref="popoverRef" class="fixed" data-fixed-popover :style="containerStyle">
+      <!-- 定位壳只负责摆放，不应挡住壳外的页面点击；实际内容层单独恢复命中。 -->
+      <div v-if="isOpen && scopeActive" ref="popoverRef" class="pointer-events-none" data-fixed-popover :style="containerStyle">
         <template v-if="framed">
           <div :class="surfaceWrapperClass">
             <div class="min-h-0 overflow-hidden rounded-xl border border-border-base/10 bg-glass-medium backdrop-blur-xl" :style="contentStyle">
@@ -13,18 +14,21 @@
           </div>
         </template>
         <template v-else>
-          <div :class="surfaceWrapperClass">
+          <div :class="surfaceWrapperClass" :style="[contentStyle, { overflowY: scrollable ? 'auto' : undefined }]">
             <slot></slot>
           </div>
         </template>
+        <div ref="childHost" class="pointer-events-none absolute inset-0 z-10 overflow-visible"></div>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onUnmounted, computed } from 'vue'
+import { ref, watch, nextTick, onUnmounted, onDeactivated, computed, inject, provide } from 'vue'
 import { useAppStore } from '../../../app/stores/appStore'
+import { UI_Z_INDEX } from '../../lib/constants.js'
+import { POPOVER_PORTAL_KEY, openPopovers } from './popoverContext.js'
 
 const emit = defineEmits(['request-close'])
 const props = defineProps({
@@ -38,9 +42,9 @@ const props = defineProps({
   offset: { type: [Number, String], default: 8 },
   scrollable: { type: Boolean, default: true },
   framed: { type: Boolean, default: false },          // 默认只负责定位与关闭，视觉壳由调用处决定。
-  placement: { type: String, default: 'auto' },       // auto | bottom | top
+  placement: { type: String, default: 'auto' },       // auto | bottom | top；空间不足时允许反向展开。
   align: { type: String, default: 'start' },          // start | center | end
-  zIndex: { type: [Number, String], default: 8000 },
+  zIndex: { type: [Number, String], default: null },
   // 下拉/浮层的大多数场景都需要默认可关闭，特殊场景再由调用方显式关闭。
   closeOnOutside: { type: Boolean, default: true },
   closeOnEscape: { type: Boolean, default: true },
@@ -48,7 +52,16 @@ const props = defineProps({
 })
 
 const appStore = useAppStore()
+const portalContext = inject(POPOVER_PORTAL_KEY, null)
+const portalTarget = computed(() => portalContext?.target?.value || 'body')
+const scopeActive = computed(() => portalContext?.active?.value !== false)
 const popoverRef = ref(null)
+const childHost = ref(null)
+provide(POPOVER_PORTAL_KEY, {
+  target: childHost, active: computed(() => props.isOpen && scopeActive.value), boundary: portalContext?.boundary,
+})
+let frameId = 0
+let lastGeometry = ''
 const scrollParents = ref([])
 const clipParents = ref([])
 const positionState = ref({
@@ -154,9 +167,10 @@ const getHorizontalAnchor = (rect, width) => {
 }
 
 const shouldFlipToTop = (spaceBelow, spaceAbove, preferredMaxHeight) => {
-  if (props.placement === 'top') return true
-  if (props.placement === 'bottom') return false
-  return spaceBelow < Math.min(preferredMaxHeight, 200) && spaceAbove > spaceBelow
+  // 指定方向优先保留，但至少要容纳一行选项，不能只剩无法操作的细条。
+  const minimumSpace = Math.min(preferredMaxHeight, appStore.scalePx(props.placement === 'auto' ? 200 : 48))
+  if (props.placement === 'top') return spaceAbove >= minimumSpace || spaceAbove >= spaceBelow
+  return spaceBelow < minimumSpace && spaceAbove > spaceBelow
 }
 
 // --- 核心定位算法 ---
@@ -169,8 +183,14 @@ const updatePosition = () => {
   }
 
   const rect = triggerEl.getBoundingClientRect()
-  const viewW = window.innerWidth
-  const viewH = window.innerHeight
+  const boundary = portalContext?.boundary?.value?.getBoundingClientRect()
+  const bounds = {
+    left: Math.max(0, boundary?.left || 0), top: Math.max(0, boundary?.top || 0),
+    right: Math.min(window.innerWidth, boundary?.right ?? window.innerWidth),
+    bottom: Math.min(window.innerHeight, boundary?.bottom ?? window.innerHeight),
+  }
+  const viewW = bounds.right - bounds.left
+  const viewH = bounds.bottom - bounds.top
   const margin = appStore.scalePx(12) // 距离窗口边缘的硬性安全距离
   const scaledOffset = resolveOffsetPx(props.offset)
   const widthPresets = { trigger: rect.width }
@@ -181,23 +201,23 @@ const updatePosition = () => {
     presets: widthPresets
   })
   const baseMinWidth = Math.max(0, Math.min(preferredMinWidth, viewW - margin * 2))
-  const preferredWidth = resolveCssLengthToPx(props.width, viewW, rect.width, {
+  const preferredWidth = resolveCssLengthToPx(props.width, viewW, 0, {
     presets: widthPresets
   })
   const requestedWidth = preferredWidth > 0 ? Math.max(baseMinWidth, preferredWidth) : null
   const resolveLeft = (width) => {
     let value = getHorizontalAnchor(rect, width)
-    if (value + width > viewW - margin) {
-      value = viewW - width - margin
+    if (value + width > bounds.right - margin) {
+      value = bounds.right - width - margin
     }
-    return Math.max(margin, value)
+    return Math.max(bounds.left + margin, value)
   }
 
-  let anchorWidth = requestedWidth || baseMinWidth
+  let anchorWidth = requestedWidth || Math.max(baseMinWidth, popoverRef.value?.getBoundingClientRect().width || 0)
   let left = resolveLeft(anchorWidth)
 
   // 最大宽度会先按用户传入值解析，再被当前窗口剩余空间截断。
-  let availableWidth = viewW - left - margin
+  let availableWidth = requestedWidth ? Math.max(0, bounds.right - left - margin) : Math.max(0, viewW - margin * 2)
   let preferredMaxWidth = resolveCssLengthToPx(props.maxWidth, viewW, availableWidth)
   let finalMaxWidth = Math.max(baseMinWidth, Math.min(preferredMaxWidth > 0 ? preferredMaxWidth : availableWidth, availableWidth))
   let finalWidth = requestedWidth ? Math.max(baseMinWidth, Math.min(requestedWidth, finalMaxWidth)) : null
@@ -206,15 +226,15 @@ const updatePosition = () => {
   if (finalWidth && finalWidth !== anchorWidth) {
     anchorWidth = finalWidth
     left = resolveLeft(anchorWidth)
-    availableWidth = viewW - left - margin
+    availableWidth = Math.max(0, bounds.right - left - margin)
     preferredMaxWidth = resolveCssLengthToPx(props.maxWidth, viewW, availableWidth)
     finalMaxWidth = Math.max(baseMinWidth, Math.min(preferredMaxWidth > 0 ? preferredMaxWidth : availableWidth, availableWidth))
     finalWidth = Math.max(baseMinWidth, Math.min(requestedWidth, finalMaxWidth))
   }
 
   // --- 2. 确定垂直位置与最大高度 ---
-  const spaceBelow = viewH - rect.bottom - scaledOffset - margin
-  const spaceAbove = rect.top - scaledOffset - margin
+  const spaceBelow = bounds.bottom - rect.bottom - scaledOffset - margin
+  const spaceAbove = rect.top - bounds.top - scaledOffset - margin
   const preferredMaxH = Math.max(1, resolveCssLengthToPx(props.maxHeight, viewH, 450))
 
   let isFlipped = false
@@ -237,33 +257,39 @@ const updatePosition = () => {
   const preferredHeight = shouldUseAvailableHeight ? finalMaxHeight : resolveCssLengthToPx(props.height, viewH, 0)
   const finalHeight = props.height ? Math.max(1, Math.min(preferredHeight, finalMaxHeight)) : null
 
+  // shortcut: 当前主体只有平移与轴向缩放，支持旋转/倾斜布局时需改用矩阵换算。
+  const host = portalContext?.target?.value
+  const hostRect = host?.getBoundingClientRect()
+  const scaleX = hostRect && host.clientWidth ? hostRect.width / host.clientWidth || 1 : 1
+  const scaleY = hostRect && host.clientHeight ? hostRect.height / host.clientHeight || 1 : 1
   // --- 3. 原子化更新状态 ---
   positionState.value = {
-    left,
-    top,
-    width: finalWidth,
-    minWidth: baseMinWidth,
-    maxWidth: finalMaxWidth,
-    height: finalHeight,
-    maxHeight: finalMaxHeight,
+    left: hostRect ? (left - hostRect.left) / scaleX : left,
+    top: hostRect ? (top - hostRect.top) / scaleY : top,
+    width: finalWidth ? finalWidth / scaleX : null,
+    minWidth: baseMinWidth / scaleX,
+    maxWidth: finalMaxWidth / scaleX,
+    height: finalHeight ? finalHeight / scaleY : null,
+    maxHeight: finalMaxHeight / scaleY,
     isFlipped
   }
 }
 
 // 样式计算属性
 const containerStyle = computed(() => ({
+  position: portalTarget.value === 'body' ? 'fixed' : 'absolute',
   left: `${positionState.value.left}px`,
   top: `${positionState.value.top}px`,
-  width: positionState.value.width ? `${positionState.value.width}px` : undefined,
+  width: positionState.value.width ? `${positionState.value.width}px` : 'max-content',
   minWidth: positionState.value.minWidth > 0 ? `${positionState.value.minWidth}px` : undefined,
   maxWidth: `${positionState.value.maxWidth}px`,
   transform: positionState.value.isFlipped ? 'translateY(-100%)' : 'none',
   overflow: 'visible',
-  zIndex: props.zIndex
+  zIndex: portalTarget.value === 'body' ? UI_Z_INDEX.PAGE_POPOVER : (props.zIndex ?? 20)
 }))
 
 const surfaceWrapperClass = computed(() => ([
-  'w-fit max-w-full',
+  'pointer-events-auto w-fit max-w-full',
   'rounded-xl shadow-[0_18px_50px_var(--shadow-color)]'
 ]))
 
@@ -277,16 +303,35 @@ const scrollBodyStyle = computed(() => ({
   maxHeight: `${positionState.value.maxHeight}px`
 }))
 
-// 监听与事件
-watch(() => props.isOpen, async (val) => {
-  if (val) {
-    await nextTick()
-    if (!resolveTriggerEl()) return
+// 打开期间只读取位置；布局移动或 transform 变化时才重新写入定位。
+const followTrigger = () => {
+  if (!props.isOpen || !scopeActive.value) return
+  const rect = resolveTriggerEl()?.getBoundingClientRect()
+  const hostRect = portalContext?.target?.value?.getBoundingClientRect()
+  const boundary = portalContext?.boundary?.value?.getBoundingClientRect()
+  const menu = popoverRef.value?.getBoundingClientRect()
+  const geometry = [rect?.x, rect?.y, rect?.width, rect?.height,
+    hostRect?.x, hostRect?.y, hostRect?.width, hostRect?.height,
+    boundary?.x, boundary?.y, boundary?.width, boundary?.height, menu?.width, menu?.height].join(',')
+  if (geometry !== lastGeometry) {
+    lastGeometry = geometry
     updatePosition()
-    // 使用 requestAnimationFrame 代替 setTimeout，防止布局抖动产生的递归
-    requestAnimationFrame(updatePosition)
   }
-})
+  frameId = requestAnimationFrame(followTrigger)
+}
+
+const isInteractive = () => {
+  const trigger = resolveTriggerEl()
+  if (!props.isOpen || !scopeActive.value || !isTriggerVisible(trigger)) return false
+  const rect = trigger.getBoundingClientRect()
+  const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+  if (!hit) return false
+  if (trigger.contains(hit) || popoverRef.value?.contains(hit)) return true
+  // 高层弹窗覆盖触发器后，底层面板不能抢走 Esc。
+  return hit.closest('[data-popover-scope]') === (portalContext?.target?.value?.closest('[data-popover-scope]') || null)
+}
+const stackEntry = { isInteractive }
+defineExpose({ isInteractive })
 
 const handleScroll = (e) => {
   // 如果滚动发生在 Popover 内部，不触发重新定位，防止死循环
@@ -312,42 +357,65 @@ const handleDocumentPointerDown = (event) => {
 const handleDocumentKeydown = (event) => {
   if (!props.closeOnEscape || !props.isOpen) return
   if (event.key !== 'Escape') return
+  if (openPopovers.findLast(entry => entry.isInteractive()) !== stackEntry) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
   emit('request-close', { reason: 'escape' })
 }
 
 const stopListeners = () => {
+  cancelAnimationFrame(frameId)
+  frameId = 0
+  lastGeometry = ''
+  const index = openPopovers.indexOf(stackEntry)
+  if (index !== -1) openPopovers.splice(index, 1)
   scrollParents.value.forEach((target) => target.removeEventListener('scroll', handleScroll))
   scrollParents.value = []
   clipParents.value = []
   window.removeEventListener('resize', updatePosition)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
-  document.removeEventListener('keydown', handleDocumentKeydown)
+  document.removeEventListener('keydown', handleDocumentKeydown, true)
 }
 
 const syncListeners = () => {
   stopListeners()
-  if (!props.isOpen) return
+  if (!props.isOpen || !scopeActive.value) return
   const triggerEl = resolveTriggerEl()
   scrollParents.value = collectScrollParents(triggerEl)
   clipParents.value = collectClipParents(triggerEl)
   scrollParents.value.forEach((target) => target.addEventListener('scroll', handleScroll, { passive: true }))
   window.addEventListener('resize', updatePosition)
   if (props.closeOnOutside) document.addEventListener('pointerdown', handleDocumentPointerDown)
-  if (props.closeOnEscape) document.addEventListener('keydown', handleDocumentKeydown)
+  openPopovers.push(stackEntry)
+  if (props.closeOnEscape) document.addEventListener('keydown', handleDocumentKeydown, true)
+  updatePosition()
+  frameId = requestAnimationFrame(followTrigger)
 }
 
 onUnmounted(stopListeners)
+onDeactivated(() => {
+  stopListeners()
+  if (props.isOpen) emit('request-close', { reason: 'scope-hidden' })
+})
 
 watch(
-  () => [props.isOpen, props.closeOnOutside, props.closeOnEscape],
-  () => syncListeners()
+  () => [props.isOpen, scopeActive.value, props.triggerRef, props.closeOnOutside, props.closeOnEscape],
+  async (_value, _oldValue, onCleanup) => {
+    let cancelled = false
+    onCleanup(() => { cancelled = true; stopListeners() })
+    stopListeners()
+    if (props.isOpen && !scopeActive.value) emit('request-close', { reason: 'scope-hidden' })
+    await nextTick()
+    if (!cancelled) syncListeners()
+  },
+  { immediate: true, flush: 'post' }
 )
 </script>
 
 <style scoped>
-/* 细腻的进入动画：带有微小的位移偏移感 */
+/* 只淡入，避免动画 transform 与向上展开定位互相覆盖。 */
 .popover-fade-enter-active {
-  transition: opacity 0.2s ease-out, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.2s ease-out;
 }
 .popover-fade-leave-active {
   transition: opacity 0.15s ease-in;
@@ -355,7 +423,6 @@ watch(
 
 .popover-fade-enter-from {
   opacity: 0;
-  transform: translateY(4px) scale(0.98) !important; /* 强制微调初始位置 */
 }
 .popover-fade-leave-to {
   opacity: 0;

@@ -26,7 +26,7 @@
 
       <div class="mt-4 rounded-lg border border-border-base/10 bg-bg-inset/45 px-3 py-2">
         <div class="flex items-center justify-between gap-3">
-          <span class="text-xs font-bold text-text-dim uppercase tracking-wider">{{ t('dialog.recommendation_export.preview_title', '预览') }}</span>
+          <span class="text-xs font-bold text-text-dim tracking-wider">{{ t('dialog.recommendation_export.preview_title', '预览') }}</span>
           <span class="text-xs text-text-dim">{{ t('dialog.recommendation_export.mod_count', '{count} 个模组', { count: exportMods.length }) }}</span>
         </div>
         <pre class="mt-2 max-h-44 overflow-auto whitespace-pre-wrap wrap-break-word text-xs leading-relaxed text-text-soft custom-scrollbar">{{ previewText }}</pre>

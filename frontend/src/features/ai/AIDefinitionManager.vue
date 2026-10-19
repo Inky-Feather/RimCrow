@@ -47,7 +47,7 @@
 
               <template v-else>
                 <div v-if="groupedPromptEntries.system.length > 0" class="mb-3">
-                  <div class="px-2 pb-1 text-[0.7rem] font-black uppercase tracking-[0.22em] text-text-disabled">{{ t('dialog.ai_definitions.system_prompts', '系统模板') }}</div>
+                  <div class="px-2 pb-1 text-[0.7rem] font-black tracking-[0.22em] text-text-disabled">{{ t('dialog.ai_definitions.system_prompts', '系统模板') }}</div>
                   <div class="space-y-1">
                     <div v-for="[promptId, prompt] in groupedPromptEntries.system" :key="promptId" @click="selectPrompt(promptId)"
                       class="cursor-pointer rounded-lg px-3 py-2 transition-all" :class="currentPromptId === promptId ? 'bg-accent-special/20 shadow-[inset_3px_0_0_rgba(var(--rgb-accent-special),1)]' : 'hover:bg-bg-overlay/5'" >
@@ -60,7 +60,7 @@
                   </div>
                 </div>
                 <div v-if="groupedPromptEntries.custom.length > 0">
-                  <div class="px-2 pb-1 text-[0.7rem] font-black uppercase tracking-[0.22em] text-text-disabled">{{ t('dialog.ai_definitions.custom_prompts', '自定义模板') }}</div>
+                  <div class="px-2 pb-1 text-[0.7rem] font-black tracking-[0.22em] text-text-disabled">{{ t('dialog.ai_definitions.custom_prompts', '自定义模板') }}</div>
                   <div class="space-y-1">
                     <div v-for="[promptId, prompt] in groupedPromptEntries.custom" :key="promptId" @click="selectPrompt(promptId)"
                       class="cursor-pointer rounded-lg px-3 py-2 transition-all" :class="currentPromptId === promptId ? 'bg-accent-special/20 shadow-[inset_3px_0_0_rgba(var(--rgb-accent-special),1)]' : 'hover:bg-bg-overlay/5'" >
@@ -79,12 +79,12 @@
           <div class="content-surface flex flex-1 flex-col">
             <div v-if="isLoadingDefinitions" class="flex flex-1 flex-col items-center justify-center text-text-disabled">
               <TerminalSquare class="mb-4 size-16 opacity-20" />
-              <p class="text-sm uppercase tracking-widest">{{ t('dialog.ai_definitions.loading', '正在加载 AI 定义') }}</p>
+              <p class="text-sm tracking-widest">{{ t('dialog.ai_definitions.loading', '正在加载 AI 定义') }}</p>
             </div>
 
             <div v-else-if="loadErrorText" class="flex flex-1 flex-col items-center justify-center px-8 text-center text-text-disabled">
               <TerminalSquare class="mb-4 size-16 opacity-20" />
-              <p class="mb-2 text-sm uppercase tracking-widest">{{ t('dialog.ai_definitions.load_failed', '读取失败') }}</p>
+              <p class="mb-2 text-sm tracking-widest">{{ t('dialog.ai_definitions.load_failed', '读取失败') }}</p>
               <p class="text-sm text-accent-danger">{{ loadErrorText }}</p>
             </div>
 
@@ -106,12 +106,12 @@
               <div class="flex-1 overflow-y-auto p-6 space-y-6">
                 <div class="grid grid-cols-[1fr_1fr] gap-x-8 gap-y-5">
                   <div>
-                    <div class="mb-1 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('common.field.name', '名称') }}</div>
+                    <div class="mb-1 text-xs font-bold tracking-widest text-text-dim">{{ t('common.field.name', '名称') }}</div>
                     <div class="text-sm font-bold text-text-main">{{ currentEntry?.name || t('dialog.ai_definitions.unnamed_entry', '未命名入口') }}</div>
                   </div>
                   <CommonSelect v-model="currentEntryForm.prompt_id" :label="t('dialog.ai_definitions.prompt_used', '使用的模板')" :options="currentEntryPromptOptions" />
                   <div class="col-span-2">
-                    <div class="mb-1 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('common.field.description', '描述') }}</div>
+                    <div class="mb-1 text-xs font-bold tracking-widest text-text-dim">{{ t('common.field.description', '描述') }}</div>
                     <div class="text-sm text-text-main">{{ currentEntry?.description || t('common.empty.no_description', '无描述') }}</div>
                   </div>
                 </div>
@@ -165,15 +165,15 @@
               <div class="flex-1 overflow-y-auto p-6 space-y-2">
                 <div v-if="currentPromptForm.is_system" class="grid grid-cols-2 gap-4">
                   <div class="space-y-1">
-                    <div class="text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.ai_definitions.prompt_name', '模板名称') }}</div>
+                    <div class="text-xs font-bold tracking-widest text-text-dim">{{ t('dialog.ai_definitions.prompt_name', '模板名称') }}</div>
                     <div class="text-sm font-bold text-text-main">{{ getPromptName(currentPromptId, currentPromptForm) }}</div>
                   </div>
                   <div class="space-y-1">
-                    <div class="text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('common.field.category', '分类') }}</div>
+                    <div class="text-xs font-bold tracking-widest text-text-dim">{{ t('common.field.category', '分类') }}</div>
                     <div class="text-sm text-text-main">{{ selectedPromptCategory?.label || currentPromptForm.category || t('common.status.uncategorized', '未分类') }}</div>
                   </div>
                   <div class="space-y-1 col-span-2">
-                    <div class="text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.ai_definitions.prompt_description', '模板描述') }}</div>
+                    <div class="text-xs font-bold tracking-widest text-text-dim">{{ t('dialog.ai_definitions.prompt_description', '模板描述') }}</div>
                     <div class="text-sm text-text-main">{{ getPromptDescription(currentPromptId, currentPromptForm) || t('common.empty.no_description', '无描述') }}</div>
                   </div>
                 </div>
@@ -207,7 +207,7 @@
                   <p class="mb-4 text-xs text-text-dim">{{ t('dialog.ai_definitions.attachment_projection_desc', '控制附件里哪些信息会发给 AI。取消勾选后，这部分内容通常不会发送。') }}</p>
                   <div class="space-y-4">
                     <div v-for="attachment in selectedAttachmentDefinitions" :key="`projection-${attachment.kind}`" class="modal-section-subtle p-3">
-                      <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ getAttachmentLabel(attachment) }}</div>
+                      <div class="mb-2 text-xs font-bold tracking-widest text-text-dim">{{ getAttachmentLabel(attachment) }}</div>
                       <div class="grid grid-cols-2 gap-2">
                         <label v-for="field in attachment.projection_options || []" :key="`${attachment.kind}-${field.path}`"
                           class="flex items-start gap-2 rounded-lg border border-border-base/10 bg-bg-inset/60 px-3 py-2 text-xs text-text-main" >
@@ -229,7 +229,7 @@
                   </div>
                   <div class="space-y-4">
                     <div>
-                      <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.ai_definitions.base_variables', '通用变量') }}</div>
+                      <div class="mb-2 text-xs font-bold tracking-widest text-text-dim">{{ t('dialog.ai_definitions.base_variables', '通用变量') }}</div>
                       <div class="flex flex-wrap gap-2">
                         <button v-for="variable in baseVariables" :key="`base-${variable.key}`" :disabled="currentPromptForm.is_system" v-tooltip="getBaseVariableDescription(variable) || variable.key"
                           class="rounded-md border border-accent-primary/30 bg-bg-inset/80 px-2 py-1 text-left text-xs text-accent-primary transition-colors hover:bg-accent-primary hover:text-on-accent-primary disabled:cursor-default disabled:opacity-70 disabled:hover:bg-bg-inset/80 disabled:hover:text-accent-primary"
@@ -241,7 +241,7 @@
                     </div>
 
                     <div v-for="attachment in selectedAttachmentDefinitions" :key="attachment.kind">
-                      <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ attachment.label }}</div>
+                      <div class="mb-2 text-xs font-bold tracking-widest text-text-dim">{{ attachment.label }}</div>
                       <div class="flex flex-wrap gap-2">
                         <button v-for="variable in attachment.prompt_variables" :key="`${attachment.kind}-${variable.key}`" :disabled="currentPromptForm.is_system" v-tooltip="getAttachmentVariableDescription(attachment.kind, variable) || variable.key"
                           class="rounded-md border border-accent-primary/30 bg-bg-inset/80 px-2 py-1 text-left text-xs text-accent-primary transition-colors hover:bg-accent-primary hover:text-on-accent-primary disabled:cursor-default disabled:opacity-70 disabled:hover:bg-bg-inset/80 disabled:hover:text-accent-primary"
@@ -255,7 +255,7 @@
                 </div>
 
                 <div class="space-y-2">
-                  <label class="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-text-dim">
+                  <label class="flex items-center justify-between text-xs font-bold tracking-widest text-text-dim">
                     <span class="flex items-center gap-2"><Bot class="size-4 text-accent-special" /> {{ t('dialog.ai_definitions.system_prompt_body', '系统提示词') }}</span>
                     <span class="font-mono text-[0.6rem] opacity-50">{{ t('dialog.ai_definitions.system_prompt_body_hint', '给 AI 的固定说明') }}</span>
                   </label>
@@ -263,7 +263,7 @@
                 </div>
 
                 <div class="space-y-2">
-                  <label class="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-text-dim">
+                  <label class="flex items-center justify-between text-xs font-bold tracking-widest text-text-dim">
                     <span class="flex items-center gap-2"><User class="size-4 text-accent-primary" /> {{ t('dialog.ai_definitions.user_template', '用户输入模板') }}</span>
                     <span class="font-mono text-[0.6rem] opacity-50">{{ t('dialog.ai_definitions.user_template_hint', '每次发送时的输入格式') }}</span>
                   </label>
@@ -274,7 +274,7 @@
 
             <div v-else class="flex flex-1 flex-col items-center justify-center text-text-disabled">
               <TerminalSquare class="mb-4 size-16 opacity-20" />
-              <p class="text-sm uppercase tracking-widest">{{ t('dialog.ai_definitions.select_left_item', '请选择左侧项目') }}</p>
+              <p class="text-sm tracking-widest">{{ t('dialog.ai_definitions.select_left_item', '请选择左侧项目') }}</p>
             </div>
           </div>
         </div>

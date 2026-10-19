@@ -1,7 +1,7 @@
 <template>
   <div class="relative">
     <div class="mb-1 flex items-center justify-between px-1">
-      <label class="text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('ui.settings.theme.scheme', '配色方案') }}</label>
+      <label class="text-xs font-bold tracking-widest text-text-dim">{{ t('ui.settings.theme.scheme', '配色方案') }}</label>
       <button type="button" class="text-xs font-bold text-accent-primary hover:text-text-main transition-colors" @click="$emit('create')">
         {{ t('ui.settings.theme.create', '创建配色') }}
       </button>

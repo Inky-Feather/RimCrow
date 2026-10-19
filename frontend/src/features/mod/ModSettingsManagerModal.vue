@@ -232,6 +232,7 @@ const modGroups = computed(() => overview.value?.mod_groups || [])
 const unknownCleanupPaths = computed(() => overview.value?.cleanup_candidate_paths || [])
 const stateFilterOptions = computed(() => [
   { value: 'all', label: t('dialog.mod_settings.state.all', '全部状态') },
+  { value: 'duplicates', label: t('dialog.mod_settings.state.duplicates', '存在重复') },
   { value: 'active', label: t('dialog.mod_settings.state.active', '当前激活') },
   { value: 'coexist_disabled', label: t('dialog.mod_settings.state.coexist_disabled', '共存停用') },
   { value: 'mod_disabled', label: t('dialog.mod_settings.state.mod_disabled', '模组停用') },
@@ -268,10 +269,11 @@ const filteredModGroups = computed(() => {
     .map((modGroup) => {
       const groupMatched = !hasQuery || textMatchesFilter(buildModSearchText(modGroup))
       const settingGroups = (modGroup.setting_groups || [])
+        .filter(settingGroup => stateFilter.value !== 'duplicates' || (settingGroup.files || []).length > 1)
         .map((settingGroup) => {
           const settingMatched = groupMatched || textMatchesFilter(buildSettingSearchText(settingGroup))
           const files = (settingGroup.files || []).filter((item) => (
-            itemMatchesState(item) && (settingMatched || textMatchesFilter(buildItemSearchText(item)))
+            (stateFilter.value === 'duplicates' || itemMatchesState(item)) && (settingMatched || textMatchesFilter(buildItemSearchText(item)))
           ))
           if (!files.length) return null
           return {

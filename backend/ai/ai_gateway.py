@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 from urllib.parse import urlparse, urlunparse
 
 import requests
+import httpx
 
 # 必须在 import litellm 前设置
 os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
@@ -28,6 +29,7 @@ os.environ["LITELLM_LOCAL_BLOG_POSTS"] = "True"
 
 from litellm import completion as litellm_completion, acompletion as litellm_acompletion 
 from litellm.utils import token_counter
+from litellm.llms.custom_httpx.http_handler import HTTPHandler, AsyncHTTPHandler
 from openai import OpenAI, AsyncOpenAI
 
 from backend.ai.def_model_capabilities import (
@@ -133,6 +135,18 @@ def validate_ai_connection_config(config: Any) -> tuple[bool, str]:
 
     return True, ""
 
+class _AIAsyncHTTPHandler(AsyncHTTPHandler):
+    """给 LiteLLM 原生协议注入请求独享的代理，不修改全局客户端。"""
+
+    def __init__(self, proxy_url: str | None):
+        self._proxy_url = proxy_url
+        super().__init__(timeout=60.0)
+
+    def create_client(self, timeout, event_hooks, **kwargs) -> httpx.AsyncClient:
+        return httpx.AsyncClient(proxy=self._proxy_url, trust_env=False, timeout=timeout,
+                                 event_hooks=event_hooks, follow_redirects=True)
+
+
 class LiteLLMGateway:
     """AI 网关。
 
@@ -166,19 +180,19 @@ class LiteLLMGateway:
         """
         return normalize_ai_provider(provider)
 
-    def _prepare_proxy_env(self):
-        """按当前设置同步 AI 请求所需的代理环境变量。"""
-        if not settings.config.network.use_proxy_on_ai:
-            for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
-                os.environ.pop(key, None)
-        else:
-            network_mgr.apply_proxy_settings()
+    def _ai_proxy_url(self, url: str) -> str | None:
+        """None 沿用环境代理，空字符串表示命中应用绕过列表后直连。"""
+        if not settings.config.network.use_proxy_on_ai or not network_mgr.get_proxy_url():
+            return None
+        return network_mgr.request_route(url)["proxy_url"]
 
-    def _requests_proxies(self):
-        """为 `requests` 调用生成代理配置；未启用时返回 `None`。"""
-        if not settings.config.network.use_proxy_on_ai: return None
-        proxy_url = network_mgr.get_proxy_url()
-        if not proxy_url: return None
+    def _requests_proxies(self, url: str) -> dict[str, Any] | None:
+        """模型列表与推理使用相同的 AI 代理策略。"""
+        proxy_url = self._ai_proxy_url(url)
+        if proxy_url is None:
+            return None
+        if not proxy_url:
+            return {"http": None, "https": None, "all": None, "no_proxy": "*"}
         return {"http": proxy_url, "https": proxy_url}
 
     def _host(self, base_url: str) -> str:
@@ -454,7 +468,9 @@ class LiteLLMGateway:
 
     def _redact_request_kwargs_for_log(self, request_kwargs: dict) -> dict:
         """脱敏请求参数，避免 Debug 日志泄露 API Key。"""
-        return redact_sensitive_data(dict(request_kwargs or {}))
+        kwargs = dict(request_kwargs or {})
+        kwargs.pop("proxy_url", None)
+        return redact_sensitive_data(kwargs)
 
     # =========================================================================
     # 厂商与模型探测
@@ -496,7 +512,7 @@ class LiteLLMGateway:
         这里不走 LiteLLM 的 provider 列表，而是直接请求目标服务，
         这样能兼容中转、自建兼容服务以及本地 Ollama。
         """
-        proxies = self._requests_proxies()
+        proxies = self._requests_proxies(base_url)
 
         try:
             # 1) Ollama 原生
@@ -606,8 +622,6 @@ class LiteLLMGateway:
         """
         统一组装 LiteLLM 参数。
         """
-        self._prepare_proxy_env()
-
         from backend.settings import AIConfig
 
         raw_cfg = settings.config.ai
@@ -716,12 +730,7 @@ class LiteLLMGateway:
         if base_url:
             kwargs["api_base"] = base_url
 
-        if settings.config.network.use_proxy_on_ai:
-            proxy_url = network_mgr.get_proxy_url()
-            if proxy_url:
-                kwargs["proxy_url"] = proxy_url
-        else:
-            kwargs["proxy_url"] = None
+        kwargs["proxy_url"] = self._ai_proxy_url(base_url)
 
         return kwargs
 
@@ -765,6 +774,8 @@ class LiteLLMGateway:
     def _normalize_litellm_request_fields(self, request_kwargs: dict) -> dict:
         """把后端统一字段映射为 LiteLLM 兼容字段。"""
         kwargs = self._drop_internal_request_fields(request_kwargs)
+        # 代理只交给 HTTP 客户端，不能作为模型参数下发给服务商。
+        kwargs.pop("proxy_url", None)
         max_output_tokens = kwargs.pop("max_output_tokens", None)
         if max_output_tokens:
             kwargs["max_tokens"] = max_output_tokens
@@ -1042,11 +1053,17 @@ class LiteLLMGateway:
 
     def _create_openai_client(self, request_kwargs: dict, meta: dict) -> OpenAI:
         """创建同步 OpenAI SDK client。"""
-        return OpenAI(**self._build_openai_client_kwargs(request_kwargs, meta))
+        kwargs = self._build_openai_client_kwargs(request_kwargs, meta)
+        if (proxy_url := request_kwargs.get("proxy_url")) is not None:
+            kwargs["http_client"] = httpx.Client(proxy=proxy_url or None, trust_env=False, timeout=60.0)
+        return OpenAI(**kwargs)
 
     def _create_async_openai_client(self, request_kwargs: dict, meta: dict) -> AsyncOpenAI:
         """创建异步 OpenAI SDK client。"""
-        return AsyncOpenAI(**self._build_openai_client_kwargs(request_kwargs, meta))
+        kwargs = self._build_openai_client_kwargs(request_kwargs, meta)
+        if (proxy_url := request_kwargs.get("proxy_url")) is not None:
+            kwargs["http_client"] = httpx.AsyncClient(proxy=proxy_url or None, trust_env=False, timeout=60.0)
+        return AsyncOpenAI(**kwargs)
 
     async def _close_async_openai_client(self, client: Any) -> None:
         """尽力关闭异步 OpenAI client，避免底层 httpx 在 event loop 关闭后才延迟清理。"""
@@ -1332,7 +1349,20 @@ class LiteLLMGateway:
             tools=tools,
             tool_choice=tool_choice,
         )
-        return client.chat.completions.create(**create_kwargs)
+        try:
+            response = client.chat.completions.create(**create_kwargs)
+        except BaseException:
+            client.close()
+            raise
+        if stream:
+            def stream_response():
+                try:
+                    yield from response
+                finally:
+                    client.close()
+            return stream_response()
+        client.close()
+        return response
 
     async def _call_openai_compatible_chat_async(
         self,
@@ -1355,17 +1385,34 @@ class LiteLLMGateway:
                 tools=tools,
                 tool_choice=tool_choice,
             )
-            return await client.chat.completions.create(**create_kwargs)
-        finally:
+            response = await client.chat.completions.create(**create_kwargs)
+        except BaseException:
             await self._close_async_openai_client(client)
+            raise
+
+        if not stream:
+            await self._close_async_openai_client(client)
+            return response
+
+        async def stream_response():
+            try:
+                async for chunk in response:
+                    yield chunk
+            finally:
+                await self._close_async_openai_client(client)
+
+        return stream_response()
 
     def _call_openai_compatible_responses(self, messages: list[dict], request_kwargs: dict, meta: dict):
         """通过 OpenAI SDK 调用 `responses.create(...)` 并包成统一返回结构。"""
         client = self._create_openai_client(request_kwargs, meta)
-        create_kwargs = self._build_openai_responses_create_kwargs(messages, dict(request_kwargs), meta)
-        resp = client.responses.create(**create_kwargs)
-        text = self._extract_responses_text(resp)
-        return self._wrap_text_response(text)
+        try:
+            create_kwargs = self._build_openai_responses_create_kwargs(messages, dict(request_kwargs), meta)
+            resp = client.responses.create(**create_kwargs)
+            text = self._extract_responses_text(resp)
+            return self._wrap_text_response(text)
+        finally:
+            client.close()
 
     async def _call_openai_compatible_responses_async(self, messages: list[dict], request_kwargs: dict, meta: dict):
         """异步调用 `responses.create(...)` 并包成统一返回结构。"""
@@ -1479,8 +1526,25 @@ class LiteLLMGateway:
         if meta["provider"] == "openai_compatible":
             return self._openai_compatible_completion(messages, request_kwargs, meta)
 
+        proxy_url = request_kwargs.get("proxy_url")
         request_kwargs = self._normalize_litellm_request_fields(request_kwargs)
-        return litellm_completion(messages=messages, **request_kwargs)
+        if proxy_url is None:
+            return litellm_completion(messages=messages, **request_kwargs)
+        client = HTTPHandler(client=httpx.Client(proxy=proxy_url or None, trust_env=False, timeout=60.0, follow_redirects=True))
+        try:
+            response = litellm_completion(messages=messages, **{**request_kwargs, "client": client})
+        except BaseException:
+            client.close()
+            raise
+        if request_kwargs.get("stream"):
+            def stream_response():
+                try:
+                    yield from response
+                finally:
+                    client.close()
+            return stream_response()
+        client.close()
+        return response
 
     async def acompletion(self, *, messages: list[dict], llm_kwargs: dict, **extra: Any):
         """异步调用统一入口。"""
@@ -1498,8 +1562,26 @@ class LiteLLMGateway:
         if meta["provider"] == "openai_compatible":
             return await self._openai_compatible_acompletion(messages, request_kwargs, meta)
 
+        proxy_url = request_kwargs.get("proxy_url")
         request_kwargs = self._normalize_litellm_request_fields(request_kwargs)
-        return await litellm_acompletion(messages=messages, **request_kwargs)
+        if proxy_url is None:
+            return await litellm_acompletion(messages=messages, **request_kwargs)
+        client = _AIAsyncHTTPHandler(proxy_url or None)
+        try:
+            response = await litellm_acompletion(messages=messages, **{**request_kwargs, "client": client})
+        except BaseException:
+            await client.close()
+            raise
+        if request_kwargs.get("stream"):
+            async def stream_response():
+                try:
+                    async for chunk in response:
+                        yield chunk
+                finally:
+                    await client.close()
+            return stream_response()
+        await client.close()
+        return response
 
     # =========================================================================
     # Token 估算

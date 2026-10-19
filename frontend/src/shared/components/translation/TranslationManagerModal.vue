@@ -60,23 +60,23 @@
       <section class="min-h-0 overflow-y-auto p-5 custom-scrollbar">
         <div v-if="selectedRow" class="space-y-4">
           <div class="rounded-xl border border-border-base/10 bg-bg-overlay/4 p-3">
-            <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.translation_manager.key', '文本 key') }}</div>
+            <div class="mb-2 text-xs font-bold tracking-widest text-text-dim">{{ t('dialog.translation_manager.key', '文本 key') }}</div>
             <div class="break-all font-mono text-sm text-text-main">{{ selectedRow.key }}</div>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div class="rounded-xl border border-border-base/10 bg-bg-deep/60 p-3">
-              <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('ui.translation.controls.source_text', '中文原文') }}</div>
+              <div class="mb-2 text-xs font-bold tracking-widest text-text-dim">{{ t('ui.translation.controls.source_text', '中文原文') }}</div>
               <p class="whitespace-pre-wrap wrap-break-words text-sm leading-6 text-text-main">{{ selectedRow.sourceText }}</p>
             </div>
             <div class="rounded-xl border border-border-base/10 bg-bg-deep/60 p-3">
-              <div class="mb-2 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.translation_manager.current_builtin', '内置译文') }}</div>
+              <div class="mb-2 text-xs font-bold tracking-widest text-text-dim">{{ t('dialog.translation_manager.current_builtin', '内置译文') }}</div>
               <p class="whitespace-pre-wrap wrap-break-words text-sm leading-6 text-text-main">{{ selectedRow.builtinText || '-' }}</p>
             </div>
           </div>
 
           <label class="block">
-            <span class="mb-2 block text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('dialog.translation_manager.edit_translation', '编辑译文') }}</span>
+            <span class="mb-2 block text-xs font-bold tracking-widest text-text-dim">{{ t('dialog.translation_manager.edit_translation', '编辑译文') }}</span>
             <textarea v-model="draftText" rows="8" class="input-glass w-full resize-y rounded-xl pl-3 pr-3 pt-2 pb-2 text-sm leading-6 text-text-main outline-none"></textarea>
           </label>
 

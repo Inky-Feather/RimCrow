@@ -29,7 +29,7 @@
             <!-- 1. 顶部工具栏 -->
             <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-bg-overlay/5 border-b border-border-base/5 z-20 shrink-0">
               <!-- 图例 -->
-              <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold uppercase tracking-wider">
+              <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold tracking-wider">
                 <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-danger"></span>{{ t('ui.diff_view.legend.missing', '缺失{count}', { count: stats.removed }) }}</div>
                 <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-success"></span>{{ t('ui.diff_view.legend.added', '新增{count}', { count: stats.added }) }}</div>
                 <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-accent-warn"></span>{{ t('ui.diff_view.legend.moved', '移动{count}', { count: stats.moved }) }}</div>

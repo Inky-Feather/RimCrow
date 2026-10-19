@@ -3,7 +3,7 @@
     :class="`border-2 rounded-2xl border-accent-${listColor}/20`">
     <!-- 标题栏 -->
     <div data-tour="group-list-header" :class="`px-3 h-8 border-b rounded-t-2xl border-border-base/5 flex justify-between items-center bg-accent-${listColor}/10`">
-      <span :class="`text-sm font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-2`">
+      <span :class="`text-sm font-bold text-accent-${listColor} tracking-wider flex items-center gap-2`">
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-${listColor} shadow-[0_0_8px_var(--color-accent-${listColor})]`"></div>
         {{ title }}
       </span>
@@ -52,13 +52,13 @@
             {{ t('ui.group_list.empty.create_hint', '可点击 “ + ” 按钮新建分组') }}
         </div>
 
-        <VirtualDragList :model-value="flatRows" :key="listKey" dataKey="row_key" :keeps="40" class="h-full p-1"
+        <VirtualDragList :model-value="flatRows" dataKey="row_key" :keeps="40" class="h-full p-1"
           wrapClass="min-h-full" ref="vListRef"
-          :draggable="!appStore.isLoading" :droppable="!appStore.isLoading" :sortable="!appStore.isLoading"
+          :draggable="!appStore.isLoading" :droppable="!appStore.isLoading"
           :disabled="appStore.isLoading"
           :delay="appStore.settings.ui.drag_delay"
           :get-drag-meta="getFlatRowDragMeta"
-          :group="{ name: 'groups', pull:'clone', put: ['mods','groups'], revertDrag: true, canPut: canDropFlatRow }"
+          :group="{ name: 'groups', put: ['mods','groups'], canPut: canDropFlatRow }"
           :size="modRowHeight"
           @drop="handleFlatDrop" @drag="startDrag" @dragend="finishDragSession"
           v-selectable-list="selectionConfig">
@@ -146,7 +146,6 @@ const menuStore = useContextMenuStore()
 const confirmStore = useConfirmStore()
 
 const vListRef = ref(null)
-const listKey = ref(0)
 const isDragging = ref(false)
 const expandingIds = ref(new Set<string>())
 const collapsingIds = ref(new Set<string>())
@@ -524,24 +523,15 @@ const finishDragSession = () => {
   groupStore.isDraggingGroup = false
   modStore.isDraggingMod = false
 }
-const cancelActiveDrag = async () => {
+const cancelActiveDrag = () => {
   if (!isDragging.value) return
+  vListRef.value?.cancelDrag()
   finishDragSession()
-  await nextTick()
-  listKey.value += 1
 }
 const startDrag = (e) => {
   isDragging.value = true
   groupStore.isDraggingGroup = e?.item?.row_type === 'group'
   modStore.isDraggingMod = e?.item?.row_type === 'mod'
-}
-
-const resolveMovingModIds = (draggedId = '') => {
-  const normalizedDraggedId = normalizeGroupModId(draggedId)
-  const selectedIds = [...new Set((modStore.selectedIds || []).map(normalizeGroupModId).filter(Boolean))]
-  if (!normalizedDraggedId) return selectedIds
-  if (!selectedIds.includes(normalizedDraggedId)) return [normalizedDraggedId]
-  return selectedIds
 }
 
 const getGroupModCount = (groupId: string) => {
@@ -655,16 +645,19 @@ const getFlatRowDragMeta = (row) => {
   // 多选数量只影响拖拽虚影，不应该写进 flatRows。
   // 否则每次选择变化都会重建整个分组虚拟列表，展开多个大分组时滚动会明显变重。
   if (row?.row_type === 'group') {
+    const ids = getNormalizedGroupModIds(row.group)
     return {
-      dragCount: Math.max(1, getGroupModCount(row.group_id)),
+      mod_ids: ids,
+      dragCount: Math.max(1, ids.length),
       dragLabel: row.group?.name || t('common.field.groups', '分组'),
     }
   }
   if (row?.row_type === 'mod') {
     const id = normalizeGroupModId(row.id)
-    const count = selectedCanonicalIds.value.has(id) ? selectedCanonicalIds.value.size : 1
+    const ids = selectedCanonicalIds.value.has(id) ? [...selectedCanonicalIds.value] : [id]
     return {
-      dragCount: Math.max(1, count),
+      mod_ids: ids,
+      dragCount: Math.max(1, ids.length),
       dragLabel: row.id,
     }
   }
@@ -680,7 +673,7 @@ const canDropFlatRow = (session, targetRow, index: number) => {
 
 const resolveDropPosition = (newIndex: number, options: { preferPreviousGroupGap?: boolean } = {}) => {
   const rows = flatRows.value
-  const nextRow = rows[Math.max(0, Math.min(newIndex, rows.length - 1))]
+  const nextRow = rows[newIndex]
   const prevRow = rows[newIndex - 1]
   if (!nextRow && prevRow?.group_id) {
     return { groupId: prevRow.group_id, index: getGroupModCount(prevRow.group_id) }
@@ -707,7 +700,7 @@ const resolveGroupInsertIndex = (sourceGroupId: string, newIndex: number) => {
   // 拖到虚拟列表总高度以下时，明确表示插入到分组列表最底部。
   // 这里不能再向上寻找“下一个 group 行”，否则最后一个展开分组下面会无法排序到末尾。
   if (newIndex >= flatRows.value.length) return nextIds.length
-  const nextGroupRow = flatRows.value.slice(newIndex).find(row => row.row_type === 'group')
+  const nextGroupRow = flatRows.value.slice(newIndex).find(row => row.row_type === 'group' && row.group_id !== sourceGroupId)
   if (!nextGroupRow) return nextIds.length
   const targetIndex = nextIds.indexOf(nextGroupRow.group_id)
   return targetIndex === -1 ? nextIds.length : targetIndex
@@ -719,6 +712,7 @@ const reorderGroupsByDrop = async (sourceGroupId: string, newIndex: number) => {
   const nextIds = groupIds.filter(id => id !== sourceGroupId)
   const targetIndex = resolveGroupInsertIndex(sourceGroupId, newIndex)
   nextIds.splice(targetIndex, 0, sourceGroupId)
+  if (nextIds.every((id, index) => id === groupIds[index])) return
   await groupStore.groupReorder(nextIds)
 }
 
@@ -727,17 +721,20 @@ const copyOrReorderGroupMods = async (sourceRow, newIndex: number) => {
   if (!target.groupId) return
   const targetGroup = groupStore.takeGroupById(target.groupId)
   if (!targetGroup) return
-  const movingIds = resolveMovingModIds(sourceRow.id)
+  const movingIds = [...new Set(sourceRow.mod_ids.map(normalizeGroupModId).filter(Boolean))]
   if (movingIds.length === 0) return
   const targetIds = (targetGroup.mod_ids || []).map(normalizeGroupModId).filter(Boolean)
   const movingSet = new Set(movingIds)
   const baseIds = sourceRow.group_id === target.groupId
     ? targetIds.filter(id => !movingSet.has(id))
     : [...targetIds]
-  const insertIndex = Math.max(0, Math.min(target.index, baseIds.length))
+  const removedBefore = sourceRow.group_id === target.groupId
+    ? targetIds.slice(0, target.index).filter(id => movingSet.has(id)).length : 0
+  const insertIndex = Math.max(0, Math.min(target.index - removedBefore, baseIds.length))
+  const targetSet = new Set(baseIds)
   const idsToInsert = sourceRow.group_id === target.groupId
     ? movingIds
-    : movingIds.filter(id => !baseIds.includes(id))
+    : movingIds.filter(id => !targetSet.has(id))
   const skippedCount = movingIds.length - idsToInsert.length
   if (idsToInsert.length === 0) {
     if (skippedCount > 0) toast.info(t('toast.group_list.drop.duplicate_skipped_all', '目标分组已包含 {count} 个模组，已跳过', { count: skippedCount }))
@@ -745,6 +742,7 @@ const copyOrReorderGroupMods = async (sourceRow, newIndex: number) => {
   }
   const nextIds = [...baseIds]
   nextIds.splice(insertIndex, 0, ...idsToInsert)
+  if (nextIds.length === targetIds.length && nextIds.every((id, index) => id === targetIds[index])) return
   await groupStore.groupContentReorder(target.groupId, nextIds)
   if (sourceRow.group_id !== target.groupId) {
     const targetName = targetGroup.name || t('ui.group_list.unnamed_group', '未命名分组')
@@ -760,12 +758,11 @@ const handleFlatDrop = async (e) => {
   if (item.row_type === 'group') {
     // 分组整体排序按“用户看到的标题落点”处理。
     // 展开分组时标题下面会有子行，若使用删除源行后的 newIndex，可能会把目标标题前后的语义换错。
-    await reorderGroupsByDrop(item.group_id, e.visualIndex ?? e.newIndex)
+    await reorderGroupsByDrop(item.group_id, e.index)
     return
   }
   if (item.row_type === 'mod' || item.id) {
-    // 组内模组排序按实际插入点处理；VirtualDragList 已经修正了同列表向下拖拽时的索引左移。
-    await copyOrReorderGroupMods(item, e.newIndex)
+    await copyOrReorderGroupMods(item, e.index)
   }
 }
 

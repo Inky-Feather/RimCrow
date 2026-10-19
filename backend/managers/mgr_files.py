@@ -1,5 +1,8 @@
 
 import os
+import stat
+from dataclasses import asdict, dataclass, field
+from typing import Callable
 import re
 import ipaddress
 import uuid
@@ -19,7 +22,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import webview # 引入 webview 库
 from webview.util import parse_file_type
 from backend.managers.mgr_game import GameManager
-from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
+from backend.managers.mgr_network import build_retry_session, merge_headers
 from backend.paths.game_locations import normalize_steam_root, resolve_steam_executable_path, resolve_steamcmd_executable_path
 from backend.paths.rimworld_layout import normalize_rimworld_install_root
 from backend.i18n.messages import localized_key, localized_params, tr
@@ -30,7 +33,7 @@ from backend.utils.event_bus import EventBus
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR, RIMWORLD_WORKSHOP_CONTENT_PARTS
 from backend.utils.logger import logger
 from backend.utils.text_decode import decode_text_bytes
-from backend.utils.tools import delete_fs_path, normalize_package_id, normalize_path_for_storage, same_path
+from backend.utils.tools import delete_fs_path, normalize_package_id, normalize_path_for_storage
 from backend.utils.shortcuts import (
     create_shortcut,
     format_shortcut_arguments,
@@ -39,6 +42,19 @@ from backend.utils.shortcuts import (
     get_shortcut_suffix,
     remove_shortcut_variants,
 )
+
+
+@dataclass
+class LinkSyncResult:
+    """链接操作结果；失败与回滚诊断随本次调用返回，不存放在全局状态中。"""
+    ok: bool
+    status: str
+    message: str = ""
+    errors: list[str] = field(default_factory=list)
+    rollback_errors: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 class LocalAssetHandler(SimpleHTTPRequestHandler):
@@ -305,10 +321,6 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                         "timeout": (5, 12),
                         "stream": True,
                     }
-                    proxy_url = network_mgr.get_proxy_url()
-                    if proxy_url:
-                        request_kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
-
                     response = session.get(remote_url, **request_kwargs)
                     if response.status_code != 200:
                         logger.debug(f"远程图片下载失败，状态码 {response.status_code}：{remote_url}")
@@ -395,6 +407,17 @@ class FileManager:
     3. 提供文件/文件夹打开操作
     4. 提供本地路径到 URL 的转换
     """
+
+    _link_locks_guard = threading.Lock()
+    _link_locks: dict[str, Any] = {}
+    storage_lock = threading.RLock()
+
+    @classmethod
+    def link_lock(cls, root: str):
+        """同一物理 Mods 目录的计划生成、写入和验证必须串行执行。"""
+        key = os.path.normcase(os.path.realpath(os.path.abspath(root)))
+        with cls._link_locks_guard:
+            return cls._link_locks.setdefault(key, threading.RLock())
 
     _JUNCTION_UNSUPPORTED_FILE_SYSTEMS = {"FAT", "FAT32", "EXFAT"}
 
@@ -1089,21 +1112,6 @@ class FileManager:
         remove_shortcut_variants(shortcut_path)
 
     @staticmethod
-    def sync_managed_links(local_mods_path: str, deploy_paths: list[str]):
-        """
-        将本地 Mods 目录中的管理器链接收敛到 deploy_paths。
-        这里复用既有同步逻辑，避免手写删除规则误伤 Self/Tool 链接。
-        返回：(是否成功，预检失败时的用户提示)。
-        """
-        failure_message = FileManager._get_link_deployment_failure(local_mods_path) if deploy_paths else None
-        if failure_message:
-            logger.error("模组链接部署失败：%s", failure_message)
-            return False, failure_message
-        if settings.config.link_deployment_mode_full:
-            return FileManager.sync_links_full(local_mods_path, deploy_paths), None
-        return FileManager.sync_links(local_mods_path, deploy_paths), None
-    
-    @staticmethod
     def localize_workshop_mods(query, local_root: str, folder_name_type: str = 'workshop_id', conflict_action: str = ''):
         """
         将工坊模组本地化或同步为本地共存模组，并推送实时进度
@@ -1414,427 +1422,295 @@ class FileManager:
     # =========================================================
 
     @staticmethod
-    def sync_links(local_mods_path, workshop_mod_paths: list):
-        """
-        极致增量同步逻辑：
-        1. 只要不在 workshop_mod_paths 里的链接，全部物理删除。
-        2. 指向路径错误的链接，全部删除并重建。
-        3. 已经正确指向的链接，绝对不动（0操作）。
-        """
-        # logger.debug(f"Sync links: local_mods_path={local_mods_path}, workshop_mod_paths={workshop_mod_paths}")
-        if not local_mods_path or not os.path.exists(local_mods_path):
-            logger.error("同步链接失败：本地 MOD 目录不存在。")
-            return False
-
-        # --- 1. 准备目标清单 (使用小写 Key 解决 Windows 大小写不敏感问题) ---
-        target_map = {}
-        for src in workshop_mod_paths:
-            if not src: continue
-            wid = os.path.basename(src)
-            link_name = f"{FileManager.LINK_PREFIX}{wid}"
-            # 存入规范化的绝对路径用于比对
-            target_map[link_name.lower()] = {
-                'raw_name': link_name,
-                'src_path': os.path.normpath(os.path.abspath(src))
-            }
-        missing_sources = [info['src_path'] for info in target_map.values() if not os.path.isdir(info['src_path'])]
-        if missing_sources:
-            logger.error("同步链接失败：源目录不存在: %s", missing_sources)
-            return False
-
-        # --- 2. 扫描磁盘并识别“必须删除”的项 ---
-        # 遍历目录下的所有内容，只要命中前缀且不在 target_map 中，就是删除目标
-        to_delete_paths = []
-        existing_valid_keys = set()
-
+    def is_directory_link(path: str) -> bool:
+        """只接受目录软链接和 junction；不跟随目标，也能识别悬空链接。"""
         try:
-            for name in os.listdir(local_mods_path):
-                # 仅处理由本管理器管理的文件夹/链接 (带前缀)
-                if name.startswith(FileManager.LINK_PREFIX):
-                    name_lower = name.lower()
-                    full_path = os.path.normpath(os.path.join(local_mods_path, name))
-                    
-                    # 判定逻辑：
-                    # A. 这个名字在目标清单里吗？
-                    if name_lower in target_map:
-                        expected_src = target_map[name_lower]['src_path']
-                        # B. 它是否已经正确指向了目标？
-                        if FileManager._is_link_correct(full_path, expected_src):
-                            # 完全正确，记录下来，后续不需要重复创建
-                            existing_valid_keys.add(name_lower)
-                            continue 
-                    
-                    # 如果运行到这里，说明：
-                    # 1. 名字不在目标清单 (不再需要的 Mod)
-                    # 2. 名字在清单但指向错误 (需要重建)
-                    # 3. 这是一个断头链接 (指向的源已删)
-                    to_delete_paths.append(full_path)
-        except OSError as e:
-            logger.error(f"扫描目录失败：{e}")
-
-        # --- 3. 执行物理删除 (针对 Windows Junction 的强力清除) ---
-        if to_delete_paths:
-            logger.info(f"正在清理 {len(to_delete_paths)} 个失效链接...")
-            # 关键优化点：不再循环调用 subprocess，而是批量处理
-            FileManager._remove_entries_windows_batch(to_delete_paths)
-
-        # --- 4. 计算需要补齐的链接 ---
-        links_to_create = []
-        for key, info in target_map.items():
-            if key not in existing_valid_keys:
-                dst_path = os.path.join(local_mods_path, info['raw_name'])
-                links_to_create.append((info['src_path'], dst_path))
-
-        # --- 5. 执行闪电创建 ---
-        if links_to_create:
-            logger.info(f"正在创建 {len(links_to_create)} 个缺失链接...")
-            FileManager._create_links_windows_batch(links_to_create)
-
-        failed_links = [
-            f"{dst} -> {src}"
-            for src, dst in links_to_create
-            if not FileManager._is_link_correct(dst, src)
-        ]
-        if failed_links:
-            logger.error("同步链接失败：创建后校验未通过: %s", failed_links)
+            info = os.lstat(path)
+        except FileNotFoundError:
             return False
-
-        logger.info(f"同步结果：保留 {len(existing_valid_keys)} 个，创建 {len(links_to_create)} 个，删除 {len(to_delete_paths)} 个")
-        return True
+        if os.name == "nt":
+            return getattr(info, "st_reparse_tag", 0) in {stat.IO_REPARSE_TAG_MOUNT_POINT, stat.IO_REPARSE_TAG_SYMLINK}
+        return stat.S_ISLNK(info.st_mode)
 
     @staticmethod
-    def sync_links_full(local_mods_path, workshop_mod_paths: list):
-        """全量重建链接：删除所有旧链接后重新创建目标集合"""
-        if not local_mods_path or not os.path.exists(local_mods_path): return False
+    def _create_directory_link(source: str, destination: str) -> None:
+        # 原生宽字符接口不经过 shell，中文、百分号和代码页不再改变路径含义。
+        if os.name == "nt":
+            import _winapi
+            # readlink 返回 Win32 扩展前缀；CreateJunction 自行添加 NT 前缀，不能重复传入。
+            if source.startswith("\\\\?\\UNC\\"):
+                source = "\\\\" + source[8:]
+            elif source.startswith("\\\\?\\"):
+                source = source[4:]
+            _winapi.CreateJunction(source, destination)
+        else:
+            os.symlink(source, destination, target_is_directory=True)
+        if not FileManager._is_link_correct(destination, source):
+            raise OSError(f"创建后链接校验失败：{destination} -> {source}")
 
-        # 1. 准备目标清单 (统一转小写进行防呆匹配)
-        target_map = {}
-        for src in workshop_mod_paths:
-            if not src: continue
-            wid = os.path.basename(os.path.normpath(src))
-            link_name = f"{FileManager.LINK_PREFIX}{wid}"
-            target_map[link_name.lower()] = {
-                'raw_name': link_name,
-                'src_path': os.path.normpath(os.path.abspath(src))
-            }
-        missing_sources = [info['src_path'] for info in target_map.values() if not os.path.isdir(info['src_path'])]
-        if missing_sources:
-            logger.error("完整同步链接失败：源目录不存在: %s", missing_sources)
+    @staticmethod
+    def _remove_directory_link(path: str) -> None:
+        if not FileManager.is_directory_link(path):
+            raise OSError(f"路径不是可管理的目录链接，已保留：{path}")
+        if os.name == "nt" and os.lstat(path).st_file_attributes & stat.FILE_ATTRIBUTE_DIRECTORY:
+            os.rmdir(path)
+        else:
+            os.unlink(path)
+        if os.path.lexists(path):
+            raise OSError(f"链接移除后仍然存在：{path}")
+
+    @staticmethod
+    def _is_link_correct(link_path: str, expected_src: str) -> bool:
+        try:
+            return FileManager.is_directory_link(link_path) and os.path.isdir(link_path) and os.path.samefile(link_path, expected_src)
+        except OSError:
             return False
 
-        to_delete_paths = []
-        links_to_create = []
-
-        # 2. 全量扫描现有链接
+    @staticmethod
+    def _paths_overlap(first: str, second: str) -> bool:
+        first = os.path.normcase(os.path.realpath(first))
+        second = os.path.normcase(os.path.realpath(second))
         try:
-            with os.scandir(local_mods_path) as it:
-                for entry in it:
-                    if not entry.name.startswith(FileManager.LINK_PREFIX): continue
-                    to_delete_paths.append(entry.path)
-        except OSError as e:
-            logger.error(f"扫描链接失败：{e}")
+            return os.path.commonpath([first, second]) in {first, second}
+        except ValueError:
+            return False
 
-        # 3. 计算需要重建的全部链接
-        for _, info in target_map.items():
-            dst_path = os.path.join(local_mods_path, info['raw_name'])
-            links_to_create.append((info['src_path'], dst_path))
-
-        # 4. 执行全量删除 (os.rmdir 对于 Junction 是瞬间且安全的，不会删除原文件)
-        for path in to_delete_paths:
+    @classmethod
+    def sync_managed_links(cls, local_mods_path: str, deploy_paths: list[str]) -> LinkSyncResult:
+        """先校验完整计划，再收敛链接；普通目录不动，失败清理新链接并恢复可用旧链接。"""
+        if not local_mods_path:
+            return LinkSyncResult(False, "failed", "未配置游戏模组目录。")
+        root = os.path.abspath(local_mods_path)
+        with cls.storage_lock, cls.link_lock(root):
+            removed: list[tuple[str, str]] = []
+            created: list[str] = []
+            rollback_errors: list[str] = []
             try:
-                # 尝试用 unlink (适用于软链接)，如果报错则用 rmdir (适用于 Junction/目录)
-                if os.path.islink(path): os.unlink(path)
-                else: os.rmdir(path)
-            except Exception:
-                pass # 忽略占用等特殊情况
+                failure = cls._get_link_deployment_failure(root) if deploy_paths else None
+                if failure:
+                    raise OSError(str(failure))
+                os.makedirs(root, exist_ok=True)
+                targets: dict[str, tuple[str, str]] = {}
+                for raw in deploy_paths:
+                    if not raw:
+                        raise ValueError("部署清单中存在空路径。")
+                    source = os.path.normpath(os.path.abspath(raw))
+                    if not os.path.isdir(source):
+                        raise OSError(f"模组来源目录不存在或不可访问：{source}")
+                    if cls._paths_overlap(root, source):
+                        raise ValueError(f"模组来源与游戏模组目录不能相同或互相包含：{source} / {root}")
+                    name = cls.LINK_PREFIX + os.path.basename(source)
+                    key = name.casefold()
+                    if key in targets and not os.path.samefile(targets[key][0], source):
+                        raise ValueError(f"模组目录同名，无法生成唯一链接：{targets[key][0]} / {source}")
+                    targets[key] = (source, os.path.join(root, name))
 
-        # 5. 执行极速创建
-        if links_to_create:
-            FileManager._create_links_fast(links_to_create)
+                existing: dict[str, tuple[str, str]] = {}
+                with os.scandir(root) as entries:
+                    for entry in entries:
+                        if not entry.name.casefold().startswith(cls.LINK_PREFIX.casefold()):
+                            continue
+                        if not cls.is_directory_link(entry.path):
+                            raise OSError(f"发现同名普通文件或目录，已保留，请先调整名称：{entry.path}")
+                        key = entry.name.casefold()
+                        if key in existing:
+                            raise ValueError(f"发现大小写冲突链接：{entry.path}")
+                        existing[key] = (entry.path, os.path.abspath(os.path.join(root, os.readlink(entry.path))))
 
-        failed_links = [
-            f"{dst} -> {src}"
-            for src, dst in links_to_create
-            if not FileManager._is_link_correct(dst, src)
-        ]
-        if failed_links:
-            logger.error("完整同步链接失败：创建后校验未通过: %s", failed_links)
-            return False
+                full = bool(settings.config.link_deployment_mode_full)
+                keep = {key for key, (path, _) in existing.items()
+                        if not full and key in targets and cls._is_link_correct(path, targets[key][0])}
+                for key, (path, target) in existing.items():
+                    if key not in keep:
+                        cls._remove_directory_link(path)
+                        removed.append((path, target))
+                for key, (source, destination) in targets.items():
+                    if key not in keep:
+                        if os.path.lexists(destination):
+                            raise OSError(f"链接位置已被其它文件占用：{destination}")
+                        # 创建接口可能先落盘再报错，必须把该位置纳入失败清理。
+                        created.append(destination)
+                        cls._create_directory_link(source, destination)
 
-        logger.info(f"完整同步结果：创建 {len(links_to_create)} 个，删除 {len(to_delete_paths)} 个")
-        return True
+                with os.scandir(root) as entries:
+                    actual = {entry.name.casefold(): entry.path for entry in entries
+                              if entry.name.casefold().startswith(cls.LINK_PREFIX.casefold())}
+                if set(actual) != set(targets):
+                    raise OSError("链接集合校验失败，仍有旧链接残留或目标链接缺失。")
+                for key, (source, _) in targets.items():
+                    if not cls._is_link_correct(actual[key], source):
+                        raise OSError(f"链接指向校验失败：{actual[key]} -> {source}")
+                return LinkSyncResult(True, "deployed" if removed or created else "noop")
+            except (OSError, ValueError) as exc:
+                for path in reversed(created):
+                    try:
+                        if os.path.lexists(path):
+                            cls._remove_directory_link(path)
+                    except OSError as rollback_exc:
+                        rollback_errors.append(f"清理新链接失败：{path}：{rollback_exc}")
+                for path, target in removed:
+                    try:
+                        # 损坏或悬空的旧目标不能恢复到游戏目录，否则外部启动仍会受影响。
+                        if os.path.isdir(target):
+                            cls._create_directory_link(target, path)
+                    except OSError as rollback_exc:
+                        rollback_errors.append(f"恢复旧链接失败：{path}：{rollback_exc}")
+                message = f"模组链接同步失败：{exc}"
+                if rollback_errors:
+                    message += "\n部分链接未能恢复，请勿启动游戏：\n" + "\n".join(rollback_errors)
+                logger.error("%s；恢复失败：%s", message, rollback_errors)
+                return LinkSyncResult(False, "failed", message, [str(exc)], rollback_errors)
 
-    @staticmethod
-    def _is_link_correct(link_path, expected_src):
-        """判断链接是否有效且指向正确"""
-        try:
-            # lexists 用于检测路径是否存在（包括断头链接）
-            if not os.path.lexists(link_path): return False
-            # samefile 会抛出异常如果路径不存在，所以这里必须配合 try
-            # 它能跨越斜杠差异和大小写差异判断物理底层是否一致
-            return os.path.samefile(link_path, expected_src)
-        except:
-            return False
-    
-    @staticmethod
-    def _remove_entries_windows_batch(paths: list):
-        """
-        最高效的 Windows 删除方式：
-        将所有 rd 指令写入一个批处理文件，一次性调用。
-        """
-        if not paths: return
-        
-        if platform.system() != 'Windows':
-            # 非 Windows 系统，Python 原生 unlink 极快，不需要批处理
-            for path in paths:
-                try:
-                    if os.path.islink(path): os.unlink(path)
-                    else: shutil.rmtree(path, ignore_errors=True)
-                except: pass
-            return
-
-        # 构造批量删除指令
-        # rd /s /q 强制删除目录或 Junction
-        lines = [f'rd /s /q "{os.path.normpath(p)}"' for p in paths]
-        batch_content = "@echo off\n" + "\n".join(lines)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix="_del.bat", mode="w", encoding="gbk") as tf:
-            tf.write(batch_content)
-            temp_path = tf.name
-
-        try:
-            # 只启动一个进程，执行成百上千条删除指令
-            subprocess.run(temp_path, shell=True, capture_output=True, check=True)
-        except Exception as e:
-            logger.error(f"批量删除失败：{e}")
-            # 如果批处理失败，尝试最后的原生备份方案
-            for p in paths:
-                try: os.rmdir(p)
-                except: pass
-        finally:
-            if os.path.exists(temp_path): os.remove(temp_path)
-    
-    @staticmethod
-    def _create_links_windows_batch(link_tasks: list):
-        """批处理创建逻辑 (保持之前的高效实现)"""
-        if not link_tasks: return
-        if platform.system() != 'Windows':
-            for src, dst in link_tasks:
-                try: os.symlink(src, dst)
-                except: pass
-            return
-
-        lines = [f'mklink /j "{dst}" "{src}"' for src, dst in link_tasks]
-        batch_content = "@echo off\n" + "\n".join(lines)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".bat", mode="w", encoding="gbk") as tf:
-            tf.write(batch_content)
-            temp_path = tf.name
-
-        try:
-            result = subprocess.run(temp_path, shell=True, capture_output=True, text=True, encoding="gbk", errors="replace")
-            if result.returncode != 0:
-                logger.error("批量创建链接命令失败: code=%s, stdout=%s, stderr=%s", result.returncode, result.stdout.strip(), result.stderr.strip())
-        finally:
-            if os.path.exists(temp_path): os.remove(temp_path)
-    
-    @staticmethod
-    def _create_links_fast(link_tasks: list):
-        """调用底层 API 极速创建链接"""
-        is_windows = platform.system() == 'Windows'
-        if is_windows:
-            try:
-                import _winapi # 导入 Windows 底层 API
-            except ImportError:
-                is_windows = False
-
-        for src, dst in link_tasks:
-            try:
-                if is_windows:
-                    # 使用底层 CreateJunction，速度极快且不需要管理员权限
-                    _winapi.CreateJunction(src, dst)
-                else:
-                    os.symlink(src, dst)
-            except Exception as e:
-                logger.error(f"创建链接失败：{dst} -> {src}，错误：{e}")
-    
     # =========================================================
     #  5. SteamCMD 根目录重定向 (Root Redirect)
     # =========================================================
 
     @staticmethod
-    def sync_steamcmd_root_link(old_mods_path: str|None = None, move_old_data: bool = False):
-        """
-        同步 SteamCMD 下载根目录到自定义存储目录的软链接。
-        
-        :param old_mods_path: 变更前的 mods_path，用于数据迁移
-        :param move_old_data: 如果 mods_path 变了，是否把旧路径的数据搬过来
-        """
-        
-        # 1. 获取最新配置
-        # 实际物理存储路径 (Target)
-        real_storage_path = os.path.normpath(os.path.abspath(settings.config.self_mods_path))
-        # SteamCMD 期望的下载路径 (Link Location, 通常是 RimWorld 工坊内容目录)
-        steamcmd_link_path = os.path.normpath(os.path.abspath(settings.config.steamcmd_mods_path))
-        
-        if same_path(steamcmd_link_path, real_storage_path):
-            os.makedirs(real_storage_path, exist_ok=True)
-            logger.debug(
-                "SteamCMD 下载目录已关联管理器 Mod 目录，无需创建重定向：%s",
-                real_storage_path,
-            )
-            return True
+    def _storage_manifest(root: str) -> dict[str, str]:
+        """迁移校验不遍历链接，保留文件内容和空目录；来源变化时拒绝切换。"""
+        manifest: dict[str, str] = {}
+        def on_error(error: OSError) -> None:
+            raise error
+        for current, directories, files in os.walk(root, followlinks=False, onerror=on_error):
+            for name in directories + files:
+                path = os.path.join(current, name)
+                info = os.lstat(path)
+                if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                    raise OSError(f"迁移目录中包含链接或重解析点，请先处理：{path}")
+                relative = os.path.relpath(path, root)
+                if stat.S_ISDIR(info.st_mode):
+                    manifest[relative] = "directory"
+                elif stat.S_ISREG(info.st_mode):
+                    with open(path, "rb") as handle:
+                        manifest[relative] = hashlib.file_digest(handle, "sha256").hexdigest()
+                else:
+                    raise OSError(f"迁移目录中包含不支持的文件类型：{path}")
+        return manifest
 
-        if not FileManager._is_junction_supported(steamcmd_link_path):
-            default_mods_path = os.path.normpath(os.path.abspath(MODS_DIR))
-            if same_path(real_storage_path, default_mods_path) and FileManager._is_empty_directory(real_storage_path):
+    @classmethod
+    def sync_steamcmd_root_link(
+        cls, storage_path: str, link_path: str, *, old_mods_path: str = "", move_old_data: bool = False,
+        commit: Callable[[str], None] | None = None,
+    ) -> LinkSyncResult:
+        """验证副本后切换目录并保存配置；失败恢复旧目录，成功后旧数据移入回收站。"""
+        with cls.storage_lock:
+            if not storage_path or not link_path:
+                return LinkSyncResult(False, "failed", "未配置 SteamCMD 下载目录或管理器模组目录。")
+            target, link = (os.path.abspath(os.path.normpath(p)) for p in (storage_path, link_path))
+            published: list[str] = []
+            backups: list[tuple[str, str]] = []
+            old_link = None
+            removed_link = False
+            created_link = False
+            stage = ""
+            rollback_errors: list[str] = []
+            try:
+                shared_root = os.path.normcase(target) == os.path.normcase(link)
+                correct = shared_root or cls._is_link_correct(link, target)
+                if not correct and cls._paths_overlap(target, link):
+                    raise ValueError(f"下载目录与存储目录不能互相包含：{link} / {target}")
+                if not correct and not cls._is_junction_supported(link):
+                    if os.path.normcase(target) == os.path.normcase(os.path.abspath(MODS_DIR)) and cls._is_empty_directory(target):
+                        os.makedirs(link, exist_ok=True)
+                        if commit:
+                            commit(link)
+                        return LinkSyncResult(True, "deployed", "当前磁盘不支持目录连接，已使用 SteamCMD 下载目录存储模组。")
+                    raise OSError("SteamCMD 下载目录所在磁盘不支持目录连接，请改用 NTFS 磁盘。")
+
+                sources: list[str] = []
+                if move_old_data and old_mods_path and os.path.isdir(old_mods_path) and os.path.normcase(os.path.abspath(old_mods_path)) != os.path.normcase(target):
+                    if not os.path.exists(target) or not os.path.samefile(old_mods_path, target):
+                        sources.append(os.path.abspath(old_mods_path))
+                if not shared_root and os.path.lexists(link) and not cls.is_directory_link(link):
+                    if not os.path.isdir(link):
+                        raise OSError(f"SteamCMD 下载位置不是目录：{link}")
+                    if not any(os.path.samefile(link, source) for source in sources):
+                        sources.append(link)
+                for source in sources:
+                    if cls.is_directory_link(source) or cls._paths_overlap(source, target):
+                        raise ValueError(f"迁移来源不能是链接，也不能与存储目录互相包含：{source} / {target}")
+                for index, source in enumerate(sources):
+                    if any(cls._paths_overlap(source, other) for other in sources[:index]):
+                        raise ValueError(f"迁移来源目录不能互相包含：{source}")
+
+                os.makedirs(target, exist_ok=True)
+                manifests = {source: cls._storage_manifest(source) for source in sources}
+                names = {name.casefold() for name in os.listdir(target)}
+                for source in sources:
+                    for name in os.listdir(source):
+                        if name.casefold() in names:
+                            raise ValueError(f"迁移目标存在同名内容，已保留两边文件，请先处理：{name}")
+                        names.add(name.casefold())
+                if sources:
+                    stage = tempfile.mkdtemp(prefix=".rimcrow-migration-", dir=target)
+                    for index, source in enumerate(sources):
+                        copied = os.path.join(stage, str(index))
+                        shutil.copytree(source, copied, symlinks=True)
+                        if cls._storage_manifest(copied) != manifests[source] or cls._storage_manifest(source) != manifests[source]:
+                            raise OSError(f"迁移内容校验失败或来源正在变化：{source}")
+                    for copied in list(Path(stage).iterdir()):
+                        for item in list(copied.iterdir()):
+                            destination = os.path.join(target, item.name)
+                            if os.path.lexists(destination):
+                                raise OSError(f"迁移目标被其它程序占用：{destination}")
+                            os.rename(item, destination)
+                            published.append(destination)
+                    for source in sources:
+                        if cls._storage_manifest(source) != manifests[source]:
+                            raise OSError(f"迁移来源在切换前发生变化：{source}")
+                        backup = source + ".rimcrow-backup-" + uuid.uuid4().hex
+                        os.rename(source, backup)
+                        backups.append((source, backup))
+
+                if not correct:
+                    if os.path.lexists(link):
+                        old_link = os.path.abspath(os.path.join(os.path.dirname(link), os.readlink(link)))
+                        cls._remove_directory_link(link)
+                        removed_link = True
+                    os.makedirs(os.path.dirname(link), exist_ok=True)
+                    created_link = True
+                    cls._create_directory_link(target, link)
+                if not shared_root and not cls._is_link_correct(link, target):
+                    raise OSError(f"SteamCMD 下载目录链接校验失败：{link} -> {target}")
+                if commit:
+                    commit(target)
+            except Exception as exc:
+                if created_link and os.path.lexists(link):
+                    try:
+                        cls._remove_directory_link(link)
+                    except OSError as error:
+                        rollback_errors.append(f"清理新链接失败：{link}：{error}")
+                for source, backup in reversed(backups):
+                    try:
+                        os.rename(backup, source)
+                    except OSError as error:
+                        rollback_errors.append(f"恢复来源失败，原文件保留在 {backup}：{error}")
+                if removed_link and old_link and os.path.isdir(old_link):
+                    try:
+                        cls._create_directory_link(old_link, link)
+                    except OSError as error:
+                        rollback_errors.append(f"恢复旧链接失败：{link}：{error}")
+                for path in published + ([stage] if stage else []):
+                    try:
+                        delete_fs_path(path, force=False)
+                    except Exception as error:
+                        rollback_errors.append(f"清理迁移副本失败，文件已保留：{path}：{error}")
+                message = f"SteamCMD 目录切换失败，未保存新路径：{exc}"
+                if rollback_errors:
+                    message += "\n部分目录未能恢复，请先检查以下路径：\n" + "\n".join(rollback_errors)
+                logger.error("%s；恢复失败：%s", message, rollback_errors)
+                return LinkSyncResult(False, "failed", message, [str(exc)], rollback_errors)
+
+            warnings: list[str] = []
+            for path in [backup for _, backup in backups] + ([stage] if stage else []):
                 try:
-                    os.makedirs(steamcmd_link_path, exist_ok=True)
-                except OSError as e:
-                    logger.error("SteamCMD 下载目录创建失败，无法自动使用该目录: %s，错误: %s", steamcmd_link_path, e)
-                    return False
+                    delete_fs_path(path, force=False)
+                except Exception as exc:
+                    warnings.append(f"旧目录已保留，可稍后移入回收站：{path}：{exc}")
+                    logger.warning("迁移完成但旧目录清理失败：%s：%s", path, exc)
+            return LinkSyncResult(True, "deployed" if sources or created_link else "noop", "\n".join(warnings))
 
-                settings.config.self_mods_path = steamcmd_link_path
-                settings.save()
-                logger.warning(
-                    "SteamCMD 所在磁盘不支持目录连接，默认模组目录为空，已改用 SteamCMD 下载目录: %s",
-                    steamcmd_link_path,
-                )
-                return True
 
-            logger.error(
-                "SteamCMD 所在磁盘不支持目录连接，未自动修改已有或自定义的管理器模组目录: %s",
-                real_storage_path,
-            )
-            return False
-
-        os.makedirs(os.path.dirname(steamcmd_link_path), exist_ok=True)
-        os.makedirs(real_storage_path, exist_ok=True)
-
-        logger.info(f"正在重定向 SteamCMD 目录：{steamcmd_link_path} -> {real_storage_path}")
-
-        # ---------------------------------------------------------
-        # 步骤 A: 处理 mods_path 变更导致的数据迁移
-        # ---------------------------------------------------------
-        if move_old_data and old_mods_path:
-            old_mods_path = os.path.normpath(os.path.abspath(old_mods_path))
-            if old_mods_path != real_storage_path and os.path.exists(old_mods_path):
-                logger.info(f"正在从旧 MOD 目录迁移数据：{old_mods_path} -> {real_storage_path}")
-                FileManager._merge_and_delete_folder(old_mods_path, real_storage_path)
-
-        # 确保实际物理目录存在
-        os.makedirs(real_storage_path, exist_ok=True)
-
-        # ---------------------------------------------------------
-        # 步骤 B: 处理 SteamCMD 链接位置 (Link Location)
-        # ---------------------------------------------------------
-        
-        # 如果该位置已经存在
-        if os.path.lexists(steamcmd_link_path):
-            # 情况 1: 它已经是一个链接了
-            if os.path.islink(steamcmd_link_path) or FileManager._is_junction_windows(steamcmd_link_path):
-                # 检查它指向的是不是我们现在的物理路径
-                if FileManager._is_link_correct(steamcmd_link_path, real_storage_path):
-                    logger.info("SteamCMD 链接已正确，跳过处理。")
-                    return True
-                else:
-                    # 指向了错误的路径，或者是旧的路径，删掉这个链接（不会删掉源文件）
-                    logger.info("正在移除失效或错误的 SteamCMD 链接。")
-                    FileManager._remove_link_safe(steamcmd_link_path)
-            
-            # 情况 2: 它是一个真实的文件夹 (里面可能有 SteamCMD 之前下的 Mod)
-            elif os.path.isdir(steamcmd_link_path):
-                logger.info(f"发现 SteamCMD 位置存在真实文件夹，正在合并到 {real_storage_path}...")
-                # 把里面的 Mod 搬到物理路径
-                FileManager._merge_and_delete_folder(steamcmd_link_path, real_storage_path)
-                # 搬完后删掉这个空壳文件夹，为创建链接腾位置
-                shutil.rmtree(steamcmd_link_path, ignore_errors=True)
-
-        # ---------------------------------------------------------
-        # 步骤 C: 创建新的链接
-        # ---------------------------------------------------------
-        # 再次确保父目录存在 (steamapps/workshop/content/)
-        os.makedirs(os.path.dirname(steamcmd_link_path), exist_ok=True)
-        
-        try:
-            if platform.system() == 'Windows':
-                # 使用 Junction (mklink /j)，不需要管理员权限，且对磁盘 IO 最友好
-                subprocess.run(f'mklink /j "{steamcmd_link_path}" "{real_storage_path}"', 
-                               shell=True, check=True, capture_output=True)
-            else:
-                os.symlink(real_storage_path, steamcmd_link_path)
-            
-            logger.info("SteamCMD 重定向链接创建成功。")
-            return True
-        except Exception as e:
-            logger.error(f"创建 SteamCMD 链接失败：{e}")
-            return False
-
-    # =========================================================
-    #  辅助私有方法
-    # =========================================================
-
-    @staticmethod
-    def _is_junction_windows(path):
-        """判断 Windows 下是否为联接点"""
-        if platform.system() != 'Windows': return False
-        try:
-            # Junction 在 Windows 下通过特定属性识别
-            output = subprocess.check_output(['dir', '/ad', os.path.dirname(path)], shell=True).decode('gbk', errors='ignore')
-            return f"<JUNCTION>     {os.path.basename(path)}" in output
-        except:
-            return False
-
-    @staticmethod
-    def _remove_link_safe(path):
-        """安全移除链接而不伤及目标"""
-        try:
-            if platform.system() == 'Windows':
-                # 对于 Junction，使用 rmdir 是安全的，它只删链接不删内容
-                subprocess.run(f'rd "{os.path.normpath(path)}"', shell=True, check=True)
-            else:
-                os.unlink(path)
-        except Exception as e:
-            logger.error(f"移除链接失败：{path}，错误：{e}")
-
-    @staticmethod
-    def _merge_and_delete_folder(src, dst):
-        """
-        合并两个文件夹的内容并删除源文件夹。
-        如果目标位置已存在同名 Mod，则覆盖。
-        """
-        if not os.path.exists(src): return
-        try:
-            same_real_path = os.path.exists(dst) and os.path.samefile(src, dst)
-        except OSError:
-            same_real_path = False
-        if same_path(src, dst) or same_real_path:
-            logger.warning("跳过同一路径目录合并: %s", src)
-            return
-        os.makedirs(dst, exist_ok=True)
-        
-        try:
-            for item in os.listdir(src):
-                s_path = os.path.join(src, item)
-                d_path = os.path.join(dst, item)
-                
-                if os.path.isdir(s_path):
-                    if os.path.exists(d_path):
-                        shutil.rmtree(d_path, ignore_errors=True)
-                    shutil.move(s_path, d_path)
-                else:
-                    if os.path.exists(d_path):
-                        os.remove(d_path)
-                    shutil.move(s_path, d_path)
-            
-            # 清理残留空目录
-            if os.path.exists(src):
-                shutil.rmtree(src, ignore_errors=True)
-        except Exception as e:
-            logger.error(f"合并文件夹失败：{e}")
-    
-    
-    
 class PathChecker:
 
     @classmethod

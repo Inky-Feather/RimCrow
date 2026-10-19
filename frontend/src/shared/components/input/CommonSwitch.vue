@@ -12,7 +12,7 @@
     <button @click="$emit('update:modelValue', !modelValue)"
       class="relative shrink-0 rounded-full transition-all duration-300 overflow-hidden border border-border-base/10"
       :class="[modelValue ? 'bg-accent-primary/20 border-accent-primary/40 shadow-[0_0_10px_rgba(var(--rgb-accent-primary),0.2)]' : 'bg-bg-inset/80',
-        mini?'w-9.5 h-5':'w-10 h-6'
+        mini?'w-9.5 h-5':'w-10 h-6 ml-2'
       ]" >
       <!-- 滑块轨迹指示灯 -->
       <div class="absolute rounded-full transition-all duration-300 ease-out"

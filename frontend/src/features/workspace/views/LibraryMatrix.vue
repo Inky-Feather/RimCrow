@@ -25,7 +25,7 @@
 
     <!-- 顶部控制栏 -->
     <div class="modal-footer flex h-12 shrink-0 items-center justify-between px-6">
-      <div class="text-xs font-mono text-text-disabled uppercase tracking-widest">
+      <div class="text-xs font-mono text-text-disabled tracking-widest">
         {{ t('ui.workspace.library.summary.count', '总计数量: {count}', { count: visibleTotalCount }) }}
         | {{ t('ui.workspace.library.summary.size', '总计大小：{size}', { size: formatFileSize(visibleTotalSize) }) }}
         | {{ t('ui.workspace.library.summary.status', '状态: {status}', { status: workspaceStore.isFetching ? t('ui.workspace.library.status.scanning', '扫描中...') : t('common.status.ready', '就绪') }) }}

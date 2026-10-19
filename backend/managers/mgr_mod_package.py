@@ -1209,6 +1209,4 @@ class ModPackageManager:
         normalized_path = str(path or "").strip()
         if not normalized_path or not os.path.exists(normalized_path):
             return False
-        if os.path.islink(normalized_path):
-            return True
-        return bool(os.name == "nt" and FileManager._is_junction_windows(normalized_path))  # noqa: SLF001
+        return FileManager.is_directory_link(normalized_path)

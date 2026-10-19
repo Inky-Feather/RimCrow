@@ -18,6 +18,8 @@ const normalizePromptItem = (item = {}) => ({
   description: String(item.description || item.message || '').trim(),
   descriptionFormat: String(item.descriptionFormat || item.description_format || 'text').trim().toLowerCase(),
   meta: Array.isArray(item.meta) ? item.meta.map(value => String(value || '').trim()).filter(Boolean) : [],
+  detailsTitle: String(item.detailsTitle || '').trim(),
+  details: Array.isArray(item.details) ? item.details.map(detail => ({ label: String(detail.label || ''), value: String(detail.value || '') })) : [],
   status: 'pending',
   statusMessage: '',
   actions: (item.actions || []).map(normalizeAction).filter(action => action.id && action.label),
@@ -35,6 +37,16 @@ const normalizePrompt = (prompt = {}) => {
     priority: Number(prompt.priority || 100),
     items: (prompt.items || []).map(normalizePromptItem).filter(item => item.id && item.title),
     bulkActions: (prompt.bulkActions || []).map(normalizeAction).filter(action => action.id && action.label),
+    actionSelector: prompt.actionSelector && Array.isArray(prompt.actionSelector.options)
+      ? {
+          label: String(prompt.actionSelector.label || '').trim(),
+          value: String(prompt.actionSelector.value ?? ''),
+          options: prompt.actionSelector.options.map(option => ({
+            label: String(option.label || '').trim(),
+            value: String(option.value ?? ''),
+          })).filter(option => option.label),
+        }
+      : null,
     onItemAction: typeof prompt.onItemAction === 'function' ? prompt.onItemAction : null,
     onBulkAction: typeof prompt.onBulkAction === 'function' ? prompt.onBulkAction : null,
   }
@@ -107,7 +119,7 @@ export const usePromptQueueStore = defineStore('promptQueue', () => {
   }
 
   // 批量任务只领取仍处于 pending 的条目，和单项点击共享 submittedItemIds 幂等锁。
-  const runBulkAction = async (prompt, actionId) => {
+  const runBulkAction = async (prompt, actionId, selection = '') => {
     const targetAction = prompt.bulkActions.find(action => action.id === actionId)
     if (!targetAction) return
     if (prompt.isBulkSubmitting) return
@@ -122,7 +134,7 @@ export const usePromptQueueStore = defineStore('promptQueue', () => {
     try {
       if (targets.length === 0) return
       if (prompt.onBulkAction) {
-        await prompt.onBulkAction(actionId, targets.map(item => item.raw), prompt)
+        await prompt.onBulkAction(actionId, targets.map(item => item.raw), prompt, selection)
       }
     } catch (error) {
       console.warn('提示队列批量处理失败:', error)
@@ -141,6 +153,7 @@ export const usePromptQueueStore = defineStore('promptQueue', () => {
       type: prompt.type,
       mode: 'confirm',
       promptItems: prompt.items,
+      actionSelector: prompt.actionSelector,
       // 单项操作点击即领取并移除，具体任务结果由任务栏/toast 呈现，弹窗只负责不重复提交。
       onPromptItemAction: async (itemId, actionId) => {
         const itemIndex = prompt.items.findIndex(candidate => candidate.id === itemId)
@@ -161,7 +174,7 @@ export const usePromptQueueStore = defineStore('promptQueue', () => {
       })),
     })
     if (result?.scope === 'bulk') {
-      await runBulkAction(prompt, result.action)
+      await runBulkAction(prompt, result.action, result.selection)
     }
   }
 

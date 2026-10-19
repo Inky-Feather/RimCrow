@@ -20,7 +20,7 @@
           <div class="grid h-full min-h-0 min-w-5xl grid-cols-[22rem_minmax(0,1fr)_24rem]">
           <!-- 左栏：会话概览与累计 token 指标 -->
           <div class="sidebar-surface min-h-0 overflow-y-auto p-4">
-	            <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.session_overview', '会话概览') }}</div>
+	            <div class="mb-4 text-xs font-black tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.session_overview', '会话概览') }}</div>
             <div v-if="!activeSession" class="modal-section-subtle px-4 py-6 text-center text-xs text-text-dim">
 	              {{ t('dialog.ai_trace.no_session_trace', '当前会话暂无链路数据') }}
             </div>
@@ -142,7 +142,7 @@
 	              {{ t('dialog.ai_trace.loading', '正在加载链路...') }}
             </div>
             <div v-else>
-	              <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.timeline', '统一时间轴') }}</div>
+	              <div class="mb-4 text-xs font-black tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.timeline', '统一时间轴') }}</div>
               <div v-if="!timelineItems.length" class="modal-section px-4 py-8 text-center text-sm text-text-dim">
 	                {{ t('dialog.ai_trace.timeline_empty', '当前会话没有可展示的链路数据') }}
               </div>
@@ -197,7 +197,7 @@
 
           <!-- 右栏：当前选中会话的原始 JSON 面板 -->
           <div class="min-h-0 overflow-y-auto border-l border-border-base/10 bg-bg-muted/70 p-4">
-	            <div class="mb-4 text-xs font-black uppercase tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.raw_json', '原始 JSON') }}</div>
+	            <div class="mb-4 text-xs font-black tracking-[0.2em] text-text-disabled">{{ t('dialog.ai_trace.raw_json', '原始 JSON') }}</div>
             <pre class="whitespace-pre-wrap break-all rounded-2xl border border-border-base/10 bg-bg-inset/70 p-3 text-[0.7rem] text-text-main">{{ prettyJson(rawJsonPanel) }}</pre>
           </div>
           </div>

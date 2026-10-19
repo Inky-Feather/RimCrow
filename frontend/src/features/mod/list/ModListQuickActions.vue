@@ -24,7 +24,6 @@ import { t } from '../../../shared/i18n.js'
 const props = defineProps({
   listId: { type: String, required: true },
   modelValue: { type: Array, required: true },
-  refreshVirtualList: { type: Function, required: true },
 })
 
 const modStore = useModStore()
@@ -181,7 +180,6 @@ const removeInvalidMod = async () => {
   }, async () => {
     modStore.removeUnavailableIdsCompletely(invalidMods)
   })
-  await props.refreshVirtualList()
 }
 
 const visibleQuickActions = computed(() => [

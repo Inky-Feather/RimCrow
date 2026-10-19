@@ -18,7 +18,7 @@
       <!-- 图标 -->
       <img v-if="mod.preview_path" :src="appStore.getThumbUrl(mod.package_id, mod.preview_path)" loading="lazy" class="size-10 rounded object-cover border border-border-base/10 shadow-sm opacity-80 group-hover:opacity-100" />
       <div v-else class="size-10 rounded bg-bg-inset/80 border border-border-base/10 flex items-center justify-center">
-        <span class="text-[0.6rem] text-text-disabled font-bold uppercase">{{ t('ui.workspace.matrix.no_image', '无图') }}</span>
+        <span class="text-[0.6rem] text-text-disabled font-bold">{{ t('ui.workspace.matrix.no_image', '无图') }}</span>
       </div>
 
       <!-- 信息 -->

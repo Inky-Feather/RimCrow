@@ -668,7 +668,6 @@
       "multiplayer_compatibility_failed": "Multiplayer 兼容表更新失败！",
       "multiplayer_compatibility_started": "Multiplayer 兼容表开始更新",
       "path_or_url_missing": "更新地址或目标路径未配置",
-      "reload_failed_after_success": "{message} 但重载失败，请稍后手动刷新。",
       "update_start_failed": "启动外部数据更新失败。请检查更新地址、网络连接、代理设置和目标目录写入权限。",
       "workshop_db_done": "社区工坊数据库更新完毕！",
       "workshop_db_failed": "社区工坊数据库更新失败！",
@@ -696,16 +695,10 @@
       "invalid_launch_warning_action": "无效的启动确认动作",
       "launch_after_steam_exit": "Steam 已退出，已发起游戏启动，等待游戏进程确认。",
       "launch_cancelled": "已取消启动",
-      "launch_prepare_active_done": "当前活动环境已完成启动前检查同步。",
-      "launch_prepare_active_failed": "当前活动环境启动前检查同步失败。",
-      "launch_prepare_cache_sync_done": "已按当前缓存状态完成启动前检查同步。",
-      "launch_prepare_cache_sync_failed": "按当前缓存执行启动前检查同步失败。",
       "launch_prepare_failed": "启动前准备失败。请检查当前环境路径、文件权限和模组链接状态。",
       "launch_prepare_missing_context": "无法构建目标环境上下文，请检查环境是否存在。",
       "launch_prepare_missing_scan_paths": "目标环境没有可用于启动前检查同步的模组路径。",
-      "launch_prepare_no_context_builder": "缺少环境上下文构建器，已跳过启动前检查同步。",
-      "launch_prepare_scan_sync_done": "已完成启动前检查同步，并按最新扫描结果更新链接。",
-      "launch_prepare_scan_sync_failed": "启动前检查同步已完成扫描，但链接同步失败。",
+      "launch_prepare_scan_failed": "启动前扫描未完成，已停止启动游戏。",
       "launch_prepare_sync_failed": "启动前同步失败",
       "launch_prepare_unhealthy_context": "目标环境路径不可用，请先完成路径设置。",
       "steam_launch_failed": "无法提交 Steam 启动请求。",
@@ -1023,7 +1016,8 @@
     "update": {
       "download_started": "开始下载更新包",
       "installing_restart": "正在重启并安装更新。",
-      "no_available_info": "当前没有可用的更新信息，请先检查更新"
+      "no_available_info": "当前没有可用的更新信息，请先检查更新",
+      "result_changed": "更新信息已变化，请重新查看更新。"
     },
     "uri": {
       "no_link_to_open": "没有可打开的链接。",
@@ -2413,6 +2407,7 @@
         "active": "当前激活",
         "all": "全部状态",
         "coexist_disabled": "共存停用",
+        "duplicates": "存在重复",
         "inactive": "未启用",
         "mod_disabled": "模组停用"
       },
@@ -3164,13 +3159,18 @@
       "access_denied": "目标服务拒绝了请求。请检查登录状态、访问权限或请求配置。",
       "auth_failed": "目标服务认证失败。请检查登录状态、访问令牌或请求配置。",
       "connection_failed": "无法连接到目标服务。请检查网络连接、代理设置或服务状态。",
+      "invalid_response": "服务器返回的内容不完整或格式错误。请重试，或更换下载来源、镜像后重试。",
       "not_found": "目标资源不存在或地址已失效。请检查链接、参数或稍后重试。",
       "proxy_auth": "代理服务器需要认证。请检查代理账号、密码或关闭不可用的代理。",
       "proxy_failed": "代理连接失败。请检查代理地址、端口、账号密码，或临时关闭代理后重试。",
       "rate_limited": "请求过于频繁或服务限流。请稍后重试。",
+      "redirect": "服务要求跳转到其他地址。若一直停留在此状态，请检查链接或更换代理、镜像后重试。",
+      "request_failed": "服务未能接受此请求。请检查链接、输入内容和配置，或更新软件后重试。",
       "request_invalid": "请求参数无效。请检查输入内容或配置后重试。",
       "service_unavailable": "目标服务暂时不可用。请稍后重试，或检查服务状态。",
-      "timeout": "网络请求超时。请检查网络连接、代理设置或稍后重试。"
+      "steam_access_denied": "Steam 拒绝了请求。使用 Web API 时请检查 API Key 和访问权限，也可切换网络或代理后重试。",
+      "timeout": "网络请求超时。请检查网络连接、代理设置或稍后重试。",
+      "tls_failed": "无法验证安全连接或建立加密连接。请检查系统时间、证书和代理设置，不要关闭证书验证。"
     },
     "path": {
       "batch_check_failed": "批量检查路径失败。请确认路径存在、权限可访问，并稍后重试。",
@@ -3231,7 +3231,7 @@
       "workshop_status_failed": "检查 Steam 工坊安装状态失败。请确认 Steam 已启动并完成登录，稍后重试。"
     },
     "steamcmd": {
-      "acf_read_failed": "读取 SteamCMD 工坊记录失败。请检查文件权限或稍后重试。",
+      "acf_repair_failed": "SteamCMD 工坊记录修复失败。请检查文件格式、权限或是否正在使用。",
       "download_start_failed": "启动 SteamCMD 下载失败。请检查网络连接、代理设置、SteamCMD 状态和目标目录权限。",
       "execution_failed": "SteamCMD 执行失败，请检查 Steam 安装、网络连接和下载环境。",
       "execution_failed_with_target": "SteamCMD 执行失败，请检查 Steam 安装、网络连接和下载目录权限。",
@@ -3837,6 +3837,8 @@
     "message": {
       "alternative_used": "__{title}__：前置依赖 [[{base}]] 已由备选模组 [[{alternative}]] 替代",
       "dependency_after_mod": "!!依赖后置!!：必须在依赖 [[{mod}]] 之后加载",
+      "disabled_dependency": "前置模组 [[{mod}]] 已被禁用，将不会在游戏中加载。请先在“已禁用”列表中重新启用。",
+      "disabled_mod": "该模组已被禁用，将不会在游戏中加载。文件仍保留，可在“已禁用”列表中重新启用。",
       "inactive_alternative_dependency": "!!{title}!!：未启用备选前置模组 [[{mod}]]",
       "inactive_dependency": "!!{title}!!：未启用前置模组 [[{mod}]]",
       "inactive_language_pack": "^^{title}^^：不支持当前语言，但本地存在语言包 [[{pack}]]",
@@ -4280,6 +4282,18 @@
       "import_success": "导入成功"
     }
   },
+  "network": {
+    "hosts": {
+      "authorization_cancelled": "已取消管理员授权，系统 Hosts 未完成更新。应用内映射不受影响。",
+      "authorization_timeout": "等待管理员授权超时，系统 Hosts 未完成更新。需要时可点击重试。",
+      "content_changed": "检测到其他程序修改了系统 Hosts，请停止同时修改后重试。",
+      "permission_denied": "没有权限更新系统 Hosts。可点击重试并允许管理员授权，或检查安全软件的拦截设置。",
+      "permission_denied_unix": "没有权限更新系统 Hosts，请检查系统文件权限后重试。应用内映射不受影响。",
+      "system_apply_failed": "系统 Hosts 未能更新，应用内映射仍可使用。请检查系统文件权限或安全软件设置后重试。",
+      "system_remove_failed": "系统 Hosts 中可能仍保留之前的映射，请点击重试完成清理。",
+      "write_timeout": "系统 Hosts 更新超时，结果尚未确认。请点击重试核实并应用已保存的设置。"
+    }
+  },
   "secret": {
     "errors": {
       "backend_unavailable": "系统凭据库不可用",
@@ -4402,6 +4416,7 @@
       "queued": "任务已加入后台队列",
       "scan_complete": "扫描完成",
       "scan_interrupted_by_suspend": "扫描因界面挂起而中断，请重新刷新。",
+      "scan_link_sync_failed": "扫描完成，但模组链接同步失败",
       "texture_task": "贴图任务"
     },
     "mod_package": {
@@ -4573,7 +4588,9 @@
   "toast": {
     "api": {
       "error": "{workname}失败：\n{message}",
+      "network_advice": "连接不稳定时，可前往“网络连接”调整网络设置，或查看推荐的网络优化工具。",
       "open_corresponding_log": "查看对应系统日志",
+      "open_network_settings": "打开网络连接设置",
       "success": "{workname}已完成",
       "warning": "{workname}需要确认：\n{message}"
     },
@@ -4732,6 +4749,7 @@
       "scan_done_with_restore_warning": "扫描已完成，共扫描 {total} 个模组，新增 {added} 个，更新 {updated} 个，删除 {removed} 个，已知 {skipped} 个。\n{extra}",
       "scan_external_enabled_count": "外部解除禁用 {count} 个",
       "scan_failed": "扫描异常。可能是路径权限、文件占用或扫描器内部状态暂时不可用。",
+      "scan_link_sync_failed": "扫描完成，但模组链接同步失败，游戏可能无法加载当前模组。\n{reason}",
       "scan_request_failed": "扫描请求异常。可能是软件后端暂时不可用或当前环境路径配置异常。",
       "scan_start_failed": "扫描启动失败。可能是当前环境路径无效、扫描器未初始化或后台任务暂时不可用。",
       "scan_strict_restore_failed_count": "恢复失败 {count} 个",
@@ -4814,9 +4832,6 @@
       "name_required": "请输入规则名称",
       "weight_clamped": "动态权重已自动限制到允许范围内（权重 {weightMin}-{weightMax}，偏移 {shiftMin} 到 {shiftMax}）。"
     },
-    "rules": {
-      "community_reload_unavailable": "规则引擎未初始化，无法立即重载社区规则库。"
-    },
     "settings": {
       "about": {
         "copied": "已复制：{text}",
@@ -4855,8 +4870,7 @@
       },
       "save_failed": "保存设置失败。可能是后端服务暂时不可用、配置文件无法写入或当前路径权限不足，请稍后重试。",
       "secret_storage_warning": "部分密钥暂时无法写入本机安全存储，已临时保留在配置文件中。请检查系统凭据服务后重新保存密钥。",
-      "self_mods_path_reset": "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。",
-      "steamcmd_junction_sync_failed": "当前磁盘无法连接 SteamCMD 下载目录，已保留你的管理器下载目录设置，但 SteamCMD 下载的模组不会自动出现在管理器目录中。请改用 NTFS 磁盘，或将管理器下载模组路径设为：{path}"
+      "self_mods_path_reset": "管理器下载模组路径不能与创意工坊目录相同，已自动恢复为默认目录。"
     },
     "startup": {
       "auxiliary_warmup_failed": "部分后台数据暂时未能预热，相关提示可能稍后才会出现。",
@@ -4906,9 +4920,7 @@
       "download_started": "已开始下载更新包，请留意底部状态栏。",
       "install_cancelled": "已取消安装更新。",
       "partial_no_update": "部分更新源暂时不可用，当前可用来源未发现新版本。",
-      "recommend_scan": "建议执行一次全量扫描，以应用新版本的核心引擎特性！",
-      "start_failed": "启动更新失败。请检查网络连接、代理设置和安装目录权限。",
-      "up_to_date": "当前已是最新版本"
+      "recommend_scan": "建议执行一次全量扫描，以应用新版本的核心引擎特性！"
     },
     "workspace": {
       "cleanup_deleted_done": "已清理 {count} 条已删除记录",
@@ -5321,6 +5333,9 @@
         "jump": "__点击跳转到另一条冲突命令。__",
         "scopes": "作用域：{scopes}"
       },
+      "network": {
+        "network_check": "使用当前表单中的代理、Hosts 和 GitHub 镜像配置检测常用站点"
+      },
       "paths": {
         "auto_detect": "尝试通过系统和 Steam 记录自动搜索路径",
         "auto_detect_loading": "正在自动搜索路径",
@@ -5678,6 +5693,9 @@
         "by_name_short": "按原名",
         "by_package_id": "按包名",
         "by_workshop_id": "按工坊 ID"
+      },
+      "status": {
+        "disabled": "已禁用"
       }
     },
     "mod_details": {
@@ -5766,6 +5784,7 @@
         "last_active_time": "启用时间",
         "last_moved_time": "移动时间",
         "multiplayer_compat": "联机兼容性",
+        "original_name": "原名",
         "patch_file_count": "补丁数量",
         "texture_file_count": "贴图数量",
         "xml_file_count": "XML数量"
@@ -6064,6 +6083,8 @@
         "downloads_desc": "查看源码、发布包和备用下载地址。",
         "feedback": "反馈与交流",
         "feedback_desc": "遇到问题时，建议带上截图、日志和复现步骤。",
+        "gitee_mirror": "Gitee 仓库",
+        "gitee_mirror_note": "国内代码仓库与后续发行版备用来源。",
         "github_releases": "GitHub 发布页",
         "github_releases_note": "下载 GitHub 发布包，或查看每个版本的发布内容。",
         "github_repo": "GitHub 仓库",
@@ -6077,6 +6098,8 @@
         "qq_group_note": "适合快速反馈和补充截图。",
         "references": "参考项目",
         "references_desc": "这些项目为排序、日志分析和管理功能提供了参考。",
+        "sourceforge_mirror": "SourceForge 下载",
+        "sourceforge_mirror_note": "提供稳定的公开发布包下载入口。",
         "tieba_thread": "贴吧主贴",
         "tieba_thread_note": "查看集中说明和公开讨论。",
         "title": "关于项目",
@@ -6417,13 +6440,104 @@
         "unbound": "未绑定"
       },
       "network": {
+        "community_tools_help": "以上工具由社区独立维护，需自行下载并按工具说明启用。建议先使用一种，避免多个加速工具同时开启造成冲突。",
+        "community_tools_title": "社区网络工具推荐",
         "custom_hosts": "自定义 Hosts 映射",
+        "custom_hosts_desc": "手动指定域名对应的 IP 地址。一般不需要修改，只有在你明确知道目标地址时才使用。",
+        "dynamic_mirrors_enabled": "启用动态镜像节点",
+        "dynamic_mirrors_enabled_desc": "开启后立即获取并检测动态镜像节点，并将通过检测的节点加入上方镜像节点选择器。关闭后不会使用动态节点。",
+        "effective_hosts_desc": "只读显示动态 Hosts；缓存文件：",
+        "effective_hosts_empty": "当前没有生效的动态 Hosts 映射。",
+        "effective_hosts_title": "查看当前生效的动态 Hosts",
         "enable_proxy": "启用代理服务",
         "enable_proxy_desc": "启用代理服务，所有网络请求将通过代理服务器处理，部分外置数据下载、更新检查、简介图片加载、内部浏览器访问等功能可能需要该配置才能正常使用。\n\n也可以在软件外部自行配置全局网络环境。",
         "enable_steam_enhanced_api": "启用工坊增强信息",
         "enable_steam_enhanced_api_desc": "开启并填写 Key 后，工坊页会优先使用在线增强信息；没有 Key 或关闭此项时会自动使用本地缓存搜索。",
         "get_page": "获取页面",
+        "github_access_choice": "网络问题如果有稳定代理优先推荐代理，Github下载慢时可先试镜像源，无法连接可试下方的动态 Hosts。一种方式解决问题后，不必同时开启；两者都不能代替代理。",
+        "github_access_desc": "GitHub 镜像源可以代替 GitHub 提供项目页面、文件、源码包和发行版下载，帮助解决访问慢或失败。镜像不可用时会回退直连。",
+        "github_access_title": "GitHub 镜像源",
+        "github_hosts_auto_update": "自动更新动态 Hosts",
+        "github_hosts_auto_update_desc": "软件启动时，超过更新间隔后自动更新动态 Hosts。",
+        "github_hosts_enabled": "动态 Hosts",
+        "github_hosts_enabled_desc": "从可信来源获取网站的 IP 地址，帮助解决域名解析导致的连接失败，适用于来源中包含的任何网站。打开开关立即后台获取，保存后生效；失败时保留已有映射。",
+        "github_hosts_failed": "获取 Hosts 失败，请检查网络和来源地址后重试。已有映射会继续保留。",
+        "github_hosts_loading": "正在后台获取 Hosts，请稍候。网络较慢时可能需要一分钟以上，不影响保存设置。",
+        "github_hosts_ready": "Hosts 已获取并应用。",
+        "github_hosts_refresh_interval": "更新间隔（小时）",
+        "github_hosts_retry": "重新获取",
+        "github_hosts_timeout": "获取 Hosts 超时，请检查网络或稍后重试。已有映射会继续保留。",
+        "github_hosts_url": "Hosts 来源",
+        "github_hosts_url_desc": "支持 Hosts 文本或 JSON 的 HTTPS 地址，可逐条编辑、启停和删除。同一域名优先使用排在前面的有效来源；某个来源失败时仍会使用其他成功来源。",
+        "github_mirror_auto": "自动选择镜像",
+        "github_mirror_direct": "GitHub 直连",
+        "github_mirror_selector_help": "选择要使用的 GitHub 镜像节点。自动选择会从当前可用节点中选择延迟较低的节点。",
+        "github_mirror_selector_label": "镜像节点",
         "host": "主机地址",
+        "hosts_help": "Hosts 就像网站地址簿，告诉软件某个域名应该连接哪个 IP。域名解析出错时，它可能帮助恢复访问，但不能保证目标服务器一定可用。默认只在软件内部生效。动态 Hosts 从来源自动获取，自定义 Hosts 由你手动填写。",
+        "hosts_partial_failure": "部分来源获取失败，已使用成功来源的映射。可检查来源后重新获取。",
+        "hosts_pending_save": "Hosts 已获取，保存设置后生效。",
+        "hosts_priority": "同一域名同时出现在动态和自定义映射中时，优先使用自定义映射。",
+        "hosts_source_add": "+ 新增来源",
+        "hosts_source_enabled": "启用此 Hosts 来源",
+        "hosts_source_remove": "删除此 Hosts 来源",
+        "hosts_sources_empty": "当前没有启用的 Hosts 来源，请添加地址并勾选启用。",
+        "hosts_title": "Hosts 地址映射",
+        "mirror_add": "新增镜像",
+        "mirror_add_help": "添加一个自定义 GitHub 镜像源",
+        "mirror_apply": "检测并加入设置",
+        "mirror_edit": "编辑所选镜像",
+        "mirror_edit_help": "修改当前选中的镜像配置",
+        "mirror_editor": "编辑 GitHub 镜像源",
+        "mirror_file_help": "新增、编辑、删除后，点击设置页的“保存”才会生效。也可以直接编辑配置文件，修改后需要重启软件。",
+        "mirror_id": "镜像 ID（字母、数字、下划线或短横线）",
+        "mirror_invalid": "请填写名称、唯一的有效 ID 和包含一个 {url} 的 HTTPS 地址。ID 不能使用 direct。",
+        "mirror_name": "镜像名称",
+        "mirror_open_failed": "无法打开镜像配置文件，请根据显示的路径手动打开。",
+        "mirror_open_file": "打开镜像配置文件",
+        "mirror_open_file_help": "打开镜像列表文件进行查看或编辑",
+        "mirror_probe_failed": "镜像探测失败，未保存此配置。请检查地址和网络连接后重试。",
+        "mirror_probe_loading": "正在检测镜像支持的功能，请稍候…",
+        "mirror_probe_result": "自动检测结果",
+        "mirror_remove": "删除所选镜像",
+        "mirror_remove_help": "删除当前选中的镜像配置",
+        "mirror_status_supported": "支持",
+        "mirror_status_unknown": "未知",
+        "mirror_status_unsupported": "不支持",
+        "mirror_type_api": "GitHub API",
+        "mirror_type_archive": "源码压缩包",
+        "mirror_type_clone": "Git Clone",
+        "mirror_type_gist": "Gist 内容",
+        "mirror_type_lfs": "LFS 媒体文件",
+        "mirror_type_raw": "Raw 文件",
+        "mirror_type_release": "发行版附件",
+        "mirror_type_web": "项目页面",
+        "mirror_url": "镜像转换地址",
+        "mirror_url_help": "填写镜像服务提供的 HTTPS 转换地址，用 {url} 代表原始 GitHub 地址。保存前会自动检查项目页面、Raw 文件和源码压缩包是否支持。",
+        "network_check": "检测访问",
+        "network_check_bypass": "已按绕过列表直连",
+        "network_check_desc": "检测当前表单中的代理、Hosts 和 GitHub 镜像配置对常用站点的访问情况与响应延迟。",
+        "network_check_direct": "直连",
+        "network_check_domain": "域名",
+        "network_check_error_code": "错误代码",
+        "network_check_failed": "检测请求未完成，请稍后重试。",
+        "network_check_failed_item": "无法访问",
+        "network_check_hosts_hit": "已使用 Hosts 映射",
+        "network_check_http_error": "服务返回错误",
+        "network_check_latency": "延时",
+        "network_check_loading_item": "正在加载",
+        "network_check_mirror": "已使用镜像源",
+        "network_check_name": "名称",
+        "network_check_ok": "可访问",
+        "network_check_proxy": "代理",
+        "network_check_reason": "说明",
+        "network_check_redirect": "需要跳转",
+        "network_check_result": "状态码结果",
+        "network_check_route": "连接方式",
+        "network_check_status_code": "状态码",
+        "network_check_timeout": "连接超时",
+        "network_check_url": "地址",
+        "network_checking": "检测中…",
         "password": "密码",
         "port": "端口",
         "protocol": "协议",
@@ -6436,6 +6550,11 @@
         "steam_web_api_key_placeholder": "填写后启用增强搜索",
         "steam_web_api_key_risk": "任何人一旦获取了此 Key，就可以在不触发 Steam 令牌的情况下，暗中取消玩家的真实交易，并替换为发给骗子的假交易。绝对不要将 API 密钥分享给任何人或任何未经验证的第三方网站。",
         "steam_web_api_key_warning": "注意！“API 密钥（API Key）相当于你的 Steam 账号后门钥匙”。可以读取账号公开数据/库存信息 以及 管理与监听交易报价。",
+        "steamcommunity302_description": "改善 Steam 社区、创意工坊等页面的连接问题，遇到网页打不开或图片加载异常时可以尝试。",
+        "steampp_description": "为 Steam 社区、创意工坊等网站提供访问加速，并集成账号切换等 Steam 实用工具。",
+        "system_hosts_applying": "正在更新系统 Hosts",
+        "system_hosts_authorizing": "正在等待管理员授权，请留意系统授权窗口。不影响设置保存。",
+        "system_hosts_retry": "重试已保存的系统 Hosts 设置",
         "title": "网络协议与代理",
         "use_proxy_on_ai": "为 AI 请求使用代理",
         "use_proxy_on_ai_desc": "如果启用，AI 将通过代理服务器进行。已经是国内代理后的端口不用开此选项。",
@@ -6443,8 +6562,9 @@
         "use_proxy_on_steamcmd_desc": "SteamCMD 是否使用代理服务器。\n\n如果启用，SteamCMD 下载、更新、安装等操作将通过代理服务器进行。",
         "username": "用户名",
         "visit": "访问",
-        "write_to_system_hosts": "将自定义 Hosts 写入系统 hosts 文件",
-        "write_to_system_hosts_desc": "注意：这将直接修改系统 hosts 文件，可能需要管理员权限。"
+        "visit_tool_website": "访问工具网页",
+        "write_to_system_hosts": "将 Hosts 映射应用到系统",
+        "write_to_system_hosts_desc": "将动态和自定义映射写入系统 Hosts，让其他软件也能使用，通常无需开启。保存相关设置或点击重试时，Windows 可能请求管理员授权；启动更新和退出清理不会弹出授权窗口。退出时会尝试移除映射，无权清理时可能保留，请在退出前关闭此项并保存。"
       },
       "panel": {
         "apply_and_save": "应用并保存配置",
@@ -6806,17 +6926,36 @@
       }
     },
     "update": {
+      "auto_source_message": "下载失败时会自动尝试备用地址。若仍无法下载，可前往“设置 → 关于项目”的下载地址手动获取适用于当前系统的安装包，退出软件后解压并覆盖安装目录。",
       "available_desc": "发现可用更新。",
+      "check_failed": "无法检查更新，请稍后重试。",
+      "checking_sources": "正在检查更新来源…",
+      "download_update": "下载更新",
       "downloaded": "已下载",
+      "downloading": "正在下载更新，进度可在任务栏查看",
       "file_size_meta": "文件大小: {size}",
       "ignore_version": "忽略此版本",
       "install_now": "立即安装",
+      "last_checked": "最近检查：{time}",
       "later": "以后再说",
-      "multiple_sources_message": "检测到多个同版本来源: {sources}。将优先使用第一个来源，失败后自动尝试候补来源。",
       "new_version_title": "发现新版本 v{version}",
-      "single_source_message": "来源: {source}。文件大小: {size}。",
-      "source_meta": "来源: {source}",
-      "update_now": "立即更新"
+      "no_compatible_update": "未发现适用于当前系统的新版本",
+      "not_checked": "尚未检查更新",
+      "partial_available": "部分来源暂时无法检查，不影响使用已发现的更新。",
+      "ready": "安装包已就绪，可稍后安装",
+      "result_changed": "更新信息已变化，请重新查看更新。",
+      "source_auto": "自动选择（推荐）",
+      "source_available": "发现新版本 v{version}",
+      "source_details": "来源详情",
+      "source_failed": "暂时无法检查",
+      "source_no_package": "没有适用的安装包",
+      "source_no_release": "尚未发布版本",
+      "source_no_update": "未发现新版本",
+      "source_older": "尚未同步目标版本（v{version}）",
+      "source_selector": "下载来源",
+      "version_available": "发现新版本 v{version}",
+      "via_builtin_mirror": " · 通过内置镜像读取",
+      "view_update": "查看更新"
     },
     "update_modal": {
       "empty": "没有找到更新记录...",

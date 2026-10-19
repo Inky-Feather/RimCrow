@@ -1,171 +1,266 @@
-import requests
+import ast
 import re
-from packaging import version
+from collections.abc import Callable, Iterator
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
-# --- 模块测试准备 ---
-if __name__ == "__main__":
-    import sys
-    from pathlib import Path
-    # Path(__file__).resolve() 获取当前文件的绝对路径
-    # .parents[2] 表示向上跳 3 级 (文件->scanner->backend->项目根目录)
-    project_root = Path(__file__).resolve().parents[2]
-    # 调试打印，确保路径正确
-    print(f"Project Root: {project_root}")
-    # sys.path 需要字符串类型，所以要用 str() 转换一下
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
+from bs4 import BeautifulSoup
+from packaging import version
+from requests import RequestException
 
+from backend.managers.mgr_network import build_retry_session
 from backend.utils.tools import get_package_platform_match, get_current_package_platform_keywords, has_supported_update_package_name
+
 
 class LanzouParser:
     UPDATE_FILENAME_PATTERN = re.compile(r"(?<!\d)v?(\d+\.\d+\.\d+)(?!\d)", re.I)
     ACW_ARG_ORDER = [0xf, 0x23, 0x1d, 0x18, 0x21, 0x10, 0x1, 0x26, 0xa, 0x9, 0x13, 0x1f, 0x28, 0x1b, 0x16, 0x17, 0x19, 0xd, 0x6, 0xb, 0x27, 0x12, 0x14, 0x8, 0xe, 0x15, 0x20, 0x1a, 0x2, 0x1e, 0x7, 0x4, 0x11, 0x5, 0x3, 0x1c, 0x22, 0x25, 0xc, 0x24]
     ACW_KEY = "3000176000856006061501533003690027800375"
+    JS_TOKENS = re.compile(r"\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|//[^\n]*|/\*.*?\*/|[{}\[\](),;:+\n]", re.S)
+    MAX_CANDIDATES = 4
+    MAX_PAGES = 100
+    PAGE_SIZE = 50
 
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.trust_env = False  # 禁用环境变量代理
+    def __init__(self, session: Any = None, *, check_cancelled: Callable[[], None] | None = None):
+        # 蓝奏云是直连来源，不继承应用或环境代理。
+        self.session = session if session is not None else build_retry_session(route_manager=False, trust_env=False)
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/javascript, */*',
             'Accept-Language': 'zh-CN,zh;q=0.9',
-            'X-Requested-With': 'XMLHttpRequest',
         })
         self.last_error = ""
+        self._check_cancelled = check_cancelled
 
-    def log_step(self, step, msg):
-        print(f"[Lanzou] {step} >> {msg}")
-
-    def _get_with_acw_retry(self, url, **kwargs):
-        res = self.session.get(url, **kwargs)
-        cookie_value = self._extract_acw_cookie(res.text)
-        if not cookie_value:
-            return res
-        domain = urlparse(url).hostname
-        cookie_kwargs = {"path": "/"}
-        if domain:
-            cookie_kwargs["domain"] = domain
-        self.session.cookies.set("acw_sc__v2", cookie_value, **cookie_kwargs)
-        self.log_step("ACW", "蓝奏云要求浏览器校验，已计算校验 Cookie 后重试")
-        return self.session.get(url, **kwargs)
+    def _get_with_acw_retry(self, url: str, **kwargs: Any) -> Any:
+        kwargs.setdefault("timeout", (5, 30))
+        for attempt in range(2):
+            if self._check_cancelled:
+                self._check_cancelled()
+            res = self.session.get(url, **kwargs)
+            if res.status_code >= 400:
+                res.raise_for_status()
+            # 部分页面未声明 HTTP 编码，但正文是 UTF-8。
+            if getattr(res, "encoding", None) == "ISO-8859-1":
+                res.encoding = "utf-8"
+            cookie = self._extract_acw_cookie(res.text)
+            if not cookie:
+                return res
+            if attempt == 0:
+                url = getattr(res, "url", None) or url
+                self.session.cookies.set("acw_sc__v2", cookie, domain=urlparse(url).hostname, path="/")
+        raise ValueError("蓝奏云浏览器校验未通过，请稍后重试")
 
     @classmethod
-    def _extract_acw_cookie(cls, html):
-        if "acw_sc__v2" not in str(html or ""):
+    def _extract_acw_cookie(cls, html: str) -> str:
+        if "acw_sc__v2" not in html:
             return ""
-        match = re.search(r"var\s+arg1\s*=\s*'([0-9a-fA-F]{40})'", html)
+        match = re.search(r"\barg1\s*=\s*['\"]([0-9a-fA-F]{40})['\"]", html)
         if not match:
-            return ""
-        arg1 = match.group(1)
-        reordered = [""] * len(cls.ACW_ARG_ORDER)
-        for idx, order in enumerate(cls.ACW_ARG_ORDER):
-            reordered[idx] = arg1[order - 1]
-        mixed = "".join(reordered)
-        result = []
-        for idx in range(0, min(len(mixed), len(cls.ACW_KEY)), 2):
-            value = int(mixed[idx:idx + 2], 16) ^ int(cls.ACW_KEY[idx:idx + 2], 16)
-            result.append(f"{value:02x}")
-        return "".join(result)
+            raise ValueError("蓝奏云浏览器校验方式已变化")
+        mixed = "".join(match.group(1)[order - 1] for order in cls.ACW_ARG_ORDER)
+        return "".join(f"{int(mixed[i:i + 2], 16) ^ int(cls.ACW_KEY[i:i + 2], 16):02x}" for i in range(0, 40, 2))
 
     @staticmethod
-    def _ensure_url_scheme(url):
+    def _ensure_url_scheme(url: str) -> str:
         text = str(url or "").strip()
-        if not text:
-            return ""
         if text.startswith("//"):
-            return f"https:{text}"
-        if not urlparse(text).scheme:
-            return f"https://{text.lstrip('/')}"
+            text = f"https:{text}"
+        elif text and not urlparse(text).scheme:
+            text = f"https://{text}"
+        parsed = urlparse(text)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or re.search(r"\s", text):
+            raise ValueError("蓝奏云返回了无效的网页或下载地址")
         return text
 
-    def get_all_files(self, folder_url, password=""):
-        """
-        获取文件夹内所有文件及其版本信息
-        返回格式: { "files": [...], "latest": { ... } }
-        """
+    @classmethod
+    def _split_js(cls, text: str, separators: str = ",") -> Iterator[str]:
+        """只在字符串、注释和括号之外分段，不执行网页脚本。"""
+        depth = 0
+        start = 0
+        for match in cls.JS_TOKENS.finditer(text):
+            token = match.group()
+            if token.startswith(("'", '"', "//", "/*")):
+                continue
+            if depth == 0 and token in separators:
+                yield text[start:match.start()].strip()
+                start = match.end()
+            elif token in "{[(":
+                depth += 1
+            elif token in "}])":
+                depth -= 1
+                if depth < 0:
+                    return
+        yield text[start:].strip()
+
+    @classmethod
+    def _resolve_js(cls, expression: str, variables: dict[str, list[str]], seen: tuple[str, ...] = ()) -> list[Any]:
+        """支持字面量、变量别名和加法；分支赋值只形成有上限的候选。"""
+        # shortcut: 不解释任意 JS；签名改为运行时计算时需扩展专用解析策略。
+        expression = expression.strip()
+        if not expression or len(seen) >= 12:
+            return []
+        parts = list(cls._split_js(expression, "+"))
+        if len(parts) > 1:
+            values = cls._resolve_js(parts[0], variables, seen)
+            for part in parts[1:]:
+                right = cls._resolve_js(part, variables, seen)
+                values = [(str(a) + str(b) if isinstance(a, str) or isinstance(b, str) else a + b)
+                          for a in values for b in right][:cls.MAX_CANDIDATES]
+            return values
+        if re.fullmatch(r"[a-zA-Z_$][\w$]*", expression):
+            if expression in {"true", "false", "null"}:
+                return [{"true": True, "false": False, "null": ""}[expression]]
+            if expression in seen:
+                return []
+            values = []
+            for assigned in variables.get(expression, []):
+                for value in cls._resolve_js(assigned, variables, (*seen, expression)):
+                    if value not in values:
+                        values.append(value)
+                if len(values) >= cls.MAX_CANDIDATES:
+                    break
+            return values[:cls.MAX_CANDIDATES]
         try:
-            self.log_step("INIT", f"正在检索文件夹列表: {folder_url}")
-            domain = folder_url.split('/')[2]
-            res = self._get_with_acw_retry(folder_url)
-            html = res.text
+            value = ast.literal_eval(expression.replace(r"\/", "/"))
+        except (ValueError, SyntaxError):
+            return []
+        return [value] if type(value) in {str, int, float, bool} else []
 
-            # 1. 提取文件夹权限参数
-            fid = re.search(r"'fid':(\d+)", html)
-            if not fid:
-                self.last_error = "无法提取文件夹ID"
-                return None
-            fid = fid.group(1)
-            data_block = re.search(r"data\s*:\s*\{([^}]+)\}", html)
-            if not data_block:
-                self.last_error = "无法提取数据块"
-                return None
-            data_block = data_block.group(1)
-            t_var = re.search(r"'t':\s*([\w]+)", data_block)
-            if not t_var:
-                self.last_error = "无法提取 t_var"
-                return None
-            t_var = t_var.group(1)
-            k_var = re.search(r"'k':\s*([\w]+)", data_block)
-            if not k_var:
-                self.last_error = "无法提取 k_var"
-                return None
-            k_var = k_var.group(1)
-            t_val = re.search(rf"var\s+{t_var}\s*=\s*'([^']+)'", html)
-            if not t_val:
-                self.last_error = "无法提取 t_val"
-                return None
-            t_val = t_val.group(1)
-            k_val = re.search(rf"var\s+{k_var}\s*=\s*'([^']+)'", html)
-            if not k_val:
-                self.last_error = "无法提取 k_val"
-                return None
-            k_val = k_val.group(1)
-
-            # 2. 获取原始文件列表
-            ajax_url = f"https://{domain}/filemoreajax.php"
-            post_data = {'lx': 2, 'fid': fid, 'pg': 1, 'rep': 0, 'up': 1, 'ls': 1, 't': t_val, 'k': k_val, 'pwd': password}
-            res_list = self.session.post(ajax_url, data=post_data)
-            list_json = res_list.json()
-
-            if list_json.get('zt') != 1:
-                self.last_error = f"蓝奏云返回错误: {list_json.get('info')}"
-                return None
-
-            # 3. 处理并格式化文件列表
-            all_files = []
-            for f in list_json['text']:
-                all_files.append(self._build_file_info(f))
-
-            if not all_files:
-                self.last_error = "文件夹内无文件"
-                return None
-
-            # 4. 识别当前系统可用的最新版本。新版包名带系统标识，旧版包名不带系统标识，两者都兼容。
-            all_files.sort(key=self._file_sort_key, reverse=True)
-            latest_file = self._select_latest_update_file(all_files)
-            if not latest_file:
-                self.last_error = "未找到适合当前系统的更新包"
-                return {"files": all_files, "latest": None}
-
-            # 5. 对最新版进行“深度解析”获取直链和更新日志
-            self.log_step("LATEST", f"发现最新版本: v{latest_file['version']}，正在解析详情...")
-            depth_info = self.get_file(f"https://{domain}/{latest_file['id']}")
-            
-            if depth_info:
-                latest_file.update(depth_info)
-                self.log_step("LATEST", f"最新版本描述: {depth_info['note']}")
-                self.log_step("LATEST", f"最新版本下载直链: {depth_info['download_url']}")
+    @classmethod
+    def _extract_requests(cls, html: str, page_url: str, kind: str, overrides: dict[str, Any] | None = None) -> list[tuple[str, dict[str, Any]]]:
+        """从同一个 Ajax 声明提取 URL 与数据，不猜接口地址或补造参数。"""
+        scripts = BeautifulSoup(html, "html.parser").find_all("script")
+        script = "\n".join(item.get_text() for item in scripts) if scripts else html
+        script = cls.JS_TOKENS.sub(lambda m: " " if m.group().startswith(("//", "/*")) else m.group(), script)
+        # 保持位置不变地遮住字符串，避免把字符串内容误认成赋值或请求声明。
+        code = cls.JS_TOKENS.sub(lambda m: " " * len(m.group()) if m.group().startswith(("'", '"')) else m.group(), script)
+        variables: dict[str, list[str]] = {}
+        for match in re.finditer(r"(?<![\w$.])([a-zA-Z_$][\w$]*)\s*=(?!=)", code):
+            value = next(cls._split_js(script[match.end():], ",;\n"), "")
+            variables.setdefault(match.group(1), []).append(value)
+        requests = []
+        for match in re.finditer(r"(?:\$|jQuery)\s*\.\s*ajax\s*\(\s*(?=\{)", code):
+            options = next(cls._split_js(script[match.end():], ")"), "")
+            fields = {}
+            for part in cls._split_js(options[1:-1]):
+                pair = list(cls._split_js(part, ":"))
+                if len(pair) >= 2:
+                    fields[pair[0].strip("'\"")] = ":".join(pair[1:])
+            data = fields.get("data", "").strip()
+            if not data.startswith("{") or not data.endswith("}"):
+                continue
+            payloads = [{}]
+            for part in cls._split_js(data[1:-1]):
+                pair = list(cls._split_js(part, ":"))
+                if len(pair) < 2:
+                    continue
+                key = pair[0].strip("'\"")
+                if overrides and key in overrides:
+                    values = [overrides[key]]
+                else:
+                    values = cls._resolve_js(":".join(pair[1:]), variables)
+                if not values:
+                    break
+                payloads = [{**payload, key: value} for payload in payloads for value in values][:cls.MAX_CANDIDATES]
             else:
-                self.log_step("LATEST", f"最新版本详情解析失败: {self.last_error}")
-                
-            return {
-                "files": all_files,
-                "latest": latest_file
-            }
+                payloads = [payload for payload in payloads if
+                            ({"fid", "t", "k"}.issubset(payload) if kind == "folder" else payload.get("action") == "downprocess")]
+                if not payloads:
+                    continue
+                for endpoint in cls._resolve_js(fields.get("url", ""), variables):
+                    if not isinstance(endpoint, str) or not endpoint:
+                        continue
+                    try:
+                        endpoint = cls._ensure_url_scheme(urljoin(page_url, str(endpoint)))
+                    except ValueError:
+                        continue
+                    for payload in payloads:
+                        candidate = (endpoint, payload)
+                        if candidate not in requests:
+                            requests.append(candidate)
+            if len(requests) >= cls.MAX_CANDIDATES:
+                break
+        if not requests:
+            raise ValueError("无法识别蓝奏云页面中的请求参数，页面格式可能已变化")
+        return requests[:cls.MAX_CANDIDATES]
 
-        except Exception as e:
-            self.last_error = f"获取版本列表失败: {str(e)}"
+    def _post_request(self, candidates: list[tuple[str, dict[str, Any]]], page_url: str, kind: str) -> dict[str, Any]:
+        parsed = urlparse(page_url)
+        headers = {"Referer": page_url, "Origin": f"{parsed.scheme}://{parsed.netloc}", "X-Requested-With": "XMLHttpRequest"}
+        errors = []
+        for endpoint, payload in candidates:
+            if self._check_cancelled:
+                self._check_cancelled()
+            try:
+                payload = {key: str(value).lower() if isinstance(value, bool) else value for key, value in payload.items()}
+                res = self.session.post(endpoint, data=payload, headers=headers, timeout=(5, 30))
+                if res.status_code >= 400:
+                    res.raise_for_status()
+                data = res.json()
+                if not isinstance(data, dict) or "zt" not in data:
+                    raise ValueError("蓝奏云接口未返回有效的结果")
+                status = str(data["zt"])
+                if status == "2" and kind == "folder":
+                    return data
+                if status != "1":
+                    raise ValueError(f"蓝奏云拒绝请求：{str(data.get('info') or data['zt'])[:160]}")
+                if kind == "folder":
+                    files = data.get("text")
+                    if not isinstance(files, list) or any(not isinstance(item, dict) or not item.get("id") for item in files):
+                        raise ValueError("蓝奏云返回的文件列表格式无效")
+                elif not isinstance(data.get("dom"), str) or not data["dom"] or not isinstance(data.get("url"), str) or data["url"] in {"", "0"}:
+                    raise ValueError("蓝奏云未返回有效的下载地址")
+                return data
+            except (RequestException, ValueError) as exc:
+                # 不记录完整 URL 和参数，避免将签名、提取码写入日志。
+                reason = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
+                errors.append(f"{urlparse(endpoint).netloc}: {reason}")
+        raise ValueError("蓝奏云请求失败：" + "; ".join(errors))
+
+    def get_all_files(self, folder_url: str, password: str = "") -> dict[str, Any] | None:
+        """读取完整文件列表后选择更新包；分页失败时不返回不完整的最新版。"""
+        self.last_error = ""
+        try:
+            folder_url = self._ensure_url_scheme(folder_url)
+            res = self._get_with_acw_retry(folder_url)
+            page_url = getattr(res, "url", None) or folder_url
+            candidates = self._extract_requests(res.text, page_url, "folder", {"pwd": password, "pg": 1})
+            all_files = []
+            seen = set()
+            for page in range(1, self.MAX_PAGES + 1):
+                current = [(url, {**payload, "pg": page}) for url, payload in candidates]
+                data = self._post_request(current, page_url, "folder")
+                if str(data["zt"]) == "2":
+                    break
+                files = data["text"]
+                if not files:
+                    break
+                previous_count = len(seen)
+                for item in files:
+                    file_id = urlparse(str(item["id"])).path
+                    if file_id in seen:
+                        continue
+                    seen.add(file_id)
+                    all_files.append(self._build_file_info(item))
+                if len(seen) == previous_count:
+                    raise ValueError("蓝奏云分页未向后推进，无法确认完整文件列表")
+                # 列表接口短页即结束；继续请求会被部分节点判为过期。
+                if len(files) < self.PAGE_SIZE:
+                    break
+            else:
+                raise ValueError("蓝奏云文件列表超过分页上限，无法确认最新版本")
+            if not all_files:
+                raise ValueError("文件夹内无文件")
+            all_files.sort(key=self._file_sort_key, reverse=True)
+            latest = self._select_latest_update_file(all_files)
+            if latest:
+                detail = self.get_file(urljoin(page_url, "/" + str(latest["id"])))
+                if not detail:
+                    raise ValueError(self.last_error or "无法获取最新版本的下载地址")
+                latest.update(detail)
+            return {"files": all_files, "latest": latest}
+        except (RequestException, ValueError) as exc:
+            self.last_error = f"获取蓝奏云文件列表失败：{exc}"
             return None
 
     def _build_file_info(self, raw_file):
@@ -223,137 +318,92 @@ class LanzouParser:
             parsed_version = version.parse("0.0.0")
         return (parsed_version, 1 if file_info.get("platform_matched") else 0)
 
-    def get_file(self, url):
-        """
-        深度解析：访问文件详情页，获取 fid、Changelog 并换取直链
-        return: {
-            'note': str,  # 文件描述 (Changelog)
-            'download_url': str  # 下载直链
-        }
-        """
+    def get_file(self, url: str) -> dict[str, str] | None:
+        """读取文件说明，优先解析下载 iframe，逐个尝试其余候选页。"""
+        self.last_error = ""
         try:
-            domain = url.split('/')[2]
+            url = self._ensure_url_scheme(url)
             res = self._get_with_acw_retry(url)
-            html = res.text
-
-            # 提取文件描述 (Changelog)
-            desc_match = re.search(r'class="p7">文件描述：</span><br>\s*(.*?)\s*</td>', html, re.S)
-            note = desc_match.group(1).replace('<br>', '\n').strip() if desc_match else ""
-
-            # 提取跳转参数 fid
-            fid_match = re.search(r'var\s+fid\s*=\s*(\d+);', html)
-            fid = fid_match.group(1) if fid_match else ""
-
-            # 提取 iframe 引导页路径
-            ifr_path = re.search(r'src="(/fn\?[^"]+)"', html)
-            if not ifr_path:
-                self.last_error = "无法提取 iframe 引导页路径"
-                return None
-            ifr_path = ifr_path.group(1)
-            ifr_url = f"https://{domain}{ifr_path}"
-            
-            # 获取下载直链
-            download_url = self._get_direct_link_from_ifr(ifr_url, fid)
-            if not download_url:
-                self.last_error = "无法获取下载直链"
-                return None
-
-            return {
-                'note': note,
-                'download_url': download_url
-            }
-        except Exception as e:
-            self.log_step("ERROR", f"深度解析详情页异常: {e}")
-            return None
-
-    def _get_direct_link_from_ifr(self, ifr_url, fid):
-        """增强版直链换取逻辑"""
-        try:
-            domain = ifr_url.split('/')[2]
-            # 必须带上 Referer，模仿用户从详情页点击
-            res = self._get_with_acw_retry(ifr_url, headers={'Referer': f"https://{domain}/{fid}"})
-            html = res.text
-
-            # 1. 提取所有变量 (更加宽泛的匹配)
-            js_vars = {}
-            for n, v in re.findall(r"var\s+([\w]+)\s*=\s*'([^']*)'", html):
-                js_vars[n] = v
-            for n, v in re.findall(r"var\s+([\w]+)\s*=\s*(\d+)", html):
-                js_vars[n] = v
-
-            data_match = re.search(r"data\s*:\s*\{([^}]+)\}", html, re.S)
-            if not data_match:
-                return None
-            data_content = data_match.group(1)
-            
-            def find_val(key):
-                # 匹配 'sign': varname 或 sign: varname
-                m = re.search(rf"['\"]?{key}['\"]?\s*:\s*([\w]+)", data_content)
-                return js_vars.get(m.group(1), "") if m else ""
-
-            # 2. 构造加密参数 (蓝奏云经常变动参数名，这里做兼容)
-            sign = find_val('sign')
-            ajaxdata = find_val('websignkey') or find_val('signs') or find_val('websign')
-            kdns = find_val('kd') or 1
-
-            post_url = f"https://{domain}/ajaxm.php?file={fid}"
-            payload = {
-                'action': 'downprocess',
-                'websignkey': ajaxdata, 
-                'signs': ajaxdata, # 兼容
-                'sign': sign, 
-                'websign': '', 
-                'kd': kdns, 
-                'ves': 1
-            }
-
-            # 3. 核心修正：模拟浏览器的高级请求头
-            headers = {
-                'Referer': ifr_url,
-                'Origin': f'https://{domain}',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json, text/javascript, */*',
-            }
-
-            res_final = self.session.post(post_url, data=payload, headers=headers)
-            res_json = res_final.json()
-
-            if res_json.get('zt') == 1:
-                # 此时 res_json['dom'] 可能已经是 zip1.webgetstore.com 这种
-                raw_url = self._ensure_url_scheme(f"{res_json['dom']}/file/{res_json['url']}")
-                
-                # 4. 重要：不要用 HEAD，改用 GET 配合 allow_redirects=False
-                # 这样可以精准拿到 302 的 Location 头部，且不会被 CDN 拦截
+            page_url = getattr(res, "url", None) or url
+            soup = BeautifulSoup(res.text, "html.parser")
+            description = soup.select_one(".n_box_des, .n_file_des, #file-description")
+            if description is None:
+                label = soup.find(string=re.compile(r"文件描述[:：]"))
+                if label:
+                    description = BeautifulSoup("".join(str(item) for item in label.parent.next_siblings), "html.parser")
+            note = ""
+            if description is not None:
+                for br in description.find_all("br"):
+                    br.replace_with("\n")
+                note = re.sub(r"^\s*文件描述[:：]\s*", "", description.get_text()).strip()
+            frames = soup.find_all("iframe", src=True)
+            frames.sort(key=lambda frame: "ifr2" not in frame.get("class", []))
+            urls = list(dict.fromkeys(urljoin(page_url, frame["src"].strip()) for frame in frames if frame["src"].strip()))
+            # 页面也可能直接声明下载请求，不再要求必须存在 iframe。
+            if not urls:
+                urls = [page_url]
+            for frame_url in urls[:self.MAX_CANDIDATES]:
                 try:
-                    # 模拟真实点击跳转
-                    r = self.session.get(raw_url, allow_redirects=False, headers={'Referer': ifr_url})
-                    if r.status_code == 302:
-                        return urljoin(raw_url, r.headers.get('Location') or "")
-                    return raw_url # 如果没重定向，这本身就是直链
-                except Exception:
-                    return raw_url
-            
+                    frame_url = self._ensure_url_scheme(frame_url)
+                except ValueError as exc:
+                    self.last_error = str(exc)
+                    continue
+                download_url = self._get_direct_link_from_ifr(frame_url, page_url)
+                if download_url:
+                    self.last_error = ""
+                    return {"note": note, "download_url": download_url}
             return None
-        except Exception as e:
-            self.log_step("ERROR", f"直链解析出错: {e}")
+        except (RequestException, ValueError) as exc:
+            self.last_error = f"获取蓝奏云文件详情失败：{exc}"
             return None
 
-# --- 测试运行 ---
-if __name__ == "__main__":
-    lp = LanzouParser()
-    data = lp.get_all_files("https://wwbns.lanzouu.com/b00mq4tqgf", "aite")
-    
-    if data:
-        print("\n" + "="*50)
-        print(f"文件夹内共有 {len(data['files'])} 个文件")
-        print(data)
-        print(f"最新版本: v{data['latest']['version']}")
-        print(f"更新日志: {data['latest']['note']}")
-        print(f"最新下载直链: {data['latest']['download_url']}")
-        print("="*50)
-        
-        print("\n历史版本列表:")
-        for f in data['files']:
-            print(f"- {f['filename']} ({f['size']}) | 发布于: {f['time']}")
-    else:
-        print(f"错误: {lp.last_error}")
+    def _get_direct_link_from_ifr(self, ifr_url: str, referer: str = "") -> str | None:
+        try:
+            res = self._get_with_acw_retry(ifr_url, headers={"Referer": referer or ifr_url})
+            page_url = getattr(res, "url", None) or ifr_url
+            candidates = self._extract_requests(res.text, page_url, "download")
+            errors = []
+            for candidate in candidates:
+                try:
+                    data = self._post_request([candidate], page_url, "download")
+                    domain = self._ensure_url_scheme(data["dom"])
+                    raw_url = self._ensure_url_scheme(domain.rstrip("/") + "/file/" + data["url"].strip().lstrip("/"))
+                    return self._resolve_download_url(raw_url, page_url)
+                except (RequestException, ValueError) as exc:
+                    errors.append(str(exc))
+            raise ValueError("; ".join(errors))
+        except (RequestException, ValueError) as exc:
+            self.last_error = f"解析蓝奏云下载地址失败：{exc}"
+            return None
+
+    def _resolve_download_url(self, url: str, referer: str) -> str:
+        """跟随跳转并处理下载节点校验，流式探测不读取安装包正文。"""
+        challenged = set()
+        for _ in range(8):
+            res = self.session.get(url, allow_redirects=False, stream=True, headers={"Referer": referer}, timeout=(5, 20))
+            try:
+                if res.status_code >= 400:
+                    res.raise_for_status()
+                if res.status_code in {301, 302, 303, 307, 308} and res.headers.get("Location"):
+                    url = self._ensure_url_scheme(urljoin(url, res.headers["Location"]))
+                    continue
+                if "text/html" in res.headers.get("Content-Type", "").lower():
+                    # 校验页大小受限，不能将网页误报为成功的下载地址。
+                    body = bytearray()
+                    for chunk in res.iter_content(4096):
+                        body.extend(chunk)
+                        if len(body) > 65536:
+                            raise ValueError("蓝奏云下载节点返回了网页而非文件")
+                    cookie = self._extract_acw_cookie(body.decode("utf-8", errors="replace"))
+                    host = urlparse(url).hostname
+                    if not cookie or host in challenged:
+                        raise ValueError("蓝奏云下载节点校验未通过")
+                    challenged.add(host)
+                    self.session.cookies.set("acw_sc__v2", cookie, domain=host, path="/")
+                    continue
+                if res.status_code not in {200, 206}:
+                    raise ValueError(f"蓝奏云下载节点返回了异常状态：{res.status_code}")
+                return url
+            finally:
+                res.close()
+        raise ValueError("蓝奏云下载跳转次数过多")

@@ -32,7 +32,7 @@
     </div>
 
     <div class="overflow-hidden rounded-md border border-border-base/10 bg-bg-muted/35">
-      <div class="grid grid-cols-[minmax(0,1.3fr)_minmax(220px,0.9fr)_120px] border-b border-border-base/10 bg-bg-surface/70 px-4 py-2 text-[11px] font-black uppercase tracking-wider text-text-disabled">
+      <div class="grid grid-cols-[minmax(0,1.3fr)_minmax(220px,0.9fr)_120px] border-b border-border-base/10 bg-bg-surface/70 px-4 py-2 text-xs font-black tracking-wider text-text-disabled">
         <div>{{ t('ui.settings.keybindings.command', '命令') }}</div>
         <div>{{ t('ui.settings.keybindings.keybinding', '快捷键') }}</div>
         <div class="text-right">{{ t('ui.settings.keybindings.operation', '操作') }}</div>
@@ -46,21 +46,21 @@
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
             <span class="truncate text-sm font-bold text-text-main">{{ row.command.title }}</span>
-            <span class="rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[10px] text-text-dim">{{ row.command.category }}</span>
-            <span class="rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[10px] text-text-dim">{{ scopeLabel(row.command.scope) }}</span>
-            <span v-if="row.command.source !== 'builtin'" class="rounded border border-accent-cool/20 bg-accent-cool/10 px-1.5 py-0.5 text-[10px] text-accent-cool">
+            <span class="rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[0.65rem] text-text-dim">{{ row.command.category }}</span>
+            <span class="rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[0.65rem] text-text-dim">{{ scopeLabel(row.command.scope) }}</span>
+            <span v-if="row.command.source !== 'builtin'" class="rounded border border-accent-cool/20 bg-accent-cool/10 px-1.5 py-0.5 text-[0.65rem] text-accent-cool">
               {{ t('ui.settings.keybindings.plugin', '插件') }}
             </span>
-            <span v-if="row.command.dangerLevel !== 'normal'" class="rounded border border-accent-warn/20 bg-accent-warn/10 px-1.5 py-0.5 text-[10px] text-accent-warn">
+            <span v-if="row.command.dangerLevel !== 'normal'" class="rounded border border-accent-warn/20 bg-accent-warn/10 px-1.5 py-0.5 text-[0.65rem] text-accent-warn">
               {{ t('ui.settings.keybindings.caution', '需谨慎') }}
             </span>
           </div>
-          <div class="mt-1 truncate font-mono text-[11px] text-text-disabled">{{ row.command.id }}</div>
+          <div class="mt-1 truncate font-mono text-xs text-text-disabled">{{ row.command.id }}</div>
           <div v-if="row.command.description" class="mt-1 line-clamp-2 text-xs leading-5 text-text-dim">{{ row.command.description }}</div>
           <div v-if="row.conflicts.length" class="mt-2 flex flex-wrap gap-1.5">
             <span v-for="conflict in row.conflicts"
               :key="`${row.command.id}:${conflict.keybinding}:${conflict.commandIds.join('-')}`"
-              class="cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-bold transition-transform hover:scale-105"
+              class="cursor-pointer rounded px-1.5 py-0.5 text-[0.65rem] font-bold transition-transform hover:scale-105"
               :class="conflictClass(conflict.level)"
               v-tooltip="conflictTooltip(conflict)"
               @click="jumpToConflictTarget(row.command.id, conflict)" >
@@ -86,7 +86,7 @@
             {{ t('ui.settings.keybindings.readonly_desc', '固定操作，仅用于说明和冲突提示。') }}
           </div>
           <div v-else class="mt-2 flex flex-wrap items-center gap-1.5">
-            <button v-for="modifier in modifierOptions" :key="`${row.command.id}:${modifier.value}`" class="rounded border px-1.5 py-0.5 text-[10px] font-bold transition-colors"
+            <button v-for="modifier in modifierOptions" :key="`${row.command.id}:${modifier.value}`" class="rounded border px-1.5 py-0.5 text-[0.65rem] font-bold transition-colors"
               :class="isDraftModifierActive(row.command.id, modifier.value) ? 'border-accent-primary/40 bg-accent-primary/15 text-accent-primary' : 'border-border-base/10 bg-bg-overlay/5 text-text-dim hover:text-text-main'"
               @click="toggleDraftModifier(row.command.id, modifier.value)" >
               {{ modifier.label }}

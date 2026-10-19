@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from pydantic import TypeAdapter
 
 from backend.ai.ai_contracts import AssistantDefinition, ModAliasGenerationItem
+from backend.ai.attachment_resolver import AttachmentResolver
 
 _STUBBED_MODULE_NAMES = [
     "backend.ai.prompts",
@@ -509,6 +510,20 @@ class TestAIServiceHelpers(unittest.TestCase):
         })
 
         self.assertEqual(definition.tool_scope_selectable, ["search_mods"])
+
+
+class TestAttachmentResolver(unittest.TestCase):
+    def test_extract_prompt_variables_uses_diagnosis_context_source_fields(self):
+        resolver = AttachmentResolver(None, None)
+        attachment = SimpleNamespace(
+            type="diagnosis_context", title="已选中日志", summary="1 条已选日志",
+            facts={"source_type": "game", "filename": "RimCrow_Realtime.log", "errors": [{"target_line": 588}]},
+        )
+
+        variables = resolver.extract_prompt_variables([attachment])
+
+        self.assertEqual(variables["diagnosis_context.source_type"], "game")
+        self.assertEqual(variables["diagnosis_context.filename"], "RimCrow_Realtime.log")
 
 
 if __name__ == "__main__":

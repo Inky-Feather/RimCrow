@@ -184,38 +184,32 @@ export const useRuleStore = defineStore('rules', () => {
     return lines.filter(Boolean).join('\n')
   }
 
-  // --- 单项规则操作 ---
-  // 添加单项规则 (Drag & Drop 调用)
-  const addUserModRule = async (targetModId, type, otherModId) => {
-    if (!window.pywebview) return
-    // type: 'loadAfter' | 'loadBefore' | 'incompatibleWith'
-    if (!targetModId || !otherModId) return
-    const pid = targetModId.toLowerCase()
-    const other = otherModId.toLowerCase()
-    // 获取或初始化当前规则对象
-    // 注意：需要深拷贝，不能直接改 ref
+  // 单项调用与多选拖入统一合并后保存，批量添加只刷新一次。
+  const addUserModRule = async (targetModId, type, otherModIds) => {
+    if (!window.pywebview || !['loadAfter', 'loadBefore', 'incompatibleWith'].includes(type)) return false
+    const pid = normalizePackageId(targetModId)
+    if (!pid) return false
+    const ids = [...new Set((Array.isArray(otherModIds) ? otherModIds : [otherModIds]).map(normalizePackageId).filter(id => id && id !== pid))]
     const rule = deepClone(userModRules.value[pid] || {})
-    // 初始化子对象
     if (!rule[type]) rule[type] = {}
-    // 如果已存在，跳过
-    if (rule[type][other]) return
-    // 写入
-    const otherMod = modStore.takeModById(other)
-    rule[type][other] = {name: [otherMod.name||''], comment:[] }
-    // 乐观更新本地 State
-    if (!userModRules.value[pid]) userModRules.value[pid] = {}
-    if (!userModRules.value[pid][type]) userModRules.value[pid][type] = {}
-    userModRules.value[pid][type][other] = rule[type][other]
-
-    // 发送后端
-    const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
-    if (!checkResult(res, t('check.rules.add_user_rule', '添加用户规则'))) {
+    const additions = ids.filter(id => !rule[type][id] && modStore.takeModById(id))
+    if (!additions.length) return false
+    additions.forEach(id => {
+      rule[type][id] = { name: [modStore.takeModById(id)?.name || ''], comment: [] }
+    })
+    userModRules.value[pid] = rule
+    try {
+      const res = await window.pywebview.api.rule_update_user_mod(pid, rule)
+      if (checkResult(res, t('check.rules.add_user_rule', '添加用户规则'))) {
+        await refreshRuleState()
+        return true
+      }
       showUserErrorToast(res, t('errors.rules.add_user_rule_failed', '添加用户规则失败。可能是规则内容无效或本地规则文件暂时无法写入，已尝试重新加载规则。'))
-      await fetchRules({ silent: true })
-      return false
+    } catch (error) {
+      showUserErrorToast(error, t('errors.rules.add_user_rule_failed', '添加用户规则失败。可能是规则内容无效或本地规则文件暂时无法写入，已尝试重新加载规则。'))
     }
-    await refreshRuleState()
-    return true
+    await fetchRules({ silent: true })
+    return false
   }
   // 移除单项规则中的mod
   const removeUserModRuleItem = async (targetModId, type, otherModId) => {

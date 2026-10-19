@@ -27,6 +27,7 @@ from backend.utils.tools import (
     normalize_package_id,
     normalize_path_for_compare,
 )
+from backend.i18n.language_registry import normalize_language_code
 
 
 @dataclass
@@ -77,6 +78,16 @@ def run_app_upgrade_migrations(last_version: str, current_version: str) -> AppUp
 
     if last < Version("0.23.8"):
         _migrate_legacy_user_custom_json_fields(result)
+
+    if last <= Version("0.24.12") < Version(current_version) and normalize_language_code(settings.config.language) == "zh-CN":
+        if not settings.config.network.github_hosts_enabled:
+            settings.config.network.github_hosts_enabled = True
+            settings.save()
+            # 网络管理器在升级迁移前已创建，保存后同步应用，避免等到下次启动才生效。
+            from backend.managers.mgr_network import network_mgr
+
+            network_mgr.apply()
+            logger.info("升级迁移：已为简体中文用户启用动态 Hosts")
 
     result.pending_actions.append("show_update_news")
     return result

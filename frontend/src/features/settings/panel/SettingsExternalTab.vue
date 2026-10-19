@@ -29,10 +29,10 @@
                   <div class="modal-section space-y-4 p-5">
                     <div class="flex items-center justify-between gap-3">
                       <div> <h4 class="text-sm font-bold text-text-main">{{ t('ui.settings.external.data_libraries', '外部库与规则') }}</h4><p class="text-xs text-text-dim mt-1">{{ t('ui.settings.external.data_libraries_desc', '规则库、工坊数据库、替代库等外部数据文件的来源、路径和更新检查。') }}</p></div>
-                      <button @click="handleCheckExternalData" :disabled="isPending('check-external-data')" :class="isPending('check-external-data') ? 'app-action-disabled' : ''"
+                      <button @click="handleCheckExternalData"
                         class="inline-flex items-center gap-1 px-3 py-1.5 bg-accent-primary/10 hover:bg-accent-primary/25 border border-accent-primary/20 rounded-lg text-xs font-bold transition-all">
                         <LoaderCircle v-if="isPending('check-external-data')" class="size-3 animate-spin" />
-                        {{ isPending('check-external-data') ? t('common.status.checking', '检查中') : t('ui.settings.external.check_data_updates', '检查外部库更新') }}
+                        {{ isPending('check-external-data') ? t('common.action.cancel', '取消') : t('ui.settings.external.check_data_updates', '检查外部库更新') }}
                       </button>
                     </div>
 
@@ -71,7 +71,7 @@
                     <div class="flex items-center gap-1.5">
                       <div class="w-full">
                         <div class="flex justify-between items-center px-1 mb-1">
-                          <label class="text-xs text-text-dim uppercase font-bold tracking-widest">
+                          <label class="text-xs text-text-dim font-bold tracking-widest">
                             {{ t('ui.settings.external.git_provider_catalog_sources', 'Git 推荐清单来源') }}
                             <span v-tooltip="t('tooltip.settings.external.git_provider_catalog_sources', '每行一个来源，格式：名称|URL。留空时使用默认推荐清单。')" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</span>
                           </label>
@@ -145,6 +145,7 @@ const downloadState = ref({
   git_provider_catalog: false,
 })
 const pendingAction = ref('')
+const externalCheckId = ref('')
 const silentExternalDataUpdateEnabled = computed(() => (
   !!props.formData.enable_auto_external_data_update_check && !!props.formData.enable_silent_external_data_update
 ))
@@ -178,9 +179,14 @@ const handleCheckTools = async () => {
 }
 
 const handleCheckExternalData = async () => {
+  if (isPending('check-external-data')) {
+    if (externalCheckId.value) await window.pywebview?.api?.maintenance_cancel_external_data_check?.(externalCheckId.value)
+    return
+  }
   await runPendingAction('check-external-data', () => appStore.checkExternalDataUpdates({
     manual: true,
     prompt: true,
+    onCheckId: (id) => { externalCheckId.value = id },
     overrides: {
       user_rules_path: props.formData.user_rules_path,
       community_rules_url: props.formData.community_rules_url,

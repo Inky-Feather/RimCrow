@@ -668,7 +668,6 @@
       "multiplayer_compatibility_failed": "멀티플레이어 호환성 표를 업데이트하지 못했습니다.",
       "multiplayer_compatibility_started": "멀티플레이어 호환성 표 업데이트가 시작되었습니다.",
       "path_or_url_missing": "업데이트 URL 또는 대상 경로가 구성되지 않았습니다.",
-      "reload_failed_after_success": "{message} 캐시 다시 로드에 실패했습니다. 나중에 수동으로 새로 고침하세요.",
       "update_start_failed": "외부 데이터 업데이트를 시작하지 못했습니다. 업데이트 주소, 네트워크 연결, 프록시 설정과 대상 폴더 쓰기 권한을 확인하세요.",
       "workshop_db_done": "커뮤니티 Workshop 데이터베이스가 업데이트되었습니다.",
       "workshop_db_failed": "커뮤니티 Workshop 데이터베이스를 업데이트하지 못했습니다.",
@@ -696,16 +695,10 @@
       "invalid_launch_warning_action": "잘못된 실행 확인 작업",
       "launch_after_steam_exit": "Steam가 종료되었습니다. 게임 출시가 시작되었습니다. 게임 프로세스가 확인되기를 기다리고 있습니다.",
       "launch_cancelled": "출시가 취소됨",
-      "launch_prepare_active_done": "현재 환경에 대한 시작 확인 동기화가 완료되었습니다.",
-      "launch_prepare_active_failed": "현재 환경에 대한 시작 확인 동기화에 실패했습니다.",
-      "launch_prepare_cache_sync_done": "현재 캐시된 상태를 사용하여 시작 확인 동기화가 완료되었습니다.",
-      "launch_prepare_cache_sync_failed": "현재 캐시된 상태를 사용하는 동안 시작 확인 동기화에 실패했습니다.",
       "launch_prepare_failed": "실행 준비에 실패했습니다. 현재 환경 경로, 파일 권한과 Mod 연결 상태를 확인하세요.",
       "launch_prepare_missing_context": "대상 환경 컨텍스트를 빌드할 수 없습니다. 환경이 존재하는지 확인하십시오.",
       "launch_prepare_missing_scan_paths": "대상 환경에는 시작 확인 동기화에 사용할 수 있는 모드 경로가 없습니다.",
-      "launch_prepare_no_context_builder": "환경 컨텍스트 빌더를 사용할 수 없으므로 시작 확인 동기화를 건너뛰었습니다.",
-      "launch_prepare_scan_sync_done": "시작 확인 동기화가 완료되었으며 최신 검사 결과에서 링크가 업데이트되었습니다.",
-      "launch_prepare_scan_sync_failed": "시작 확인 검사가 완료되었지만 링크 동기화에 실패했습니다.",
+      "launch_prepare_scan_failed": "실행 전 검사가 완료되지 않아 게임 실행을 중단했습니다.",
       "launch_prepare_sync_failed": "시작 동기화 실패",
       "launch_prepare_unhealthy_context": "대상 환경 경로를 사용할 수 없습니다. 먼저 경로 설정을 완료하세요.",
       "steam_launch_failed": "Steam 실행 요청을 보낼 수 없습니다.",
@@ -1023,7 +1016,8 @@
     "update": {
       "download_started": "업데이트 패키지 다운로드 시작됨",
       "installing_restart": "업데이트를 다시 시작하고 설치합니다.",
-      "no_available_info": "업데이트 정보가 없습니다. 먼저 업데이트를 확인하세요."
+      "no_available_info": "업데이트 정보가 없습니다. 먼저 업데이트를 확인하세요.",
+      "result_changed": "업데이트 정보가 변경되었습니다. 업데이트를 다시 확인하세요."
     },
     "uri": {
       "no_link_to_open": "열 수 있는 링크가 없습니다.",
@@ -2413,6 +2407,7 @@
         "active": "현재 활동 중",
         "all": "모든 주",
         "coexist_disabled": "공존 비활성화됨",
+        "duplicates": "중복 있음",
         "inactive": "비활성",
         "mod_disabled": "모드 비활성"
       },
@@ -3164,13 +3159,18 @@
       "access_denied": "대상 서비스가 요청을 거부했습니다. 로그인 상태, 접근 권한 또는 요청 설정을 확인하세요.",
       "auth_failed": "대상 서비스 인증에 실패했습니다. 로그인 상태, 접근 토큰 또는 요청 설정을 확인하세요.",
       "connection_failed": "대상 서비스에 연결할 수 없습니다. 네트워크 연결, 프록시 설정 또는 서비스 상태를 확인하세요.",
+      "invalid_response": "서버가 불완전하거나 잘못된 내용을 반환했습니다. 다시 시도하거나 다른 다운로드 출처 또는 미러를 선택하세요.",
       "not_found": "대상 리소스가 없거나 주소가 만료되었습니다. 링크, 매개변수를 확인하거나 잠시 후 다시 시도하세요.",
       "proxy_auth": "프록시 서버 인증이 필요합니다. 프록시 계정과 비밀번호를 확인하거나 사용할 수 없는 프록시를 끄세요.",
       "proxy_failed": "프록시 연결에 실패했습니다. 프록시 주소, 포트, 계정과 비밀번호를 확인하거나 잠시 프록시를 끈 뒤 다시 시도하세요.",
       "rate_limited": "요청이 너무 잦거나 서비스 제한에 걸렸습니다. 잠시 후 다시 시도하세요.",
+      "redirect": "서비스에서 다른 주소로 이동하도록 요청했습니다. 이 상태가 계속되면 링크를 확인하거나 다른 프록시 또는 미러로 다시 시도하세요.",
+      "request_failed": "서비스에서 요청을 처리할 수 없습니다. 링크, 입력 내용과 설정을 확인하거나 앱을 업데이트한 후 다시 시도하세요.",
       "request_invalid": "요청 매개변수가 올바르지 않습니다. 입력 내용이나 설정을 확인한 뒤 다시 시도하세요.",
       "service_unavailable": "대상 서비스를 잠시 사용할 수 없습니다. 잠시 후 다시 시도하거나 서비스 상태를 확인하세요.",
-      "timeout": "네트워크 요청 시간이 초과되었습니다. 네트워크 연결, 프록시 설정을 확인하거나 잠시 후 다시 시도하세요."
+      "steam_access_denied": "Steam에서 요청을 거부했습니다. Web API를 사용하는 경우 API Key와 접근 권한을 확인하세요. 다른 네트워크나 프록시로 다시 시도할 수도 있습니다.",
+      "timeout": "네트워크 요청 시간이 초과되었습니다. 네트워크 연결, 프록시 설정을 확인하거나 잠시 후 다시 시도하세요.",
+      "tls_failed": "보안 연결을 확인하거나 설정할 수 없습니다. 시스템 시간, 인증서와 프록시 설정을 확인하세요. 인증서 검증은 끄지 마세요."
     },
     "path": {
       "batch_check_failed": "일괄적으로 경로를 확인하지 못했습니다. 경로가 있는지, 권한이 액세스를 허용하는지 확인한 후 나중에 다시 시도하세요.",
@@ -3231,7 +3231,7 @@
       "workshop_status_failed": "Steam Workshop 설치 상태를 확인하지 못했습니다. Steam가 실행 중이고 로그인되어 있는지 확인한 후 나중에 다시 시도하세요."
     },
     "steamcmd": {
-      "acf_read_failed": "SteamCMD Workshop 기록을 읽지 못했습니다. 파일 권한을 확인하거나 잠시 후 다시 시도하세요.",
+      "acf_repair_failed": "SteamCMD 워크숍 기록을 복구하지 못했습니다. 파일 형식과 접근 권한을 확인하고 파일이 사용 중인지 확인하세요.",
       "download_start_failed": "SteamCMD 다운로드를 시작하지 못했습니다. 네트워크 연결, 프록시 설정, SteamCMD 상태, 대상 폴더 권한을 확인하세요.",
       "execution_failed": "SteamCMD 실행에 실패했습니다. Steam 설치, 네트워크 연결과 다운로드 환경을 확인하세요.",
       "execution_failed_with_target": "SteamCMD 실행에 실패했습니다. Steam 설치, 네트워크 연결과 다운로드 폴더 권한을 확인하세요.",
@@ -3837,6 +3837,8 @@
     "message": {
       "alternative_used": "__{title}__: 종속성 [[{base}]]가 대체 모드 [[{alternative}]]로 대체되었습니다.",
       "dependency_after_mod": "!!Dependency After Target!!: 종속성 [[{mod}]] 이후에 로드해야 함",
+      "disabled_dependency": "필수 모드 [[{mod}]]이(가) 비활성화되어 게임에서 로드되지 않습니다. 먼저 비활성화 목록에서 다시 활성화하세요.",
+      "disabled_mod": "이 모드는 비활성화되어 게임에서 로드되지 않습니다. 파일은 그대로 남아 있으며, 비활성화 목록에서 다시 활성화할 수 있습니다.",
       "inactive_alternative_dependency": "!!{title}!!: 대체 종속성 [[{mod}]]가 활성화되지 않았습니다.",
       "inactive_dependency": "!!{title}!!: 종속성 [[{mod}]]이 활성화되지 않았습니다.",
       "inactive_language_pack": "^^{title}^^: 현재 언어를 지원하지 않지만, 로컬 언어팩 [[{pack}]]이 존재합니다.",
@@ -4280,6 +4282,18 @@
       "import_success": "가져오기가 완료되었습니다."
     }
   },
+  "network": {
+    "hosts": {
+      "authorization_cancelled": "관리자 승인이 취소되어 시스템 Hosts가 업데이트되지 않았습니다. 앱 내부 매핑에는 영향이 없습니다.",
+      "authorization_timeout": "관리자 승인 대기 시간이 초과되어 시스템 Hosts가 업데이트되지 않았습니다. 필요하면 다시 시도하세요.",
+      "content_changed": "다른 프로그램이 시스템 Hosts를 변경했습니다. 동시에 수정하는 프로그램을 중지한 후 다시 시도하세요.",
+      "permission_denied": "시스템 Hosts를 업데이트할 권한이 없습니다. 다시 시도하여 관리자 승인을 허용하거나 보안 소프트웨어 설정을 확인하세요.",
+      "permission_denied_unix": "시스템 Hosts를 업데이트할 권한이 없습니다. 파일 권한을 확인한 후 다시 시도하세요. 앱 내부 매핑에는 영향이 없습니다.",
+      "system_apply_failed": "시스템 Hosts를 업데이트하지 못했습니다. 앱 내부 매핑은 계속 사용할 수 있습니다. 파일 권한이나 보안 소프트웨어 설정을 확인한 후 다시 시도하세요.",
+      "system_remove_failed": "이전 매핑이 시스템 Hosts에 남아 있을 수 있습니다. 다시 시도하여 제거를 완료하세요.",
+      "write_timeout": "시스템 Hosts 업데이트 시간이 초과되어 결과를 확인하지 못했습니다. 다시 시도하여 상태를 확인하고 저장된 설정을 적용하세요."
+    }
+  },
   "secret": {
     "errors": {
       "backend_unavailable": "시스템 자격 증명 저장소를 사용할 수 없습니다.",
@@ -4402,6 +4416,7 @@
       "queued": "작업이 대기열에 추가되었습니다.",
       "scan_complete": "스캔 완료",
       "scan_interrupted_by_suspend": "인터페이스가 일시 중단되어 검색이 중단되었습니다. 다시 새로고침하세요.",
+      "scan_link_sync_failed": "검사는 완료되었지만 모드 링크 동기화에 실패했습니다",
       "texture_task": "텍스처 작업"
     },
     "mod_package": {
@@ -4573,7 +4588,9 @@
   "toast": {
     "api": {
       "error": "{workname} 실패:\n{message}",
+      "network_advice": "연결이 불안정하면 “네트워크 연결”에서 연결 설정을 조정하거나 추천 네트워크 최적화 도구를 확인해 보세요.",
       "open_corresponding_log": "관련 시스템 로그 보기",
+      "open_network_settings": "네트워크 연결 설정 열기",
       "success": "{workname} 완료",
       "warning": "{workname}에는 주의가 필요합니다.\n{message}"
     },
@@ -4732,6 +4749,7 @@
       "scan_done_with_restore_warning": "스캔이 완료되었습니다. 스캔된 {total} 모드: {added} 추가, {updated} 업데이트, {removed} 제거, 알려진 {skipped}.\n{extra}",
       "scan_external_enabled_count": "{count}는 외부적으로 다시 활성화되었습니다.",
       "scan_failed": "스캔 중 문제가 발생했습니다. 경로 권한, 파일 사용 중 상태 또는 스캐너 상태를 잠시 사용할 수 없을 수 있습니다.",
+      "scan_link_sync_failed": "검사는 완료되었지만 모드 링크 동기화에 실패하여 게임에서 현재 모드를 불러오지 못할 수 있습니다.\n{reason}",
       "scan_request_failed": "스캔 요청 중 문제가 발생했습니다. 프로그램 백엔드를 잠시 사용할 수 없거나 현재 환경 경로 설정이 올바르지 않을 수 있습니다.",
       "scan_start_failed": "스캔 시작에 실패했습니다. 현재 환경 경로가 올바르지 않거나 스캐너가 초기화되지 않았거나 백그라운드 작업을 잠시 사용할 수 없을 수 있습니다.",
       "scan_strict_restore_failed_count": "{count} 복원 실패",
@@ -4814,9 +4832,6 @@
       "name_required": "규칙 이름을 입력하세요.",
       "weight_clamped": "동적 중량이 허용 범위(중량 {weightMin}-{weightMax}, {shiftMin}를 {shiftMax}로 이동)로 고정되었습니다."
     },
-    "rules": {
-      "community_reload_unavailable": "규칙 엔진이 초기화되지 않았으므로 지금은 커뮤니티 규칙 데이터베이스를 다시 로드할 수 없습니다."
-    },
     "settings": {
       "about": {
         "copied": "복사됨: {text}",
@@ -4855,8 +4870,7 @@
       },
       "save_failed": "설정을 저장하지 못했습니다. 앱 서비스를 사용할 수 없거나, 구성 파일에 쓸 수 없거나, 현재 경로에 충분한 권한이 없을 수 있습니다. 나중에 다시 시도해 주세요.",
       "secret_storage_warning": "일부 키는 보안 저장소에 쓸 수 없어 임시로 구성 파일에 보관됩니다. 시스템 자격 증명 서비스를 확인하고 키를 다시 저장하십시오.",
-      "self_mods_path_reset": "관리자가 다운로드한 Mods 폴더는 Workshop 디렉터리와 동일할 수 없으므로 기본 폴더로 복원되었습니다.",
-      "steamcmd_junction_sync_failed": "현재 드라이브에서 SteamCMD 다운로드 폴더를 연결할 수 없습니다. 관리자 다운로드 폴더 설정은 유지되지만 SteamCMD로 다운로드한 모드는 관리자 폴더에 자동으로 나타나지 않습니다. SteamCMD를 NTFS 드라이브로 옮기거나 관리자 모드 다운로드 경로를 다음으로 설정하세요: {path}"
+      "self_mods_path_reset": "관리자가 다운로드한 Mods 폴더는 Workshop 디렉터리와 동일할 수 없으므로 기본 폴더로 복원되었습니다."
     },
     "startup": {
       "auxiliary_warmup_failed": "일부 배경 데이터를 아직 준비할 수 없습니다. 관련 힌트는 나중에 나타날 수 있습니다.",
@@ -4906,9 +4920,7 @@
       "download_started": "업데이트 다운로드가 시작되었습니다. 진행 상황은 상태 표시줄을 확인하세요.",
       "install_cancelled": "업데이트 설치가 취소되었습니다.",
       "partial_no_update": "일부 업데이트 소스를 사용할 수 없습니다. 사용 가능한 소스에서 새 버전을 찾을 수 없습니다.",
-      "recommend_scan": "새 버전의 핵심 엔진 기능을 적용하려면 전체 검사를 실행하세요.",
-      "start_failed": "업데이트를 시작하지 못했습니다. 네트워크 연결, 프록시 설정과 설치 폴더 권한을 확인하세요.",
-      "up_to_date": "이미 최신 버전을 사용하고 있습니다."
+      "recommend_scan": "새 버전의 핵심 엔진 기능을 적용하려면 전체 검사를 실행하세요."
     },
     "workspace": {
       "cleanup_deleted_done": "{count} 삭제된 기록을 정리했습니다.",
@@ -5321,6 +5333,9 @@
         "jump": "__다른 충돌하는 명령으로 이동하려면 클릭하세요.__",
         "scopes": "범위: {scopes}"
       },
+      "network": {
+        "network_check": "이 양식의 프록시, Hosts 및 GitHub 미러 값으로 주요 사이트 확인"
+      },
       "paths": {
         "auto_detect": "시스템 및 Steam 레코드에서 경로를 찾아보세요.",
         "auto_detect_loading": "자동 감지 경로",
@@ -5678,6 +5693,9 @@
         "by_name_short": "원래 이름 기준",
         "by_package_id": "패키지 ID 기준",
         "by_workshop_id": "Workshop ID 기준"
+      },
+      "status": {
+        "disabled": "비활성화됨"
       }
     },
     "mod_details": {
@@ -5766,6 +5784,7 @@
         "last_active_time": "활성화 시간",
         "last_moved_time": "이동된 시간",
         "multiplayer_compat": "멀티플레이어 호환성",
+        "original_name": "원래 이름",
         "patch_file_count": "패치 수",
         "texture_file_count": "텍스처 수",
         "xml_file_count": "XML 수"
@@ -6064,6 +6083,8 @@
         "downloads_desc": "소스 코드, 릴리스 패키지, 미러 다운로드 링크를 확인하세요.",
         "feedback": "피드백 및 커뮤니티",
         "feedback_desc": "문제를 보고할 때는 스크린샷, 로그, 재현 단계를 권장합니다.",
+        "gitee_mirror": "Gitee 저장소",
+        "gitee_mirror_note": "국내 코드 저장소이며 향후 릴리스의 백업 소스입니다.",
         "github_releases": "GitHub 출시",
         "github_releases_note": "GitHub 릴리스 패키지를 다운로드하거나 각 버전의 릴리스 노트를 확인하세요.",
         "github_repo": "GitHub 저장소",
@@ -6077,6 +6098,8 @@
         "qq_group_note": "빠른 피드백과 추가 스크린샷에 가장 적합합니다.",
         "references": "참조된 프로젝트",
         "references_desc": "이러한 프로젝트는 정렬, 로그 분석 및 관리 기능에 대한 참조를 제공합니다.",
+        "sourceforge_mirror": "SourceForge 다운로드",
+        "sourceforge_mirror_note": "릴리스 패키지를 안정적으로 받을 수 있는 공개 다운로드 주소입니다.",
         "tieba_thread": "티에바실",
         "tieba_thread_note": "중앙 집중식 메모와 공개 토론을 봅니다.",
         "title": "에 대한",
@@ -6417,13 +6440,104 @@
         "unbound": "매여 있지 않은"
       },
       "network": {
+        "community_tools_help": "커뮤니티에서 독립적으로 관리하는 도구입니다. 직접 다운로드한 뒤 각 도구의 안내에 따라 활성화하세요. 충돌을 피하려면 한 번에 하나씩 사용해 보세요.",
+        "community_tools_title": "커뮤니티 네트워크 도구 추천",
         "custom_hosts": "사용자 정의 호스트 매핑",
+        "custom_hosts_desc": "도메인에 사용할 IP 주소를 직접 지정합니다. 일반적으로 변경할 필요가 없으며 대상 주소를 알고 있을 때만 사용하세요.",
+        "dynamic_mirrors_enabled": "동적 미러 사용",
+        "dynamic_mirrors_enabled_desc": "켜면 동적 미러를 즉시 가져와 검사하고 사용 가능한 미러를 위 선택기에 추가합니다. 끄면 동적 미러를 사용하지 않습니다.",
+        "effective_hosts_desc": "동적 Hosts는 읽기 전용입니다. 캐시 파일:",
+        "effective_hosts_empty": "현재 적용된 동적 Hosts 매핑이 없습니다.",
+        "effective_hosts_title": "현재 적용된 동적 Hosts 보기",
         "enable_proxy": "프록시 서비스 활성화",
         "enable_proxy_desc": "프록시 서비스를 활성화합니다. 모든 네트워크 요청은 프록시 서버를 통과합니다. 일부 외부 데이터 다운로드, 업데이트 확인, 설명 이미지 로드, 내장 브라우저 액세스 및 유사한 기능이 작동하려면 이 기능이 필요할 수 있습니다.\n\n앱 외부에서 글로벌 네트워크 환경을 구성할 수도 있습니다.",
         "enable_steam_enhanced_api": "향상된 Workshop 정보 활성화",
         "enable_steam_enhanced_api_desc": "키를 활성화하고 입력한 후 Workshop 페이지는 온라인으로 향상된 정보를 선호합니다. 키가 없거나 비활성화된 경우 로컬 캐시 검색이 자동으로 사용됩니다.",
         "get_page": "페이지",
+        "github_access_choice": "안정적인 프록시가 있다면 네트워크 문제에는 프록시를 우선 사용하세요. GitHub 다운로드가 느리면 미러를, 연결할 수 없으면 아래의 동적 Hosts를 시도할 수 있습니다. 하나가 해결되면 둘 다 켤 필요가 없으며, 어느 쪽도 프록시를 대신하지 않습니다.",
+        "github_access_desc": "GitHub 미러는 GitHub 연결이 느리거나 실패할 때 프로젝트 페이지, 파일, 소스 코드 압축 파일 및 릴리스를 제공합니다. 미러를 사용할 수 없으면 직접 연결로 전환합니다.",
+        "github_access_title": "GitHub 미러",
+        "github_hosts_auto_update": "동적 Hosts 자동 업데이트",
+        "github_hosts_auto_update_desc": "업데이트 간격이 지나면 프로그램 시작 시 동적 Hosts를 자동으로 업데이트합니다.",
+        "github_hosts_enabled": "동적 Hosts",
+        "github_hosts_enabled_desc": "신뢰할 수 있는 소스에서 웹사이트 IP 주소를 받아 도메인 조회 오류로 인한 연결 실패를 해결하는 데 도움을 줍니다. 소스에 포함된 모든 웹사이트에 적용됩니다. 켜면 즉시 백그라운드에서 가져오며 설정을 저장하면 적용됩니다. 가져오기에 실패하면 기존 매핑을 유지합니다.",
+        "github_hosts_failed": "Hosts를 가져오지 못했습니다. 네트워크와 원본 URL을 확인한 후 다시 시도하세요. 기존 매핑은 유지됩니다.",
+        "github_hosts_loading": "백그라운드에서 Hosts를 가져오는 중입니다. 네트워크가 느리면 1분 이상 걸릴 수 있습니다. 설정 저장에는 영향을 주지 않습니다.",
+        "github_hosts_ready": "Hosts를 가져와 적용했습니다.",
+        "github_hosts_refresh_interval": "업데이트 간격(시간)",
+        "github_hosts_retry": "다시 가져오기",
+        "github_hosts_timeout": "Hosts 가져오기 시간이 초과되었습니다. 네트워크를 확인하거나 나중에 다시 시도하세요. 기존 매핑은 유지됩니다.",
+        "github_hosts_url": "Hosts 소스",
+        "github_hosts_url_desc": "Hosts 텍스트나 JSON을 제공하는 HTTPS 주소를 지원합니다. 각 소스를 편집, 활성화, 비활성화하거나 삭제할 수 있습니다. 같은 도메인은 목록에서 먼저 가져오기에 성공한 소스가 우선하며, 일부 소스가 실패해도 나머지 소스는 계속 사용합니다.",
+        "github_mirror_auto": "미러 자동 선택",
+        "github_mirror_direct": "GitHub 직접 연결",
+        "github_mirror_selector_help": "사용할 GitHub 미러를 선택하세요. 자동 선택은 사용 가능한 미러 중 지연 시간이 짧은 미러를 우선합니다.",
+        "github_mirror_selector_label": "미러",
         "host": "주인",
+        "hosts_help": "Hosts는 웹사이트 주소록처럼 도메인에 연결할 IP를 프로그램에 알려줍니다. 도메인 조회 오류가 발생할 때 접속 복구에 도움이 될 수 있지만 서버 연결을 보장하지는 않습니다. 기본적으로 이 프로그램 안에서만 적용됩니다. 동적 Hosts는 소스에서 자동으로 가져오고 사용자 지정 Hosts는 직접 입력합니다.",
+        "hosts_partial_failure": "일부 소스에서 가져오지 못해 성공한 소스의 매핑을 사용합니다. 소스를 확인한 후 다시 가져올 수 있습니다.",
+        "hosts_pending_save": "Hosts를 가져왔습니다. 설정을 저장하면 적용됩니다.",
+        "hosts_priority": "같은 도메인이 동적 매핑과 사용자 지정 매핑에 모두 있으면 사용자 지정 매핑을 우선 사용합니다.",
+        "hosts_source_add": "+ 소스 추가",
+        "hosts_source_enabled": "이 Hosts 소스 활성화",
+        "hosts_source_remove": "이 Hosts 소스 삭제",
+        "hosts_sources_empty": "활성화된 Hosts 소스가 없습니다. 주소를 추가하고 체크박스를 선택하세요.",
+        "hosts_title": "Hosts 주소 매핑",
+        "mirror_add": "미러 추가",
+        "mirror_add_help": "사용자 지정 GitHub 미러 소스 추가",
+        "mirror_apply": "확인 후 추가",
+        "mirror_edit": "선택한 미러 편집",
+        "mirror_edit_help": "선택한 미러 설정 편집",
+        "mirror_editor": "GitHub 미러 소스 편집",
+        "mirror_file_help": "설정 저장 후 변경 사항이 적용됩니다. 구성 파일을 직접 편집한 뒤 앱을 다시 시작할 수도 있습니다.",
+        "mirror_id": "미러 ID (영문자, 숫자, 밑줄 또는 하이픈)",
+        "mirror_invalid": "이름, 중복되지 않는 ID, {url}이(가) 하나 포함된 HTTPS 주소를 입력하세요. ID로 direct를 사용할 수 없습니다.",
+        "mirror_name": "미러 이름",
+        "mirror_open_failed": "미러 설정 파일을 열 수 없습니다. 표시된 경로에서 직접 열어 주세요.",
+        "mirror_open_file": "미러 설정 파일 열기",
+        "mirror_open_file_help": "미러 목록 파일 열어 보기 또는 편집",
+        "mirror_probe_failed": "미러 확인에 실패하여 이 설정을 저장하지 않았습니다. 주소와 네트워크 연결을 확인한 후 다시 시도하세요.",
+        "mirror_probe_loading": "미러가 지원하는 기능을 확인하는 중입니다. 잠시만 기다려 주세요…",
+        "mirror_probe_result": "자동 확인 결과",
+        "mirror_remove": "선택한 미러 삭제",
+        "mirror_remove_help": "선택한 미러 설정 삭제",
+        "mirror_status_supported": "지원됨",
+        "mirror_status_unknown": "알 수 없음",
+        "mirror_status_unsupported": "지원되지 않음",
+        "mirror_type_api": "GitHub API",
+        "mirror_type_archive": "소스 아카이브",
+        "mirror_type_clone": "Git Clone",
+        "mirror_type_gist": "Gist 콘텐츠",
+        "mirror_type_lfs": "LFS 미디어 파일",
+        "mirror_type_raw": "Raw 파일",
+        "mirror_type_release": "릴리스 첨부 파일",
+        "mirror_type_web": "프로젝트 페이지",
+        "mirror_url": "미러 변환 주소",
+        "mirror_url_help": "미러 서비스가 제공한 HTTPS 변환 주소를 입력하고 원래 GitHub 주소를 {url}로 표시하세요. 저장하기 전에 프로젝트 페이지, Raw 파일, 소스 아카이브 지원 여부를 자동으로 확인합니다.",
+        "network_check": "접속 확인",
+        "network_check_bypass": "예외 목록에 따라 직접 연결",
+        "network_check_desc": "이 양식에 입력된 프록시, Hosts 및 GitHub 미러 값으로 주요 사이트의 접속 가능 여부와 응답 시간을 확인합니다.",
+        "network_check_direct": "직접 연결",
+        "network_check_domain": "도메인",
+        "network_check_error_code": "오류 코드",
+        "network_check_failed": "확인이 완료되지 않았습니다. 잠시 후 다시 시도하세요.",
+        "network_check_failed_item": "접속할 수 없음",
+        "network_check_hosts_hit": "Hosts 매핑 적용됨",
+        "network_check_http_error": "서비스 오류 응답",
+        "network_check_latency": "지연 시간",
+        "network_check_loading_item": "로드 중",
+        "network_check_mirror": "미러 적용됨",
+        "network_check_name": "이름",
+        "network_check_ok": "접속 가능",
+        "network_check_proxy": "프록시",
+        "network_check_reason": "설명",
+        "network_check_redirect": "주소 이동 필요",
+        "network_check_result": "상태 코드 / 결과",
+        "network_check_route": "연결 방식",
+        "network_check_status_code": "상태 코드",
+        "network_check_timeout": "시간 초과",
+        "network_check_url": "주소",
+        "network_checking": "확인 중…",
         "password": "비밀번호",
         "port": "포트",
         "protocol": "규약",
@@ -6436,6 +6550,11 @@
         "steam_web_api_key_placeholder": "채워지면 향상된 검색이 활성화됩니다.",
         "steam_web_api_key_risk": "이 키를 획득한 사람은 누구나 Steam Guard를 실행하지 않고 플레이어의 실제 거래를 자동으로 취소하고 사기꾼에게 전송된 가짜 거래로 대체할 수 있습니다. API 키를 다른 사람이나 확인되지 않은 제3자 웹사이트와 공유하지 마세요.",
         "steam_web_api_key_warning": "경고: API 키는 사실상 Steam 계정에 대한 백도어 키입니다. 공개 계정 데이터/재고 정보를 읽고 거래 제안을 관리하거나 청취할 수 있습니다.",
+        "steamcommunity302_description": "Steam 커뮤니티, 창작마당 등의 페이지 연결 문제를 개선합니다. 페이지가 열리지 않거나 이미지가 로드되지 않을 때 사용해 보세요.",
+        "steampp_description": "Steam 커뮤니티, 창작마당 등의 사이트 접속을 개선하고 계정 전환 등 Steam 편의 기능을 제공합니다.",
+        "system_hosts_applying": "시스템 Hosts 업데이트 중",
+        "system_hosts_authorizing": "관리자 승인을 기다리고 있습니다. 시스템 승인 창을 확인하세요. 설정 저장에는 영향이 없습니다.",
+        "system_hosts_retry": "저장된 시스템 Hosts 설정 다시 적용",
         "title": "네트워크 프로토콜 및 프록시",
         "use_proxy_on_ai": "AI 요청에 프록시 사용",
         "use_proxy_on_ai_desc": "활성화되면 AI 요청이 프록시 서버를 통과합니다. 구성된 엔드포인트가 이미 로컬/국내 프록시인 경우에는 이를 활성화하지 마십시오.",
@@ -6443,8 +6562,9 @@
         "use_proxy_on_steamcmd_desc": "SteamCMD가 프록시 서버를 사용하는지 여부.\n\n활성화되면 SteamCMD 다운로드, 업데이트 및 설치 작업이 프록시 서버를 통해 진행됩니다.",
         "username": "사용자 이름",
         "visit": "방문하다",
-        "write_to_system_hosts": "시스템 호스트 파일에 사용자 정의 호스트 쓰기",
-        "write_to_system_hosts_desc": "경고: 이는 시스템 호스트 파일을 직접 수정하며 관리자 권한이 필요할 수 있습니다."
+        "visit_tool_website": "도구 웹사이트 방문",
+        "write_to_system_hosts": "Hosts 매핑을 시스템에 적용",
+        "write_to_system_hosts_desc": "동적 및 사용자 지정 매핑을 시스템 Hosts에 기록하여 다른 앱에서도 사용하도록 합니다. 보통은 필요하지 않습니다. Windows에서는 관련 설정을 저장하거나 다시 시도할 때 관리자 승인을 요청할 수 있지만, 시작 시 업데이트와 종료 시 정리에서는 요청하지 않습니다. 종료 시 매핑 제거를 시도하지만 권한이 없으면 남을 수 있습니다. 제거하려면 종료 전에 이 옵션을 끄고 저장하세요."
       },
       "panel": {
         "apply_and_save": "설정 적용 및 저장",
@@ -6806,17 +6926,36 @@
       }
     },
     "update": {
+      "auto_source_message": "다운로드에 실패하면 대체 주소를 자동으로 시도합니다. 계속 실패하면 설정 → 프로젝트 정보의 다운로드 링크에서 현재 시스템에 맞는 설치 패키지를 직접 받으세요. 프로그램을 종료한 뒤 설치 폴더에 압축을 풀고 기존 파일을 덮어쓰세요.",
       "available_desc": "업데이트를 사용할 수 있습니다.",
+      "check_failed": "업데이트를 확인할 수 없습니다. 나중에 다시 시도하세요.",
+      "checking_sources": "업데이트 출처 확인 중…",
+      "download_update": "업데이트 다운로드",
       "downloaded": "다운로드됨",
+      "downloading": "업데이트 다운로드 중입니다. 진행 상황은 작업 표시줄에서 확인하세요.",
       "file_size_meta": "파일 크기: {size}",
       "ignore_version": "이 버전을 무시하세요",
       "install_now": "지금 설치",
+      "last_checked": "최근 확인: {time}",
       "later": "나중에",
-      "multiple_sources_message": "동일한 버전({sources})에 대해 여러 소스가 발견되었습니다. 첫 번째 소스가 먼저 사용되며, 실패할 경우 대체 소스가 자동으로 시도됩니다.",
       "new_version_title": "새 버전 v{version} 사용 가능",
-      "single_source_message": "출처: {source}. 파일 크기: {size}.",
-      "source_meta": "출처: {source}",
-      "update_now": "지금 업데이트"
+      "no_compatible_update": "현재 시스템에 맞는 새 버전을 찾지 못했습니다.",
+      "not_checked": "아직 업데이트를 확인하지 않았습니다.",
+      "partial_available": "일부 출처를 확인하지 못했습니다. 다른 출처에서 발견한 업데이트는 사용할 수 있습니다.",
+      "ready": "업데이트 패키지가 준비되었습니다. 나중에 설치할 수 있습니다.",
+      "result_changed": "업데이트 정보가 변경되었습니다. 업데이트를 다시 확인하세요.",
+      "source_auto": "자동 선택(권장)",
+      "source_available": "새 버전 v{version} 발견",
+      "source_details": "출처 상세 정보",
+      "source_failed": "일시적으로 확인할 수 없음",
+      "source_no_package": "호환되는 설치 패키지 없음",
+      "source_no_release": "아직 배포된 버전 없음",
+      "source_no_update": "새 버전을 찾지 못함",
+      "source_older": "대상 버전이 아직 제공되지 않음(v{version})",
+      "source_selector": "다운로드 소스",
+      "version_available": "새 버전 v{version} 발견",
+      "via_builtin_mirror": " · 내장 미러를 통해 확인",
+      "view_update": "업데이트 보기"
     },
     "update_modal": {
       "empty": "업데이트 기록이 없습니다...",

@@ -1,7 +1,7 @@
 <template>
   <div class="w-full">
     <div v-if="label" class="mb-1 flex items-center justify-between px-1">
-      <label class="text-xs text-text-dim uppercase font-bold tracking-widest">
+      <label class="text-xs text-text-dim font-bold tracking-widest">
         {{ label }}
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
       </label>

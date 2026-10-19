@@ -1,5 +1,6 @@
 <template>
   <div v-if="selectedMod" class="flex flex-col h-full p-1 bg-bg-surface/50 select-text">
+    
     <!-- 1. 顶部大图与标题区 (保持原有设计风格但优化) -->
     <div v-viewer="imageViewerOptions" class="w-full aspect-video opacity-90 backdrop-blur-sm bg-bg-inset/80 rounded-xl overflow-hidden relative border border-border-base/10 shadow-lg group">
 
@@ -36,7 +37,10 @@
           :style="{ fontSize: computedFontSize }" v-tooltip="selectedMod.name">{{ selectedMod.name }}</h2>
       </div>
     </div>
-
+    <div v-if="selectedMod.disabled" class="mb-1 rounded-lg border border-accent-danger/25 bg-accent-danger/10 p-2 text-xs text-accent-danger" role="alert">
+      <strong>{{ t('ui.mod.status.disabled', '已禁用') }}</strong>
+      <p>{{ t('issue.message.disabled_mod', '该模组已被禁用，将不会在游戏中加载。文件仍保留，可在“已禁用”列表中重新启用。') }}</p>
+    </div>
     <!-- 2. 内容滚动区 -->
     <div class="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pt-3 space-y-4">
       <!-- 包ID -->

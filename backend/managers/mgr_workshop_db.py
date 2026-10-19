@@ -1,8 +1,7 @@
 # backend/managers/mgr_workshop_db.py
-import gzip
-import json
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from peewee import chunked
 
@@ -18,6 +17,7 @@ from backend.settings import settings
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR
 from backend.utils.logger import logger
 from backend.utils.tools import current_ms
+from backend.utils.json_io import read_json_dataset
 
 
 class WorkshopDBManager:
@@ -107,16 +107,7 @@ class WorkshopDBManager:
 
     def _read_dataset_payload(self, path: Path) -> dict[str, Any]:
         """按文件内容优先识别 JSON / GZip JSON，兼容历史错误后缀。"""
-        header = b""
-        with open(path, "rb") as probe:
-            header = probe.read(2)
-
-        is_gzip = header == b"\x1f\x8b" or str(path).lower().endswith(".gz")
-        if is_gzip:
-            with gzip.open(path, "rt", encoding="utf-8-sig") as handle:
-                return json.load(handle)
-        with open(path, "r", encoding="utf-8-sig") as handle:
-            return json.load(handle)
+        return read_json_dataset(path)
 
     def _require_dataset_field(self, payload: dict[str, Any], field: str, expected_type: type | tuple[type, ...], dataset_label: str) -> Any:
         value = payload.get(field) if isinstance(payload, dict) else None
@@ -127,9 +118,76 @@ class WorkshopDBManager:
     def _require_dataset_version(self, payload: dict[str, Any], dataset_label: str) -> str:
         value = self._require_dataset_field(payload, "version", (str, int, float), dataset_label)
         version = str(value).strip()
-        if not version:
+        if isinstance(value, bool) or not version:
             raise ValueError(f"{dataset_label} 数据文件缺少有效字段: version")
         return version
+
+    def prepare_dataset(self, data_type: str, path: Path) -> dict[str, Any]:
+        """在改文件或数据库前完成结构检查与导入行构建；空数据集是有效快照。"""
+        payload = self._read_dataset_payload(path)
+        version = self._require_dataset_version(payload, data_type)
+        rows = []
+        if data_type == "workshop_db":
+            records = self._require_dataset_field(payload, "database", dict, data_type)
+            for wid, info in records.items():
+                if not isinstance(info, dict):
+                    raise ValueError("工坊数据库记录必须是对象")
+                dependencies = info.get("dependencies", {})
+                versions = info.get("gameVersions", [])
+                dependencies = {} if dependencies is None else dependencies
+                versions = [] if versions is None else versions
+                if not isinstance(dependencies, dict) or not isinstance(versions, list):
+                    raise ValueError("工坊数据库的依赖或游戏版本字段无效")
+                if wid == RIMWORLD_STEAM_APP_ID_STR:
+                    continue
+                rows.append({
+                    "workshop_id": wid, "package_id": str(info.get("packageId") or "").lower() or None,
+                    "name": info.get("name", ""), "author": info.get("authors", ""), "game_versions": versions,
+                    "dependencies_mods": {dep_id: dep_info[0] if isinstance(dep_info, list) and dep_info else "Unknown"
+                                          for dep_id, dep_info in dependencies.items()},
+                })
+        elif data_type == "instead_db":
+            records = self._require_dataset_field(payload, "rules", list, data_type)
+            for record in records:
+                if not isinstance(record, dict):
+                    raise ValueError("替代规则记录必须是对象")
+                if not isinstance(record.get("oldVersions", []), list) or not isinstance(record.get("newVersions", []), list):
+                    raise ValueError("替代规则的版本字段必须是数组")
+                rows.append({
+                    "old_workshop_id": record.get("oldWorkshopId"), "old_package_id": str(record.get("oldPackageId", "")).lower(),
+                    "old_name": record.get("oldName", ""), "old_author": record.get("oldAuthor", ""),
+                    "new_workshop_id": record.get("newWorkshopId"), "new_package_id": str(record.get("newPackageId", "")).lower(),
+                    "new_name": record.get("newName", ""), "old_versions": record.get("oldVersions", []),
+                    "new_versions": record.get("newVersions", []),
+                })
+        else:
+            raise ValueError(f"不支持的数据集: {data_type}")
+        return {"version": version, "rows": rows}
+
+    @contextmanager
+    def dataset_transaction(self, data_type: str) -> Iterator[None]:
+        """回滚导入行和状态；外置库提交失败时补偿已提交的主库版本记录。"""
+        version_key = "steamdb_version" if data_type == "workshop_db" else "instead_version"
+        previous = SystemInfo.get_or_none(SystemInfo.key == version_key)
+        previous_value = previous.value if previous is not None else None
+        try:
+            with ext_db.atomic(), SystemInfo._meta.database.atomic():
+                yield
+        except BaseException:
+            if previous is None:
+                SystemInfo.delete().where(SystemInfo.key == version_key).execute()
+            else:
+                SystemInfo.insert(key=version_key, value=previous_value).on_conflict_replace().execute()
+            raise
+
+    def import_prepared_dataset(self, data_type: str, path: Path, prepared: dict[str, Any]) -> None:
+        """由调用方的事务保护导入；文件路径必须是最终路径，不能记录暂存路径。"""
+        is_workshop = data_type == "workshop_db"
+        model = WorkshopManifest if is_workshop else ModReplacement
+        schema = self.WORKSHOP_DB_IMPORT_SCHEMA_VERSION if is_workshop else self.INSTEAD_DB_IMPORT_SCHEMA_VERSION
+        self._replace_ext_table_rows(model, prepared["rows"])
+        self._save_dataset_state(data_type, path, source_version=prepared["version"], import_schema_version=schema, row_count=len(prepared["rows"]))
+        SystemInfo.insert(key="steamdb_version" if is_workshop else "instead_version", value=prepared["version"]).on_conflict_replace().execute()
 
     def _replace_ext_table_rows(self, model: Any, rows: list[dict[str, Any]], *, batch_size: int = 500) -> None:
         """
@@ -163,41 +221,10 @@ class WorkshopDBManager:
                 logger.info("SteamDB 文件元数据未变化，跳过本轮 manifest 重建")
                 return True
 
-            data = self._read_dataset_payload(path)
-
-            version = self._require_dataset_version(data, "SteamDB")
-            raw_db = self._require_dataset_field(data, "database", dict, "SteamDB")
-
-            batch = []
-            for wid, info in raw_db.items():
-                if wid == RIMWORLD_STEAM_APP_ID_STR: continue # 跳过游戏本体
-                # 提取依赖项，压缩结构：{"2891845502": "Alpha Genes"}
-                deps = {}
-                for dep_id, dep_info in (info.get("dependencies", {}) or {}).items():
-                    deps[dep_id] = dep_info[0] if isinstance(dep_info, list) and dep_info else "Unknown"
-                batch.append(
-                    {
-                        "workshop_id": wid,
-                        "package_id": str(info.get("packageId", "") or "").lower() or None,
-                        "name": info.get("name", ""),
-                        "author": info.get("authors", ""),
-                        "game_versions": info.get("gameVersions", []),
-                        "dependencies_mods": deps,
-                    }
-                )
-
-            self._replace_ext_table_rows(WorkshopManifest, batch)
-
-            self._save_dataset_state(
-                "workshop_db",
-                path,
-                source_version=version,
-                import_schema_version=self.WORKSHOP_DB_IMPORT_SCHEMA_VERSION,
-                row_count=len(batch),
-            )
-            # 记录版本号到主数据库
-            SystemInfo.insert(key="steamdb_version", value=version).on_conflict_replace().execute()
-            logger.info(f"SteamDB manifest 重建完成！总记录数: {len(batch)}")
+            prepared = self.prepare_dataset("workshop_db", path)
+            with self.dataset_transaction("workshop_db"):
+                self.import_prepared_dataset("workshop_db", path, prepared)
+            logger.info("SteamDB manifest 重建完成！总记录数: %s", len(prepared["rows"]))
             return True
         except Exception as e:
             logger.error(f"SteamDB manifest 重建失败: {e}", exc_info=True)
@@ -224,38 +251,10 @@ class WorkshopDBManager:
                 logger.info("UseThisInstead 文件元数据未变化，跳过本轮替代规则重建")
                 return True
 
-            content = self._read_dataset_payload(path)
-
-            version = self._require_dataset_version(content, "UseThisInstead")
-            rules = self._require_dataset_field(content, "rules", list, "UseThisInstead")
-
-            batch = []
-            for r in rules:
-                batch.append(
-                    {
-                        "old_workshop_id": r.get("oldWorkshopId"),
-                        "old_package_id": str(r.get("oldPackageId", "")).lower(),
-                        "old_name": r.get("oldName", ""),
-                        "old_author": r.get("oldAuthor", ""),
-                        "new_workshop_id": r.get("newWorkshopId"),
-                        "new_package_id": str(r.get("newPackageId", "")).lower(),
-                        "new_name": r.get("newName", ""),
-                        "old_versions": r.get("oldVersions", []),
-                        "new_versions": r.get("newVersions", []),
-                    }
-                )
-
-            self._replace_ext_table_rows(ModReplacement, batch)
-
-            self._save_dataset_state(
-                "instead_db",
-                path,
-                source_version=version,
-                import_schema_version=self.INSTEAD_DB_IMPORT_SCHEMA_VERSION,
-                row_count=len(batch),
-            )
-            SystemInfo.insert(key="instead_version", value=version).on_conflict_replace().execute()
-            logger.info(f"替代规则库重建完成！总记录数: {len(batch)}")
+            prepared = self.prepare_dataset("instead_db", path)
+            with self.dataset_transaction("instead_db"):
+                self.import_prepared_dataset("instead_db", path, prepared)
+            logger.info("替代规则库重建完成！总记录数: %s", len(prepared["rows"]))
             return True
         except Exception as e:
             logger.error(f"替代规则库重建失败: {e}", exc_info=True)

@@ -130,12 +130,16 @@ export const useModSelection = ({
     finalChunks.sort((a, b) => a.index - b.index)
     const result = finalChunks.flatMap(chunk => chunk.items)
     // 5. 更新状态
-    selectedIds.value = result
+    // 联锁展开后可能仍是同一组选中项，保留引用，避免所有列表重复刷新。
+    if (result.length !== selectedIds.value.length || result.some((id, index) => id !== selectedIds.value[index])) {
+      selectedIds.value = result
+    }
 
     // 处理最后选中项高亮
     if (lastId) {
       // 检查 lastId 是否在最终结果中。
-      const target = result.find(id => normalizeListToken(id) === normalizeListToken(lastId))
+      const lastToken = normalizeListToken(lastId)
+      const target = result.find(id => normalizeListToken(id) === lastToken)
       lastSelectedMod.value = target ? takeModById(target) : takeModById(result[result.length - 1])
     } else {
       lastSelectedMod.value = takeModById(result[result.length - 1])

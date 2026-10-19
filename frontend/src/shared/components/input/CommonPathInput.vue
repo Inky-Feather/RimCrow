@@ -2,7 +2,7 @@
 <template>
   <div class="space-y-1.5 w-full max-w-full overflow-hidden">
     <div class="flex justify-between items-center px-1">
-      <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}
+      <label class="text-xs text-text-dim font-bold tracking-widest">{{ label }}
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
       </label>
       <button v-if="modelValue" @click="openInExplorer" 
@@ -17,7 +17,7 @@
       <div class="relative flex-1 h-9 input-glass overflow-hidden flex items-center px-3 cursor-help min-w-0" v-tooltip="checkMsg || (modelValue || t('tooltip.path.not_configured', '未配置路径'))" 
         :class="[ checkClassStyle ]">
         <!-- 固定前缀标签 -->
-        <div class="shrink-0 mr-2 text-text-disabled italic text-xs font-mono uppercase select-none">{{ t('common.field.path', '路径') }}</div>
+        <div class="shrink-0 mr-2 text-text-disabled italic text-xs font-mono select-none">{{ t('common.field.path', '路径') }}</div>
         
         <!-- 手动输入框 -->
         <input type="text" :value="modelValue" @input="$emit('update:modelValue', $event.target.value)"

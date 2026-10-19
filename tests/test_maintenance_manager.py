@@ -170,7 +170,7 @@ def test_external_data_check_includes_git_provider_catalog():
     manager = MaintenanceManager.__new__(MaintenanceManager)
     manager.EXTERNAL_DATASETS = ()
     manager.github_mgr = type("FakeGithubManager", (), {
-        "check_provider_catalog_updates": lambda self, url: {
+        "check_external_provider_catalog": lambda self, url, **kwargs: {
             "sources": [
                 {
                     "source_id": "rjw",

@@ -11,7 +11,7 @@
           <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-bg-contrast"></span>
         </span>
         <!-- 给文字加上跳动类 -->
-        <span class="guide-text text-sm font-black text-on-accent-primary z-10 uppercase tracking-tight">
+        <span class="guide-text text-sm font-black text-on-accent-primary z-10 tracking-tight">
           {{ guideCapsuleText }}
         </span>
       </div>

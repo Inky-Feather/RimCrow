@@ -3,7 +3,7 @@
                 <div class="mb-6 flex items-center justify-between">
                   <h3 class="text-lg font-bold text-text-main flex items-center gap-2">
                     {{ t('ui.settings.ai.title', '人工智能') }}
-                    <span class="px-2 py-0.5 rounded bg-accent-special/20 text-accent-special text-xs font-black uppercase">{{ t('ui.settings.ai.experimental', '实验性') }}</span>
+                    <span class="px-2 py-0.5 rounded bg-accent-special/20 text-accent-special text-xs font-black">{{ t('ui.settings.ai.experimental', '实验性') }}</span>
                   </h3>
 
                   <button v-if="formData.ai.enabled" @click="appStore.uiState.showAIDefinitionManager = true"

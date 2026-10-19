@@ -57,6 +57,7 @@ export function useModListQuery({
   const SORT_MODE_MAP = computed(() => ({
     default: t('ui.mod_list.sort.default', '默认'),
     name: t('common.field.name', '名称'),
+    original_name: t('ui.mod_list.sort.original_name', '原名'),
     package_id: t('common.field.package_id', '包名'),
     author: t('common.field.author', '作者'),
     last_active_time: t('ui.mod_list.sort.last_active_time', '启用时间'),
@@ -76,7 +77,7 @@ export function useModListQuery({
   const SORT_MENU_GROUPS = computed(() => [
     {
       key: 'basic',
-      items: ['default', 'name', 'package_id', 'author', 'multiplayer_compat'],
+      items: ['default', 'name', 'original_name', 'package_id', 'author', 'multiplayer_compat'],
     },
     {
       key: 'time',
@@ -93,7 +94,8 @@ export function useModListQuery({
   const getFileStat = (mod, key) => Number(mod?.file_stats?.[key] || 0)
   const getXmlFileCount = (mod) => getFileStat(mod, 'game_xml') + getFileStat(mod, 'patch_xml') + getFileStat(mod, 'lang_xml')
   const getSortValue = (mod, id, fallbackId = '') => {
-    if (id === 'name') return String(mod?.name || fallbackId)
+    if (id === 'name') return String(mod?.alias_name || mod?.name || fallbackId)
+    if (id === 'original_name') return String(mod?.name || fallbackId)
     if (id === 'author') return String(mod?.author?.[0] || '')
     if (id === 'package_id') return String(mod?.package_id || fallbackId)
     if (id === 'last_active_time') return Number(mod?.last_active_time || 0)

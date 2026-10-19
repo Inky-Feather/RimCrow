@@ -168,7 +168,7 @@
                 </div>
                 <div class="space-y-3">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-xs font-bold uppercase tracking-wide text-text-dim">{{ t('dialog.package_transfer.batch_handling', '批量处理') }}</span>
+                    <span class="text-xs font-bold tracking-wide text-text-dim">{{ t('dialog.package_transfer.batch_handling', '批量处理') }}</span>
                     <label v-for="option in profileStrategyOptions" :key="option.value" class="rounded-full flex items-center border px-2 py-1 text-xs"
                       :class="profileStrategy === option.value ? 'border-accent-primary/35 bg-accent-primary/10 text-accent-primary' : 'border-border-base/10 bg-bg-inset/55 text-text-dim'" >
                       <input class="mr-1 accent-accent-primary" type="radio" :checked="profileStrategy === option.value" @change="setProfileStrategy(option.value)" >
@@ -219,7 +219,7 @@
                   </div>
                   <div class="space-y-3">
                     <div class="flex flex-wrap items-center gap-2">
-                      <span class="text-xs font-bold uppercase tracking-wide text-text-dim">{{ t('dialog.package_transfer.batch_handling', '批量处理') }}</span>
+                      <span class="text-xs font-bold tracking-wide text-text-dim">{{ t('dialog.package_transfer.batch_handling', '批量处理') }}</span>
                       <label v-for="option in modConflictStrategyOptions" :key="option.value" class="rounded-full flex items-center border px-2 py-1 text-xs"
                         :class="modConflictStrategy === option.value ? 'border-accent-primary/35 bg-accent-primary/10 text-accent-primary' : 'border-border-base/10 bg-bg-inset/55 text-text-dim'" >
                         <input class="mr-1 accent-accent-primary" type="radio" :checked="modConflictStrategy === option.value" @change="setModConflictStrategy(option.value)" >
@@ -263,7 +263,7 @@
             </div>
             <div class="space-y-3">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-xs font-bold uppercase tracking-wide text-text-dim">{{ t('dialog.package_transfer.batch_handling', '批量处理') }}</span>
+                <span class="text-xs font-bold tracking-wide text-text-dim">{{ t('dialog.package_transfer.batch_handling', '批量处理') }}</span>
                 <label v-for="option in profileStrategyOptions" :key="option.value" class="rounded-full flex items-center border px-2 py-1 text-xs"
                   :class="profileStrategy === option.value ? 'border-accent-primary/35 bg-accent-primary/10 text-accent-primary' : 'border-border-base/10 bg-bg-inset/55 text-text-dim'" >
                   <input class="mr-1 accent-accent-primary" type="radio" :checked="profileStrategy === option.value" @change="setProfileStrategy(option.value)" >

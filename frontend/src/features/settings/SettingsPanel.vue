@@ -6,109 +6,109 @@
     @backdrop="shakeComponent('#btn-cancel')"
     @close="shakeComponent('#btn-cancel')"
   >
-        
-        <!-- A. 装饰光效 -->
-        <div class="absolute -top-24 -left-24 w-64 h-64 bg-accent-primary/10 blur-3xl rounded-full pointer-events-none"></div>
-        <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-accent-special/10 blur-3xl rounded-full pointer-events-none"></div>
+    
+    <!-- A. 装饰光效 -->
+    <div class="absolute -top-24 -left-24 w-64 h-64 bg-accent-primary/10 blur-3xl rounded-full pointer-events-none"></div>
+    <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-accent-special/10 blur-3xl rounded-full pointer-events-none"></div>
 
-        <!-- B. 左侧导航栏 -->
-        <aside class="w-52 shrink-0 border-r bg-bg-muted border-border-base/5 flex flex-col p-6 relative z-10">
-          <div class="mb-10 px-2">
-            <h2 class="text-xl font-black text-text-main tracking-tighter italic">{{ t('ui.settings.panel.system', '系统') }} <span class="text-accent-primary">{{ t('ui.settings.panel.settings', '设置') }}</span></h2>
+    <!-- B. 左侧导航栏 -->
+    <aside class="w-50 shrink-0 border-r bg-bg-muted border-border-base/5 flex flex-col py-6 pl-6 pr-2 relative z-10">
+      <div class="mb-5">
+        <h2 class="text-xl font-black text-text-main tracking-tighter italic">{{ t('ui.settings.panel.system', '系统') }} <span class="text-accent-primary">{{ t('ui.settings.panel.settings', '设置') }}</span></h2>
+      </div>
+
+      <!-- 动态 Glider 导航 -->
+      <nav class="settings-nav relative flex flex-col" :style="{ '--nav-index': currentTabIndex }">
+        <button v-for="tab in tabs" :key="tab.id" :data-tour="`settings-tab-${tab.id}`" @click="changeTab(tab.id)" v-tooltip="tab.label"
+          class="settings-nav-item relative z-10 flex min-w-0 items-center gap-2 text-left font-bold transition-all duration-300"
+          :class="currentTab === tab.id ? 'text-accent-primary' : 'text-text-dim hover:text-text-dim'" >
+          <component :is="tab.icon" class="size-5 shrink-0" />
+          <span class="settings-nav-label min-w-0 flex-1 truncate">
+            {{ tab.label }}
+          </span>
+        </button>
+
+        <!-- 物理 Glider 滑块 -->
+        <div class="glider-container pointer-events-none absolute inset-0">
+          <div class="glider absolute -left-6 top-0 w-1 bg-accent-primary brightness-120 shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.75)] transition-transform duration-500 cubic-bezier">
+            <!-- 侧边发光层 -->
+            <div class="absolute left-0 top-0 h-full w-40 bg-linear-to-r from-accent-primary/10 to-transparent"></div>
           </div>
+        </div>
+      </nav>
 
-          <!-- 动态 Glider 导航 -->
-          <nav class="flex flex-col relative gap-1" :style="{ '--total-tabs': tabs.length }">
-            <button v-for="(tab, index) in tabs" :key="tab.id" :data-tour="`settings-tab-${tab.id}`"
-              class="settings-nav-item relative z-10 flex h-11 min-w-0 items-center gap-3 px-2 text-left font-bold transition-all duration-300 group"
-              :class="currentTab === tab.id ? 'text-accent-primary' : 'text-text-dim hover:text-text-dim'"
-              @click="changeTab(tab.id)" >
-              <component :is="tab.icon" class="size-4 shrink-0" />
-              <span class="settings-nav-label min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{{ tab.label }}</span>
-            </button>
+      <!-- 底部版本号 -->
+      <div class="mt-auto px-4 py-2 border-t border-border-base/5 opacity-30">
+        <p class="text-xs font-mono text-text-dim">V{{ appStore.appVersion || t('common.status.unknown_version', '版本未知') }}</p>
+      </div>
+    </aside>
 
-            <!-- 物理 Glider 滑块 -->
-            <div class="glider-container absolute left-0 top-0 w-full h-full pointer-events-none">
-              <div class="glider absolute -left-6 w-1 h-11 bg-accent-primary brightness-120 shadow-[0_0_15px_rgba(var(--rgb-accent-primary),0.75)] transition-transform duration-500 cubic-bezier"
-                :style="{ transform: `translateY(${currentTabIndex * 3}rem)` }">
-                <!-- 侧边发光层 -->
-                <div class="absolute left-0 top-0 w-40 h-full bg-linear-to-r from-accent-primary/10 to-transparent"></div>
-              </div>
-            </div>
-          </nav>
+    <!-- C. 右侧主内容区 -->
+    <main class="flex-1 flex flex-col min-w-0 bg-bg-deep relative z-10">
+      <!-- 顶部状态条 -->
+      <header class="h-14 flex items-center justify-between px-8 border-b border-border-base/5">
+        <span class="text-xs font-mono text-text-disabled tracking-[0.3em]">
+          / root / {{ currentTabLabel }}
+        </span>
+        <div class="flex gap-1.5 text-text-disabled relative">
+          <Settings class="absolute size-23 -top-16 -right-13" />
+        </div>
+      </header>
 
-          <!-- 底部版本号 -->
-          <div class="mt-auto px-4 py-2 border-t border-border-base/5 opacity-30">
-            <p class="text-xs font-mono text-text-dim">V{{ appStore.appVersion || t('common.status.unknown_version', '版本未知') }}</p>
-          </div>
-        </aside>
+      <!-- 内容滚动容器 -->
+      <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div class=" mx-auto space-y-10">
 
-        <!-- C. 右侧主内容区 -->
-        <main class="flex-1 flex flex-col min-w-0 bg-bg-deep relative z-10">
-          <!-- 顶部状态条 -->
-          <header class="h-14 flex items-center justify-between px-8 border-b border-border-base/5">
-            <span class="text-xs font-mono text-text-disabled uppercase tracking-[0.3em]">
-              / root / {{ currentTabLabel }}
-            </span>
-            <div class="flex gap-1.5 text-text-disabled relative">
-              <Settings class="absolute size-23 -top-16 -right-13" />
-            </div>
-          </header>
+          <SettingsPathsTab
+            v-if="currentTab === 'paths'"
+            :form-data="formData"
+            :validate-steam-launch-enable="validateSteamLaunchEnable"
+            :validate-workshop-mods-enable="validateWorkshopModsEnable"
+            :auto-detect="autoDetect"
+            :handle-browse="handleBrowse"
+            :check-path="checkPath"
+          />
+          <SettingsGeneralTab v-if="currentTab === 'general'" :form-data="formData" />
+          <SettingsFeaturesTab v-if="currentTab === 'features'" :form-data="formData" />
+          <SettingsExternalTab
+            v-if="currentTab === 'community'"
+            :form-data="formData"
+            :handle-browse="handleBrowse"
+            :check-path="checkPath"
+          />
+          <SettingsNetworkTab
+            v-if="currentTab === 'network'"
+            :form-data="formData"
+            :reveal-secret="appStore.revealSecret"
+            :is-secret-preserved="isSecretPreserved"
+            @preserve-secret="preserveFormSecret"
+            @clear-secret="clearFormSecret"
+          />
+          <SettingsAiTab
+            v-if="currentTab === 'ai'"
+            :form-data="formData"
+            :reveal-secret="appStore.revealSecret"
+            :is-secret-preserved="isSecretPreserved"
+            @preserve-secret="preserveFormSecret"
+            @clear-secret="clearFormSecret"
+          />
+          <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
+          <SettingsDevTab v-if="currentTab === 'dev'" :form-data="formData" />
+          <SettingsDataTab v-if="currentTab === 'data'" :form-data="formData" />
+          <SettingsAboutTab v-if="currentTab === 'about'" :form-data="formData" />
 
-          <!-- 内容滚动容器 -->
-          <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
-            <div class=" mx-auto space-y-10">
+        </div>
+      </div>
 
-              <SettingsPathsTab
-                v-if="currentTab === 'paths'"
-                :form-data="formData"
-                :validate-steam-launch-enable="validateSteamLaunchEnable"
-                :validate-workshop-mods-enable="validateWorkshopModsEnable"
-                :auto-detect="autoDetect"
-                :handle-browse="handleBrowse"
-                :check-path="checkPath"
-              />
-              <SettingsGeneralTab v-if="currentTab === 'general'" :form-data="formData" />
-              <SettingsFeaturesTab v-if="currentTab === 'features'" :form-data="formData" />
-              <SettingsExternalTab
-                v-if="currentTab === 'community'"
-                :form-data="formData"
-                :handle-browse="handleBrowse"
-                :check-path="checkPath"
-              />
-              <SettingsNetworkTab
-                v-if="currentTab === 'network'"
-                :form-data="formData"
-                :reveal-secret="appStore.revealSecret"
-                :is-secret-preserved="isSecretPreserved"
-                @preserve-secret="preserveFormSecret"
-                @clear-secret="clearFormSecret"
-              />
-              <SettingsAiTab
-                v-if="currentTab === 'ai'"
-                :form-data="formData"
-                :reveal-secret="appStore.revealSecret"
-                :is-secret-preserved="isSecretPreserved"
-                @preserve-secret="preserveFormSecret"
-                @clear-secret="clearFormSecret"
-              />
-              <SettingsKeybindingsTab v-if="currentTab === 'keybindings'" :form-data="formData" />
-              <SettingsDevTab v-if="currentTab === 'dev'" :form-data="formData" />
-              <SettingsDataTab v-if="currentTab === 'data'" :form-data="formData" />
-              <SettingsAboutTab v-if="currentTab === 'about'" :form-data="formData" />
-
-            </div>
-          </div>
-
-          <!-- D. 底部操作栏 -->
-          <footer class="modal-footer flex items-center justify-end gap-4 px-10 py-3">
-            <button id="btn-cancel" :disabled="saving" :class="saving ? 'app-action-disabled' : ''" @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-text-main transition-colors">{{ t('ui.settings.panel.discard_changes', '放弃修改') }}</button>
-            <button data-tour="settings-save-button" :disabled="saving" :class="saving ? 'app-action-disabled' : ''" @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-on-accent-primary font-black text-sm shadow-[0_0_20px_rgba(var(--rgb-accent-primary),0.3)] hover:scale-105 active:scale-95 transition-all group">
-              <div class="absolute inset-0 bg-bg-overlay/10 -translate-x-full group-hover:translate-x-full transition-transform duration-500 skew-x-12"></div>
-              {{ t('ui.settings.panel.apply_and_save', '应用并保存配置') }}
-            </button>
-          </footer>
-        </main>
+      <!-- D. 底部操作栏 -->
+      <footer class="modal-footer flex items-center justify-end gap-4 px-10 py-3">
+        <button id="btn-cancel" :disabled="saving" :class="saving ? 'app-action-disabled' : ''" @click="appStore.closeSettingsPanel()" class="text-sm font-bold text-text-dim hover:text-text-main transition-colors">{{ t('ui.settings.panel.discard_changes', '放弃修改') }}</button>
+        <button data-tour="settings-save-button" :disabled="saving" :class="saving ? 'app-action-disabled' : ''" @click="save" class="relative overflow-hidden px-8 py-2.5 bg-accent-primary rounded-xl text-on-accent-primary font-black text-sm shadow-[0_0_20px_rgba(var(--rgb-accent-primary),0.3)] hover:scale-105 active:scale-95 transition-all group">
+          <div class="absolute inset-0 bg-bg-overlay/10 -translate-x-full group-hover:translate-x-full transition-transform duration-500 skew-x-12"></div>
+          {{ t('ui.settings.panel.apply_and_save', '应用并保存配置') }}
+        </button>
+      </footer>
+    </main>
 
   </CommonModalShell>
 </template>
@@ -141,7 +141,10 @@ const appStore = useAppStore()
 const profileStore = useProfileStore()
 
 // 设置面板只编辑本地副本，保存时再交给 store 统一提交。
-const currentTab = ref('paths')
+const currentTab = computed({
+  get: () => appStore.uiState.settingsTab,
+  set: (tab) => { appStore.uiState.settingsTab = tab },
+})
 const formData = ref({})
 const saving = ref(false)
 
@@ -668,8 +671,27 @@ const save = async () => {
   transition-timing-function: cubic-bezier(0.37, 1.95, 0.66, 0.56);
 }
 
+.settings-nav {
+  --nav-item-height: 2.2rem;
+  --nav-gap: 0.25rem;
+  --nav-step: calc(var(--nav-item-height) + var(--nav-gap));
+
+  gap: var(--nav-gap);
+}
+
+.settings-nav-item {
+  height: var(--nav-item-height);
+}
+
+.settings-nav .glider {
+  height: var(--nav-item-height);
+  transform: translateY(
+    calc(var(--nav-index, 0) * var(--nav-step))
+  );
+}
+
 .settings-nav-label {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   line-height: 1;
 }
 

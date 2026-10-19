@@ -5,6 +5,16 @@ const TECHNICAL_MESSAGE_PATTERN = /(?:Traceback|Exception|Error code:|Client Err
 const normalizeText = (value = '') => String(value ?? '').trim()
 const looksTechnicalMessage = (value = '') => TECHNICAL_MESSAGE_PATTERN.test(normalizeText(value))
 
+// 只根据诊断码提供入口，不从提示文案猜测原因，避免把权限或参数错误当成连接问题。
+const NETWORK_SETTINGS_ERROR_CODES = new Set([
+  'NETWORK.CONNECTION', 'NETWORK.TIMEOUT', 'NETWORK.PROXY', 'NETWORK.PROXY_AUTH',
+  'NETWORK.TLS', 'NETWORK.INVALID_RESPONSE', 'GIT.REQUEST_FAILED', 'UPDATE.CHECK_FAILED',
+])
+
+export const shouldOfferNetworkSettings = (payload = {}) => (
+  NETWORK_SETTINGS_ERROR_CODES.has(normalizeText(payload?.error_code).toUpperCase())
+)
+
 export const stripLogHint = (value = '') => {
   const text = normalizeText(value)
     .replace(/[，,。；;]?\s*(详细原因|失败详情)已写入系统日志[。.]?/g, '')

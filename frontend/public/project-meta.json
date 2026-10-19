@@ -7,6 +7,15 @@
   "update": {
     "sources": [
       {
+        "type": "sourceforge",
+        "url": "https://sourceforge.net/projects/rimcrow"
+      },
+      {
+        "type": "gitee",
+        "repo": "InkyXFeather/RimCrow",
+        "url": "https://gitee.com/InkyXFeather/RimCrow"
+      },
+      {
         "type": "lanzou",
         "url": "https://wwbns.lanzouu.com/b00mq4tqgf",
         "password": "aite"

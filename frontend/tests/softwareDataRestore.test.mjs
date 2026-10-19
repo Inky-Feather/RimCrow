@@ -41,7 +41,7 @@ context.inspectData.value = { is_software_backup: false }
 assert.equal(actions.canSubmit.value, false)
 console.log('软件数据恢复确认及模式分流测试通过')
 
-const settingsDescriptor = parse(readFileSync(new URL('../src/features/settings/panel/SettingsDevTab.vue', import.meta.url), 'utf8')).descriptor
+const settingsDescriptor = parse(readFileSync(new URL('../src/features/settings/panel/SettingsDataTab.vue', import.meta.url), 'utf8')).descriptor
 const settingsAst = compileScript(settingsDescriptor, { id: 'settings-data-restore' }).scriptSetupAst
 const settingNames = ['softwareBackupTooltip', 'openDataBundleImportDialog']
 const settingsCode = settingsAst

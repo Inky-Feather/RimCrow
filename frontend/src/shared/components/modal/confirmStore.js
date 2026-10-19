@@ -26,6 +26,7 @@ export const useConfirmStore = defineStore('confirm', () => {
     deleteOptionsHint: '',
     // actionButtons 是窗口级按钮，promptItems 是队列弹窗的逐项操作列表；老 confirm/alert 调用不传则保持原行为。
     actionButtons: [],
+    actionSelector: null,
     defaultActionValue: undefined,
     promptItems: [],
     onPromptItemAction: null,
@@ -55,6 +56,7 @@ export const useConfirmStore = defineStore('confirm', () => {
     state.forceOptionText = t('dialog.delete.force_option', '强制删除')
     state.deleteOptionsHint = ''
     state.actionButtons = []
+    state.actionSelector = null
     state.defaultActionValue = undefined
     state.promptItems = []
     state.onPromptItemAction = null

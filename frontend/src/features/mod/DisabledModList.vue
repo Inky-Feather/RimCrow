@@ -1,7 +1,7 @@
 <template>
   <div class="flex h-full flex-col overflow-hidden rounded-b-none rounded-t-2xl border-2 border-accent-danger/20 bg-bg-surface/40 shadow-2xl">
     <div class="flex h-8 items-center justify-between border-b border-border-base/5 bg-accent-danger/10 px-3">
-      <span class="flex items-center gap-1 text-sm font-bold uppercase tracking-wider text-accent-danger">
+      <span class="flex items-center gap-1 text-sm font-bold tracking-wider text-accent-danger">
         <div class="mr-1 h-1.5 w-1.5 rounded-full bg-accent-danger shadow-lg shadow-accent-danger"></div>
         {{ t('ui.disabled_mod_list.title', '已禁用') }}
       </span>
@@ -48,7 +48,7 @@
           <div v-for="virtualRow in virtualRows" :key="displayMods[virtualRow.index]?.path_hash || virtualRow.index"
             class="absolute left-0 right-0"
             :style="{ transform: `translateY(${virtualRow.start}px)`, height: `${virtualRow.size}px` }">
-            <div class="py-[3px]" :data-id="displayMods[virtualRow.index]?.path_hash">
+            <div class="py-0.5" :data-id="displayMods[virtualRow.index]?.path_hash">
               <div class="matrix-select-trigger relative flex h-full items-center gap-2 rounded-lg border p-1.5 text-text-soft transition-all hover:bg-bg-overlay/10 hover:brightness-125"
                 :class="selectedPathHashes.includes(displayMods[virtualRow.index]?.path_hash)
                   ? 'border-accent-special/70 ring-1 ring-accent-special bg-accent-special/10'

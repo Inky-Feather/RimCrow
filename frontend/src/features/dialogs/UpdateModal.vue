@@ -40,7 +40,7 @@
           <div v-if="displayedLogs.length === 0" class="text-center text-text-dim py-10">
             {{ t('ui.update_modal.empty', '没有找到更新记录...') }}
           </div>
-          <div v-else class="relative space-y-5 before:absolute before:inset-0 before:ml-3 before:h-full before:-left-[0.05rem] before:w-0.5 before:bg-linear-to-b before:from-transparent before:via-text-main/10 before:to-transparent">
+          <div v-else class="relative space-y-5 before:absolute before:inset-0 before:ml-3 before:h-full before:left-[-0.05rem] before:w-0.5 before:bg-linear-to-b before:from-transparent before:via-text-main/10 before:to-transparent">
             <!-- 每一版的记录 -->
             <div v-for="(log, idx) in displayedLogs" :key="log.version" 
                 class="relative flex items-start gap-5 group">
@@ -63,7 +63,7 @@
                     class="space-y-2.5"
                     :class="{ 'border-t border-border-base/10 pt-4': entryIdx > 0 }"
                   >
-                    <div v-if="entry.title" class="text-xs font-bold uppercase tracking-[0.18em] text-text-dim">
+                    <div v-if="entry.title" class="text-xs font-bold tracking-[0.18em] text-text-dim">
                       {{ entry.title }}
                     </div>
                     <ul class="space-y-2.5">

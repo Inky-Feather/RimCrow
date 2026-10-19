@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { getMatrixItemState } from '../frontend/src/features/workspace/lib/matrixItemState.js'
+import { getMatrixItemState } from '../src/features/workspace/lib/matrixItemState.js'
 
 const workspaceStore = {
   getMatrixSameItems: () => [],

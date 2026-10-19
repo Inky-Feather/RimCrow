@@ -32,7 +32,7 @@ from backend.database.dao import ModDAO, ModMaintenanceDAO
 from backend.scanner.parser_xml import ModXMLParser
 from backend.scanner.analyzer import ModAnalyzer
 from backend.scanner.parser_dlc import DLCParser
-from backend.managers.mgr_files import FileManager
+from backend.managers.mgr_files import FileManager, LinkSyncResult
 from backend.utils.profile_runtime import resolve_profile_runtime_capabilities
 from backend.managers.mgr_steam import SteamManager
 from backend.settings import TOOL_MODS_DIR, settings
@@ -197,13 +197,12 @@ class ModScanner:
             ]
             if not valid_paths:
                 error_metrics = {'stage': scan_stage, 'current': current_index, 'total': total_count}
-                self._finish_scan({
+                return self._finish_scan({
                     'status': 'failed',
                     'message': tr("tasks.scan.no_valid_paths", "没有有效路径"),
                     'task_id': task_id,
                     'metrics': error_metrics,
                 }, task_id, emit_events=emit_events)
-                return
 
             scan_stage = "prepare_cleanup"
             stage_started_at = time.perf_counter()
@@ -281,7 +280,7 @@ class ModScanner:
                         for entry in it:
                             if entry.is_dir():
                                 # 遇到链接生成目录直接跳过，防止无限递归和重复
-                                if entry.name.startswith(FileManager.LINK_PREFIX): continue
+                                if entry.name.casefold().startswith(FileManager.LINK_PREFIX.casefold()): continue
                                 mod_folders.append((normalize_path_for_storage(entry.path), is_data_dir))
                 except OSError as e:
                     logger.warning(f"无法访问路径 {base_path}: {e}")
@@ -302,8 +301,7 @@ class ModScanner:
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
                     logger.info("扫描在解析阶段停止。")
-                    self._handle_interruption(task_id)
-                    return # 直接结束任务，不进入写库阶段
+                    return self._handle_interruption(task_id, emit_events=emit_events) # 直接结束任务，不进入写库阶段
                 # 进度报告
                 if (idx + 1) % report_interval == 0:
                     percent = min(98, 5 + int(((idx + 1) / total_count) * 93))
@@ -339,8 +337,7 @@ class ModScanner:
             # 【关键检查点】：解析完成后检查中断标志
             if self._stop_requested:
                 logger.info("扫描在解析阶段停止。")
-                self._handle_interruption(task_id, emit_events=emit_events)
-                return # 直接结束任务，不进入写库阶段
+                return self._handle_interruption(task_id, emit_events=emit_events) # 直接结束任务，不进入写库阶段
             # --- 3. 库存落库与运行态分析 ---
             if emit_events:
                 EventBus.emit_progress(
@@ -362,8 +359,7 @@ class ModScanner:
                 # 【关键检查点】：每一条 Mod 解析前检查中断标志
                 if self._stop_requested:
                     logger.info("扫描在解析阶段停止。")
-                    self._handle_interruption(task_id, emit_events=emit_events)
-                    return # 直接结束任务
+                    return self._handle_interruption(task_id, emit_events=emit_events) # 直接结束任务
 
                 disabled_paths = [mod['path'] for mod in entries if mod.get('disabled') and mod.get('path')]
                 for mod in entries:
@@ -398,11 +394,6 @@ class ModScanner:
                     ModDAO.batch_update_mods(mods_to_touch)
                 if shadow_paths_map:
                     ModDAO.batch_update_shadow_paths(shadow_paths_map)
-            # 扫描完成后再基于本轮 self 域磁盘结果补齐 SteamCMD ACF，
-            # 让 ACF 记录集合与真实目录集合保持同步。异常由外层统一记录阶段和路径。
-            scan_stage = "steamcmd_finalize"
-            stage_started_at = time.perf_counter()
-            SteamManager().reconcile_steamcmd_acf(scan_mods=mods_to_upsert)
             # 入库完成后，再按当前 Profile 的启用域统一分析冲突与运行态收敛依据。
             scan_stage = "runtime_analysis"
             stage_started_at = time.perf_counter()
@@ -415,11 +406,11 @@ class ModScanner:
             final_conflicts = runtime_analysis['hard_conflicts']
             final_coexistences = runtime_analysis['coexistences']
             # --- 6. 扫描后通知运行态收敛 ---
-            runtime_sync_msg = "Runtime link sync not configured"
+            runtime_sync = LinkSyncResult(True, "skipped")
             scan_stage = "runtime_sync"
             stage_started_at = time.perf_counter()
             if callable(self.runtime_link_sync_handler):
-                runtime_sync_msg = self.runtime_link_sync_handler(self.context.profile_id)
+                runtime_sync = self.runtime_link_sync_handler(self.context.profile_id)
 
             # --- 7. 完成 ---
             stats['duration'] = time.time() - start_time
@@ -433,12 +424,12 @@ class ModScanner:
                 'stats': stats,
                 'conflicts': final_conflicts,
                 'coexistences': final_coexistences,
-                'runtime_sync_message': runtime_sync_msg,
+                'runtime_sync': runtime_sync.to_dict(),
                 'strict_disable_restore_failures': scan_details['strict_restore_failed_mods'],
                 'should_check_mod_residue': should_check_mod_residue,
                 'core_refresh_required': core_refresh_required,
             }
-            self._finish_scan(result, task_id, emit_events=emit_events)
+            result = self._finish_scan(result, task_id, emit_events=emit_events)
 
             duration = time.time() - start_time
             logger.info(
@@ -450,7 +441,7 @@ class ModScanner:
                 stats['about_conflict_cleaned'], stats['shadow_path_cleaned'], len(final_conflicts),
                 len(final_coexistences), "需要" if core_refresh_required else "跳过",
                 "待检测" if should_check_mod_residue else "跳过",
-                runtime_sync_msg,
+                runtime_sync.message,
             )
             disabled_debug = {
                 key: [
@@ -476,6 +467,7 @@ class ModScanner:
             ]
             logger.debug("扫描禁用状态详情: %s", disabled_debug)
             logger.debug("扫描冲突详情: conflicts=%s coexistences=%s should_check_mod_residue=%s", conflict_debug, coexistence_debug, should_check_mod_residue)
+            return result
         except Exception as e:
             failed_message = tr("tasks.scan.failed", "扫描失败。请检查搜索路径、数据库状态和文件权限后重试。")
             error_metrics = {
@@ -493,7 +485,7 @@ class ModScanner:
                 exc_info=True,
                 extra={"extra_context": error_metrics},
             )
-            self._finish_scan({'status': 'error', 'message': str(failed_message), 'task_id': task_id, 'metrics': error_metrics}, task_id, emit_events=emit_events)
+            return self._finish_scan({'status': 'error', 'message': str(failed_message), 'task_id': task_id, 'metrics': error_metrics}, task_id, emit_events=emit_events)
         finally:
             self._is_scanning = False
             self._stop_requested = False # 清理状态
@@ -504,11 +496,12 @@ class ModScanner:
     def _handle_interruption(self, task_id: str, emit_events: bool = True):
         """处理中断后的清理和通知"""
         self._is_scanning = False
-        self._finish_scan({
+        result = self._finish_scan({
             'status': 'cancelled',
             'message': tr("tasks.scan.cancelled_no_changes", "扫描已由用户中止，未对数据库进行任何修改。"),
         }, task_id, emit_events=emit_events)
         logger.info("扫描已安全取消。")
+        return result
 
     def _finish_scan(self, result, task_id: str | None = None, emit_events: bool = True):
         """扫描结束，通知前端并发送最终统计"""
@@ -530,6 +523,7 @@ class ModScanner:
         payload.setdefault('metrics', {})
         if emit_events:
             EventBus.emit('scan-complete', payload)
+        return payload
 
     def _process_single_mod( self, mod_path, is_dlc_dir, existing_snapshots, dlc_parser: DLCParser | None, forced_update=False, size_check_override: bool | None = None, size_check_paths: set[str] | None = None, stats: dict | None = None, scan_details: dict | None = None ):
         """
@@ -774,13 +768,21 @@ class ModScanner:
         """
         解析预览图和图标的绝对路径。
         """
-        # --- Preview.png ---
-        # 默认位置：About/Preview.png
-        # 扩展：RimWorld 也支持 jpg/gif 改名为 png，或者直接识别。
-        # 这里简单起见，先只找 About/Preview.png，如果要做得细致，可以 glob 搜索
-        preview_path = os.path.join(mod_path, 'About', 'Preview.png')
-        if os.path.isfile(preview_path): preview_path = normalize_path_for_storage(preview_path)
-        else: preview_path = ""
+        # 只枚举一次 About 目录，忽略文件名大小写；多种格式并存时优先使用 PNG。
+        preview_files = {}
+        about_path = os.path.join(mod_path, 'About')
+        try:
+            with os.scandir(about_path) as entries:
+                preview_files = {entry.name.lower(): entry.path for entry in entries
+                                 if entry.name.lower().startswith('preview.') and entry.is_file()}
+        except OSError as error:
+            logger.debug(f"读取模组预览图目录失败，跳过预览图：{about_path}，原因：{error}")
+        preview_path = ""
+        for extension in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'):
+            candidate = preview_files.get(f'preview{extension}')
+            if candidate:
+                preview_path = normalize_path_for_storage(candidate)
+                break
 
         # --- ModIcon.png ---
         icon_path = os.path.join(mod_path, 'About', 'ModIcon.png')

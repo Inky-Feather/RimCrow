@@ -3,6 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +18,7 @@ from packaging.version import InvalidVersion, Version
 from backend.database.models import GithubModRecord
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_multiplayer_compat import MultiplayerCompatibilityManager
-from backend.managers.mgr_network import build_retry_session, merge_headers
+from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr, remaining_request_timeout
 from backend.managers.mgr_steam import SteamManager
 from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_texture_opt import TextureOptimizationManager
@@ -181,11 +185,43 @@ class MaintenanceManager:
             "has_issues": bool(issues),
         }
 
-    def check_external_data(self, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    def check_external_data(self, overrides: dict[str, Any] | None = None, *, budget_seconds: float = 30,
+                            cancel_event: threading.Event | None = None, network_override: dict[str, Any] | None = None,
+                            deadline: float | None = None) -> dict[str, Any]:
         checked_at = current_ms()
-        check_overrides = overrides or {}
-        items = [self._check_external_dataset(spec, check_overrides) for spec in self.EXTERNAL_DATASETS]
-        items.append(self._check_provider_catalog(check_overrides))
+        cancel_event = cancel_event if cancel_event is not None else threading.Event()
+        deadline = deadline if deadline is not None else time.monotonic() + budget_seconds
+        # 提交前复制全部路径和来源；运行中保存设置不能改变本轮的目标。
+        keys = {key for spec in self.EXTERNAL_DATASETS for key in (spec["path_key"], spec["url_key"])}
+        keys.add("git_provider_catalog_url")
+        check_overrides = {key: getattr(settings.config, key, "") for key in keys}
+        check_overrides.update(overrides or {})
+        network = deepcopy(network_override) if network_override is not None else network_mgr.snapshot_config()
+        if "api_mirrors" not in network:
+            network["api_mirrors"] = deepcopy(GithubManager.get_effective_mirrors(capability="api"))
+        request_options = {"deadline": deadline, "cancel_event": cancel_event, "network_override": network}
+        specs = [*self.EXTERNAL_DATASETS, {"data_type": "git_provider_catalog", "name": "Git 推荐清单"}]
+
+        def check(spec):
+            try:
+                remaining_request_timeout(deadline, cancel_event)
+                if spec["data_type"] == "git_provider_catalog":
+                    item = self._check_provider_catalog(check_overrides, request_options=request_options)
+                else:
+                    item = self._check_external_dataset(spec, check_overrides, request_options=request_options)
+                remaining_request_timeout(deadline, cancel_event)
+                return item
+            except Exception as error:
+                path_key = spec.get("path_key")
+                local_path = str(check_overrides.get(path_key) or "").strip() if path_key else ""
+                local_exists = bool(local_path and Path(local_path).exists())
+                return {"data_type": spec["data_type"], "name": spec["name"], "exists": local_exists,
+                        "remote_supported": True, "remote_available": False, "needs_update": False,
+                        "message": str(error), "cancelled": cancel_event.is_set(), "timed_out": time.monotonic() >= deadline}
+
+        # 不遗弃线程来伪装取消；正在执行的 I/O 必须退出后才返回本轮结果。
+        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="external-check") as executor:
+            items = list(executor.map(check, specs))
         updates = [item for item in items if item.get("needs_update")]
         missing = [item for item in items if not item.get("exists")]
         # 远端检查失败不等于“已是最新”。
@@ -202,6 +238,8 @@ class MaintenanceManager:
             "failed": failed,
             "has_updates": bool(updates),
             "has_errors": bool(failed),
+            "cancelled": cancel_event.is_set(),
+            "timed_out": time.monotonic() >= deadline,
         }
 
     def check_steamcmd_mod_updates(self) -> dict[str, Any]:
@@ -333,7 +371,8 @@ class MaintenanceManager:
             )
         return updates
 
-    def _check_external_dataset(self, spec: dict[str, str], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _check_external_dataset(self, spec: dict[str, str], overrides: dict[str, Any] | None = None,
+                                *, request_options: dict[str, Any] | None = None) -> dict[str, Any]:
         overrides = overrides or {}
         data_type = str(spec["data_type"])
         name = str(spec["name"])
@@ -385,7 +424,8 @@ class MaintenanceManager:
             else self._resolve_local_dataset_version(data_type)
         )
 
-        remote_info = self._probe_mp_compat_source(url) if data_type == "mp_compat_package_ids" else self._probe_remote_file(url)
+        options = {"request_options": request_options} if request_options is not None else {}
+        remote_info = self._probe_mp_compat_source(url, **options) if data_type == "mp_compat_package_ids" else self._probe_remote_file(url, **options)
         remote_signature = str(remote_info.get("signature") or "")
         remote_size = int(remote_info.get("size") or 0)
         remote_updated_at = int(remote_info.get("updated_at") or 0)
@@ -396,12 +436,15 @@ class MaintenanceManager:
             needs_update = True
             comparison_mode = "missing"
         elif data_type == "mp_compat_package_ids":
-            local_source_id = str(local_source_info.get("source_id") or local_source_info.get("signature") or "").strip()
+            local_source_id = str(local_source_info.get("source_id") or "").strip()
             remote_source_id = str(remote_info.get("source_id") or remote_info.get("signature") or "").strip()
             local_source_etag = str(local_source_info.get("etag") or "").strip()
             local_source_updated_at = int(local_source_info.get("updated_at") or 0)
             remote_etag = str(remote_info.get("etag") or "").strip()
-            if remote_info.get("available") and remote_source_id:
+            if remote_info.get("available") and remote_source_id and not local_source_id:
+                comparison_mode = "unverified"
+                remote_info = {**remote_info, "available": False, "message": "本地适配缓存缺少可比较的提交标识，请手动刷新。"}
+            elif remote_info.get("available") and remote_source_id:
                 comparison_mode = "source_id"
                 needs_update = remote_source_id != local_source_id
             elif remote_info.get("available") and remote_etag and local_source_etag:
@@ -457,14 +500,14 @@ class MaintenanceManager:
             "download_url": str(remote_info.get("download_url") or ""),
         }
 
-    def _check_provider_catalog(self, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _check_provider_catalog(self, overrides: dict[str, Any] | None = None, *, request_options: dict[str, Any] | None = None) -> dict[str, Any]:
         overrides = overrides or {}
         url = (
             str(overrides.get("git_provider_catalog_url") or "")
             if "git_provider_catalog_url" in overrides
             else str(getattr(settings.config, "git_provider_catalog_url", "") or "")
         )
-        remote_info = self.github_mgr.check_provider_catalog_updates(url)
+        remote_info = self.github_mgr.check_provider_catalog_updates(url) if request_options is None else self.github_mgr.check_external_provider_catalog(url, **request_options)
         sources = remote_info.get("sources") if isinstance(remote_info, dict) else []
         sources = sources if isinstance(sources, list) else []
         exists = bool(sources) and all(bool(source.get("exists")) for source in sources)
@@ -537,14 +580,23 @@ class MaintenanceManager:
         source = payload.get("source")
         return source if isinstance(source, dict) else {}
 
-    def _probe_mp_compat_source(self, url: str) -> dict[str, Any]:
+    def _probe_mp_compat_source(self, url: str, *, request_options: dict[str, Any] | None = None) -> dict[str, Any]:
         source_ref = MultiplayerCompatibilityManager.parse_source_repository_ref(url)
         if not source_ref:
-            return self._probe_remote_file(url)
+            return self._probe_remote_file(url, **({"request_options": request_options} if request_options is not None else {}))
         owner = source_ref["owner"]
         repo = source_ref["repo"]
         ref = source_ref["ref"]
         try:
+            if request_options is not None:
+                if not ref:
+                    repo_info = self.github_mgr._fetch_external_metadata(f"https://api.github.com/repos/{owner}/{repo}", **request_options)
+                    ref = str(repo_info.get("default_branch") or "master")
+                from urllib.parse import quote
+                commit = self.github_mgr._fetch_external_metadata(f"https://api.github.com/repos/{owner}/{repo}/commits/{quote(ref, safe='')}", **request_options)
+                source_id = str(commit.get("sha") or "").strip()
+                return {"supported": True, "available": bool(source_id), "signature": source_id, "source_id": source_id,
+                        "source_id_type": "github_commit", "version": source_id[:12], "download_url": url}
             if not ref:
                 repo_info = self.github_mgr.fetch_repo(owner, repo, missing_ok=True) or {}
                 ref = str(repo_info.get("default_branch") or "master").strip() or "master"
@@ -584,7 +636,7 @@ class MaintenanceManager:
         header = f"blob {len(data)}\0".encode("utf-8")
         return hashlib.sha1(header + data).hexdigest()
 
-    def _probe_remote_file(self, url: str) -> dict[str, Any]:
+    def _probe_remote_file(self, url: str, *, request_options: dict[str, Any] | None = None) -> dict[str, Any]:
         normalized_url = str(url or "").strip()
         if not normalized_url:
             return {
@@ -602,6 +654,7 @@ class MaintenanceManager:
                     ref=github_target["ref"],
                     remote_path=github_target["remote_path"],
                     missing_ok=True,
+                    **(request_options or {}),
                 )
                 if payload:
                     return {
@@ -623,32 +676,25 @@ class MaintenanceManager:
                     "available": False,
                     "message": f"获取远端状态失败: {exc}",
                 }
-        return self._probe_generic_file(normalized_url)
+        return self._probe_generic_file(normalized_url, request_options=request_options)
 
-    def _probe_generic_file(self, url: str) -> dict[str, Any]:
+    def _probe_generic_file(self, url: str, *, request_options: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
-            with build_retry_session() as session:
-                response = session.head(
-                    url,
-                    headers=merge_headers(),
-                    timeout=(8, 20),
-                    allow_redirects=True,
-                )
-                response.raise_for_status()
-                headers = response.headers
-                updated_at = self._parse_http_datetime_to_ms(headers.get("Last-Modified"))
-                size = int(headers.get("Content-Length") or 0)
-                etag = str(headers.get("ETag") or "").strip('"')
-                return {
-                    "supported": True,
-                    "available": True,
-                    # HTTP ETag 语义由服务端决定，不一定是文件内容哈希；
-                    # 不能拿它和本地 Git blob SHA 直接比较，否则会造成误报。
-                    "etag": etag,
-                    "size": size,
-                    "download_url": str(response.url or url),
-                    "updated_at": updated_at,
-                }
+            options = request_options or {}
+            timeout = remaining_request_timeout(options.get("deadline"), options.get("cancel_event")) if options else (8, 20)
+            session_options = {"total": 0, "connect": 0, "read": 0, "network_override": options.get("network_override")} if options else {}
+            with build_retry_session(**session_options) as session:
+                with session.head(url, headers=merge_headers(), timeout=timeout, allow_redirects=True) as response:
+                    response.raise_for_status()
+                    headers = response.headers
+                    updated_at = self._parse_http_datetime_to_ms(headers.get("Last-Modified"))
+                    size = int(headers.get("Content-Length") or 0)
+                    etag = str(headers.get("ETag") or "").strip('"')
+                    return {
+                        "supported": True, "available": True,
+                        # ETag 不一定是内容哈希，不能和 Git blob SHA 直接比较。
+                        "etag": etag, "size": size, "download_url": str(response.url or url), "updated_at": updated_at,
+                    }
         except Exception as exc:
             logger.warning("通用外部文件检查失败: %s", url, exc_info=True)
             return {

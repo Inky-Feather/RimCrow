@@ -2,7 +2,7 @@
 <template>
   <Teleport to="body">
     <Transition name="workspace-zoom">
-      <div v-if="appStore.uiState.showWorkspace" 
+      <div v-if="appStore.uiState.showWorkspace" ref="workspaceRef" data-popover-scope
         class="fixed inset-0 z-200 flex flex-col bg-bg-deep/95 backdrop-blur-2xl overflow-hidden font-sans text-text-main">
         
         <!-- 1. 顶部全局导航栏 (Glowing Segmented Control) -->
@@ -56,6 +56,7 @@
             </KeepAlive>
           </Transition>
         </main>
+        <div ref="popoverHost" class="pointer-events-none absolute inset-0 z-40 overflow-visible"></div>
 
       </div>
     </Transition>
@@ -63,14 +64,20 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, defineAsyncComponent, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, defineAsyncComponent, provide, watch } from 'vue'
 import { useAppStore } from '../../app/stores/appStore'
 import { Library, FolderArchive, Globe, Github } from 'lucide-vue-next'
 import { useWorkspaceStore } from './workspaceStore'
 import { t } from '../../shared/i18n.js'
+import { POPOVER_PORTAL_KEY } from '../../shared/components/popover/popoverContext.js'
 
 const workspaceStore = useWorkspaceStore()
 const appStore = useAppStore()
+const workspaceRef = ref(null)
+const popoverHost = ref(null)
+provide(POPOVER_PORTAL_KEY, {
+  target: popoverHost, active: computed(() => appStore.uiState.showWorkspace), boundary: workspaceRef,
+})
 
 const tabs = computed(() => [
   { id: 'library', label: t('ui.workspace.tab.library', '全库数据管理'), icon: Library, colorClass: 'bg-accent-success shadow-[0_0_10px_var(--color-accent-success)]' },

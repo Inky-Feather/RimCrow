@@ -54,7 +54,7 @@
                   <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-1.5">
                       <h4 class="text-sm font-black tracking-wide text-text-main">{{ group.title }}</h4>
-                      <span class="rounded-full border px-2 py-0.5 text-[0.625rem] font-black uppercase tracking-wider"
+                      <span class="rounded-full border px-2 py-0.5 text-[0.625rem] font-black tracking-wider"
                         :class="severityClass(group.severity)" >
                         {{ severityLabel(group.severity) }}
                       </span>
@@ -77,7 +77,7 @@
                         <div class="min-w-0 flex-1">
                           <div class="flex flex-wrap items-center gap-1.5">
                             <span class="truncate text-[0.8125rem] font-black text-text-main">{{ row.title }}</span>
-                            <span class="rounded-full border px-2 py-0.5 text-[0.625rem] font-black uppercase tracking-wider" :class="severityClass(row.severity)">
+                            <span class="rounded-full border px-2 py-0.5 text-[0.625rem] font-black tracking-wider" :class="severityClass(row.severity)">
                               {{ severityLabel(row.severity) }}
                             </span>
                           </div>
@@ -125,7 +125,7 @@
                       <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap items-center gap-1.5">
                           <span class="truncate text-[0.8125rem] font-black text-text-main">{{ row.title }}</span>
-                          <span class="rounded-full border px-2 py-0.5 text-[0.625rem] font-black uppercase tracking-wider" :class="severityClass(row.severity)">
+                          <span class="rounded-full border px-2 py-0.5 text-[0.625rem] font-black tracking-wider" :class="severityClass(row.severity)">
                             {{ severityLabel(row.severity) }}
                           </span>
                           <span v-for="relationLabel in row.relationLabels || []" :key="relationLabel" class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-[0.625rem] font-bold text-text-dim" >

@@ -107,7 +107,7 @@
       <!-- 未选中时的默认骨架屏 -->
       <div v-else class="flex-1 flex flex-col items-center justify-center opacity-20 pointer-events-none select-none">
         <BoxSelect class="size-32 mb-4" />
-        <span class="text-sm font-black uppercase tracking-widest">{{ t('ui.workspace.collection.detail.empty_select', '选择右侧合集以查看详情') }}</span>
+        <span class="text-sm font-black tracking-widest">{{ t('ui.workspace.collection.detail.empty_select', '选择右侧合集以查看详情') }}</span>
       </div>
     </div>
 
@@ -209,7 +209,7 @@
             <DynamicScrollerItem :item="row" :active="active" :size-dependencies="[row.items.map(item => item?.id).join(',')]" :data-index="index">
               <div class="grid grid-cols-2 gap-4 pb-4">
                 <article v-for="coll in row.items" :key="coll.id" @click="selectCollectionCard(coll)"
-                  class="group relative min-h-[170px] cursor-pointer overflow-hidden rounded-2xl border bg-bg-inset/82 shadow-[0_12px_24px_rgba(0,0,0,0.22)] isolate transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px" v-tooltip="buildCollectionTooltip(coll)"
+                  class="group relative min-h-42 cursor-pointer overflow-hidden rounded-2xl border bg-bg-inset/82 shadow-[0_12px_24px_rgba(0,0,0,0.22)] isolate transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px" v-tooltip="buildCollectionTooltip(coll)"
                   :class="wsStore.collections.activeId === coll.id ? 'border-accent-warn ring-1 ring-accent-warn shadow-[0_0_25px_rgba(var(--rgb-accent-warn),0.2)]' : 'border-border-base/10 hover:border-accent-warn/50 hover:shadow-[0_8px_20px_var(--shadow-color)]'">
                   <img v-if="coll.preview_url" :src="appStore.getRemoteUrl(coll.preview_url)"
                     class="absolute inset-0 h-full w-full object-cover opacity-55 transition-[transform,opacity] duration-700 ease-out group-hover:scale-[1.08] group-hover:opacity-70" loading="lazy" />

@@ -116,6 +116,7 @@
 │   │   ├──  restart.py
 │   │   ├──  secret_store.py
 │   │   ├──  shortcuts.py
+│   │   ├──  system_hosts.py
 │   │   ├──  text_decode.py
 │   │   ├──  tools.py
 │   │   └──  versioning.py
@@ -131,6 +132,7 @@
 ├── ·[doc]
 │   ├── ·[assets]
 │   │   ├──  Preview.png
+│   │   ├──  Preview0.png
 │   │   └──  主界面.png
 │   │   
 │   ├── ·[en]
@@ -365,6 +367,8 @@
 │   └──  vite.config.js
 │   
 ├── ·[scripts]
+│   ├── ·[doc_parts]
+│   ├── ·[doc_updater]
 │   ├──  analyze_i18n_duplicates.py
 │   ├──  create_locale.py
 │   ├──  extract_i18n_messages.py

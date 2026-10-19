@@ -1,8 +1,12 @@
 import io
 import json
 import zipfile
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+import requests
+import pytest
+
+from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_multiplayer_compat import MultiplayerCompatibilityManager
 from backend.settings import settings
 
@@ -149,6 +153,49 @@ def test_mp_compat_package_ids_can_be_generated_from_source_archive(tmp_path):
     assert payload["source"]["repository"] == "rwmt/Multiplayer-Compatibility"
     assert payload["source"]["ref"] == "master"
     assert result["source_id"] == "abcdef1234567890"
+
+
+def test_mp_compat_cache_generation_observes_cancellation(tmp_path):
+    archive_path = tmp_path / "source.zip"
+    archive_path.write_bytes(_source_archive({
+        "repo/Source/Example.cs": '[MpCompatFor("Example.Mod")]',
+        "repo/Source/Other.cs": '[MpCompatFor("Other.Mod")]',
+    }))
+    manager = MultiplayerCompatibilityManager()
+    checks = 0
+
+    def cancel_check():
+        nonlocal checks
+        checks += 1
+        if checks == 2:
+            raise InterruptedError("cancelled")
+
+    with pytest.raises(InterruptedError):
+        manager.prepare_mp_compat_cache(
+            archive_path, "https://github.com/rwmt/Multiplayer-Compatibility/archive.zip",
+            cancel_check=cancel_check,
+        )
+    assert checks >= 2
+
+
+@pytest.mark.parametrize("mirror_content", [b"__invalid_zip__", b"<html>login</html>"])
+def test_github_source_archive_falls_back_for_invalid_mirror_response(mirror_content):
+    manager = MultiplayerCompatibilityManager()
+    with patch("backend.managers.mgr_multiplayer_compat.build_retry_session") as session:
+        http = session.return_value.__enter__.return_value
+        archive_buffer = io.BytesIO()
+        with zipfile.ZipFile(archive_buffer, "w") as archive:
+            archive.writestr("Source/Compat.cs", "")
+        mirror = Mock(status_code=200 if mirror_content.startswith(b"<") else 502, content=mirror_content, headers={}, url="https://mirror/archive.zip")
+        mirror.raise_for_status.side_effect = requests.HTTPError("bad gateway") if mirror.status_code >= 400 else None
+        direct = Mock(status_code=200, content=archive_buffer.getvalue(), headers={}, url="https://github.com/archive.zip")
+        http.get.side_effect = [mirror, direct]
+        with patch.object(GithubManager, "_github_download_candidates", return_value=["https://mirror/archive.zip", "https://github.com/archive.zip"]), \
+             patch.object(GithubManager, "record_mirror_result") as record_result:
+            content, _, final_url = manager._download_source_archive("https://github.com/archive.zip")
+        assert content == archive_buffer.getvalue()
+        assert final_url == "https://github.com/archive.zip"
+        record_result.assert_called_once_with("https://mirror/archive.zip", success=False, capability="archive")
 
 
 def test_official_compatibility_file_is_formatted_after_download(tmp_path):

@@ -2,7 +2,7 @@
   <div class="relative flex flex-col h-full bg-bg-surface/40 border-2 border-border-base/5 rounded-2xl overflow-hidden shadow-2xl">
     <!-- 标题栏 -->
     <div class="px-3 h-8 border-b rounded-t-2xl border-border-base/5 flex justify-between items-center bg-bg-muted/50">
-      <span :class="`text-sm font-bold text-accent-primary uppercase tracking-wider flex items-center gap-2`">
+      <span :class="`text-sm font-bold text-accent-primary tracking-wider flex items-center gap-2`">
         <div :class="`w-1.5 h-1.5 rounded-full bg-accent-primary shadow-[0_0_8px_var(--color-accent-primary)]`"></div>
         {{ t('ui.backup_list.title', '备份') }}
       </span>
@@ -107,7 +107,7 @@
 
       <!-- 0. 临时导入 (import) -->
       <section v-if="parsedData.import.length > 0">
-        <div class="px-2 mb-2 text-xs font-bold text-accent-warn uppercase opacity-80 flex items-center gap-2">
+        <div class="px-2 mb-2 text-xs font-bold text-accent-warn opacity-80 flex items-center gap-2">
           <span>{{ t('ui.backup_list.section.import', '临时导入') }}</span>
           <div class="h-px flex-1 bg-accent-warn/20"></div>
         </div>
@@ -122,7 +122,7 @@
       </section>
 
       <section v-if="parsedData.last_backup.length > 0">
-        <div class="px-2 mb-2 text-xs font-bold text-accent-warn uppercase opacity-80 flex items-center gap-2">
+        <div class="px-2 mb-2 text-xs font-bold text-accent-warn opacity-80 flex items-center gap-2">
           <span>{{ t('ui.backup_list.section.latest', '最新备份') }}</span>
           <div class="h-px flex-1 bg-accent-warn/20"></div>
         </div>
@@ -137,7 +137,7 @@
 
       <!-- 1. 今日备份 (Today) -->
       <section v-if="parsedData.today.length > 0">
-        <div class="px-2 mb-2 text-xs font-bold text-accent-primary uppercase opacity-80 flex items-center gap-2">
+        <div class="px-2 mb-2 text-xs font-bold text-accent-primary opacity-80 flex items-center gap-2">
           <span>{{ t('ui.backup_list.section.today', '今日动态') }}</span>
           <div class="h-px flex-1 bg-accent-primary/20"></div>
         </div>
@@ -157,7 +157,7 @@
 
       <!-- 2. 早期归档 (Earlier) -->
       <section v-if="parsedData.earlier.length > 0">
-        <div class="px-2 mt-4 mb-2 text-xs font-bold text-text-dim uppercase opacity-60 flex items-center gap-2">
+        <div class="px-2 mt-4 mb-2 text-xs font-bold text-text-dim opacity-60 flex items-center gap-2">
           <span>{{ t('ui.backup_list.section.history', '历史归档') }}</span>
           <div class="h-px flex-1 bg-bg-overlay/5"></div>
         </div>
@@ -177,7 +177,7 @@
 
       <!-- 3. 其他备份 (Other) -->
       <section v-if="parsedData.other.length > 0">
-        <div class="px-2 mt-4 mb-2 text-xs font-bold text-text-dim uppercase opacity-60 flex items-center gap-2">
+        <div class="px-2 mt-4 mb-2 text-xs font-bold text-text-dim opacity-60 flex items-center gap-2">
           <span>{{ t('ui.backup_list.section.manual', '手动备份') }}</span>
           <div class="h-px flex-1 bg-bg-overlay/5"></div>
         </div>

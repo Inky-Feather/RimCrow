@@ -126,6 +126,7 @@
           </div>
           <!-- 主名称 -->
           <div class="text-sm font-medium truncate">
+            <span v-if="modData.disabled" class="mr-1 rounded bg-accent-danger/15 px-1 text-xs font-bold text-accent-danger">{{ t('ui.mod.status.disabled', '已禁用') }}</span>
             {{ displayName }}
           </div>
           <!-- 标签 -->
@@ -213,7 +214,7 @@ import { DEFAULT_ACCENT_HEX, hexToRgba, hexToRgb, normalizeHexColor } from '../.
 import { extractSectionHeaderTitle, isSectionHeaderTitle, sortByDisplayName, sortTextByName, toast, toUserMessage } from '../../shared/lib/common'
 import { normalizePackageId, normalizePackageToken } from './lib/modIdentity'
 import { isOfficialMod } from './lib/packageScope'
-import { X, FolderInput, Tag, Group, Palette, BetweenHorizontalStart, Redo2, ChevronDown, ChevronsDown, ChevronUp, ChevronsUp, ChessPawn, MessageSquareHeart, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, RefreshCw, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, Lock, SquaresExclude, Package, ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next';
+import { X, FolderInput, Tag, Group, Palette, BetweenHorizontalStart, Redo2, ChevronDown, ChevronsDown, ChevronUp, ChevronsUp, ChessPawn, MessageSquareHeart, Download, Eraser, FolderMinus, SquareX, Trash2, Cable, Link2, Link2Off, PencilRuler, MegaphoneOff, Megaphone, ExternalLink, Flag, FlagOff, Copy, RefreshCw, CircleSlash2, CircleCheckBig, BotMessageSquare, CircleFadingPlus, CornerUpRight, Lock, LockOpen, SquaresExclude, Package, ChevronsDownUp, ChevronsUpDown } from 'lucide-vue-next';
 import { t } from '../../shared/i18n.js'
 
 
@@ -613,7 +614,11 @@ const handleContextMenu = async (event) => {
     disabled: selectedIds.length === 1 && !getModCopyInfoValue(singleSelectedMod, field.key),
     action: () => copySelectedModInfo(field.key, field.label, [...selectedIds]),
   }))
-  const selectedHasPathHash = modStore.selectedMods.some(m => !!m?.path_hash)
+  const selectedDisableIds = selectedIds.filter(id => {
+    const mod = modStore.takeModById(id)
+    return mod?.path_hash && !mod.disabled
+  })
+  const selectedDisabledHashes = [...new Set(modStore.selectedMods.filter(mod => mod?.disabled && mod.path_hash).map(mod => mod.path_hash))]
   const localizeSummary = modStore.resolveLocalizeCandidates(modStore.selectedMods, 'workshop')
   const selectedLocalizeCandidates = localizeSummary.candidates
   const selectedCoexistWorkshopCount = localizeSummary.existingCount
@@ -735,7 +740,9 @@ const handleContextMenu = async (event) => {
         { label: t('menu.mod_item.coexist.switch_local', '切换为本地版') + coexistSelectedCountStr, icon: FolderMinus, action: () => modStore.switchCoexistenceSource(coexistSelectedIds, 'local') },
       ]
     },
-    { commandId: 'mods.disableSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: t('menu.mod_item.disable_files', '禁用') + selectedCountStr, icon: Lock, level: 'warn', disabled: !selectedHasPathHash },
+    { commandId: 'mods.disableSelectedFiles', args: { modIds: selectedDisableIds }, labelOverride: t('menu.mod_item.disable_files', '禁用') + countSuffix(selectedDisableIds.length), icon: Lock, level: 'warn', hidden: !selectedDisableIds.length },
+    { label: t('menu.disabled_mod_list.restore', '解除禁用{countText}', { countText: countSuffix(selectedDisabledHashes.length) }), icon: LockOpen, level: 'success', hidden: !selectedDisabledHashes.length,
+      action: () => modStore.disableMods(selectedDisabledHashes, false, { preserveListState: true }) },
     { commandId: 'mods.deleteSelectedFiles', args: { modIds: [...selectedIds] }, labelOverride: t('common.action.delete', '删除') + selectedCountStr, disabled: !modData.value.path, icon: Trash2 },
   ]
 

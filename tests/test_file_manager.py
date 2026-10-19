@@ -3,6 +3,10 @@ import shutil
 import struct
 import tempfile
 import unittest
+import threading
+import pytest
+from copy import deepcopy
+from contextlib import ExitStack
 import zlib
 from io import BytesIO
 from pathlib import Path
@@ -11,7 +15,7 @@ from unittest.mock import patch
 from PIL import Image
 from webview.util import parse_file_type
 
-from backend.managers.mgr_files import FileManager, LocalAssetHandler, PathChecker
+from backend.managers.mgr_files import FileManager, LinkSyncResult, LocalAssetHandler, PathChecker
 from backend.settings import settings
 from backend.utils.tools import normalize_path_for_storage
 
@@ -75,6 +79,19 @@ class TestFileManager(unittest.TestCase):
 
         self.assertEqual(selected, "picked.rimcrowdata.zip")
         tk_dialog.assert_not_called()
+
+    def test_thumbnail_generation_supports_common_preview_formats(self):
+        for extension in ("png", "jpg", "jpeg", "webp", "gif", "bmp"):
+            with self.subTest(extension=extension), tempfile.TemporaryDirectory() as temp_dir:
+                preview_path = Path(temp_dir) / f"Preview.{extension}"
+                with Image.new("RGB", (128, 96), "red") as image:
+                    image.save(preview_path)
+                with patch("backend.managers.mgr_files.THUMBNAIL_CACHE_DIR", temp_dir):
+                    target_path = LocalAssetHandler._ensure_thumbnail("test.mod", str(preview_path))
+                self.assertTrue(target_path)
+                with Image.open(target_path) as thumbnail:
+                    self.assertEqual(thumbnail.format, "WEBP")
+                    self.assertEqual(thumbnail.size, (64, 48))
 
     def test_thumbnail_generation_tolerates_broken_png_metadata(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -361,27 +378,21 @@ class TestFileManager(unittest.TestCase):
 
     def test_sync_managed_links_stops_before_deleting_on_unsupported_filesystem(self):
         with (
-            patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
-            patch.object(FileManager, "_get_windows_filesystem_type", return_value="exFAT"),
-            patch.object(FileManager, "sync_links") as sync_links,
+            patch.object(FileManager, "_get_link_deployment_failure", return_value="请改用 NTFS"),
+            patch.object(FileManager, "_remove_directory_link") as remove,
         ):
-            success, failure_message = FileManager.sync_managed_links(r"E:\Profile\Mods", [r"E:\Workshop\1001"])
-
-        self.assertFalse(success)
-        self.assertIn("NTFS", failure_message)
-        sync_links.assert_not_called()
+            result = FileManager.sync_managed_links("E:/Profile/Mods", ["E:/Workshop/1001"])
+        self.assertFalse(result.ok)
+        self.assertIn("NTFS", result.message)
+        remove.assert_not_called()
 
     def test_sync_managed_links_allows_empty_deployment_on_exfat(self):
-        for full_mode in (False, True):
-            with (
-                self.subTest(full_mode=full_mode),
-                patch.object(settings.config, "link_deployment_mode_full", full_mode),
-                patch.object(FileManager, "_get_link_deployment_failure") as precheck,
-                patch.object(FileManager, "sync_links_full" if full_mode else "sync_links", return_value=True) as sync_links,
-            ):
-                self.assertEqual(FileManager.sync_managed_links(r"E:\Profile\Mods", []), (True, None))
-                precheck.assert_not_called()
-                sync_links.assert_called_once_with(r"E:\Profile\Mods", [])
+        with tempfile.TemporaryDirectory() as root:
+            with patch.object(FileManager, "_get_link_deployment_failure") as precheck:
+                result = FileManager.sync_managed_links(root, [])
+            self.assertTrue(result.ok)
+            self.assertEqual(result.status, "noop")
+            precheck.assert_not_called()
 
     def test_check_steamcmd_path_warns_when_windows_junction_is_unsupported(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -420,83 +431,321 @@ class TestFileManager(unittest.TestCase):
             self.assertEqual(result["type"], "warn")
             self.assertIn(str(steamcmd_root / "steamapps" / "workshop" / "content" / "294100"), result["msg"])
 
-    def test_settings_update_warns_when_steamcmd_link_sync_fails(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            original_self_mods = settings.config.self_mods_path
-            original_steamcmd_path = settings.config.steamcmd_path
-            original_steamcmd_mods = settings.config.steamcmd_mods_path
-            custom_mods = str(Path(temp_dir) / "custom-mods")
-            self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods)
-            self.addCleanup(setattr, settings.config, "steamcmd_path", original_steamcmd_path)
-            self.addCleanup(setattr, settings.config, "steamcmd_mods_path", original_steamcmd_mods)
-
-            with (
-                patch("backend.managers.mgr_files.FileManager.sync_steamcmd_root_link", return_value=False),
-                patch.object(settings, "save") as save,
-            ):
-                warnings = settings.update_from_dict({"self_mods_path": custom_mods})
-
-            self.assertIn("steamcmd_junction_sync_failed", warnings)
-            save.assert_called_once()
+    def test_settings_update_preserves_old_config_when_steamcmd_link_sync_fails(self):
+        original = deepcopy(settings.config)
+        with (
+            patch.object(settings, "config", deepcopy(original)),
+            patch.object(FileManager, "sync_steamcmd_root_link", return_value=LinkSyncResult(False, "failed", "probe failed")),
+            patch.object(settings, "save") as save,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "probe failed"):
+                settings.update_from_dict({"self_mods_path": "E:/probe/custom-mods"})
+            self.assertEqual(settings.config, original)
+            save.assert_not_called()
 
     def test_sync_steamcmd_root_link_uses_steamcmd_directory_when_default_storage_is_empty(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_root = Path(temp_dir)
-            default_mods = temp_root / "mods"
-            steamcmd_mods = temp_root / "steamcmd" / "steamapps" / "workshop" / "content" / "294100"
-            original_self_mods = settings.config.self_mods_path
-            original_steamcmd_mods = settings.config.steamcmd_mods_path
-            self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods)
-            self.addCleanup(setattr, settings.config, "steamcmd_mods_path", original_steamcmd_mods)
-            settings.config.self_mods_path = str(default_mods)
-            settings.config.steamcmd_mods_path = str(steamcmd_mods)
-
+        with tempfile.TemporaryDirectory() as root:
+            default, link = Path(root) / "mods", Path(root) / "downloads"
             with (
-                patch("backend.managers.mgr_files.MODS_DIR", default_mods),
-                patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
-                patch.object(FileManager, "_get_windows_filesystem_type", return_value="FAT32"),
-                patch.object(settings, "save") as save,
-                patch("backend.managers.mgr_files.subprocess.run") as run,
+                patch("backend.managers.mgr_files.MODS_DIR", default),
+                patch.object(FileManager, "_is_junction_supported", return_value=False),
+                patch.object(FileManager, "_create_directory_link") as create,
             ):
-                self.assertTrue(FileManager.sync_steamcmd_root_link())
-
-            self.assertEqual(settings.config.self_mods_path, str(steamcmd_mods))
-            self.assertFalse(default_mods.exists())
-            self.assertTrue(steamcmd_mods.is_dir())
-            save.assert_called_once()
-            run.assert_not_called()
+                saved = []
+                result = FileManager.sync_steamcmd_root_link(str(default), str(link), commit=saved.append)
+            self.assertTrue(result.ok)
+            self.assertEqual(saved, [str(link)])
+            self.assertFalse(default.exists())
+            self.assertTrue(link.is_dir())
+            create.assert_not_called()
 
     def test_sync_steamcmd_root_link_does_not_replace_nonempty_or_custom_storage(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_root = Path(temp_dir)
-            default_mods = temp_root / "mods"
-            steamcmd_mods = temp_root / "steamcmd" / "steamapps" / "workshop" / "content" / "294100"
-            original_self_mods = settings.config.self_mods_path
-            original_steamcmd_mods = settings.config.steamcmd_mods_path
-            self.addCleanup(setattr, settings.config, "self_mods_path", original_self_mods)
-            self.addCleanup(setattr, settings.config, "steamcmd_mods_path", original_steamcmd_mods)
-
-            for storage, should_create_file in ((default_mods, True), (temp_root / "custom-mods", False)):
-                with self.subTest(storage=storage):
-                    if should_create_file:
-                        storage.mkdir()
-                        (storage / "existing-mod").mkdir()
-                    settings.config.self_mods_path = str(storage)
-                    settings.config.steamcmd_mods_path = str(steamcmd_mods)
-
-                    with (
-                        patch("backend.managers.mgr_files.MODS_DIR", default_mods),
-                        patch("backend.managers.mgr_files.platform.system", return_value="Windows"),
-                        patch.object(FileManager, "_get_windows_filesystem_type", return_value="FAT"),
-                        patch.object(settings, "save") as save,
-                        patch("backend.managers.mgr_files.subprocess.run") as run,
-                    ):
-                        self.assertFalse(FileManager.sync_steamcmd_root_link())
-
-                    self.assertEqual(settings.config.self_mods_path, str(storage))
-                    save.assert_not_called()
-                    run.assert_not_called()
+        with tempfile.TemporaryDirectory() as root:
+            default, custom, link = (Path(root) / name for name in ("mods", "custom", "downloads"))
+            default.mkdir()
+            (default / "preserve").write_text("keep")
+            with (
+                patch("backend.managers.mgr_files.MODS_DIR", default),
+                patch.object(FileManager, "_is_junction_supported", return_value=False),
+            ):
+                for storage in (default, custom):
+                    self.assertFalse(FileManager.sync_steamcmd_root_link(str(storage), str(link)).ok)
+            self.assertEqual((default / "preserve").read_text(), "keep")
 
 
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.parametrize("full", [False, True])
+@pytest.mark.parametrize("name", ["弱运 游戏", "日本語 한국어", "emoji_😀", "%RIMCROW_PROBE% !test! (mod)"])
+def test_native_links_preserve_unicode_and_literal_paths(tmp_path, full, name):
+    source = tmp_path / "sources" / name
+    source.mkdir(parents=True)
+    (source / "sentinel").write_text("keep")
+    root = tmp_path / "Mods"
+    with patch.object(settings.config, "link_deployment_mode_full", full), patch.dict(os.environ, {"RIMCROW_PROBE": "WRONG_TARGET"}), patch("backend.managers.mgr_files.subprocess.run") as shell:
+        result = FileManager.sync_managed_links(str(root), [str(source)])
+        link = root / (FileManager.LINK_PREFIX + name)
+        assert result.ok, result
+        assert os.path.samefile(link, source)
+        assert FileManager.sync_managed_links(str(root), [str(source)]).ok
+        assert FileManager.sync_managed_links(str(root), []).ok
+        assert not os.path.lexists(link)
+        assert (source / "sentinel").read_text() == "keep"
+        shell.assert_not_called()
+
+
+@pytest.mark.parametrize("kind", ["directory", "file"])
+def test_managed_sync_never_removes_ordinary_prefix_entries(tmp_path, kind):
+    root = tmp_path / "Mods"
+    root.mkdir()
+    entry = root / "_Link_manual"
+    if kind == "directory":
+        entry.mkdir()
+        (entry / "sentinel").write_text("keep")
+    else:
+        entry.write_text("keep")
+    result = FileManager.sync_managed_links(str(root), [])
+    assert not result.ok
+    assert entry.exists()
+    with pytest.raises(OSError):
+        FileManager._remove_directory_link(str(entry))
+    assert entry.exists()
+
+
+def test_deployment_collision_rejected_before_changing_links(tmp_path):
+    a, b, old, root = (tmp_path / part for part in ("self/common", "workshop/common", "old", "Mods"))
+    for folder in (a, b, old, root):
+        folder.mkdir(parents=True)
+    link = root / "_Link_old"
+    FileManager._create_directory_link(str(old), str(link))
+    result = FileManager.sync_managed_links(str(root), [str(a), str(b)])
+    assert not result.ok and "common" in result.message
+    assert os.path.samefile(link, old)
+
+
+@pytest.mark.parametrize("full", [False, True])
+def test_failed_link_delete_is_not_reported_as_success(tmp_path, full):
+    source, root = tmp_path / "source", tmp_path / "Mods"
+    source.mkdir(); root.mkdir()
+    link = root / "_Link_old"
+    FileManager._create_directory_link(str(source), str(link))
+    with patch.object(settings.config, "link_deployment_mode_full", full), patch.object(FileManager, "_remove_directory_link", side_effect=PermissionError("locked")):
+        result = FileManager.sync_managed_links(str(root), [])
+    assert not result.ok and "locked" in result.message
+    assert os.path.samefile(link, source)
+
+
+def test_partial_creation_failure_restores_usable_links_and_removes_new_links(tmp_path):
+    root, old, a, b = (tmp_path / part for part in ("Mods", "old", "a", "b"))
+    for folder in (root, old, a, b): folder.mkdir()
+    FileManager._create_directory_link(str(old), str(root / "_Link_old"))
+    create = FileManager._create_directory_link
+    def fail_after_create(source, destination):
+        create(source, destination)
+        if source == str(b): raise OSError("post-create failure")
+    with patch.object(FileManager, "_create_directory_link", side_effect=fail_after_create):
+        result = FileManager.sync_managed_links(str(root), [str(a), str(b)])
+    assert not result.ok and not result.rollback_errors
+    assert os.path.samefile(root / "_Link_old", old)
+    assert not os.path.lexists(root / "_Link_a")
+    assert not os.path.lexists(root / "_Link_b")
+
+
+def test_dangling_link_repaired_without_restoring_bad_target(tmp_path):
+    root, missing, good = (tmp_path / part for part in ("Mods", "missing", "good"))
+    for folder in (root, missing, good): folder.mkdir()
+    link = root / "_Link_good"
+    FileManager._create_directory_link(str(missing), str(link))
+    missing.rmdir()
+    assert os.path.lexists(link) and not link.exists()
+    result = FileManager.sync_managed_links(str(root), [str(good)])
+    assert result.ok and os.path.samefile(link, good)
+
+
+@pytest.mark.parametrize("source_inside", [True, False])
+def test_runtime_deployment_rejects_overlapping_roots(tmp_path, source_inside):
+    outer, inner = tmp_path / "outer", tmp_path / "outer/inner"
+    inner.mkdir(parents=True)
+    root, source = (outer, inner) if source_inside else (inner, outer)
+    assert not FileManager.sync_managed_links(str(root), [str(source)]).ok
+
+
+def test_root_migration_copies_verifies_and_commits_before_recycling_source(tmp_path):
+    source, target = tmp_path / "downloads", tmp_path / "storage"
+    source.mkdir()
+    (source / "mod").mkdir()
+    (source / "mod/file").write_bytes(b"preserve bytes")
+    recycled, saved = [], []
+    def recycle(path, force=False):
+        assert saved and not force
+        recycled.append(path)
+        return True
+    def commit(path):
+        assert os.path.samefile(source, target)
+        assert (target / "mod/file").read_bytes() == b"preserve bytes"
+        saved.append(path)
+    with patch("backend.managers.mgr_files.delete_fs_path", side_effect=recycle):
+        result = FileManager.sync_steamcmd_root_link(str(target), str(source), commit=commit)
+    assert result.ok, result
+    assert saved == [str(target)] and len(recycled) == 2
+    assert os.path.samefile(source, target)
+
+
+@pytest.mark.parametrize("failure", ["copy", "verify", "create", "save"])
+def test_root_migration_failure_preserves_original_data(tmp_path, failure):
+    source, target = tmp_path / "downloads", tmp_path / "storage"
+    source.mkdir()
+    (source / "mod").write_bytes(b"original")
+    commit = unittest.mock.Mock(side_effect=OSError("save failed") if failure == "save" else None)
+    with ExitStack() as stack:
+        if failure == "copy": stack.enter_context(patch("backend.managers.mgr_files.shutil.copytree", side_effect=OSError("copy failed")))
+        if failure == "verify":
+            manifest = FileManager._storage_manifest
+            stack.enter_context(patch.object(FileManager, "_storage_manifest", side_effect=lambda root: {} if ".rimcrow-migration-" in root else manifest(root)))
+        if failure == "create": stack.enter_context(patch.object(FileManager, "_create_directory_link", side_effect=OSError("create failed")))
+        # 测试只检查清理请求，不向系统回收站写入临时测试副本。
+        stack.enter_context(patch("backend.managers.mgr_files.delete_fs_path", return_value=True))
+        result = FileManager.sync_steamcmd_root_link(str(target), str(source), commit=commit)
+    assert not result.ok
+    assert not FileManager.is_directory_link(str(source))
+    assert (source / "mod").read_bytes() == b"original"
+    if failure != "save": commit.assert_not_called()
+
+
+@pytest.mark.parametrize("inverted", [False, True])
+def test_root_migration_rejects_nested_storage_without_mutation(tmp_path, inverted):
+    outer, inner = tmp_path / "downloads", tmp_path / "downloads/storage"
+    inner.mkdir(parents=True)
+    (outer / "sentinel").write_text("keep")
+    source, target = (outer, inner) if not inverted else (inner, outer)
+    result = FileManager.sync_steamcmd_root_link(str(target), str(source))
+    assert not result.ok
+    assert (outer / "sentinel").read_text() == "keep"
+    assert inner.is_dir()
+
+
+def test_migration_conflict_preserves_both_versions(tmp_path):
+    source, target = tmp_path / "downloads", tmp_path / "storage"
+    for root, content in ((source, "old"), (target, "new")):
+        root.mkdir(); (root / "mod").write_text(content)
+    result = FileManager.sync_steamcmd_root_link(str(target), str(source))
+    assert not result.ok
+    assert (source / "mod").read_text() == "old"
+    assert (target / "mod").read_text() == "new"
+
+
+def test_link_lock_identifies_same_physical_root(tmp_path):
+    physical, alias = tmp_path / "Mods", tmp_path / "alias"
+    physical.mkdir()
+    FileManager._create_directory_link(str(physical), str(alias))
+    assert FileManager.link_lock(str(physical)) is FileManager.link_lock(str(alias))
+
+
+def test_settings_refuse_path_change_while_storage_in_use():
+    ready, release = threading.Event(), threading.Event()
+    def hold():
+        with FileManager.storage_lock:
+            ready.set()
+            assert release.wait(5)
+    worker = threading.Thread(target=hold)
+    worker.start()
+    try:
+        assert ready.wait(5)
+        original = deepcopy(settings.config)
+        with pytest.raises(RuntimeError):
+            settings.update_from_dict({"self_mods_path": "E:/probe/blocked"})
+        assert settings.config == original
+    finally:
+        release.set(); worker.join(5)
+    assert not worker.is_alive()
+
+
+def test_shared_download_storage_root_still_migrates_old_data(tmp_path):
+    old, target = tmp_path / "old", tmp_path / "downloads"
+    old.mkdir()
+    (old / "mod").write_bytes(b"keep")
+    commit = unittest.mock.Mock()
+    with patch("backend.managers.mgr_files.delete_fs_path", return_value=True):
+        result = FileManager.sync_steamcmd_root_link(
+            str(target), str(target), old_mods_path=str(old), move_old_data=True, commit=commit,
+        )
+    assert result.ok and result.status == "deployed"
+    assert (target / "mod").read_bytes() == b"keep"
+    assert not FileManager.is_directory_link(str(target))
+    commit.assert_called_once_with(str(target))
+
+
+def test_unchanged_paths_do_not_block_saving_other_settings():
+    with patch.object(settings, "config", deepcopy(settings.config)), \
+         patch.object(settings, "save") as save, \
+         patch.object(FileManager, "storage_lock") as lock:
+        settings.update_from_dict({
+            "self_mods_path": settings.config.self_mods_path,
+            "steamcmd_path": settings.config.steamcmd_path,
+            "enable_auto_scan": not settings.config.enable_auto_scan,
+        })
+        lock.acquire.assert_not_called()
+        save.assert_called_once_with()
+
+
+def test_final_verification_rejects_creator_that_does_not_create_link(tmp_path):
+    source, root = tmp_path / "source", tmp_path / "Mods"
+    source.mkdir()
+    with patch.object(FileManager, "_create_directory_link"):
+        result = FileManager.sync_managed_links(str(root), [str(source)])
+    assert not result.ok and not list(root.iterdir())
+
+
+def test_failed_rollback_is_in_user_visible_message(tmp_path):
+    root, old, source = (tmp_path / part for part in ("Mods", "old", "source"))
+    for folder in (root, old, source): folder.mkdir()
+    old_link = root / "_Link_old"
+    FileManager._create_directory_link(str(old), str(old_link))
+    with patch.object(FileManager, "_create_directory_link", side_effect=OSError("creation blocked")):
+        result = FileManager.sync_managed_links(str(root), [str(source)])
+    assert not result.ok and result.rollback_errors
+    assert str(old_link) in result.message
+    assert (old).is_dir() and source.is_dir()
+
+
+def test_save_failure_restores_old_root_junction(tmp_path):
+    old, target, link = (tmp_path / part for part in ("old", "new", "downloads"))
+    old.mkdir(); target.mkdir()
+    (old / "mod").write_bytes(b"original")
+    FileManager._create_directory_link(str(old), str(link))
+    with patch("backend.managers.mgr_files.delete_fs_path", return_value=True):
+        result = FileManager.sync_steamcmd_root_link(
+            str(target), str(link), old_mods_path=str(old), move_old_data=True,
+            commit=unittest.mock.Mock(side_effect=OSError("save failed")),
+        )
+    assert not result.ok and not result.rollback_errors
+    assert os.path.samefile(link, old)
+    assert (link / "mod").read_bytes() == b"original"
+
+
+def test_runtime_sync_serializes_workers_for_same_physical_root(tmp_path):
+    root, source = tmp_path / "Mods", tmp_path / "source"
+    source.mkdir()
+    entered, release, second_started = threading.Event(), threading.Event(), threading.Event()
+    create = FileManager._create_directory_link
+    results = []
+    def slow_create(origin, destination):
+        entered.set()
+        assert release.wait(5)
+        create(origin, destination)
+    def sync(second=False):
+        if second: second_started.set()
+        results.append(FileManager.sync_managed_links(str(root), [str(source)]))
+    first, second = threading.Thread(target=sync), threading.Thread(target=sync, args=(True,))
+    with patch.object(FileManager, "_create_directory_link", side_effect=slow_create):
+        first.start()
+        try:
+            assert entered.wait(5)
+            second.start()
+            assert second_started.wait(5)
+            assert not results
+        finally:
+            release.set()
+            first.join(5)
+            if second.ident is not None: second.join(5)
+    assert not first.is_alive() and not second.is_alive()
+    assert len(results) == 2 and all(result.ok for result in results)
+    assert os.path.samefile(root / "_Link_source", source)

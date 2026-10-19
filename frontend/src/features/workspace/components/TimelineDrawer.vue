@@ -51,7 +51,7 @@
                 <span class="text-xs font-mono font-bold" :class="getColorClass(log.color, 'text')">
                   {{ formatDate(log.time) }}
                 </span>
-                <span class="px-2 py-0.5 rounded-full text-[0.7rem] font-black uppercase tracking-wider bg-bg-overlay/5 border border-border-base/5"
+                <span class="px-2 py-0.5 rounded-full text-[0.7rem] font-black tracking-wider bg-bg-overlay/5 border border-border-base/5"
                   :class="getColorClass(log.color, 'text')">
                   {{ timelineTitle(log) }}
                 </span>

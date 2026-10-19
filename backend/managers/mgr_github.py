@@ -1,5 +1,6 @@
 import json
 import base64
+import ipaddress
 import os
 import re
 import shutil
@@ -11,23 +12,25 @@ import html
 import hashlib
 import threading
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import quote, unquote, urlparse, urlunparse
 
 import requests
 from backend.database.models import GithubModRecord, GithubTimeline, SystemInfo, db
 from backend.i18n.messages import localized_key, localized_params, tr
 from backend.managers.mgr_download import DownloadManager, DownloadTask
-from backend.managers.mgr_network import build_retry_session, merge_headers
-from backend.settings import GIT_PROVIDER_CATALOG_DIR, HOME_DIR, settings
+from backend.managers.mgr_network import build_retry_session, merge_headers, remaining_request_timeout
+from backend.settings import GITHUB_MIRROR_CATALOG_CACHE_PATH, GIT_PROVIDER_CATALOG_DIR, HOME_DIR, settings
 from backend.utils.event_bus import EventBus
 from backend.utils.bundle_io import replace_dir_atomically
+from backend.utils.json_io import write_json_atomic
 from backend.utils.logger import logger
-from backend.utils.tools import current_ms, normalize_package_id, normalize_package_ids
+from backend.utils.tools import current_ms, normalize_package_id, normalize_package_ids, validate_zip_archive
 
 
 @dataclass(frozen=True)
@@ -75,6 +78,38 @@ BUILTIN_GITHUB_OWNER_SOURCES = [
 
 GITHUB_ARTIFACT_RELEASE_ASSET = "release_asset"
 GITHUB_ARTIFACT_SOURCE_ARCHIVE = "source_archive"
+GITHUB_DOWNLOAD_RELEASE_ASSET = "release_asset"
+GITHUB_DOWNLOAD_ARCHIVE = "archive"
+GITHUB_DOWNLOAD_RAW = "raw"
+GITHUB_DOWNLOAD_API = "api"
+GITHUB_DOWNLOAD_GIST = "gist"
+GITHUB_DOWNLOAD_GIT_CLONE = "git_clone"
+GITHUB_DOWNLOAD_LFS_MEDIA = "lfs_media"
+GITHUB_DOWNLOAD_HOSTS = {
+    "github.com", "www.github.com", "raw.githubusercontent.com", "codeload.github.com",
+    "api.github.com", "gist.github.com", "gist.githubusercontent.com", "media.githubusercontent.com",
+}
+
+GITHUB_MIRROR_CATALOG_SOURCES = {
+    "ghproxy_next": (
+        "https://raw.githubusercontent.com/hubporg/ghproxy-next/main/components/nodes.ts",
+        "https://cdn.jsdelivr.net/gh/hubporg/ghproxy-next@main/components/nodes.ts",
+    ),
+    "hiwiki": ("https://git.hiwiki.org/data/mirror-speeds.json?client=rimcrow",),
+}
+GITHUB_MIRROR_PROBE_TARGETS = {
+    "web": "https://github.com/octocat/Hello-World",
+    "raw": "https://raw.githubusercontent.com/octocat/Hello-World/master/README",
+    "archive": "https://codeload.github.com/octocat/Hello-World/zip/refs/heads/master",
+    "api": "https://api.github.com/repos/octocat/Hello-World",
+    "gist": "https://gist.githubusercontent.com/octocat/9257657/raw",
+    "git_clone": "https://github.com/octocat/Hello-World.git/info/refs?service=git-upload-pack",
+    "release_asset": "https://github.com/NVIDIA/cccl/releases/download/v3.2.0/cccl-src-v3.2.0.zip",
+    "lfs_media": "https://media.githubusercontent.com/media/onnx/models/main/validated/vision/classification/mnist/model/mnist-12.onnx",
+}
+GITHUB_MIRROR_HEALTH_SECONDS = 12 * 3600
+GITHUB_MIRROR_SUPPORT_SECONDS = 30 * 86400
+GITHUB_MIRROR_MAX_CANDIDATES = 3
 
 GITHUB_INSTALL_DOWNLOAD_ONLY = "download_only"
 GITHUB_INSTALL_EXTRACT = "extract"
@@ -180,6 +215,7 @@ class GithubResolvedArtifact:
     host: str = "github.com"
     project_path: str = ""
     evidence: dict[str, Any] = field(default_factory=dict)
+    fallback_urls: list[str] = field(default_factory=list)
 
 
 class GithubApiError(RuntimeError):
@@ -212,12 +248,482 @@ class GithubManager:
     _response_cache: dict[tuple[str, ...], tuple[float, Any]] = {}
     _install_locks: dict[str, threading.Lock] = {}
     _install_lock_guard = threading.Lock()
+    _mirror_catalog_lock = threading.RLock()
+    _mirror_catalog: dict[str, Any] = {
+        "schema_version": 2, "status": "idle", "mirrors": [], "source_snapshots": {},
+        "updated_at": 0, "source_errors": [],
+    }
+    _mirror_catalog_loaded = False
+    _mirror_catalog_thread: threading.Thread | None = None
+    _mirror_catalog_stop = threading.Event()
+    _mirror_refresh_attempt_at = 0.0
+    _mirror_cooldowns: dict[tuple[str, str], float] = {}
 
     def __init__(self):
         if GithubManager._cache_lock is None:
-            import threading
-
             GithubManager._cache_lock = threading.Lock()
+        self._load_mirror_catalog_cache()
+
+    # ------------------------------------------------------------------
+    # 镜像节点池：模式只决定节点来源，能力和健康状态决定节点是否可用。
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _builtin_mirrors() -> list[dict[str, Any]]:
+        return [{
+            "id": "gh_proxy",
+            "label": "GH-Proxy",
+            "url_template": "https://gh-proxy.org/{url}",
+            "url_mode": "full_url",
+            "origin": "builtin",
+            "enabled": True,
+            "support": {
+                "web": {"status": "unsupported"},
+                "raw": {"status": "supported"},
+                "archive": {"status": "supported"},
+                "release_asset": {"status": "supported"},
+                "api": {"status": "supported"},
+                "gist": {"status": "supported"},
+                "git_clone": {"status": "supported"},
+                "lfs_media": {"status": "unsupported"},
+            },
+            "health": {},
+        }]
+
+    @staticmethod
+    def _node_key(node: dict[str, Any]) -> tuple[str, str]:
+        return str(node.get("url_template") or ""), str(node.get("url_mode") or "full_url")
+
+    @classmethod
+    def _copy_node(cls, node: dict[str, Any], *, origin: str | None = None) -> dict[str, Any]:
+        value = deepcopy(node)
+        value["origin"] = origin or value.get("origin") or "custom"
+        value["enabled"] = value.get("enabled", True) is not False
+        value.setdefault("url_mode", "full_url")
+        value.setdefault("support", {})
+        value.setdefault("health", {})
+        value.setdefault("id", hashlib.sha256(f"{value.get('url_template','')}|{value['url_mode']}".encode()).hexdigest()[:16])
+        value["selection_id"] = f"{value['origin']}:{value['id']}"
+        return value
+
+    @classmethod
+    def _all_mirror_pools(cls, custom_override: list[dict[str, Any]] | None = None) -> dict[str, list[dict[str, Any]]]:
+        cls._load_mirror_catalog_cache()
+        source = getattr(settings.config, "github_mirrors", []) if custom_override is None else custom_override
+        custom = [cls._copy_node(item, origin="custom") for item in source if isinstance(item, dict)]
+        with cls._mirror_catalog_lock:
+            dynamic = [cls._copy_node(item, origin="dynamic") for item in cls._mirror_catalog.get("mirrors", []) if isinstance(item, dict)]
+        return {
+            "builtin": [cls._copy_node(item, origin="builtin") for item in cls._builtin_mirrors()],
+            "custom": custom,
+            "dynamic": dynamic,
+        }
+
+    @classmethod
+    def get_mirror_pools(cls, capability: str = "", custom_override: list[dict[str, Any]] | None = None) -> dict[str, list[dict[str, Any]]]:
+        pools = cls._all_mirror_pools(custom_override)
+        if not capability:
+            return pools
+        return {name: [node for node in nodes if cls._node_supports(node, capability)] for name, nodes in pools.items()}
+
+    @staticmethod
+    def _state(node: dict[str, Any], bucket: str, capability: str) -> dict[str, Any]:
+        value = node.get(bucket, {})
+        return value.get(capability, {}) if isinstance(value, dict) and isinstance(value.get(capability, {}), dict) else {}
+
+    @classmethod
+    def _node_supports(cls, node: dict[str, Any], capability: str) -> bool:
+        support = node.get("support") if isinstance(node.get("support"), dict) else {}
+        if support and capability not in support:
+            return False
+        state = cls._state(node, "support", capability)
+        return state.get("status") not in {"unsupported", "invalid"}
+
+    @classmethod
+    def _node_is_healthy(cls, node: dict[str, Any], capability: str, *, strict: bool) -> bool:
+        state = cls._state(node, "health", capability)
+        status = str(state.get("status") or "").lower()
+        if status == "valid":
+            checked_at = float(state.get("checked_at") or 0)
+            return not checked_at or time.time() - checked_at < GITHUB_MIRROR_HEALTH_SECONDS
+        if status == "invalid":
+            return False
+        if node.get("origin") == "builtin":
+            return True
+        return not strict
+
+    @classmethod
+    def get_effective_mirrors(cls, selection: str | None = None, capability: str = "", custom_override: list[dict[str, Any]] | None = None, dynamic_enabled: bool | None = None) -> list[dict[str, Any]]:
+        selection = str(selection or getattr(settings.config, "github_mirror_id", "direct") or "direct").strip().lower()
+        if dynamic_enabled is None:
+            dynamic_enabled = bool(getattr(settings.config, "github_dynamic_mirrors_enabled", False))
+        pools = cls.get_mirror_pools(custom_override=custom_override)
+        if not dynamic_enabled:
+            pools["dynamic"] = []
+        if selection == "direct":
+            return []
+        if selection == "auto":
+            selected = [node for nodes in pools.values() for node in nodes]
+            strict_health = True
+        else:
+            selected = [node for nodes in pools.values() for node in nodes if selection in {node.get("selection_id"), node.get("id")}]
+            strict_health = False
+        result = []
+        now = time.time()
+        for node in selected:
+            if not node.get("enabled", True) or not cls._node_supports(node, capability):
+                continue
+            key = (str(node.get("url_template")), capability)
+            with cls._mirror_catalog_lock:
+                if cls._mirror_cooldowns.get(key, 0) > now:
+                    continue
+            if strict_health and not cls._node_is_healthy(node, capability, strict=True):
+                continue
+            if not strict_health and not cls._node_is_healthy(node, capability, strict=False):
+                continue
+            result.append(node)
+        if selection == "auto":
+            result.sort(key=lambda node: (
+                cls._state(node, "health", capability).get("latency_ms", node.get("remote_latency_ms", 1e9)),
+                0 if node.get("origin") == "builtin" else 1,
+                str(node.get("label") or ""),
+            ))
+        else:
+            result.sort(key=lambda node: (0 if node.get("origin") == "builtin" else 1, str(node.get("label") or "")))
+        return result
+
+    @classmethod
+    def get_mirror_candidates(cls, url: str, capability: str, selection: str | None = None, custom_override: list[dict[str, Any]] | None = None, dynamic_enabled: bool | None = None) -> list[str]:
+        original = str(url or "").strip()
+        nodes = cls.get_effective_mirrors(selection, capability, custom_override, dynamic_enabled)
+        candidates = []
+        for node in nodes:
+            rendered = cls._render_mirror_url(node.get("url_template", ""), original, node.get("url_mode", "full_url"))
+            if rendered and rendered != original:
+                candidates.append(rendered)
+        return list(dict.fromkeys(candidates))[:GITHUB_MIRROR_MAX_CANDIDATES]
+
+    @staticmethod
+    def _render_mirror_url(template: str, target: str, url_mode: str = "full_url") -> str:
+        value = str(target or "").strip()
+        if url_mode == "github_host_path":
+            value = re.sub(r"^https?://", "", value, flags=re.I)
+        elif url_mode == "github_path":
+            parsed = urlparse(value)
+            if parsed.hostname not in {"github.com", "www.github.com"}:
+                return ""
+            value = parsed.path.lstrip("/") + (f"?{parsed.query}" if parsed.query else "")
+        return str(template or "").replace("{url}", value)
+
+    @staticmethod
+    def _valid_mirror_template(template: str) -> bool:
+        try:
+            parsed = urlparse(template)
+            parsed.port
+            host = parsed.hostname or ""
+            if (template.count("{url}") != 1 or any(c in template.replace("{url}", "") for c in "{}\r\n")
+                or parsed.scheme != "https" or not host or parsed.username or parsed.password or parsed.fragment
+                or "{" in parsed.netloc or "." not in host):
+                return False
+            try:
+                return ipaddress.ip_address(host).is_global
+            except ValueError:
+                return bool(re.fullmatch(r"[a-zA-Z0-9.-]+", host)) and not host.endswith((".local", ".localhost", ".internal"))
+        except (TypeError, ValueError):
+            return False
+
+    @classmethod
+    def _load_mirror_catalog_cache(cls) -> None:
+        with cls._mirror_catalog_lock:
+            if cls._mirror_catalog_loaded:
+                return
+            cls._mirror_catalog_loaded = True
+            try:
+                payload = json.loads(GITHUB_MIRROR_CATALOG_CACHE_PATH.read_text(encoding="utf-8"))
+                mirrors = payload.get("mirrors") if isinstance(payload, dict) else None
+                if not isinstance(mirrors, list):
+                    return
+                valid = []
+                for item in mirrors:
+                    if not isinstance(item, dict) or not cls._valid_mirror_template(str(item.get("url_template") or "")):
+                        continue
+                    valid.append(cls._copy_node(item, origin="dynamic"))
+                cls._mirror_catalog = {**payload, "schema_version": 2, "mirrors": valid,
+                                       "status": "ready" if valid else "idle"}
+            except (OSError, ValueError, TypeError):
+                logger.debug("GitHub 动态镜像目录没有可读取的缓存: %s", GITHUB_MIRROR_CATALOG_CACHE_PATH)
+
+    @staticmethod
+    def _mirror_host(item: dict[str, Any]) -> str:
+        return (urlparse(str(item.get("url_template") or "")).hostname or "").lower()
+
+    @classmethod
+    def _parse_ghproxy_next_nodes(cls, text: str) -> list[dict[str, Any]]:
+        result = []
+        for value in re.findall(r"value\s*:\s*[\"']([^\"']+)[\"']", text):
+            base = value.strip().rstrip("/")
+            if "://" not in base:
+                base = f"https://{base}"
+            template = f"{base}/{{url}}"
+            if cls._valid_mirror_template(template):
+                result.append({"label": urlparse(base).hostname, "url_template": template, "url_mode": "full_url", "sources": ["ghproxy_next"], "remote_status": "unknown"})
+        if not result:
+            raise ValueError("GitHub 动态节点清单格式已变化或没有有效节点")
+        return result
+
+    @classmethod
+    def _parse_hiwiki_nodes(cls, payload: Any) -> list[dict[str, Any]]:
+        if not isinstance(payload, dict) or not isinstance(payload.get("mirrors"), list):
+            raise ValueError("HiWiki 镜像清单格式不正确")
+        result = []
+        for item in payload["mirrors"]:
+            if not isinstance(item, dict):
+                continue
+            base = str(item.get("base") or "").strip().rstrip("/")
+            template = f"{base}/{{url}}"
+            if not cls._valid_mirror_template(template):
+                continue
+            prefix = item.get("pathPrefix")
+            modes = {"https://github.com": "full_url", "github.com": "github_host_path", "": "github_path"}
+            if prefix not in modes:
+                continue
+            state = str(item.get("status") or "").strip().lower()
+            remote_status = "ok" if state in {"ok", "healthy", "available", "up"} else "failed" if state in {"failed", "error", "invalid", "offline", "down", "unavailable"} else "unknown"
+            result.append({"label": str(item.get("label") or cls._mirror_host({"url_template": template}))[:100], "url_template": template, "url_mode": modes[prefix], "sources": ["hiwiki"], "remote_status": remote_status, "remote_latency_ms": item.get("latency"), "remote_speed_mbps": item.get("speed")})
+        if payload["mirrors"] and not result:
+            raise ValueError("HiWiki 镜像清单没有可识别的节点")
+        return result
+
+    @classmethod
+    def _fetch_mirror_source(cls, source_id: str) -> tuple[list[dict[str, Any]], str | None]:
+        last_error = "来源获取失败"
+        for url in GITHUB_MIRROR_CATALOG_SOURCES[source_id]:
+            if cls._mirror_catalog_stop.is_set():
+                return [], "已停止"
+            try:
+                with build_retry_session(total=0) as session:
+                    with session.get(url, timeout=(5, 20), stream=True, headers={"Accept": "application/json, text/plain", "Accept-Encoding": "gzip, deflate"}) as response:
+                        response.raise_for_status()
+                        body = bytearray()
+                        for chunk in response.iter_content(16384):
+                            body.extend(chunk)
+                            if len(body) > 1024 * 1024:
+                                raise ValueError("镜像清单超过 1 MB 限制")
+                text = body.decode("utf-8-sig")
+                return (cls._parse_hiwiki_nodes(json.loads(text)) if source_id == "hiwiki" else cls._parse_ghproxy_next_nodes(text)), None
+            except (requests.RequestException, ValueError, UnicodeError) as exc:
+                last_error = str(exc)
+        return [], last_error
+
+    @classmethod
+    def _merge_mirror_nodes(cls, groups: list[list[dict[str, Any]]], previous: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+        failed = {(str(item.get("url_template")), str(item.get("url_mode") or "full_url")) for group in groups for item in group if item.get("remote_status") == "failed"}
+        old = {cls._node_key(item): item for item in (previous or [])}
+        merged = {}
+        for item in sorted((item for group in groups for item in group), key=lambda value: value.get("remote_status") != "ok"):
+            key = cls._node_key(item)
+            if key in failed or not cls._valid_mirror_template(key[0]):
+                continue
+            if key in merged:
+                merged[key]["sources"] = sorted(set(merged[key].get("sources", [])) | set(item.get("sources", [])))
+                continue
+            cached = old.get(key, {})
+            merged[key] = cls._copy_node({**item, "id": hashlib.sha256(f"{key[0]}|{key[1]}".encode()).hexdigest()[:16], "origin": "dynamic", "support": cached.get("support", {}), "health": cached.get("health", {})}, origin="dynamic")
+        return sorted(merged.values(), key=lambda value: (value.get("remote_status") != "ok", -(float(value.get("remote_speed_mbps") or 0)), float(value.get("remote_latency_ms") or 1e9), value.get("label", "")))[:150]
+
+    @classmethod
+    def get_github_mirror_catalog(cls) -> dict[str, Any]:
+        cls._load_mirror_catalog_cache()
+        with cls._mirror_catalog_lock:
+            payload = deepcopy(cls._mirror_catalog)
+        payload.pop("source_snapshots", None)
+        payload["cache_path"] = str(GITHUB_MIRROR_CATALOG_CACHE_PATH)
+        payload["pools"] = {name: [cls._copy_node(item, origin=name) for item in nodes] for name, nodes in cls._all_mirror_pools().items()}
+        return payload
+
+    @classmethod
+    def start_mirror_catalog_refresh(cls, *, force: bool = True, probe_limit: int = 24) -> dict[str, Any]:
+        cls._load_mirror_catalog_cache()
+        with cls._mirror_catalog_lock:
+            if cls._mirror_catalog_thread and cls._mirror_catalog_thread.is_alive():
+                return cls.get_github_mirror_catalog()
+            if not force and time.time() - cls._mirror_refresh_attempt_at < 300:
+                return cls.get_github_mirror_catalog()
+            cls._mirror_refresh_attempt_at = time.time()
+            cls._mirror_catalog = {**cls._mirror_catalog, "status": "loading"}
+            cls._mirror_catalog_thread = threading.Thread(target=cls.refresh_github_mirror_catalog, kwargs={"probe_limit": probe_limit}, name="github-mirror-catalog", daemon=True)
+            cls._mirror_catalog_thread.start()
+            return cls.get_github_mirror_catalog()
+
+    @classmethod
+    def refresh_github_mirror_catalog(cls, *, probe_limit: int = 24) -> dict[str, Any]:
+        with cls._mirror_catalog_lock:
+            previous = deepcopy(cls._mirror_catalog)
+        snapshots = deepcopy(previous.get("source_snapshots", {}))
+        source_errors = []
+        try:
+            with ThreadPoolExecutor(max_workers=len(GITHUB_MIRROR_CATALOG_SOURCES)) as pool:
+                jobs = {pool.submit(cls._fetch_mirror_source, key): key for key in GITHUB_MIRROR_CATALOG_SOURCES}
+                for future in as_completed(jobs):
+                    source_id = jobs[future]
+                    nodes, error = future.result()
+                    if error:
+                        source_errors.append({"source": source_id, "error": error})
+                    else:
+                        snapshots[source_id] = {"nodes": nodes, "updated_at": time.time()}
+            groups = [item["nodes"] for item in snapshots.values() if time.time() - float(item.get("updated_at") or 0) < 7 * 86400]
+            mirrors = cls._merge_mirror_nodes(groups, previous.get("mirrors", []))
+            selected = mirrors[:max(1, min(int(probe_limit or 24), 48))]
+            jobs = {}
+            with ThreadPoolExecutor(max_workers=12) as pool:
+                for node in selected:
+                    for name, sample in GITHUB_MIRROR_PROBE_TARGETS.items():
+                        support_state = cls._state(node, "support", name)
+                        health_state = cls._state(node, "health", name)
+                        support_fresh = bool(support_state.get("checked_at")) and time.time() - float(support_state.get("checked_at", 0)) < GITHUB_MIRROR_SUPPORT_SECONDS
+                        health_fresh = bool(health_state.get("checked_at")) and time.time() - float(health_state.get("checked_at", 0)) < GITHUB_MIRROR_HEALTH_SECONDS
+                        if support_fresh and health_fresh:
+                            continue
+                        def probe(target_node=node, target_name=name, target_url=sample):
+                            try:
+                                return cls._probe_mirror_url(target_node["url_template"], target_url, target_node.get("url_mode", "full_url"), strict=True)
+                            except TypeError as exc:
+                                if "strict" not in str(exc):
+                                    raise
+                                return cls._probe_mirror_url(target_node["url_template"], target_url, target_node.get("url_mode", "full_url"))
+                        jobs[pool.submit(probe)] = (node, name)
+                for future in as_completed(jobs):
+                    node, name = jobs[future]
+                    result = {**future.result()[1], "checked_at": time.time()}
+                    node.setdefault("support", {})[name] = {key: value for key, value in result.items() if key in {"status", "reason", "http_status", "latency_ms", "checked_at"}}
+                    node.setdefault("health", {})[name] = {**result, "status": {"supported": "valid", "unsupported": "invalid"}.get(result.get("status"), "unknown")}
+            for node in mirrors:
+                supported = [key for key in GITHUB_MIRROR_PROBE_TARGETS if cls._state(node, "support", key).get("status") == "supported"]
+                valid = [key for key in GITHUB_MIRROR_PROBE_TARGETS if cls._state(node, "health", key).get("status") == "valid"]
+                node["capabilities"] = supported
+                node["health_status"] = "success" if valid else "failed" if node.get("health") else "unknown"
+            successful_fetch = len(source_errors) < len(GITHUB_MIRROR_CATALOG_SOURCES)
+            payload = {"schema_version": 2, "status": "ready" if mirrors else "error", "mirrors": mirrors, "source_snapshots": snapshots, "updated_at": time.time() if successful_fetch else previous.get("updated_at", 0), "source_errors": source_errors}
+            with cls._mirror_catalog_lock:
+                cls._mirror_catalog = payload
+                write_json_atomic(GITHUB_MIRROR_CATALOG_CACHE_PATH, payload, indent=2)
+        except Exception as exc:
+            logger.warning("GitHub 动态镜像目录刷新失败，保留缓存: %s", exc)
+            with cls._mirror_catalog_lock:
+                cls._mirror_catalog = {**previous, "status": "error", "error": str(exc)}
+        result = cls.get_github_mirror_catalog()
+        EventBus.emit("github-mirror-catalog", result)
+        return result
+
+    @classmethod
+    def record_mirror_result(cls, url: str, *, success: bool, capability: str = "") -> None:
+        with cls._mirror_catalog_lock:
+            for node in cls._mirror_catalog.get("mirrors", []):
+                prefix = str(node.get("url_template") or "").split("{url}", 1)[0]
+                if str(url).startswith(prefix):
+                    key = (str(node.get("url_template")), capability or cls.github_url_capability(str(url)) or "raw")
+                    if success:
+                        cls._mirror_cooldowns.pop(key, None)
+                    else:
+                        cls._mirror_cooldowns[key] = time.time() + 600
+                    state = node.setdefault("health", {}).setdefault(key[1], {})
+                    state.update({"status": "valid" if success else "invalid", "checked_at": time.time()})
+                    break
+
+    @staticmethod
+    def github_url_capability(url: str) -> str | None:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        if parsed.scheme != "https" or parsed.username or parsed.password:
+            return None
+        if host == "api.github.com": return "api"
+        if host == "raw.githubusercontent.com": return "raw"
+        if host == "codeload.github.com": return "archive"
+        if host == "gist.githubusercontent.com": return "gist"
+        if host == "gist.github.com": return "gist" if re.match(r"^/[^/]+/[^/]+/raw(?:/|$)", parsed.path) else "web"
+        if host == "media.githubusercontent.com": return "lfs_media"
+        if host not in {"github.com", "www.github.com"}: return None
+        if "/releases/download/" in parsed.path: return "release_asset"
+        if "/archive/" in parsed.path: return "archive"
+        if parsed.path.endswith("/info/refs") or "/git-upload-pack" in parsed.path: return "git_clone"
+        if "/raw/" in parsed.path: return "raw"
+        return "web"
+
+    @classmethod
+    def _github_download_candidates(cls, url: str, capability: str = "") -> list[str]:
+        original_url = str(url or "").strip()
+        parsed = urlparse(original_url)
+        if parsed.scheme.lower() != "https" or parsed.username or parsed.password or (parsed.hostname or "").lower() not in GITHUB_DOWNLOAD_HOSTS:
+            return [original_url] if original_url else []
+        if (parsed.hostname or "").lower() in {"github.com", "www.github.com"} and "/blob/" in parsed.path:
+            original_url = urlunparse(parsed._replace(netloc="raw.githubusercontent.com", path=parsed.path.replace("/blob/", "/", 1)))
+        if not capability:
+            capability = cls.github_url_capability(original_url) or ""
+            if capability not in {GITHUB_DOWNLOAD_RAW, GITHUB_DOWNLOAD_ARCHIVE, GITHUB_DOWNLOAD_RELEASE_ASSET, "gist", "lfs_media"}:
+                return [original_url]
+        selection = str(getattr(settings.config, "github_mirror_id", "direct") or "direct").strip().lower()
+        dynamic_enabled = bool(getattr(settings.config, "github_dynamic_mirrors_enabled", False))
+        return [*cls.get_mirror_candidates(original_url, capability, selection, dynamic_enabled=dynamic_enabled), original_url]
+
+    @staticmethod
+    def _probe_mirror_url(template: str, target: str, url_mode: str = "full_url", *, strict: bool = False) -> tuple[str, dict[str, Any]]:
+        """探测真实 GitHub 资源，不把镜像首页或跳回原站误判为成功。"""
+        mirror_url = GithubManager._render_mirror_url(template, target, url_mode)
+        if not mirror_url or not GithubManager._valid_mirror_template(template):
+            return mirror_url, {"status": "unsupported", "reason": "镜像地址或资源类型不匹配"}
+        capability = GithubManager.github_url_capability(target) or "raw"
+        max_body_size = 65536 if capability == "web" else 8192
+        started = time.monotonic()
+        try:
+            with build_retry_session(total=0) as session:
+                with session.get(mirror_url, headers={"Range": f"bytes=0-{max_body_size - 1}", "Accept-Encoding": "identity"}, timeout=(5, 15), stream=True) as response:
+                    status = int(response.status_code)
+                    result = {"http_status": status, "latency_ms": round((time.monotonic() - started) * 1000)}
+                    if status not in {200, 206}:
+                        return mirror_url, {**result, "status": "unknown" if status in {401, 403, 408, 429} or status >= 500 else "unsupported", "reason": "服务返回 HTTP 错误"}
+                    if urlparse(response.url).hostname in GITHUB_DOWNLOAD_HOSTS:
+                        return mirror_url, {**result, "status": "unsupported", "reason": "节点跳回原站，未提供镜像访问"}
+                    chunks = []
+                    body_size = 0
+                    for chunk in response.iter_content(1024):
+                        chunks.append(chunk)
+                        body_size += len(chunk)
+                        if body_size >= max_body_size:
+                            break
+                    body = b"".join(chunks)[:max_body_size]
+                    content_type = str(response.headers.get("Content-Type") or "").lower()
+                    lower = body.lstrip().lower()
+                    is_html = "text/html" in content_type or lower.startswith((b"<!doctype html", b"<html"))
+                    if capability == "api":
+                        valid = "json" in content_type and b"octocat/Hello-World" in body
+                    elif capability == "git_clone":
+                        valid = b"# service=git-upload-pack" in body
+                    elif capability == "web":
+                        # 代理首页也常包含 GitHub 字样，必须核对原站的仓库元数据。
+                        repo_path = urlparse(target).path.strip("/").encode()
+                        valid = is_html and b'octolytics-dimension-repository_nwo' in body and repo_path in body and b"captcha" not in body.lower()
+                    elif capability in {"archive", "release_asset"}:
+                        valid = body.startswith(b"PK\x03\x04")
+                    else:
+                        valid = bool(body) and not is_html
+                    return mirror_url, {**result, "status": "supported" if valid else "unsupported", **({"reason": "返回内容与请求资源不符"} if not valid else {})}
+        except requests.RequestException as exc:
+            return mirror_url, {"status": "unknown", "reason": str(exc)}
+        except Exception as exc:
+            return mirror_url, {"status": "unknown", "reason": str(exc)}
+
+    @classmethod
+    def probe_github_mirror(cls, mirror: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(mirror, dict) or not cls._valid_mirror_template(str(mirror.get("url_template") or "")):
+            raise ValueError("镜像地址必须为包含一个 {url} 的公开 HTTPS 地址")
+        template = str(mirror["url_template"])
+        mode = str(mirror.get("url_mode") or "full_url")
+        if mode not in {"full_url", "github_host_path", "github_path"}:
+            raise ValueError("镜像地址格式无效")
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            jobs = {pool.submit(cls._probe_mirror_url, template, target, mode, strict=True): key for key, target in GITHUB_MIRROR_PROBE_TARGETS.items()}
+            support = {jobs[future]: {**future.result()[1], "checked_at": time.time()} for future in as_completed(jobs)}
+        health = {key: {**value, "status": {"supported": "valid", "unsupported": "invalid"}.get(value.get("status"), "unknown")} for key, value in support.items()}
+        return {"support": support, "health": health, "probed_url_template": template, "probed_at": time.time()}
 
     def parse_git_repo_url(self, url: str) -> GitRepoIdentity | None:
         """解析当前支持的 Git 仓库地址。
@@ -436,46 +942,87 @@ class GithubManager:
             self._store_cached_payload(cache_key, payload)
             return payload
 
-    def fetch_file_metadata(self, owner: str, repo: str, *, ref: str, remote_path: str, timeout: tuple[int, int] = (8, 25), missing_ok: bool = False) -> dict[str, Any] | None:
-        """读取 GitHub 单文件元数据，并尽量补齐最近更新时间。"""
+    def _fetch_external_metadata(self, url: str, *, params: dict[str, Any] | None = None,
+                                 deadline: float | None = None, cancel_event: threading.Event | None = None,
+                                 network_override: dict[str, Any] | None = None, candidates: list[str] | None = None,
+                                 validate_payload: Callable[[Any], bool] | None = None) -> Any:
+        """外部数据专用 API 候补；不查询附属时间、不转发账号认证、不叠加底层重试。"""
+        if candidates is None:
+            mirrors = (network_override or {}).get("api_mirrors")
+            if mirrors is not None and urlparse(url).hostname == "api.github.com":
+                candidates = [self._render_mirror_url(node["url_template"], url, node.get("url_mode", "full_url")) for node in mirrors]
+                candidates.append(url)
+            else:
+                candidates = self._github_download_candidates(url, "api")
+        last_error = None
+        with build_retry_session(total=0, connect=0, read=0, network_override=network_override) as session:
+            for candidate in dict.fromkeys(candidates):
+                timeout = remaining_request_timeout(deadline, cancel_event)
+                try:
+                    response = session.get(candidate, params=params, headers=self._build_github_headers({"Accept": GITHUB_ACCEPT_HEADER}), timeout=timeout)
+                    try:
+                        response.raise_for_status()
+                        payload = response.json()
+                        if validate_payload is not None and not validate_payload(payload):
+                            raise ValueError("远端元数据结构无效")
+                    finally:
+                        response.close()
+                    remaining_request_timeout(deadline, cancel_event)
+                    return payload
+                except (requests.RequestException, ValueError) as error:
+                    last_error = error
+        if last_error is not None:
+            raise last_error
+        raise ValueError("外部数据元数据没有可用来源")
+
+    def fetch_file_metadata(self, owner: str, repo: str, *, ref: str, remote_path: str, timeout: tuple[int, int] = (8, 25), missing_ok: bool = False,
+                            deadline: float | None = None, cancel_event: threading.Event | None = None,
+                            network_override: dict[str, Any] | None = None, api_candidates: list[str] | None = None) -> dict[str, Any] | None:
+        """读取用于内容比较的必要元数据，提交日期不再阻塞文件 SHA/大小。"""
         normalized_ref = str(ref or "").strip()
         normalized_path = str(remote_path or "").strip().lstrip("/")
         if not normalized_path: return None
 
         cache_key = ("file_meta", owner.lower(), repo.lower(), normalized_ref or "latest", normalized_path)
         cached = self._get_cached_payload(cache_key)
-        if cached is not self._cache_miss: return cached
+        remaining_request_timeout(deadline, cancel_event)
+        if cached is not self._cache_miss:
+            if not isinstance(cached, dict):
+                return cached
+            # 元数据缓存不绑定镜像选择；镜像配置变化后只重算下载地址，避免继续复用旧直连地址。
+            raw_url = str(cached.get("raw_download_url") or cached.get("download_url") or "")
+            candidates = self._github_download_candidates(raw_url, GITHUB_DOWNLOAD_RAW)
+            result = dict(cached)
+            result["download_url"] = candidates[0] if candidates else raw_url
+            result["fallback_urls"] = candidates[1:]
+            return result
 
-        with build_retry_session() as session:
-            response = session.get(
-                f"{GITHUB_API_BASE}/{owner}/{repo}/contents/{quote(normalized_path)}",
-                params={"ref": normalized_ref},
-                headers=self._build_github_headers({"Accept": GITHUB_ACCEPT_HEADER}),
-                timeout=timeout,
-            )
-            if missing_ok and response.status_code == 404:
-                self._store_cached_payload(cache_key, None, ttl_seconds=60)
+        deadline = deadline if deadline is not None else time.monotonic() + sum(timeout)
+        try:
+            payload = self._fetch_external_metadata(
+                f"{GITHUB_API_BASE}/{owner}/{repo}/contents/{quote(normalized_path)}", params={"ref": normalized_ref},
+                deadline=deadline, cancel_event=cancel_event, network_override=network_override, candidates=api_candidates,
+                validate_payload=lambda data: isinstance(data, dict) and isinstance(data.get("sha"), str) and bool(data["sha"])
+                and isinstance(data.get("size"), int) and not isinstance(data["size"], bool) and data["size"] >= 0)
+        except requests.HTTPError as error:
+            if missing_ok and error.response is not None and error.response.status_code == 404:
                 return None
-            self._raise_for_github_status(response, f"{owner}/{repo}/contents/{normalized_path}")
-            payload = response.json()
-
-        latest_commit = self.fetch_path_commit(
-            owner,
-            repo,
-            ref=normalized_ref,
-            remote_path=normalized_path,
-            timeout=timeout,
-            missing_ok=True,
-        )
-        updated_at = self._parse_iso_datetime_to_ms(self._extract_commit_timestamp(latest_commit))
+            raise
         result = {
             "signature": str(payload.get("sha") or ""),
             "size": int(payload.get("size") or 0),
-            "download_url": str(payload.get("download_url") or f"https://raw.githubusercontent.com/{owner}/{repo}/{normalized_ref}/{normalized_path}"),
+            "download_url": "",
+            "raw_download_url": "",
             # 外部库没有稳定语义版本，这里把短 SHA 作为远端版本提示。
             "version": str(payload.get("sha") or "")[:12],
-            "updated_at": updated_at,
+            "updated_at": 0,
         }
+        raw_url = str(payload.get("download_url") or f"https://raw.githubusercontent.com/{owner}/{repo}/{normalized_ref}/{normalized_path}")
+        result["raw_download_url"] = raw_url
+        candidates = self._github_download_candidates(raw_url, GITHUB_DOWNLOAD_RAW)
+        result["download_url"] = candidates[0] if candidates else raw_url
+        if len(candidates) > 1:
+            result["fallback_urls"] = candidates[1:]
         self._store_cached_payload(cache_key, result)
         return result
 
@@ -560,23 +1107,49 @@ class GithubManager:
 
         这条链路不走 GitHub API 配额，适合在 rate limit 时退化获取基础元数据。
         """
-        cache_key = ("repo_page", owner.lower(), repo.lower())
+        original_url = f"{GITHUB_WEB_BASE}/{owner}/{repo}"
+        candidates = self._github_download_candidates(original_url, "web")
+        request_url = candidates[0] if candidates else original_url
+        cache_key = ("repo_page", request_url)
         cached = self._get_cached_payload(cache_key)
         if cached is not self._cache_miss: return cached
 
         with build_retry_session() as session:
-            response = session.get(
-                f"{GITHUB_WEB_BASE}/{owner}/{repo}",
-                headers=self._build_github_headers({"Accept": "text/html,application/xhtml+xml"}),
-                timeout=timeout,
-            )
-            if missing_ok and response.status_code == 404:
-                self._store_cached_payload(cache_key, None, ttl_seconds=60)
-                return None
-            response.raise_for_status()
-            payload = response.text
-            self._store_cached_payload(cache_key, payload, ttl_seconds=120)
-            return payload
+            last_error = None
+            candidate_list = candidates or [original_url]
+            for index, candidate in enumerate(candidate_list):
+                is_mirror = candidate != original_url
+                try:
+                    response = session.get(
+                        candidate,
+                        headers=self._build_github_headers({"Accept": "text/html,application/xhtml+xml"}),
+                        timeout=timeout,
+                    )
+                    if missing_ok and response.status_code == 404:
+                        if is_mirror:
+                            self.record_mirror_result(candidate, success=False, capability="web")
+                        # 镜像可能没有对应页面；只有最后一个候选也不存在时才结束。
+                        if index == len(candidate_list) - 1:
+                            response.close()
+                            self._store_cached_payload(cache_key, None, ttl_seconds=60)
+                            return None
+                        response.close()
+                        continue
+                    response.raise_for_status()
+                    payload = response.text
+                    if is_mirror:
+                        self.record_mirror_result(candidate, success=True, capability="web")
+                    self._store_cached_payload(cache_key, payload, ttl_seconds=120)
+                    return payload
+                except (requests.RequestException, GithubApiError) as exc:
+                    if is_mirror:
+                        self.record_mirror_result(candidate, success=False, capability="web")
+                    last_error = exc
+                    if index == len(candidate_list) - 1:
+                        raise
+            if last_error:
+                raise last_error
+            return None
 
     def fetch_release_web(self, owner: str, repo: str, *, timeout: tuple[int, int] = (5, 20), missing_ok: bool = False) -> dict[str, Any] | None:
         """通过 `releases/latest` 的跳转位置解析最新 Release tag。
@@ -999,6 +1572,40 @@ class GithubManager:
             "remote_available": len(available_items) == len(items) if items else False,
         }
 
+    def check_external_provider_catalog(self, catalog_url: str = "", **request_options: Any) -> dict[str, Any]:
+        """普通维护检查只取单文件清单；仓库枚举留给显式刷新，不能伪报已是最新。"""
+        items = []
+        for source in self._provider_catalog_sources(catalog_url):
+            cached = self._load_provider_catalog_source_cache(source)
+            item = {"source_id": source["id"], "label": source.get("label"), "exists": bool(cached),
+                    "local_signature": self._provider_catalog_source_signature(cached),
+                    "local_count": len(cached.get("items", [])) if cached else 0,
+                    "remote_available": False, "needs_update": False}
+            try:
+                remaining_request_timeout(request_options.get("deadline"), request_options.get("cancel_event"))
+                if source.get("type") != "provider_json":
+                    item["message"] = "此来源需要枚举仓库，请使用刷新 Git 推荐清单。"
+                else:
+                    payload = self._fetch_external_metadata(source["url"], **request_options)
+                    catalog = self._normalize_provider_catalog_payload(payload, source_url=source["url"])
+                    for record in catalog["items"]:
+                        record["source_id"] = source["id"]
+                        if record.get("type") == "zip":
+                            record["catalog_signature"] = self._catalog_item_signature(record)
+                    signature = self._provider_catalog_source_signature(catalog)
+                    item.update(remote_available=True, remote_signature=signature, remote_count=len(catalog["items"]),
+                                needs_update=not cached or signature != item["local_signature"])
+            except (requests.RequestException, ValueError, TimeoutError, InterruptedError) as error:
+                item["message"] = str(error)
+            items.append(item)
+        available = [item for item in items if item["remote_available"]]
+        return {"sources": items, "remote_available": bool(items) and len(available) == len(items),
+                "needs_update": any(item["needs_update"] for item in items),
+                "local_signature": self._provider_catalog_sources_signature(items, "local_signature"),
+                "remote_signature": self._provider_catalog_sources_signature(available, "remote_signature"),
+                "local_count": sum(item["local_count"] for item in items),
+                "remote_count": sum(item.get("remote_count", 0) for item in available)}
+
     def record_timeline(self, repo_url: str, action: str, message: str):
         """主动记录操作轨迹"""
         with db.atomic():
@@ -1026,20 +1633,39 @@ class GithubManager:
         def on_download_error(task: DownloadTask):
             self._handle_download_error(task, normalized, resolved)
 
+        def on_source_result(url: str, success: bool):
+            # 下载器只报告结果，镜像能力由 GitHub 业务层确定。
+            if normalized.provider == GIT_PROVIDER_GITHUB:
+                self.record_mirror_result(
+                    url,
+                    success=success,
+                    capability=(
+                        GITHUB_DOWNLOAD_RELEASE_ASSET
+                        if resolved.kind == GITHUB_ARTIFACT_RELEASE_ASSET
+                        else GITHUB_DOWNLOAD_ARCHIVE
+                    ),
+                )
+
         # DownloadManager 只关心“下载什么”和“完成后回调什么”，不需要知道 GitHub 语义。
         Path(normalized.install.download_dir).mkdir(parents=True, exist_ok=True)
         is_temporary = normalized.install.action != GITHUB_INSTALL_DOWNLOAD_ONLY and normalized.install.cleanup_archive
         download_dir = tempfile.mkdtemp(prefix="git-task-", dir=normalized.install.download_dir) if is_temporary else normalized.install.download_dir
         try:
+            metadata = {
+                **({"temporary_dir": download_dir} if is_temporary else {}),
+            }
             return download_mgr.add_task(
                 url=resolved.download_url,
                 dest_dir=download_dir,
                 filename=resolved.filename,
                 expected_hash=normalized.expected_hash or None,
                 hash_algorithm=normalized.hash_algorithm,
-                on_complete=on_download_complete,
+                validate_download=validate_zip_archive if resolved.filename.lower().endswith(".zip") else None,
+                fallback_urls=resolved.fallback_urls,
+                on_source_result=on_source_result,
+                on_post_download=on_download_complete,
                 on_error=on_download_error,
-                metadata={"complete_after_callback": True, **({"temporary_dir": download_dir} if is_temporary else {})},
+                metadata=metadata,
             )
         except Exception:
             if is_temporary: shutil.rmtree(download_dir, ignore_errors=True)
@@ -1139,6 +1765,7 @@ class GithubManager:
         safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", name).strip(" ._") or "catalog_mod"
         filename = Path(urlparse(download_url).path).name or f"{name}.zip"
         version = str(item.get("catalog_signature") or current_ms())
+        candidates = self._github_download_candidates(download_url)
         request = GithubInstallRequest(
             repo_url=catalog_url,
             provider=str(item.get("provider") or "catalog_zip"),
@@ -1168,10 +1795,11 @@ class GithubManager:
             repo=safe_name,
             kind=GITHUB_ARTIFACT_SOURCE_ARCHIVE,
             version=version,
-            download_url=download_url,
+            download_url=candidates[0],
             filename=filename,
             provider=request.provider,
             host=request.host,
+            fallback_urls=candidates[1:],
         )
         self.record_timeline(catalog_url, "download", f"开始获取清单压缩包: {filename}")
 
@@ -1181,16 +1809,22 @@ class GithubManager:
         def on_download_error(task: DownloadTask):
             self._handle_download_error(task, request, resolved)
 
+        def on_source_result(url: str, success: bool):
+            self.record_mirror_result(url, success=success, capability=self.github_url_capability(download_url) or GITHUB_DOWNLOAD_ARCHIVE)
+
         Path(request.install.download_dir).mkdir(parents=True, exist_ok=True)
         download_dir = tempfile.mkdtemp(prefix="git-task-", dir=request.install.download_dir)
         try:
             return download_mgr.add_task(
-                url=download_url,
+                url=resolved.download_url,
                 dest_dir=download_dir,
                 filename=filename,
-                on_complete=on_download_complete,
+                fallback_urls=resolved.fallback_urls,
+                validate_download=validate_zip_archive,
+                on_source_result=on_source_result,
+                on_post_download=on_download_complete,
                 on_error=on_download_error,
-                metadata={"complete_after_callback": True, "temporary_dir": download_dir},
+                metadata={"temporary_dir": download_dir},
             )
         except Exception:
             shutil.rmtree(download_dir, ignore_errors=True)
@@ -1449,18 +2083,20 @@ class GithubManager:
             raise GithubApiError(f"无法解析 Git 引用对应的完整提交: {source_ref}")
         download_url = (self._build_gitlab_archive_url(identity, commit_sha) if request.provider == GIT_PROVIDER_GITLAB else
                         f"https://github.com/{request.owner}/{request.repo}/archive/{commit_sha}.zip")
+        candidates = self._github_download_candidates(download_url, GITHUB_DOWNLOAD_ARCHIVE) if request.provider == GIT_PROVIDER_GITHUB else [download_url]
         return GithubResolvedArtifact(
             repo_url=request.repo_url,
             owner=request.owner,
             repo=request.repo,
             kind=GITHUB_ARTIFACT_SOURCE_ARCHIVE,
             version=self._build_source_version(source_ref, commit_sha),
-            download_url=download_url,
+            download_url=candidates[0],
             filename=f"{request.repo}_{commit_sha[:12]}_source.zip",
             provider=request.provider,
             host=request.host,
             project_path=request.project_path,
             evidence={"ref": source_ref, "ref_type": source_ref_type, "commit_sha": commit_sha.lower()},
+            fallback_urls=candidates[1:],
         )
 
     def _select_release_asset(self, assets: list[dict[str, Any]], request: GithubArtifactRequest) -> dict[str, Any] | None:
@@ -1517,13 +2153,15 @@ class GithubManager:
         asset = self._select_release_asset(release.get("assets", []), request.artifact)
         if not asset: return None
 
+        download_url = str(asset.get("browser_download_url") or "")
+        candidates = self._github_download_candidates(download_url, GITHUB_DOWNLOAD_RELEASE_ASSET) if request.provider == GIT_PROVIDER_GITHUB else [download_url]
         return GithubResolvedArtifact(
             repo_url=request.repo_url,
             owner=request.owner,
             repo=request.repo,
             kind=GITHUB_ARTIFACT_RELEASE_ASSET,
             version=str(release.get("tag_name") or request.artifact.release_tag or "latest"),
-            download_url=str(asset.get("browser_download_url") or ""),
+            download_url=candidates[0] if candidates else download_url,
             filename=str(asset.get("name") or ""),
             asset_name=str(asset.get("name") or ""),
             provider=request.provider,
@@ -1531,6 +2169,7 @@ class GithubManager:
             project_path=request.project_path,
             evidence={"release_tag": str(release.get("tag_name") or request.artifact.release_tag),
                       "asset_name": str(asset.get("name") or ""), "asset_fingerprint": self._release_asset_fingerprint(asset)},
+            fallback_urls=candidates[1:],
         )
 
     @staticmethod
@@ -1772,18 +2411,20 @@ class GithubManager:
             request.repo,
             exc,
         )
+        candidates = self._github_download_candidates(fallback_url, GITHUB_DOWNLOAD_RELEASE_ASSET) if request.provider == GIT_PROVIDER_GITHUB else [fallback_url]
         return GithubResolvedArtifact(
             repo_url=request.repo_url,
             owner=request.owner,
             repo=request.repo,
             kind=GITHUB_ARTIFACT_RELEASE_ASSET,
             version=str(request.artifact.fallback_version or request.artifact.release_tag or "fallback"),
-            download_url=fallback_url,
+            download_url=candidates[0] if candidates else fallback_url,
             filename=fallback_filename,
             asset_name=str(request.artifact.fallback_asset_name or fallback_filename),
             provider=request.provider,
             host=request.host,
             project_path=request.project_path,
+            fallback_urls=candidates[1:],
         )
 
     def _fetch_repo_info_via_api(self, owner: str, repo: str, *, source_branch: str = "", identity: GitRepoIdentity | None = None, source_ref_type: str = GITHUB_SOURCE_BRANCH, force_refresh: bool = False) -> dict[str, Any]:

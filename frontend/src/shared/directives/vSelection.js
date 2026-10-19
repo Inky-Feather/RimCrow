@@ -1,4 +1,4 @@
-
+import { computed, shallowRef } from 'vue'
 /**
  * 核心逻辑类，用于管理单个列表的交互状态
  */
@@ -12,7 +12,7 @@ class SelectionManager {
     
     // 配置
     this.config = {
-      data: [],         // 必须传入有序的 ID 列表，用于计算范围
+      data: [],         // 有序 ID 数组；响应式数组可原地更新，普通数组需替换引用。
       selectedIds: [],       // 当前选中的 ID 列表
       onSelect: null,        // 选中触发的回调 (ids, anchorId) => {}
       onClear: null,         // 清空触发的回调 () => {}
@@ -29,11 +29,12 @@ class SelectionManager {
       ignoreClass: 'no-select', // 可选：命中该类名的区域直接放行，不参与点击/框选
       shouldIgnoreEvent: null, // 可选：(event) => boolean，用于调用方处理更复杂的忽略规则
       // 可自定义选框样式，支持 Tailwind 类名
-      boxClass: 'absolute z-9999 rounded border-2 border-dashed border-accent-special bg-accent-special/20 pointer-events-none transition-none',
+      boxClass: 'absolute z-20 rounded border-2 border-dashed border-accent-special bg-accent-special/20 pointer-events-none transition-none',
       disabled: false  // 特定情况下禁止选择
     }
-    this.dataIndexMap = new Map()
-    this.dataIndexKeys = []
+    this.data = shallowRef([])
+    // 索引只依赖列表数据，选择变化不扫描列表；保留传入数组自身的响应式依赖。
+    this.dataIndexMap = computed(() => new Map(this.data.value.map((id, index) => [String(id), index])))
     this.updateConfig(binding.value)
 
     // 运行时状态
@@ -50,6 +51,9 @@ class SelectionManager {
     // 性能优化状态
     this.lastHoveredId = null // 【优化1】记录上一次经过的ID
     this.rafId = null         // 【优化2】rAF 句柄
+    this.pendingPoint = null
+    this.pendingItemId = null
+    this.gestureIndex = null
     // 点击/连选状态
     this.anchorId = null // Shift 连选的锚点 ID (上一次点击的 ID)
     this.currentFocusId = null // 记录当前的光标位置，混合键鼠操作时非常重要
@@ -63,52 +67,37 @@ class SelectionManager {
     this.onMouseMove = this.onMouseMove.bind(this)
     this.onMouseUp = this.onMouseUp.bind(this)
     this.onKeyDown = this.onKeyDown.bind(this) // 键盘监听
+    // 原生拖拽可能不派发 mouseup；启动时结束点击候选，避免松手后继续框选或误改单选。
+    this.cancelGesture = this.cancelGesture.bind(this)
+    this.onGestureKeyDown = e => { if (e.key === 'Escape') this.cancelGesture() }
 
     // 事件绑定
     this.el.addEventListener('mousedown', this.onMouseDown)
     this.el.addEventListener('keydown', this.onKeyDown) // 绑定键盘事件
-    // 绑定到 document 以处理移出容器后的释放
-    document.addEventListener('mousemove', this.onMouseMove) 
-    document.addEventListener('mouseup', this.onMouseUp)
+    this.el.addEventListener('dragstart', this.cancelGesture)
   }
 
   updateConfig(value) {
     if (!value) return
-    const nextConfig = { ...this.config, ...value }
-    const nextData = Array.isArray(nextConfig.data) ? nextConfig.data : []
-    const shouldRebuildIndex = !this.areDataKeysSame(nextData)
-    this.config = nextConfig
-    // 大列表框选/Shift 连选会频繁按 ID 反查索引。
-    // 只有数据顺序真的改变时才重建索引；选中态、回调函数或模板内联对象变化不应该触发 O(n) 扫描。
-    if (shouldRebuildIndex) {
-      this.rebuildDataIndexMap(nextData)
-    }
+    this.config = { ...this.config, ...value }
+    this.data.value = Array.isArray(this.config.data) ? this.config.data : []
+    if (this.isMouseDown && (this.config.disabled || this.gestureIndex !== this.dataIndexMap.value)) this.cancelGesture()
   }
 
   // --- 辅助方法 ---
-  areDataKeysSame(data = []) {
-    if (!Array.isArray(data) || data.length !== this.dataIndexKeys.length) return false
-    for (let index = 0; index < data.length; index++) {
-      if (String(data[index]) !== this.dataIndexKeys[index]) return false
-    }
-    return true
-  }
-  rebuildDataIndexMap(data = []) {
-    this.dataIndexKeys = data.map(id => String(id))
-    this.dataIndexMap = new Map(this.dataIndexKeys.map((id, index) => [id, index]))
-  }
   // 获取事件目标对应的 Item ID
   getItemId(target) {
+    if (!target || !this.el.contains(target)) return null
     if (typeof this.config.getItemId === 'function') {
       return this.config.getItemId(target, this.el)
     }
-    const el = target.closest(`[${this.config.idAttribute}]`)
-    return el ? el.getAttribute(this.config.idAttribute) : null
+    const el = target.closest?.(`[${this.config.idAttribute}]`)
+    return el && this.el.contains(el) ? el.getAttribute(this.config.idAttribute) : null
   }
   // 获取 ID 在数据中的索引位置
   getIndexById(id) {
     if (!this.config.data) return -1
-    return this.dataIndexMap.get(String(id)) ?? -1
+    return this.dataIndexMap.value.get(String(id)) ?? -1
   }
   getItemScope(id) {
     if (!id || typeof this.config.getItemScope !== 'function') return null
@@ -135,42 +124,23 @@ class SelectionManager {
 
   updateSelectionBox(currentX, currentY) {
     if (!this.selectionBoxEl) return
-    // 使用 rAF 避免在一帧内多次重排
-    if (this.rafId) cancelAnimationFrame(this.rafId)
-
-    this.rafId = requestAnimationFrame(() => {
-        // 获取容器当前的实时位置
-        const rect = this.el.getBoundingClientRect()
-        const scrollTop = this.el.scrollTop
-        const scrollLeft = this.el.scrollLeft
-        
-        const startX = (this.startPos.x - rect.left) + this.startScrollLeft
-        const startY = (this.startPos.y - rect.top) + this.startScrollTop
-        
-        const curX = (currentX - rect.left) + scrollLeft
-        const curY = (currentY - rect.top) + scrollTop
-
-        // 计算矩形几何属性
-        // left/top 取最小坐标，width/height 取坐标差绝对值
-        const left = Math.min(startX, curX)
-        const top = Math.min(startY, curY)
-        const width = Math.abs(curX - startX)
-        const height = Math.abs(curY - startY)
-
-        // 更新样式 (使用 transform 可能会更流畅，但 top/left 在选框场景下足够且不易出错)
-        if (this.selectionBoxEl) {
-          this.selectionBoxEl.style.display = 'block'
-          // 使用 transform 可能会比 top/left 性能更好一点，但在 fixed 场景下 top/left 兼容性更好且直观
-          this.selectionBoxEl.style.left = `${left}px`
-          this.selectionBoxEl.style.top = `${top}px`
-          this.selectionBoxEl.style.width = `${width}px`
-          this.selectionBoxEl.style.height = `${height}px`
-        }
-    })
+    const rect = this.el.getBoundingClientRect()
+    const startX = this.startPos.x - rect.left + this.startScrollLeft
+    const startY = this.startPos.y - rect.top + this.startScrollTop
+    // 指针离开列表时将选框限制在容器内，避免撑大滚动区域。
+    const curX = Math.max(0, Math.min(currentX - rect.left, this.el.clientWidth)) + this.el.scrollLeft
+    const curY = Math.max(0, Math.min(currentY - rect.top, this.el.clientHeight)) + this.el.scrollTop
+    const style = this.selectionBoxEl.style
+    style.display = 'block'
+    style.left = `${Math.min(startX, curX)}px`
+    style.top = `${Math.min(startY, curY)}px`
+    style.width = `${Math.abs(curX - startX)}px`
+    style.height = `${Math.abs(curY - startY)}px`
   }
 
   removeSelectionBox() {
     if (this.rafId) cancelAnimationFrame(this.rafId) // 清理未执行的动画帧
+    this.rafId = null
     if (this.selectionBoxEl) {
       // 检查是否还在 DOM 中再移除
       if (this.el.contains(this.selectionBoxEl)) {
@@ -238,6 +208,7 @@ class SelectionManager {
   // 处理鼠标按下事件
   onMouseDown(e) {
     if (this.config.disabled || e.button !== 0) return
+    this.cancelGesture()
     // 通用忽略入口：复杂卡片里经常有按钮、输入框、颜色选择器等控件。
     // 调用方可以用 no-select 类名或 shouldIgnoreEvent 回调明确告诉指令“这里不是选择行为”。
     if (e.target.closest?.(`.${this.config.ignoreClass}`)) return
@@ -271,6 +242,12 @@ class SelectionManager {
       e.preventDefault()
     }
     this.isMouseDown = true
+    this.gestureIndex = this.dataIndexMap.value
+    // 只有手势期间监听全局移动和释放，避免每个空闲列表都处理 mousemove。
+    document.addEventListener('mousemove', this.onMouseMove)
+    document.addEventListener('mouseup', this.onMouseUp)
+    window.addEventListener('blur', this.cancelGesture)
+    window.addEventListener('keydown', this.onGestureKeyDown)
     this.isDragging = false
     this.isSwiping = false // 此时还没开始拖动，不算划动框选
     this.startPos = { x: e.clientX, y: e.clientY }
@@ -284,7 +261,7 @@ class SelectionManager {
     // 这样 clickClass 和 swipeClass 复用同一块区域时，点击与拖拽都能正常工作。
     if (this.isSwipeTarget) {
       this.swipeStartIndex = this.getIndexById(itemId)
-      this.lastHoveredId = itemId
+      this.pendingItemId = itemId
       // 分组列表等场景会给 ID 配置选择域；跨域多选会让“从当前分组移除”等操作语义变得模糊。
       // 因此划动时只继承同一选择域内已有项，不把其它分组的选择带进来。
       this.selectionSnapshot = isMulti ? new Set(this.filterIdsToScope(this.config.selectedIds, this.getItemScope(itemId))) : new Set()
@@ -317,6 +294,10 @@ class SelectionManager {
   // 处理鼠标移动事件
   onMouseMove(e) {
     if (!this.isMouseDown) return
+    if (e.buttons === 0 || this.config.disabled || this.gestureIndex !== this.dataIndexMap.value) {
+      this.cancelGesture()
+      return
+    }
 
     // 1. 检测拖拽阈值 (防止手抖误判为拖拽)
     if (!this.isDragging) {
@@ -328,9 +309,7 @@ class SelectionManager {
           // 超过阈值后才真正进入划动模式，兼容“点击”和“拖拽”复用同一区域的场景。
           this.isSwiping = true
           this.createSelectionBox()
-          if (this.mouseDownItemId) {
-            this.updateSwipeRange(this.mouseDownItemId)
-          }
+          this.anchorId = this.mouseDownItemId
         }
       }
     }
@@ -338,27 +317,37 @@ class SelectionManager {
     // 2. 处理划动框选逻辑
     if (this.isSwiping) {
       e.preventDefault()
-      // A. 更新视觉选框
-      this.updateSelectionBox(e.clientX, e.clientY)
-      // B. 更新选中数据
+      this.pendingPoint = { x: e.clientX, y: e.clientY }
       const itemId = this.getItemId(e.target)
-      // 只有当 ID 变化时才触发昂贵的计算逻辑
-      if (itemId && itemId !== this.lastHoveredId) {
-        this.lastHoveredId = itemId
-        this.updateSwipeRange(itemId)
+      if (itemId && this.getItemScope(itemId) === this.getItemScope(this.mouseDownItemId)) {
+        this.pendingItemId = itemId
       }
+      if (!this.rafId) this.rafId = requestAnimationFrame(() => this.flushSwipe())
     }
   }
-  // 处理鼠标松开事件
-  onMouseUp(e) {
-    if (!this.isMouseDown) return
-    const wasSwiping = this.isSwiping
-    const wasDragging = this.isDragging
-    const wasClickTarget = this.isClickTarget
-    const mouseDownItemId = this.mouseDownItemId
-    // 移除视觉选框 (无论是否在划动模式都尝试移除，确保清洁)
+
+  flushSwipe() {
+    if (this.rafId) cancelAnimationFrame(this.rafId)
+    this.rafId = null
+    if (!this.isSwiping) return
+    if (this.config.disabled || this.gestureIndex !== this.dataIndexMap.value) {
+      this.cancelGesture()
+      return
+    }
+    // 选框和范围共用一帧，鼠标松开时也可同步提交最后一个有效落点。
+    if (this.pendingPoint) this.updateSelectionBox(this.pendingPoint.x, this.pendingPoint.y)
+    const itemId = this.pendingItemId
+    if (itemId && itemId !== this.lastHoveredId && this.getIndexById(itemId) !== -1) {
+      this.lastHoveredId = itemId
+      this.updateSwipeRange(itemId)
+    }
+  }
+
+  cancelGesture() {
     this.removeSelectionBox()
-    this.lastHoveredId = null // 重置
+    this.pendingPoint = null
+    this.pendingItemId = null
+    this.lastHoveredId = null
     this.isSwiping = false
     this.isMouseDown = false
     this.isDragging = false
@@ -367,15 +356,33 @@ class SelectionManager {
     this.swipeStartIndex = -1
     this.selectionSnapshot = new Set()
     this.mouseDownItemId = null
+    this.gestureIndex = null
+    document.removeEventListener('mousemove', this.onMouseMove)
+    document.removeEventListener('mouseup', this.onMouseUp)
+    window.removeEventListener('blur', this.cancelGesture)
+    window.removeEventListener('keydown', this.onGestureKeyDown)
+  }
+  // 处理鼠标松开事件
+  onMouseUp(e) {
+    if (!this.isMouseDown) return
+    if (this.config.disabled || this.gestureIndex !== this.dataIndexMap.value) {
+      this.cancelGesture()
+      return
+    }
+    if (this.isSwiping) {
+      const itemId = this.getItemId(e.target)
+      if (itemId && this.getItemScope(itemId) === this.getItemScope(this.mouseDownItemId)) this.pendingItemId = itemId
+      this.flushSwipe()
+    }
+    const wasSwiping = this.isSwiping
+    const wasDragging = this.isDragging
+    const wasClickTarget = this.isClickTarget
+    const mouseDownItemId = this.mouseDownItemId
+    this.cancelGesture()
     // 如果是划动模式，松开即结束
     if (wasSwiping || wasDragging) {
       return
     }
-    // 如果发生了拖拽，则不处理点击选择逻辑 (交给 SortableJS 或其他拖拽库处理)
-    //if (this.isDragging) {
-    //  this.isMouseDown = false
-    //  return
-    //}
     // === 处理纯点击逻辑 (Click End) ===
     // 只有在没有发生拖拽且没在划动时才触发
     // 获取目标 ID (因为绑定在 document 上，需要重新判断 target 是否在容器内)
@@ -432,6 +439,8 @@ class SelectionManager {
     if (this.getItemScope(this.mouseDownItemId) !== this.getItemScope(currentId)) return
     const currentIndex = this.getIndexById(currentId)
     if (currentIndex === -1 || this.swipeStartIndex === -1) return
+    const focusChanged = this.currentFocusId !== currentId
+    this.currentFocusId = currentId
 
     const min = Math.min(this.swipeStartIndex, currentIndex)
     const max = Math.max(this.swipeStartIndex, currentIndex)
@@ -444,10 +453,8 @@ class SelectionManager {
       const id = this.config.data[i]
       if (id) newSelection.add(id)
     }
-    // 数据防抖：只有结果真的变了才提交 Store
-    // 数据防抖：用传入的 selectedIds 做比较
-    const currentStoreSet = new Set(this.config.selectedIds)
-    if (this.setsAreEqual(newSelection, currentStoreSet)) {
+    // 焦点变化仍需通知调用方；联锁展开后的集合去重由业务 Store 处理。
+    if (!focusChanged && this.setsAreEqual(newSelection, new Set(this.config.selectedIds))) {
         return
     }
     if (this.config.onSelect) this.config.onSelect(Array.from(newSelection), currentId)
@@ -470,7 +477,7 @@ class SelectionManager {
         this.anchorId = targetId
         return
     }
-    if (!this.anchorId || !this.dataIndexMap.has(String(this.anchorId))) {
+    if (!this.anchorId || !this.dataIndexMap.value.has(String(this.anchorId))) {
         // 如果没有锚点，退化为单选并建立锚点
         if (this.config.onSelect) this.config.onSelect([targetId], targetId)
         this.anchorId = targetId
@@ -500,11 +507,10 @@ class SelectionManager {
   }
 
   destroy() {
-    this.removeSelectionBox() // 销毁时清理遗留DOM
+    this.cancelGesture()
     this.el.removeEventListener('mousedown', this.onMouseDown)
     this.el.removeEventListener('keydown', this.onKeyDown) // 移除键盘监听
-    document.removeEventListener('mousemove', this.onMouseMove)
-    document.removeEventListener('mouseup', this.onMouseUp)
+    this.el.removeEventListener('dragstart', this.cancelGesture)
   }
 }
 

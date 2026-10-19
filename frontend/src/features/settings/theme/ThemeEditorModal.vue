@@ -24,7 +24,7 @@
 
         <div class="relative z-10 flex-1 overflow-y-auto p-3 custom-scrollbar">
           <label>
-            <span class="mb-1 block px-1 text-xs font-bold uppercase tracking-widest text-text-dim">{{ t('ui.settings.theme.editor.name', '主题名称') }}</span>
+            <span class="mb-1 block px-1 text-xs font-bold tracking-widest text-text-dim">{{ t('ui.settings.theme.editor.name', '主题名称') }}</span>
             <input v-model="draft.name" class="input-glass h-9 w-full px-3 text-sm text-text-main focus:outline-none" :placeholder="t('ui.settings.theme.editor.name_placeholder', '例如：我的主题')">
           </label>
 

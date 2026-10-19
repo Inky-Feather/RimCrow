@@ -4,6 +4,134 @@ from pathlib import Path
 import pytest
 
 from backend.i18n.messages import deep_merge, localized_key, localized_params, tr
+from backend.i18n.language_registry import get_language_english_name, get_language_label, get_language_options, normalize_language_code, normalize_language_codes, to_external_language, to_steam_elanguage
+
+
+def test_initial_language_choices_match_builtin_locale_files():
+    from backend.settings import _BUILTIN_UI_LANGUAGE_CODES
+
+    locales = Path(__file__).resolve().parents[1] / "frontend" / "src" / "locales"
+    codes = {json.loads(path.read_text(encoding="utf-8"))["_meta"]["language"] for path in locales.glob("*.json")}
+    assert _BUILTIN_UI_LANGUAGE_CODES == codes
+
+
+@pytest.mark.parametrize("language, expected", [
+    ("zh_CN", "zh-CN"), ("zh_SG", "zh-CN"), ("zh_TW", "zh-TW"),
+    ("zh_HK", "zh-TW"), ("zh_MO", "zh-TW"), ("zh-Hant-CN", "zh-TW"),
+    ("zh-Hans-HK", "zh-CN"), ("en_GB", "en"), ("de_AT.UTF-8", "de"),
+    ("ko_KR.UTF-8", "ko"), ("ru_RU.UTF-8", "ru"), ("ja_JP", "en"),
+    ("fr_FR", "en"), ("C.UTF-8", "en"), ("", "en"),
+])
+def test_initial_language_matches_available_ui_languages(monkeypatch, language, expected):
+    import backend.settings as settings_module
+
+    monkeypatch.setattr(settings_module.sys, "platform", "linux")
+    for key in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(settings_module.locale, "getlocale", lambda: (language, None))
+    assert settings_module._detect_initial_language() == expected
+
+
+def test_initial_language_uses_message_locale_priority(monkeypatch):
+    import backend.settings as settings_module
+
+    monkeypatch.setattr(settings_module.sys, "platform", "linux")
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.setenv("LC_MESSAGES", "ko_KR.UTF-8")
+    monkeypatch.setenv("LANG", "de_DE.UTF-8")
+    assert settings_module._detect_initial_language() == "ko"
+    monkeypatch.setenv("LC_ALL", "ru_RU.UTF-8")
+    assert settings_module._detect_initial_language() == "ru"
+
+
+def test_initial_language_reads_windows_ui_language_and_handles_failure(monkeypatch):
+    import ctypes
+    from types import SimpleNamespace
+    import backend.settings as settings_module
+
+    monkeypatch.setattr(settings_module.sys, "platform", "win32")
+    kernel32 = SimpleNamespace(GetUserDefaultUILanguage=lambda: 0x0404)
+    monkeypatch.setattr(ctypes, "windll", SimpleNamespace(kernel32=kernel32), raising=False)
+    assert settings_module._detect_initial_language() == "zh-TW"
+    kernel32.GetUserDefaultUILanguage = lambda: 0
+    assert settings_module._detect_initial_language() == "en"
+
+    def fail():
+        raise OSError("UI language unavailable")
+
+    kernel32.GetUserDefaultUILanguage = fail
+    assert settings_module._detect_initial_language() == "en"
+
+
+@pytest.mark.parametrize("current, backup, detected, expected, enabled", [
+    (None, None, "de", "de", False), (None, None, "zh-CN", "zh-CN", True),
+    (None, None, "zh-TW", "zh-TW", False), (None, None, "en", "en", False),
+    ({"language": "zh-CN", "network": {"github_hosts_auto_update": False}}, None, None, "zh-CN", False),
+    (None, {"language": "ko"}, None, "ko", False),
+    ({"language": "ja"}, {"language": "en"}, None, "ja", False),
+    ({"run_count": 1}, None, None, "zh-CN", False),
+])
+def test_initial_language_and_hosts_only_apply_without_saved_config(monkeypatch, current, backup, detected, expected, enabled):
+    import backend.settings as settings_module
+
+    manager = object.__new__(settings_module.SettingsManager)
+    manager.config = settings_module.AppConfig()
+    manager.last_relocation = None
+    monkeypatch.setattr(manager, "_read_config_fragment", lambda _path, source: current if source == "current" else backup)
+    monkeypatch.setattr(manager, "_normalize_config", lambda: None)
+    monkeypatch.setattr(manager, "_sync_derived_paths", lambda: None)
+    monkeypatch.setattr(manager, "_is_config_valid", lambda: True)
+    monkeypatch.setattr(manager, "save", lambda: None)
+
+    def detect():
+        assert current is None and backup is None
+        return detected
+
+    monkeypatch.setattr(settings_module, "_detect_initial_language", detect)
+    manager._load_to_config()
+    assert manager.config.language == expected
+    assert manager.config.network.github_hosts_enabled is enabled
+    assert manager.config.network.github_hosts_auto_update is (current or {}).get("network", {}).get("github_hosts_auto_update", True)
+
+
+@pytest.mark.parametrize("last, current, language, initially_enabled, should_enable", [
+    ("0.24.11", "0.24.13", "zh-CN", False, True),
+    ("v0.24.12", "0.25.0", "zh-CN", False, True),
+    ("0.24.12", "0.24.13", "zh_CN", False, True),
+    ("0.24.12", "0.24.13", "zh-TW", False, False),
+    ("0.24.12", "0.24.13", "en", False, False),
+    ("0.24.13", "0.25.0", "zh-CN", False, False),
+    ("0.24.12", "0.24.12", "zh-CN", False, False),
+    ("0.24.12", "0.24.11", "zh-CN", False, False),
+    ("0.24.12", "0.24.13", "zh-CN", True, True),
+])
+def test_hosts_upgrade_migration_respects_version_and_language(monkeypatch, last, current, language, initially_enabled, should_enable):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    import backend.migrations.app_upgrade as app_upgrade
+    import backend.managers.mgr_network as network_module
+    from backend.settings import AppConfig
+
+    config = AppConfig(language=language)
+    config.network.github_hosts_enabled = initially_enabled
+    config.network.github_hosts_auto_update = False
+    mock_settings = SimpleNamespace(config=config, save=Mock())
+    mock_network = Mock()
+    monkeypatch.setattr(app_upgrade, "settings", mock_settings)
+    monkeypatch.setattr(network_module, "network_mgr", mock_network)
+
+    app_upgrade.run_app_upgrade_migrations(last, current)
+    assert config.network.github_hosts_enabled is should_enable
+    assert config.network.github_hosts_auto_update is False
+    assert config.network.write_to_system_hosts is False
+    changed = should_enable and not initially_enabled
+    assert mock_settings.save.call_count == int(changed)
+    assert mock_network.apply.call_count == int(changed)
+
+    # 新版本已记录后，后续升级不能重新打开用户手动关闭的开关。
+    config.network.github_hosts_enabled = False
+    app_upgrade.run_app_upgrade_migrations("0.24.13", "0.25.0")
+    assert config.network.github_hosts_enabled is False
 
 
 def test_tr_keeps_default_text_and_message_meta():
@@ -375,3 +503,32 @@ def test_locale_workfile_keeps_same_text_as_valid_translation():
     assert language == "en"
     assert errors == []
     assert messages == {"ui.symbol": "^^|^^"}
+
+
+def test_language_registry_normalizes_common_aliases():
+    assert normalize_language_code("ChineseSimplified") == "zh-CN"
+    assert normalize_language_code("Simplified_Chinese") == "zh-CN"
+    assert normalize_language_code("schinese") == "zh-CN"
+    assert normalize_language_code("PortugueseBrazilian") == "pt-BR"
+    assert normalize_language_codes(["zh", "zh-CN", "English"]) == ["zh-CN", "en"]
+
+
+def test_language_registry_exposes_unified_names_and_labels():
+    assert get_language_english_name("zh-CN") == "ChineseSimplified"
+    assert get_language_label("zh-CN") == "简体中文"
+    assert to_external_language("zh-CN", "english_name") == "ChineseSimplified"
+    assert to_external_language("zh-CN", "label") == "简体中文"
+
+
+def test_language_registry_maps_steam_elanguage():
+    assert to_steam_elanguage("en") == 0
+    assert to_steam_elanguage("zh-CN") == 6
+    assert to_steam_elanguage("Traditional_Chinese") == 7
+    assert to_steam_elanguage("PortugueseBrazilian") == 22
+    assert to_steam_elanguage("none") == -1
+
+
+def test_language_registry_builds_options():
+    options = get_language_options(steam_only=True)
+    assert options[0]["value"] == ""
+    assert any(option["value"] == 6 and option["code"] == "zh-CN" for option in options)

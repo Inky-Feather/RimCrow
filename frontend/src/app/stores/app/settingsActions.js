@@ -101,7 +101,10 @@ export const useSettingsActions = ({
   requestModScan,
 } = {}) => {
   // 打开/关闭设置页面
-  const openSettingsPanel = () => { uiState.showSettingsPanel = true }
+  const openSettingsPanel = (tab = 'paths') => {
+    uiState.settingsTab = tab
+    uiState.showSettingsPanel = true
+  }
   const closeSettingsPanel = () => { uiState.showSettingsPanel = false }
 
   const refreshAfterModListSourceChange = async (nextContext) => {
@@ -257,9 +260,9 @@ export const useSettingsActions = ({
         if (res.data.remote_image_cache) syncRemoteImageCache(res.data.remote_image_cache)
         profileStore.currentProfileId = nextContext?.profile_id || nextSettings.current_profile_id || profileStore.currentProfileId
         profileStore.activeContext = nextContext
-        await profileStore.fetchProfiles()
-
+        // 保存已完成；环境列表刷新不能继续占用设置面板。
         closeSettingsPanel()
+        void profileStore.fetchProfiles().catch(e => console.error('刷新环境列表异常:', e))
 
         const changes = getRefreshSettingsChanges(previousSnapshot, settings.value, nextContext)
         await refreshAfterSettingsSave(changes, nextContext)

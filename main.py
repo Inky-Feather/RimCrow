@@ -1,4 +1,27 @@
 
+import sys
+
+# 系统文件 worker 必须先分流，不能导入应用、初始化网络或创建窗口。
+if __name__ == "__main__" and sys.argv[1:2] == ["--system-hosts-worker"]:
+    if len(sys.argv) != 2:
+        raise SystemExit(2)
+    from backend.utils.system_hosts import run_system_hosts_worker
+    raise SystemExit(run_system_hosts_worker())
+if __name__ == "__main__" and sys.argv[1:2] in (["--system-hosts-authorize"], ["--system-hosts-helper"]):
+    from pathlib import Path
+    from backend.utils.system_hosts import run_hosts_authorization, run_elevated_hosts_helper
+    if len(sys.argv) != 4:
+        raise SystemExit(2)
+    try:
+        port, token = int(sys.argv[2]), sys.argv[3]
+        if not 0 < port <= 65535 or len(token) != 64 or any(char not in "0123456789abcdef" for char in token):
+            raise ValueError("Invalid Hosts helper arguments")
+        if sys.argv[1] == "--system-hosts-authorize":
+            raise SystemExit(run_hosts_authorization(Path(__file__), port, token))
+        raise SystemExit(run_elevated_hosts_helper(port, token))
+    except (OSError, ValueError):
+        raise SystemExit(2)
+
 try:
     from pip_system_certs.wrapt_requests import inject_truststore
     # 打包环境不执行 .pth，必须在网络模块导入前启用系统证书。
@@ -7,7 +30,6 @@ except ImportError:
     pass
 
 import glob
-import sys
 import threading
 import time
 
@@ -378,4 +400,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    finally:
+        # 统一覆盖桌面、网页和 Steam 子进程退出；局部 cleanup 不关闭全局网络。
+        network_module = sys.modules.get("backend.managers.mgr_network")
+        if network_module is not None:
+            network_module.network_mgr.close()

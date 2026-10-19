@@ -668,7 +668,6 @@
       "multiplayer_compatibility_failed": "Die Multiplayer-Kompatibilitätstabelle konnte nicht aktualisiert werden.",
       "multiplayer_compatibility_started": "Aktualisierung der Multiplayer-Kompatibilitätstabelle gestartet",
       "path_or_url_missing": "Update-URL oder Zielpfad ist nicht konfiguriert",
-      "reload_failed_after_success": "{message} Cache-Neuladen fehlgeschlagen. Später manuell aktualisieren.",
       "update_start_failed": "Aktualisierung externer Daten konnte nicht gestartet werden. Prüfen Sie Update-Adresse, Netzwerkverbindung, Proxy-Einstellungen und Schreibrechte des Zielordners.",
       "workshop_db_done": "Community Workshop-Datenbank aktualisiert.",
       "workshop_db_failed": "Die Community-Workshop-Datenbank konnte nicht aktualisiert werden.",
@@ -696,16 +695,10 @@
       "invalid_launch_warning_action": "Ungültige Startbestätigungsaktion",
       "launch_after_steam_exit": "Steam wurde beendet. Der Spielstart hat begonnen. Warten auf die Bestätigung des Spielvorgangs.",
       "launch_cancelled": "Start abgebrochen",
-      "launch_prepare_active_done": "Die Synchronisierung der Startprüfung ist für die aktuelle Umgebung abgeschlossen.",
-      "launch_prepare_active_failed": "Die Synchronisierung der Startüberprüfung ist für die aktuelle Umgebung fehlgeschlagen.",
-      "launch_prepare_cache_sync_done": "Die Synchronisierung der Startprüfung wurde mit dem aktuellen Cache-Status abgeschlossen.",
-      "launch_prepare_cache_sync_failed": "Die Synchronisierung der Startüberprüfung ist bei Verwendung des aktuellen Cache-Status fehlgeschlagen.",
       "launch_prepare_failed": "Startvorbereitung fehlgeschlagen. Prüfen Sie die Pfade des aktuellen Profils, Dateirechte und Mod-Verknüpfungen.",
       "launch_prepare_missing_context": "Der Zielumgebungskontext konnte nicht erstellt werden. Überprüfen Sie, ob die Umgebung vorhanden ist.",
       "launch_prepare_missing_scan_paths": "In der Zielumgebung stehen keine Mod-Pfade für die Startup-Check-Synchronisierung zur Verfügung.",
-      "launch_prepare_no_context_builder": "Der Umgebungskontext-Builder ist nicht verfügbar, daher wurde die Synchronisierung der Startprüfung übersprungen.",
-      "launch_prepare_scan_sync_done": "Die Synchronisierung der Startprüfung ist abgeschlossen und die Links wurden anhand der neuesten Scanergebnisse aktualisiert.",
-      "launch_prepare_scan_sync_failed": "Der Scan der Startüberprüfung wurde abgeschlossen, aber die Linksynchronisierung ist fehlgeschlagen.",
+      "launch_prepare_scan_failed": "Der Scan vor dem Start wurde nicht abgeschlossen. Der Spielstart wurde abgebrochen.",
       "launch_prepare_sync_failed": "Die Startsynchronisierung ist fehlgeschlagen",
       "launch_prepare_unhealthy_context": "Der Zielumgebungspfad ist nicht verfügbar. Schließen Sie zunächst die Pfadeinrichtung ab.",
       "steam_launch_failed": "Die Steam-Startanfrage konnte nicht gesendet werden.",
@@ -1023,7 +1016,8 @@
     "update": {
       "download_started": "Mit dem Herunterladen des Update-Pakets begonnen",
       "installing_restart": "Neustart und Installation des Updates.",
-      "no_available_info": "Es sind keine Update-Informationen verfügbar. Suchen Sie zuerst nach Updates."
+      "no_available_info": "Es sind keine Update-Informationen verfügbar. Suchen Sie zuerst nach Updates.",
+      "result_changed": "Die Update-Informationen haben sich geändert. Bitte öffnen Sie das Update erneut."
     },
     "uri": {
       "no_link_to_open": "Kein Link zum Öffnen.",
@@ -2413,6 +2407,7 @@
         "active": "Derzeit aktiv",
         "all": "Alle Staaten",
         "coexist_disabled": "Koexistenz behindert",
+        "duplicates": "Mit Duplikaten",
         "inactive": "Inaktiv",
         "mod_disabled": "Mod inaktiv"
       },
@@ -3164,13 +3159,18 @@
       "access_denied": "Der Zieldienst hat die Anfrage abgelehnt. Prüfen Sie Anmeldestatus, Zugriffsrechte oder Anfragekonfiguration.",
       "auth_failed": "Authentifizierung beim Zieldienst fehlgeschlagen. Prüfen Sie Anmeldestatus, Zugriffstoken oder Anfragekonfiguration.",
       "connection_failed": "Verbindung zum Zieldienst fehlgeschlagen. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen oder Dienststatus.",
+      "invalid_response": "Der Server hat unvollständige oder ungültige Inhalte zurückgegeben. Versuche es erneut oder wähle eine andere Downloadquelle oder einen anderen Mirror.",
       "not_found": "Zielressource wurde nicht gefunden oder die Adresse ist ungültig. Prüfen Sie Link und Parameter oder versuchen Sie es später erneut.",
       "proxy_auth": "Der Proxy-Server erfordert Anmeldung. Prüfen Sie Proxy-Benutzername und Passwort oder deaktivieren Sie einen nicht verfügbaren Proxy.",
       "proxy_failed": "Proxy-Verbindung fehlgeschlagen. Prüfen Sie Proxy-Adresse, Port, Benutzername und Passwort oder deaktivieren Sie den Proxy vorübergehend.",
       "rate_limited": "Zu viele Anfragen oder Dienstlimit erreicht. Versuchen Sie es später erneut.",
+      "redirect": "Der Dienst verlangt eine Weiterleitung zu einer anderen Adresse. Falls dies weiter auftritt, prüfen Sie den Link oder versuchen Sie einen anderen Proxy oder Mirror.",
+      "request_failed": "Der Dienst konnte diese Anfrage nicht annehmen. Prüfen Sie Link, Eingaben und Einstellungen oder aktualisieren Sie die App und versuchen Sie es erneut.",
       "request_invalid": "Ungültige Anfrageparameter. Prüfen Sie Eingaben oder Konfiguration und versuchen Sie es erneut.",
       "service_unavailable": "Der Zieldienst ist vorübergehend nicht verfügbar. Versuchen Sie es später erneut oder prüfen Sie den Dienststatus.",
-      "timeout": "Netzwerkanfrage abgelaufen. Prüfen Sie Netzwerkverbindung und Proxy-Einstellungen oder versuchen Sie es später erneut."
+      "steam_access_denied": "Steam hat die Anfrage abgelehnt. Prüfen Sie bei Nutzung der Web API Ihren API-Schlüssel und die Zugriffsrechte. Versuchen Sie auch ein anderes Netzwerk oder einen anderen Proxy.",
+      "timeout": "Netzwerkanfrage abgelaufen. Prüfen Sie Netzwerkverbindung und Proxy-Einstellungen oder versuchen Sie es später erneut.",
+      "tls_failed": "Die sichere Verbindung konnte nicht überprüft oder hergestellt werden. Prüfen Sie Systemzeit, Zertifikate und Proxy-Einstellungen. Lassen Sie die Zertifikatsprüfung aktiviert."
     },
     "path": {
       "batch_check_failed": "Pfade konnten nicht im Batch überprüft werden. Stellen Sie sicher, dass Pfade vorhanden sind und die Berechtigungen den Zugriff zulassen, und versuchen Sie es später erneut.",
@@ -3231,7 +3231,7 @@
       "workshop_status_failed": "Der Installationsstatus von Steam Workshop konnte nicht überprüft werden. Stellen Sie sicher, dass Steam ausgeführt und angemeldet ist, und versuchen Sie es später erneut."
     },
     "steamcmd": {
-      "acf_read_failed": "SteamCMD-Workshop-Datensätze konnten nicht gelesen werden. Prüfen Sie Dateirechte oder versuchen Sie es später erneut.",
+      "acf_repair_failed": "Die SteamCMD-Workshop-Einträge konnten nicht repariert werden. Prüfe das Dateiformat, die Zugriffsrechte und ob die Datei gerade verwendet wird.",
       "download_start_failed": "Der SteamCMD-Download konnte nicht gestartet werden. Überprüfen Sie die Netzwerkverbindung, die Proxy-Einstellungen, den SteamCMD-Status und die Berechtigungen für den Zielordner.",
       "execution_failed": "SteamCMD-Ausführung fehlgeschlagen. Prüfen Sie Steam-Installation, Netzwerkverbindung und Downloadumgebung.",
       "execution_failed_with_target": "SteamCMD-Ausführung fehlgeschlagen. Prüfen Sie Steam-Installation, Netzwerkverbindung und Rechte des Downloadordners.",
@@ -3837,6 +3837,8 @@
     "message": {
       "alternative_used": "__{title}__: Abhängigkeit [[{base}]] wird durch alternativen Mod [[{alternative}]] ersetzt",
       "dependency_after_mod": "!!Abhängigkeit nach Ziel!!: muss nach der Abhängigkeit geladen werden [[{mod}]]",
+      "disabled_dependency": "Die benötigte Mod [[{mod}]] wurde deaktiviert und wird im Spiel nicht geladen. Aktiviere sie zuerst in der Liste „Deaktiviert“ wieder.",
+      "disabled_mod": "Diese Mod wurde deaktiviert und wird im Spiel nicht geladen. Die Dateien sind weiterhin vorhanden. Du kannst sie in der Liste „Deaktiviert“ wieder aktivieren.",
       "inactive_alternative_dependency": "!!{title}!!: Alternative Abhängigkeit [[{mod}]] ist nicht aktiv",
       "inactive_dependency": "!!{title}!!: Abhängigkeit [[{mod}]] ist nicht aktiv",
       "inactive_language_pack": "^^{title}^^: Unterstützt die aktuelle Sprache nicht, aber das lokale Sprachpaket [[{pack}]] ist vorhanden",
@@ -4280,6 +4282,18 @@
       "import_success": "Import erfolgreich"
     }
   },
+  "network": {
+    "hosts": {
+      "authorization_cancelled": "Die Administratorfreigabe wurde abgebrochen. Die System-Hosts-Datei wurde nicht aktualisiert. App-interne Zuordnungen bleiben unverändert.",
+      "authorization_timeout": "Zeitüberschreitung beim Warten auf die Administratorfreigabe. Die System-Hosts-Datei wurde nicht aktualisiert. Bei Bedarf erneut versuchen.",
+      "content_changed": "Ein anderes Programm hat die System-Hosts-Datei geändert. Gleichzeitige Änderungen beenden und erneut versuchen.",
+      "permission_denied": "Keine Berechtigung zum Aktualisieren der System-Hosts-Datei. Erneut versuchen und die Administratorfreigabe bestätigen oder die Sicherheitssoftware prüfen.",
+      "permission_denied_unix": "Keine Berechtigung zum Aktualisieren der System-Hosts-Datei. Dateiberechtigungen prüfen und erneut versuchen. App-interne Zuordnungen bleiben unverändert.",
+      "system_apply_failed": "Die System-Hosts-Datei konnte nicht aktualisiert werden. App-interne Zuordnungen bleiben verfügbar. Dateiberechtigungen oder Sicherheitssoftware prüfen und erneut versuchen.",
+      "system_remove_failed": "Bisherige Zuordnungen können in der System-Hosts-Datei verblieben sein. Erneut versuchen, um sie zu entfernen.",
+      "write_timeout": "Zeitüberschreitung beim Aktualisieren der System-Hosts-Datei; das Ergebnis ist unbestätigt. Erneut versuchen, um den Zustand zu prüfen und die gespeicherten Einstellungen anzuwenden."
+    }
+  },
   "secret": {
     "errors": {
       "backend_unavailable": "Der Speicher für Systemanmeldeinformationen ist nicht verfügbar",
@@ -4402,6 +4416,7 @@
       "queued": "Die Aufgabe wurde in die Warteschlange gestellt",
       "scan_complete": "Scan abgeschlossen",
       "scan_interrupted_by_suspend": "Der Scan wurde unterbrochen, weil die Schnittstelle angehalten wurde. Erneut aktualisieren.",
+      "scan_link_sync_failed": "Scan abgeschlossen, aber die Mod-Verknüpfungen konnten nicht synchronisiert werden",
       "texture_task": "Texturaufgabe"
     },
     "mod_package": {
@@ -4573,7 +4588,9 @@
   "toast": {
     "api": {
       "error": "{workname} fehlgeschlagen:\n{message}",
+      "network_advice": "Bei instabiler Verbindung kannst du unter „Netzwerk“ die Verbindungseinstellungen anpassen oder die empfohlenen Netzwerktools ansehen.",
       "open_corresponding_log": "Zugehöriges Systemlog anzeigen",
+      "open_network_settings": "Netzwerkeinstellungen öffnen",
       "success": "{workname} abgeschlossen",
       "warning": "{workname} braucht Aufmerksamkeit:\n{message}"
     },
@@ -4732,6 +4749,7 @@
       "scan_done_with_restore_warning": "Scan abgeschlossen. Gescannte {total}-Mods: {added} hinzugefügt, {updated} aktualisiert, {removed} entfernt, {skipped} bekannt.\n{extra}",
       "scan_external_enabled_count": "{count} extern wieder aktiviert",
       "scan_failed": "Scan fehlgeschlagen. Ursache können Pfadrechte, belegte Dateien oder ein vorübergehend nicht verfügbarer Scannerstatus sein.",
+      "scan_link_sync_failed": "Scan abgeschlossen, aber die Mod-Verknüpfungen konnten nicht synchronisiert werden. Das Spiel lädt die aktuellen Mods möglicherweise nicht.\n{reason}",
       "scan_request_failed": "Scan-Anfrage fehlgeschlagen. Das App-Backend ist möglicherweise vorübergehend nicht verfügbar oder die Pfadkonfiguration des aktuellen Profils ist fehlerhaft.",
       "scan_start_failed": "Scan konnte nicht gestartet werden. Der aktuelle Profilpfad ist möglicherweise ungültig, der Scanner nicht initialisiert oder die Hintergrundaufgabe vorübergehend nicht verfügbar.",
       "scan_strict_restore_failed_count": "{count}-Wiederherstellung ist fehlgeschlagen",
@@ -4814,9 +4832,6 @@
       "name_required": "Geben Sie einen Regelnamen ein",
       "weight_clamped": "Das dynamische Gewicht wurde auf den zulässigen Bereich begrenzt (Gewicht {weightMin}-{weightMax}, Verschiebung von {shiftMin} zu {shiftMax})."
     },
-    "rules": {
-      "community_reload_unavailable": "Die Regel-Engine ist nicht initialisiert, daher kann die Community-Regeldatenbank jetzt nicht neu geladen werden."
-    },
     "settings": {
       "about": {
         "copied": "Kopiert: {text}",
@@ -4855,8 +4870,7 @@
       },
       "save_failed": "Einstellungen konnten nicht gespeichert werden. Der App-Dienst ist möglicherweise nicht verfügbar, die Konfigurationsdatei ist möglicherweise nicht beschreibbar oder der aktuelle Pfad verfügt möglicherweise nicht über ausreichende Berechtigungen. Bitte versuchen Sie es später noch einmal.",
       "secret_storage_warning": "Einige Schlüssel konnten nicht in den sicheren Speicher geschrieben werden, daher werden sie vorübergehend in der Konfigurationsdatei gespeichert. Überprüfen Sie den Anmeldeinformationsdienst des Systems und speichern Sie die Schlüssel erneut.",
-      "self_mods_path_reset": "Der vom Manager heruntergeladene Mods-Ordner darf nicht mit dem Workshop-Verzeichnis identisch sein und wurde daher im Standardordner wiederhergestellt.",
-      "steamcmd_junction_sync_failed": "Das aktuelle Laufwerk kann den SteamCMD-Downloadordner nicht verbinden. Deine Einstellung für den Manager-Downloadordner wurde beibehalten, aber mit SteamCMD geladene Mods erscheinen nicht automatisch im Manager-Ordner. Verschiebe SteamCMD auf ein NTFS-Laufwerk oder setze den Manager-Mod-Downloadpfad auf: {path}"
+      "self_mods_path_reset": "Der vom Manager heruntergeladene Mods-Ordner darf nicht mit dem Workshop-Verzeichnis identisch sein und wurde daher im Standardordner wiederhergestellt."
     },
     "startup": {
       "auxiliary_warmup_failed": "Einige Hintergrunddaten konnten noch nicht aufgewärmt werden. Verwandte Hinweise können später erscheinen.",
@@ -4906,9 +4920,7 @@
       "download_started": "Update-Download gestartet. Beobachten Sie den Fortschritt in der Statusleiste.",
       "install_cancelled": "Update-Installation abgebrochen.",
       "partial_no_update": "Einige Update-Quellen sind nicht verfügbar. Aus den verfügbaren Quellen wurde keine neue Version gefunden.",
-      "recommend_scan": "Führen Sie einen vollständigen Scan durch, um die Kernfunktionen der neuen Version zu übernehmen.",
-      "start_failed": "Update konnte nicht gestartet werden. Prüfen Sie Netzwerkverbindung, Proxy-Einstellungen und Rechte des Installationsordners.",
-      "up_to_date": "Sie sind bereits auf der neuesten Version."
+      "recommend_scan": "Führen Sie einen vollständigen Scan durch, um die Kernfunktionen der neuen Version zu übernehmen."
     },
     "workspace": {
       "cleanup_deleted_done": "Bereinigte gelöschte {count}-Datensätze",
@@ -5321,6 +5333,9 @@
         "jump": "__Klicken Sie, um zum anderen widersprüchlichen Befehl zu springen.__",
         "scopes": "Bereiche: {scopes}"
       },
+      "network": {
+        "network_check": "Gängige Seiten mit den Proxy-, Hosts- und GitHub-Mirror-Werten dieses Formulars prüfen"
+      },
       "paths": {
         "auto_detect": "Versuchen Sie, Pfade aus System- und Steam-Datensätzen zu finden",
         "auto_detect_loading": "Automatische Pfaderkennung",
@@ -5678,6 +5693,9 @@
         "by_name_short": "Nach Originalname",
         "by_package_id": "Nach Paket-ID",
         "by_workshop_id": "Nach Workshop-ID"
+      },
+      "status": {
+        "disabled": "Deaktiviert"
       }
     },
     "mod_details": {
@@ -5766,6 +5784,7 @@
         "last_active_time": "Aktivierungszeit",
         "last_moved_time": "Verschobene Zeit",
         "multiplayer_compat": "Multiplayer-Kompatibilität",
+        "original_name": "Originalname",
         "patch_file_count": "Patch-Anzahl",
         "texture_file_count": "Texturanzahl",
         "xml_file_count": "XML-Anzahl"
@@ -6064,6 +6083,8 @@
         "downloads_desc": "Sehen Sie sich Quellcode, Release-Pakete und Mirror-Download-Links an.",
         "feedback": "Feedback und Community",
         "feedback_desc": "Wenn Sie ein Problem melden, werden Screenshots, Protokolle und Reproduktionsschritte empfohlen.",
+        "gitee_mirror": "Gitee-Repository",
+        "gitee_mirror_note": "Inländisches Code-Repository und Ersatzquelle für künftige Veröffentlichungen.",
         "github_releases": "GitHub-Versionen",
         "github_releases_note": "Laden Sie die GitHub-Versionspakete herunter oder sehen Sie sich Versionshinweise für jede Version an.",
         "github_repo": "GitHub-Repository",
@@ -6077,6 +6098,8 @@
         "qq_group_note": "Am besten für schnelles Feedback und zusätzliche Screenshots.",
         "references": "Referenzierte Projekte",
         "references_desc": "Diese Projekte bieten Referenzen für Sortier-, Protokollanalyse- und Verwaltungsfunktionen.",
+        "sourceforge_mirror": "SourceForge-Download",
+        "sourceforge_mirror_note": "Stabiler öffentlicher Download für Veröffentlichungspakete.",
         "tieba_thread": "Tieba-Thread",
         "tieba_thread_note": "Sehen Sie sich zentralisierte Notizen und öffentliche Diskussionen an.",
         "title": "Um",
@@ -6417,13 +6440,104 @@
         "unbound": "Ungebunden"
       },
       "network": {
+        "community_tools_help": "Diese Tools werden unabhängig von der Community gepflegt. Laden Sie sie selbst herunter und aktivieren Sie sie gemäß ihrer Anleitung. Verwenden Sie zunächst nur eines, um Konflikte zu vermeiden.",
+        "community_tools_title": "Netzwerktools aus der Community",
         "custom_hosts": "Benutzerdefinierte Hosts-Zuordnung",
+        "custom_hosts_desc": "Legt die IP-Adresse einer Domain manuell fest. Normalerweise sind keine Änderungen nötig; verwenden Sie dies nur, wenn Sie die Zieladresse kennen.",
+        "dynamic_mirrors_enabled": "Dynamische Mirrors aktivieren",
+        "dynamic_mirrors_enabled_desc": "Beim Aktivieren werden dynamische Mirrors sofort abgerufen und geprüft. Verfügbare Mirrors werden der Auswahl oben hinzugefügt. Im deaktivierten Zustand werden keine dynamischen Mirrors verwendet.",
+        "effective_hosts_desc": "Dynamische Hosts sind schreibgeschützt; Cache-Datei:",
+        "effective_hosts_empty": "Derzeit sind keine dynamischen Hosts-Zuordnungen aktiv.",
+        "effective_hosts_title": "Aktive dynamische Hosts anzeigen",
         "enable_proxy": "Proxy-Dienst aktivieren",
         "enable_proxy_desc": "Proxy-Dienst aktivieren. Alle Netzwerkanfragen werden über den Proxyserver geleitet. Für einige externe Datendownloads, Aktualisierungsprüfungen, das Laden von Beschreibungsbildern, den integrierten Browserzugriff und ähnliche Funktionen ist dies möglicherweise erforderlich, damit sie funktionieren.\n\nSie können eine globale Netzwerkumgebung auch außerhalb der App konfigurieren.",
         "enable_steam_enhanced_api": "Aktivieren Sie erweiterte Workshop-Informationen",
         "enable_steam_enhanced_api_desc": "Nach der Aktivierung und Eingabe des Schlüssels bevorzugen Workshop-Seiten online erweiterte Informationen. Ohne Schlüssel oder wenn deaktiviert, wird die lokale Cache-Suche automatisch verwendet.",
         "get_page": "Seite",
+        "github_access_choice": "Wenn ein stabiles Proxy verfügbar ist, wird es bei Netzwerkproblemen empfohlen. Bei langsamen GitHub-Downloads kann ein Spiegelserver helfen, bei Verbindungsproblemen dynamische Hosts. Nach einer funktionierenden Lösung müssen nicht beide aktiviert sein; keines ersetzt ein Proxy.",
+        "github_access_desc": "GitHub-Mirrors stellen Projektseiten, Dateien, Quellcodearchive und Releases bereit, wenn GitHub langsam oder nicht erreichbar ist. Fällt ein Mirror aus, wird eine direkte Verbindung versucht.",
+        "github_access_title": "GitHub-Mirrors",
+        "github_hosts_auto_update": "Dynamische Hosts automatisch aktualisieren",
+        "github_hosts_auto_update_desc": "Dynamische Hosts beim Programmstart aktualisieren, wenn das Aktualisierungsintervall abgelaufen ist.",
+        "github_hosts_enabled": "Dynamische Hosts",
+        "github_hosts_enabled_desc": "Website-IP-Adressen aus vertrauenswürdigen Quellen abrufen, um Verbindungsfehler durch fehlerhafte Namensauflösung zu beheben. Gilt für alle Websites in den Quellen. Beim Einschalten beginnt der Abruf sofort im Hintergrund; zum Anwenden Einstellungen speichern. Bei Fehlern bleiben bestehende Zuordnungen erhalten.",
+        "github_hosts_failed": "Hosts konnten nicht abgerufen werden. Netzwerkverbindung und Quell-URL prüfen und erneut versuchen. Vorhandene Zuordnungen bleiben erhalten.",
+        "github_hosts_loading": "Hosts werden im Hintergrund abgerufen. Bei langsamer Verbindung kann dies länger als eine Minute dauern. Einstellungen können weiterhin gespeichert werden.",
+        "github_hosts_ready": "Hosts wurden abgerufen und angewendet.",
+        "github_hosts_refresh_interval": "Aktualisierungsintervall (Stunden)",
+        "github_hosts_retry": "Erneut abrufen",
+        "github_hosts_timeout": "Zeitüberschreitung beim Abrufen der Hosts. Netzwerkverbindung prüfen oder später erneut versuchen. Vorhandene Zuordnungen bleiben erhalten.",
+        "github_hosts_url": "Hosts-Quellen",
+        "github_hosts_url_desc": "HTTPS-Adressen mit Hosts-Text oder JSON werden unterstützt. Jede Quelle lässt sich bearbeiten, aktivieren, deaktivieren oder löschen. Bei gleichen Domains hat die erste erfolgreiche Quelle Vorrang. Fällt eine Quelle aus, werden die anderen weiterhin verwendet.",
+        "github_mirror_auto": "Mirror automatisch wählen",
+        "github_mirror_direct": "GitHub direkt verbinden",
+        "github_mirror_selector_help": "Wählen Sie einen GitHub-Mirror. Die automatische Auswahl bevorzugt einen verfügbaren Mirror mit geringer Latenz.",
+        "github_mirror_selector_label": "Mirror",
         "host": "Gastgeber",
+        "hosts_help": "Hosts funktioniert wie ein Adressbuch für Websites: Es legt fest, mit welcher IP-Adresse die App eine Domain verbindet. Das kann bei Fehlern der Namensauflösung helfen, garantiert aber keine erreichbaren Server. Standardmäßig gilt es nur in dieser App. Dynamische Hosts werden aus Quellen abgerufen, eigene Hosts tragen Sie selbst ein.",
+        "hosts_partial_failure": "Einige Quellen konnten nicht abgerufen werden. Die Zuordnungen der erfolgreichen Quellen werden verwendet. Quellen prüfen und erneut abrufen.",
+        "hosts_pending_save": "Hosts abgerufen. Zum Anwenden Einstellungen speichern.",
+        "hosts_priority": "Ist eine Domain sowohl in dynamischen als auch in eigenen Zuordnungen enthalten, hat die eigene Zuordnung Vorrang.",
+        "hosts_source_add": "+ Quelle hinzufügen",
+        "hosts_source_enabled": "Diese Hosts-Quelle aktivieren",
+        "hosts_source_remove": "Diese Hosts-Quelle löschen",
+        "hosts_sources_empty": "Keine Hosts-Quelle ist aktiviert. Fügen Sie eine Adresse hinzu und aktivieren Sie das Kontrollkästchen.",
+        "hosts_title": "Hosts-Adresszuordnungen",
+        "mirror_add": "Spiegel hinzufügen",
+        "mirror_add_help": "Eigenen GitHub-Spiegelserver hinzufügen",
+        "mirror_apply": "Prüfen und hinzufügen",
+        "mirror_edit": "Ausgewählten Spiegel bearbeiten",
+        "mirror_edit_help": "Konfiguration des ausgewählten Spiegels bearbeiten",
+        "mirror_editor": "GitHub-Spiegelserver bearbeiten",
+        "mirror_file_help": "Änderungen werden nach dem Speichern der Einstellungen wirksam. Du kannst die Konfigurationsdatei auch direkt bearbeiten und die App anschließend neu starten.",
+        "mirror_id": "Spiegel-ID (Buchstaben, Zahlen, Unterstriche oder Bindestriche)",
+        "mirror_invalid": "Geben Sie einen Namen, eine eindeutige gültige ID und eine HTTPS-Adresse mit genau einem {url} ein. Die ID darf nicht direct sein.",
+        "mirror_name": "Spiegelname",
+        "mirror_open_failed": "Die Spiegelkonfiguration konnte nicht geöffnet werden. Öffne sie manuell über den angezeigten Pfad.",
+        "mirror_open_file": "Spiegelkonfiguration öffnen",
+        "mirror_open_file_help": "Spiegellistendatei zum Anzeigen oder Bearbeiten öffnen",
+        "mirror_probe_failed": "Die Spiegelprüfung ist fehlgeschlagen; diese Konfiguration wurde nicht gespeichert. Prüfen Sie Adresse und Netzwerkverbindung und versuchen Sie es erneut.",
+        "mirror_probe_loading": "Unterstützte Funktionen dieses Spiegels werden geprüft. Bitte warten …",
+        "mirror_probe_result": "Automatische Prüfergebnisse",
+        "mirror_remove": "Ausgewählten Spiegel löschen",
+        "mirror_remove_help": "Konfiguration des ausgewählten Spiegels löschen",
+        "mirror_status_supported": "Unterstützt",
+        "mirror_status_unknown": "Unbekannt",
+        "mirror_status_unsupported": "Nicht unterstützt",
+        "mirror_type_api": "GitHub API",
+        "mirror_type_archive": "Quellarchive",
+        "mirror_type_clone": "Git Clone",
+        "mirror_type_gist": "Gist-Inhalte",
+        "mirror_type_lfs": "LFS-Mediendateien",
+        "mirror_type_raw": "Raw-Dateien",
+        "mirror_type_release": "Release-Anhänge",
+        "mirror_type_web": "Projektseiten",
+        "mirror_url": "Umwandlungsadresse des Spiegels",
+        "mirror_url_help": "Geben Sie die vom Spiegeldienst bereitgestellte HTTPS-Umwandlungsadresse ein und verwenden Sie {url} für die ursprüngliche GitHub-Adresse. Projektseite, Raw-Dateien und Quellarchive werden vor dem Speichern geprüft.",
+        "network_check": "Zugriff prüfen",
+        "network_check_bypass": "Direktverbindung gemäß Ausnahmeliste",
+        "network_check_desc": "Prüft Zugriff und Antwortzeit gängiger Seiten mit den Proxy-, Hosts- und GitHub-Mirror-Werten dieses Formulars.",
+        "network_check_direct": "Direkt",
+        "network_check_domain": "Domain",
+        "network_check_error_code": "Fehlercode",
+        "network_check_failed": "Die Prüfung wurde nicht abgeschlossen. Bitte später erneut versuchen.",
+        "network_check_failed_item": "Nicht erreichbar",
+        "network_check_hosts_hit": "Hosts-Zuordnung angewendet",
+        "network_check_http_error": "Dienst meldet einen Fehler",
+        "network_check_latency": "Latenz",
+        "network_check_loading_item": "Wird geladen",
+        "network_check_mirror": "Mirror angewendet",
+        "network_check_name": "Name",
+        "network_check_ok": "Erreichbar",
+        "network_check_proxy": "Proxy",
+        "network_check_reason": "Details",
+        "network_check_redirect": "Weiterleitung erforderlich",
+        "network_check_result": "Statuscode / Ergebnis",
+        "network_check_route": "Verbindungsart",
+        "network_check_status_code": "Statuscode",
+        "network_check_timeout": "Zeitüberschreitung",
+        "network_check_url": "Adresse",
+        "network_checking": "Wird geprüft…",
         "password": "Passwort",
         "port": "Hafen",
         "protocol": "Protokoll",
@@ -6436,6 +6550,11 @@
         "steam_web_api_key_placeholder": "Aktiviert die erweiterte Suche, wenn es ausgefüllt ist",
         "steam_web_api_key_risk": "Jeder, der diesen Schlüssel erhält, kann die echten Trades eines Spielers stillschweigend stornieren, ohne den Steam Guard auszulösen, und sie durch gefälschte Trades ersetzen, die an einen Betrüger gesendet werden. Teilen Sie Ihren API-Schlüssel niemals mit irgendjemandem oder einer nicht verifizierten Website Dritter.",
         "steam_web_api_key_warning": "Warnung: Ihr API-Schlüssel ist praktisch ein Hintertürschlüssel zu Ihrem Steam-Konto. Es kann öffentliche Kontodaten/Bestandsinformationen lesen und Handelsangebote verwalten oder anhören.",
+        "steamcommunity302_description": "Hilft bei Verbindungsproblemen mit Steam Community, Workshop und ähnlichen Seiten. Einen Versuch wert, wenn Seiten nicht öffnen oder Bilder nicht laden.",
+        "steampp_description": "Verbessert den Zugriff auf Steam Community, Workshop und weitere Websites und bietet zusätzliche Steam-Funktionen wie den Kontowechsel.",
+        "system_hosts_applying": "System-Hosts werden aktualisiert.",
+        "system_hosts_authorizing": "Warten auf Administratorfreigabe. Bitte den Systemdialog beachten. Einstellungen können weiterhin gespeichert werden.",
+        "system_hosts_retry": "Gespeicherte System-Hosts-Einstellungen erneut anwenden",
         "title": "Netzwerkprotokoll und Proxy",
         "use_proxy_on_ai": "Verwenden Sie einen Proxy für KI-Anfragen",
         "use_proxy_on_ai_desc": "Wenn diese Option aktiviert ist, laufen AI-Anfragen über den Proxyserver. Aktivieren Sie dies nicht, wenn der konfigurierte Endpunkt bereits ein lokaler/inländischer Proxy ist.",
@@ -6443,8 +6562,9 @@
         "use_proxy_on_steamcmd_desc": "Ob SteamCMD den Proxyserver verwendet.\n\nWenn diese Option aktiviert ist, laufen die Download-, Aktualisierungs- und Installationsvorgänge von SteamCMD über den Proxyserver.",
         "username": "Benutzername",
         "visit": "Besuchen",
-        "write_to_system_hosts": "Schreiben Sie benutzerdefinierte Hosts in die Hosts-Datei des Systems",
-        "write_to_system_hosts_desc": "Warnung: Dadurch wird die System-Hosts-Datei direkt geändert und möglicherweise ist eine Administratorberechtigung erforderlich."
+        "visit_tool_website": "Tool-Website besuchen",
+        "write_to_system_hosts": "Hosts-Zuordnungen systemweit anwenden",
+        "write_to_system_hosts_desc": "Dynamische und eigene Zuordnungen in die System-Hosts-Datei schreiben, damit andere Apps sie nutzen können. Normalerweise nicht nötig. Unter Windows kann beim Speichern relevanter Einstellungen oder beim erneuten Versuch eine Administratorfreigabe angefordert werden; beim Start und Beenden erfolgt keine Abfrage. Beim Beenden werden die Zuordnungen nach Möglichkeit entfernt. Ohne Berechtigung können sie verbleiben. Zum Entfernen diese Option vor dem Beenden ausschalten und speichern."
       },
       "panel": {
         "apply_and_save": "Einstellungen übernehmen und speichern",
@@ -6806,17 +6926,36 @@
       }
     },
     "update": {
+      "auto_source_message": "Bei einem fehlgeschlagenen Download werden automatisch Ersatzadressen versucht. Falls auch diese nicht funktionieren, laden Sie über einen Link unter Einstellungen → Über das Projekt das Paket für Ihr System herunter. Beenden Sie die Anwendung und entpacken Sie das Paket in den Installationsordner, wobei vorhandene Dateien ersetzt werden.",
       "available_desc": "Ein Update ist verfügbar.",
+      "check_failed": "Updates können nicht geprüft werden. Bitte versuchen Sie es später erneut.",
+      "checking_sources": "Update-Quellen werden geprüft…",
+      "download_update": "Update herunterladen",
       "downloaded": "Heruntergeladen",
+      "downloading": "Update wird heruntergeladen; Fortschritt in der Aufgabenleiste",
       "file_size_meta": "Dateigröße: {size}",
       "ignore_version": "Ignorieren Sie diese Version",
       "install_now": "Jetzt installieren",
+      "last_checked": "Zuletzt geprüft: {time}",
       "later": "Später",
-      "multiple_sources_message": "Für dieselbe Version wurden mehrere Quellen gefunden: {sources}. Die erste Quelle wird zuerst verwendet und bei einem Fehler werden automatisch Ersatzquellen ausprobiert.",
       "new_version_title": "Neue Version v{version} verfügbar",
-      "single_source_message": "Quelle: {source}. Dateigröße: {size}.",
-      "source_meta": "Quelle: {source}",
-      "update_now": "Jetzt aktualisieren"
+      "no_compatible_update": "Keine neue Version für dieses System gefunden",
+      "not_checked": "Noch nicht auf Updates geprüft",
+      "partial_available": "Einige Quellen konnten nicht geprüft werden. Das über andere Quellen gefundene Update ist weiterhin verfügbar.",
+      "ready": "Das Update-Paket ist bereit und kann später installiert werden.",
+      "result_changed": "Die Update-Informationen haben sich geändert. Bitte öffnen Sie das Update erneut.",
+      "source_auto": "Automatisch auswählen (empfohlen)",
+      "source_available": "Neue Version v{version} gefunden",
+      "source_details": "Quellendetails",
+      "source_failed": "Prüfung vorübergehend nicht möglich",
+      "source_no_package": "Kein passendes Update-Paket",
+      "source_no_release": "Noch keine Version veröffentlicht",
+      "source_no_update": "Keine neue Version gefunden",
+      "source_older": "Zielversion noch nicht verfügbar (v{version})",
+      "source_selector": "Downloadquelle",
+      "version_available": "Neue Version v{version} verfügbar",
+      "via_builtin_mirror": " · Über den integrierten Spiegel gelesen",
+      "view_update": "Update anzeigen"
     },
     "update_modal": {
       "empty": "Keine Aktualisierungsdatensätze gefunden...",

@@ -2,8 +2,8 @@
 <template>
 <div class="relative mx-0 p-0" :aria-disabled="disabled" :class="[{'flex items-center gap-1 min-w-0 max-w-full flex-1 basis-0' : mini}, disabled ? 'opacity-50' : '']">
     <!-- Label：点击时联动聚焦 -->
-    <span v-if="label" class="block text-xs shrink-0 text-text-dim uppercase font-bold tracking-widest px-1 cursor-pointer hover:text-text-main transition-colors" 
-      :class="[mini ? '' : 'mb-1']" @click="handleLabelClick" >
+    <span v-if="label" class="block text-xs shrink-0 text-text-dim font-bold tracking-widest px-1 cursor-pointer hover:text-text-main transition-colors" 
+      :class="[mini ? '' : 'mb-1']" @pointerdown.stop @click="toggleMenu" >
       {{ label }}
       <label v-if="description" v-tooltip="description" class="text-text-dim ml-0.5 cursor-help italic underline hover:text-text-main">?</label>
     </span>
@@ -15,7 +15,7 @@
            mini ? 'py-1 pl-2 pr-7 text-xs' : 'w-full h-9 px-3', editable ? 'cursor-text' : ' bg-bg-surface',
           { 'cursor-pointer': !editable && !disabled, 'cursor-text': editable && !disabled, 'cursor-not-allowed text-text-disabled': disabled }
         ]"
-        @click="openMenu"
+        @click="toggleMenu"
         @input="handleInput"
         @keydown="handleKeydown"
         @blur="handleBlur"
@@ -32,6 +32,7 @@
 
     <!-- 下拉面板 -->
     <FixedPopover
+      ref="popoverRef"
       :trigger-ref="inputRef" :is-open="isOpen"
       :placement="menuPlacement"
       :z-index="popoverZIndex"
@@ -89,7 +90,7 @@ const props = defineProps({
   options: { type: Array, default: () => [] }, // { label, value, ... }
   mini: { type: Boolean, default: false },
   showBottom: { type: Boolean, default: false }, // 默认向下展开
-  popoverZIndex: { type: [Number, String], default: 8000 }, // 特殊高层浮窗可抬高下拉层级，普通场景保持默认。
+  popoverZIndex: { type: [Number, String], default: null }, // 只调整所属主体内的顺序，不抬高到其它弹窗上方。
   editable: { type: Boolean, default: false }, // 是否可输入
   disabled: { type: Boolean, default: false },
 })
@@ -99,6 +100,7 @@ const emit = defineEmits(['update:modelValue', 'change', 'visible-change'])
 // --- 状态 ---
 const isOpen = ref(false)
 const inputRef = ref(null)
+const popoverRef = ref(null)
 const optionRefs = ref([])
 const highlightedIndex = ref(-1) // 键盘导航索引
 const internalSearch = ref('') // 编辑模式下的搜索词
@@ -177,11 +179,6 @@ const isMatch = (opt) => {
 
 
 // 1. 切换开关
-const handleLabelClick = () => {
-  if (props.disabled) return
-  openMenu()
-}
-
 const openMenu = () => {
   if (props.disabled) return
   if (isOpen.value) return
@@ -196,6 +193,12 @@ const openMenu = () => {
   }
   // 聚焦输入框
   nextTick(() => inputRef.value?.focus())
+}
+
+const toggleMenu = () => {
+  if (props.disabled) return
+  if (isOpen.value) return closeMenu()
+  openMenu()
 }
 
 const closeMenu = () => {
@@ -271,9 +274,11 @@ const handleBlur = () => {
 
 // 5. 键盘导航
 const handleKeydown = (e) => {
+  if (isOpen.value && !popoverRef.value?.isInteractive()) return
   if (!isOpen.value && e.key !== 'Tab') {
     if (e.key === 'Enter' || e.key === 'ArrowDown') {
       e.preventDefault()
+      e.stopPropagation()
       openMenu()
     }
     return
@@ -297,6 +302,7 @@ const handleKeydown = (e) => {
       break
     case 'Enter':
       e.preventDefault()
+      e.stopPropagation()
       if (highlightedIndex.value >= 0 && filteredOptions.value[highlightedIndex.value]) {
         // 用户明确用上下键选中了某一项
         selectOption(filteredOptions.value[highlightedIndex.value])
@@ -309,6 +315,7 @@ const handleKeydown = (e) => {
       break
     case 'Escape':
       e.preventDefault()
+      e.stopPropagation()
       closeMenu()
       break
     case 'Tab':
@@ -337,9 +344,9 @@ const setOptionRef = (el, index) => {
     optionRefs.value[index] = el
   }
 }
-const handlePopoverRequestClose = () => {
+const handlePopoverRequestClose = ({ reason } = {}) => {
   if (!isOpen.value) return
-  if (props.editable) commitInputValue()
+  if (props.editable && reason !== 'scope-hidden') commitInputValue()
   closeMenu()
 }
 // 每次更新前清空，防止内存泄漏和死循环

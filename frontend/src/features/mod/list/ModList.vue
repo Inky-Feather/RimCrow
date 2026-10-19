@@ -5,7 +5,7 @@
       :class="`border-2 rounded-2xl border-accent-${listColor}/20 overflow-hidden`">
     <!-- 标题栏 -->
     <div :data-tour="listId=='active'?'list-header':null" :class="`px-3 h-8 border-b rounded-t-2xl border-border-base/5 flex justify-between items-center bg-accent-${listColor}/10`">
-      <span :class="`text-sm font-bold text-accent-${listColor} uppercase tracking-wider flex items-center gap-1`">
+      <span :class="`text-sm font-bold text-accent-${listColor} tracking-wider flex items-center gap-1`">
         <div :class="`w-1.5 h-1.5 mr-1 rounded-full bg-accent-${listColor} shadow-lg shadow-accent-primary`"></div>
         <span class="mr-1">{{ title }}</span>
         <!-- 状态提示 -->
@@ -156,16 +156,17 @@
         </div>
         <!-- 列表 -->
           <!-- :size="isSimpleView ? 34 : 54" -->
-        <VirtualDragList v-model="internalListProxy" ref="vListRef" :key="listKey" dataKey="id" :keeps="50" class="h-full p-1 pb-10" wrapClass="" 
-          :draggable="!appStore.isLoading" :droppable="allowSort && !appStore.isLoading" :sortable="allowSort && !appStore.isLoading" :disabled="appStore.isLoading"
+        <VirtualDragList :model-value="internalListProxy" ref="vListRef" dataKey="id" :keeps="50" class="h-full p-1 pb-10"
+          :draggable="!appStore.isLoading" :droppable="allowSort && !appStore.isLoading" :disabled="appStore.isLoading"
           :delay="appStore.settings.ui.drag_delay"
           :get-drag-meta="getModRowDragMeta"
-          :group="{ name: 'mods', pull:'clone', put: allowSort ? ['mods','groups']:false, revertDrag: true }" :animation="150" 
+          :group="{ name: 'mods', put: allowSort ? ['mods','groups']:false }"
           :size="itemHeight"
           @drop="updateChildren" @drag="startDrag" @dragend="finishDragSession"
           @click="focusContainer"
           v-selectable-list="{ 
             data: visibleList, 
+            disabled: appStore.isLoading,
             selectedIds: modStore.selectedIds, 
             onSelect: (ids, anchor) => modStore.selectMods(ids, anchor),
             onClear: () => modStore.clearSelection(),
@@ -210,7 +211,6 @@
         <ModListQuickActions
           :list-id="props.listId"
           :model-value="props.modelValue"
-          :refresh-virtual-list="refreshVirtualList"
         />
 
       </div>
@@ -394,7 +394,7 @@ const {
   // 可见列表与定位
   visibleList, revealCollapsedSectionFor, findCurrentSectionGroupById,
   // 拖拽与移动
-  getSectionMemberIds, resolveInsertionIndex, correctInterlockInsertIndex, internalListProxy,
+  getSectionMemberIds, moveIdsToList, internalListProxy,
   moveIdsToListBoundary, moveIdsToCurrentSectionBoundary, moveIdsToSectionGroup,
 } = useModListSections({
   props, appStore, modStore, profileStore, displayList, allowSort, normalizeId, normalizeCanonicalId,
@@ -508,7 +508,6 @@ const handleMoveSelected = async ({ action, targetGroupId, targetListId } = {}) 
   }
 
   if (changed) {
-    await refreshVirtualList()
     // 复用现有搜索定位链路。先清空再设置，确保连续移动同一项时也会重新触发滚动。
     modStore.currentTargetId = ''
     await nextTick()
@@ -541,9 +540,9 @@ const lineData = computed(() => {
 
 const {
   // 拖拽状态
-  listKey, isDragging,
+  isDragging,
   // 会话控制
-  finishDragSession, dispatchSyntheticDragEnd, refreshVirtualList, cancelActiveDrag,
+  finishDragSession, cancelActiveDrag,
   // 拖拽入口
   startDrag, updateChildren,
 } = useModListDrag({
@@ -552,13 +551,7 @@ const {
   modStore,
   vListRef,
   allowSort,
-  internalListProxy,
-  isSectionHeaderId,
-  isSectionCollapsed,
-  getSectionMemberIds,
-  resolveInsertionIndex,
-  correctInterlockInsertIndex,
-  normalizeId,
+  moveIdsToList,
 })
 
 const focusContainer = (event) => {
@@ -599,10 +592,7 @@ watch(isFiltered, async (nextFiltered, previousFiltered) => {
   }
 })
 onBeforeUnmount(() => {
-  if (isDragging.value) {
-    finishDragSession({ suppressDrop: true })
-    dispatchSyntheticDragEnd()
-  }
+  cancelActiveDrag()
   savePosition()
 })
 onMounted(() => {
@@ -620,18 +610,14 @@ watch(() => appStore.isLoading, async (loading) => {
 })
 
 const getModRowDragMeta = (row) => {
-  // 这段逻辑只在 dragstart 执行。选择集合可能频繁变化，但不应该反向污染虚拟列表 row 流。
-  if (row?.mod_ids?.length) {
-    return {
-      dragCount: Math.max(1, row.mod_ids.length),
-      dragLabel: row.id,
-    }
-  }
-  const selectedSet = new Set((modStore.selectedIds || []).map(id => normalizeId(id)).filter(Boolean))
-  const id = normalizeId(row?.id)
+  const isSection = isSectionHeaderId(row.id)
+  const isCollapsedSection = isSection && isSectionCollapsed(row.id)
+  const ids = isSection
+    ? (isCollapsedSection ? getSectionMemberIds(row.id) : [row.id])
+    : (selectedIdSet.value.has(normalizeId(row.id)) ? [...modStore.selectedIds] : [row.id])
   return {
-    dragCount: id && selectedSet.has(id) ? Math.max(1, selectedSet.size) : 1,
-    dragLabel: row?.id,
+    mod_ids: ids, isSection, isCollapsedSection,
+    dragCount: ids.length, dragLabel: row.id,
   }
 }
 

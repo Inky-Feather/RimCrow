@@ -7,7 +7,10 @@ from pathlib import Path
 from unittest.mock import patch
 import zipfile
 
+import pytest
+
 import pack_pyinstaller
+import pack_nuitka
 
 
 class TestPackPyInstaller(unittest.TestCase):
@@ -107,8 +110,8 @@ class TestPackPyInstaller(unittest.TestCase):
 
         with zipfile.ZipFile(zip_path) as archive:
             names = archive.namelist()
-            self.assertIn("RimCrow/docs/RimCrow 使用说明.pdf", names)
-            self.assertIn("RimCrow/docs/zh-CN/01-快速上手.pdf", names)
+            self.assertIn("RimCrow/RimCrow 使用说明.pdf", names)
+            self.assertIn("RimCrow/zh-CN/01-快速上手.pdf", names)
 
     def test_build_release_docs_keeps_existing_pdfs_without_command(self):
         docs_dir = self.temp_dir / "docs"
@@ -212,6 +215,26 @@ class TestPackPyInstaller(unittest.TestCase):
         self.assertNotIn("--version-file", cmd)
         self.assertNotIn("--splash", cmd)
         self.assertNotIn("--upx-dir", cmd)
+
+
+@pytest.mark.parametrize("platform, names", [
+    ("win32", ["SteamworksPy64.dll", "steam_api64.dll"]),
+    ("darwin", ["SteamworksPy.dylib", "libsteam_api.dylib"]),
+    ("linux", ["SteamworksPy.so", "libsteam_api.so"]),
+])
+def test_steamworks_runtime_is_embedded_not_zipped(tmp_path, monkeypatch, platform, names):
+    runtime_dir = tmp_path / "tools" / "steamworks"
+    runtime_dir.mkdir(parents=True)
+    for name in names:
+        (runtime_dir / name).touch()
+    monkeypatch.setattr(sys, "platform", platform)
+
+    for packer in (pack_pyinstaller, pack_nuitka):
+        assert [path.name for path in packer._steamworks_runtime_files(tmp_path)] == names
+        assert not any(
+            archive_path.parts[:2] == ("tools", "steamworks")
+            for _, archive_path in packer._iter_tools_files(tmp_path / "tools")
+        )
 
 
 if __name__ == "__main__":

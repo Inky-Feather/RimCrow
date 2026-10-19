@@ -2,7 +2,7 @@
 <template>
   <div class="space-y-2">
     <div class="flex justify-between items-center px-1">
-      <label class="text-xs text-text-dim uppercase font-bold tracking-widest">{{ label }}
+      <label class="text-xs text-text-dim font-bold tracking-widest">{{ label }}
         <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
       </label>
       <button @click="add" class="text-xs text-accent-primary hover:underline">{{ t('ui.kv.add_item', '+ 新增条目') }}</button>

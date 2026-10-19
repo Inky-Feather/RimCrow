@@ -30,7 +30,7 @@
               <!-- ================= 优先级排序 (侧边栏) ================= -->
               <div class="px-4 pt-3 pb-2 bg-bg-highlight/25 border-border-base/5" data-tour="rule-priority">
                 <div class="flex items-center justify-between mb-3 px-2">
-                  <span class="text-xs font-bold text-text-dim uppercase tracking-widest">
+                  <span class="text-xs font-bold text-text-dim tracking-widest">
                     {{ t('ui.rule_panel.priority.title', '生效优先级') }}
                     <label v-tooltip="t('tooltip.rule_panel.priority', '规则生效优先级，影响自动排序和问题检测的判定。')" class="text-xs text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
                   </span>
@@ -276,7 +276,7 @@
                           <div class="flex-1 min-w-0 space-y-2 border-l border-border-base/5 pl-4">
                             <!-- Dependencies -->
                             <div v-if="item.rules.dependencies && Object.keys(item.rules.dependencies).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
-                              <span class="text-xs font-bold text-accent-highlight uppercase mt-0.5">{{ t('ui.rule_panel.relation.dependencies', '依赖:') }}</span>
+                              <span class="text-xs font-bold text-accent-highlight mt-0.5">{{ t('ui.rule_panel.relation.dependencies', '依赖:') }}</span>
                               <div class="flex flex-wrap gap-1 w-full min-w-0">
                                 <span v-for="(info, targetId) in item.rules.dependencies" :key="targetId" 
                                   v-tooltip="formatTooltip(targetId, info)"
@@ -287,7 +287,7 @@
                             </div>
                             <!-- Load After -->
                             <div v-if="item.rules.loadAfter && Object.keys(item.rules.loadAfter).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
-                              <span class="text-xs font-bold text-accent-warn uppercase mt-0.5">{{ t('ui.rule_panel.relation.load_after', '前置:') }}</span>
+                              <span class="text-xs font-bold text-accent-warn mt-0.5">{{ t('ui.rule_panel.relation.load_after', '前置:') }}</span>
                               <div class="flex flex-wrap gap-1 w-full min-w-0">
                                 <span v-for="(info, targetId) in item.rules.loadAfter" :key="targetId" 
                                   v-tooltip="formatTooltip(targetId, info)"
@@ -298,7 +298,7 @@
                             </div>
                             <!-- Load Before -->
                             <div v-if="item.rules.loadBefore && Object.keys(item.rules.loadBefore).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
-                              <span class="text-xs font-bold text-accent-primary uppercase mt-0.5">{{ t('ui.rule_panel.relation.load_before', '后置:') }}</span>
+                              <span class="text-xs font-bold text-accent-primary mt-0.5">{{ t('ui.rule_panel.relation.load_before', '后置:') }}</span>
                               <div class="flex flex-wrap gap-1 w-full min-w-0 ">
                                 <span v-for="(info, targetId) in item.rules.loadBefore" :key="targetId"
                                   v-tooltip="formatTooltip(targetId, info)" 
@@ -309,7 +309,7 @@
                             </div>
                             <!-- Incompatible -->
                             <div v-if="item.rules.incompatibleWith && Object.keys(item.rules.incompatibleWith).length" class="flex flex-wrap gap-2 w-full min-w-0 items-start">
-                              <span class="text-xs font-bold text-accent-danger uppercase mt-0.5">{{ t('ui.rule_panel.relation.incompatible', '冲突:') }}</span>
+                              <span class="text-xs font-bold text-accent-danger mt-0.5">{{ t('ui.rule_panel.relation.incompatible', '冲突:') }}</span>
                               <div class="flex flex-wrap gap-1 w-full min-w-0 ">
                                 <span v-for="(info, targetId) in item.rules.incompatibleWith" :key="targetId"
                                   v-tooltip="formatTooltip(targetId, info)"
@@ -398,7 +398,7 @@
 
                 <!-- 动作设置 -->
                 <div class="space-y-3 ">
-                  <label class="text-xs uppercase font-bold text-text-dim tracking-wider">{{ t('ui.rule_panel.editor.action_label', '执行动作') }}</label>
+                  <label class="text-xs font-bold text-text-dim tracking-wider">{{ t('ui.rule_panel.editor.action_label', '执行动作') }}</label>
                   <div class="mt-1 bg-accent-primary/5 border border-accent-primary/20 rounded-xl p-3 flex gap-2 items-center">
                     <CommonSelect class="min-w-40" v-model="editingRule.action.type" :options="Object.entries(ruleStore.DYNAMIC_RULE_ACTIONS).map(([key, value]) => ({label: value, value: key}))"></CommonSelect>
                     

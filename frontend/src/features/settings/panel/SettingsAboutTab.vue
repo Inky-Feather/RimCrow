@@ -34,6 +34,23 @@
             </div>
           </div>
         </div>
+        <div class="mt-4 border-t border-border-base/10 pt-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="text-xs leading-relaxed" :class="appStore.updateState.checkError || appStore.updateState.info?.check_status === 'partial' ? 'text-accent-warn' : 'text-text-dim'">{{ updateStatusText }}</p>
+            <button v-if="appStore.updateState.hasUpdate && appStore.updateState.info?.local_status !== 'downloading'" type="button"
+              class="rounded-lg bg-accent-primary/15 px-3 py-2 text-xs font-bold text-accent-primary hover:bg-accent-primary/25"
+              @click="appStore.showAvailableUpdate()">{{ t('ui.update.view_update', '查看更新') }}</button>
+          </div>
+          <p v-if="appStore.updateState.lastCheckedAt" class="mt-1 text-xs text-text-dim">{{ t('ui.update.last_checked', '最近检查：{time}', { time: new Date(appStore.updateState.lastCheckedAt).toLocaleString() }) }}</p>
+          <details v-if="updateSourceDetails.length" class="mt-2 text-xs text-text-dim">
+            <summary class="cursor-pointer py-2 text-text-soft">{{ t('ui.update.source_details', '来源详情') }}</summary>
+            <dl class="space-y-2 pt-1">
+              <div v-for="(detail, index) in updateSourceDetails" :key="index" class="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                <dt>{{ detail.label }}</dt><dd class="min-w-0 break-words">{{ detail.value }}</dd>
+              </div>
+            </dl>
+          </details>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -199,6 +216,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Copy, ExternalLink, HeartHandshake, KeyRound, LoaderCircle, X } from 'lucide-vue-next'
 import { useToast } from 'vue-toastification'
 import { useAppStore } from '../../../app/stores/appStore'
+import { getUpdateSourceDetails, getUpdateStatusText } from '../../../app/stores/app/updateActions.js'
 import CommonSwitch from '../../../shared/components/input/CommonSwitch.vue'
 import BrandSignature from '../../../shared/branding/BrandSignature.vue'
 import brandProfile from '../../../shared/branding/brandProfile'
@@ -210,6 +228,8 @@ defineProps({
 })
 
 const appStore = useAppStore()
+const updateStatusText = computed(() => getUpdateStatusText(appStore.updateState))
+const updateSourceDetails = computed(() => getUpdateSourceDetails(appStore.updateState.info || {}))
 const toast = useToast()
 const pendingAction = ref('')
 const showDonateModal = ref(false)
@@ -331,6 +351,20 @@ const downloadLinks = computed(() => {
       url: lanzouSource.value.url,
       password: lanzouSource.value.password,
       note: t('ui.settings.about.lanzou_mirror_note', '网络不稳定时，可以尝试从这里下载备用包。'),
+    })
+  }
+  for (const source of aboutMeta.value.update.sources || []) {
+    const type = String(source?.type || '').trim().toLowerCase()
+    const url = String(source?.url || '').trim()
+    if (!url || !['sourceforge', 'gitee'].includes(type)) continue
+    links.push({
+      label: type === 'sourceforge'
+        ? t('ui.settings.about.sourceforge_mirror', 'SourceForge 下载')
+        : t('ui.settings.about.gitee_mirror', 'Gitee 仓库'),
+      url,
+      note: type === 'sourceforge'
+        ? t('ui.settings.about.sourceforge_mirror_note', '提供稳定的公开发布包下载入口。')
+        : t('ui.settings.about.gitee_mirror_note', '国内代码仓库与后续发行版备用来源。'),
     })
   }
   return links

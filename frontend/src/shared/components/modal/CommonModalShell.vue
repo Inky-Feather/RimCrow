@@ -1,11 +1,11 @@
 <template>
   <Teleport to="body" :disabled="!teleport">
     <Transition name="common-modal-fade">
-      <div v-if="shouldRender" v-show="isOpen" class="fixed inset-0 flex items-center justify-center px-3 py-4 text-text-main selection:bg-bg-overlay/10" :style="{ zIndex }" >
+      <div v-if="shouldRender" v-show="isOpen" data-popover-scope class="fixed inset-0 flex items-center justify-center px-3 py-4 text-text-main selection:bg-bg-overlay/10" :style="{ zIndex }" >
         <div class="absolute inset-0 bg-overlay-scrim backdrop-blur-md" @mousedown="handleBackdropClick" ></div>
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(var(--rgb-accent-primary),0.10),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(var(--rgb-accent-special),0.08),transparent_34%)]"></div>
 
-        <section :class="[surfaceClass, sizeClass, panelClass]" role="dialog" aria-modal="true"  :aria-label="title || undefined" >
+        <section ref="panelRef" :class="[surfaceClass, sizeClass, panelClass]" role="dialog" aria-modal="true"  :aria-label="title || undefined" >
           <div v-if="!frameless" class="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-border-base/18 to-transparent"></div>
           <div v-if="!frameless && accentGlow" class="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full blur-3xl" :class="accentGlow"></div>
 
@@ -39,16 +39,19 @@
             <slot name="footer"></slot>
           </footer>
         </section>
+        <!-- 同一弹窗内的下拉/菜单出口；不穿透到其它弹窗。 -->
+        <div ref="popoverHost" class="pointer-events-none absolute inset-0 z-20 overflow-visible"></div>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useConfirmStore } from './confirmStore'
 import { t } from '../../i18n.js'
+import { POPOVER_PORTAL_KEY } from '../popover/popoverContext.js'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -77,6 +80,9 @@ const modalStack = window.__commonModalStack || (window.__commonModalStack = [])
 
 const isOpen = computed(() => props.show)
 const shouldRender = computed(() => props.persistent || isOpen.value)
+const popoverHost = ref(null)
+const panelRef = ref(null)
+provide(POPOVER_PORTAL_KEY, { target: popoverHost, active: isOpen, boundary: panelRef })
 const surfaceClass = computed(() => (
   props.frameless
     ? 'relative z-10 flex max-h-[calc(100vh-2rem)] flex-col overflow-visible'

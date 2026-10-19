@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
@@ -8,13 +9,22 @@ let i18nModule
 
 before(async () => {
   globalThis.window = { pywebview: { api: {} } }
-  server = await createServer({ root: fileURLToPath(new URL('..', import.meta.url)), server: { middlewareMode: true }, appType: 'custom' })
+  // 测试配置与开发配置不同，必须隔离依赖缓存，避免使已打开页面的模块地址失效。
+  server = await createServer({
+    root: fileURLToPath(new URL('..', import.meta.url)), cacheDir: 'node_modules/.vite-tests/i18n',
+    server: { middlewareMode: true }, appType: 'custom', optimizeDeps: { noDiscovery: true, include: [] },
+  })
   i18nModule = await server.ssrLoadModule('/src/shared/i18n.js')
   globalThis.document = { documentElement: { lang: '' } }
 })
 
 after(async () => {
   await server?.close()
+})
+
+test('test server does not share the development dependency cache', () => {
+  const developmentCache = fileURLToPath(new URL('../node_modules/.vite', import.meta.url))
+  assert.notEqual(resolve(server.config.cacheDir), resolve(developmentCache))
 })
 
 test('only the latest locale request may update the active locale', async () => {
@@ -41,13 +51,14 @@ test('backend canonical language code is used by the active locale', async () =>
 })
 
 test('locale load errors keep the active locale and reach the caller', async () => {
+  const previousLocale = i18nModule.getCurrentLocale()
   window.pywebview.api.locale_load_user_messages = async () => ({
     status: 'error',
     user_message: '读取用户语言文件失败。',
   })
 
   await assert.rejects(i18nModule.setLocale('de'), /读取用户语言文件失败/)
-  assert.equal(i18nModule.getCurrentLocale(), 'pt-BR')
+  assert.equal(i18nModule.getCurrentLocale(), previousLocale)
 })
 
 test('translation validation detects placeholders and format markers', () => {

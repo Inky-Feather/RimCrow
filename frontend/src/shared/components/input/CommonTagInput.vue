@@ -1,7 +1,7 @@
 <!-- components/common/input/CommonTagInput.vue -->
 <template>
   <div class="w-full">
-    <label class="block text-xs text-text-dim uppercase font-bold tracking-widest px-1 mb-1">
+    <label class="block text-xs text-text-dim font-bold tracking-widest px-1 mb-1">
       {{ label }}
       <label v-if="description" v-tooltip="description" class="text-text-dim ml-1 cursor-help italic underline hover:text-text-main">?</label>
     </label>

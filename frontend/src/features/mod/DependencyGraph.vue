@@ -603,11 +603,18 @@ const handleCanvasContextMenu = (event) => {
 }
 
 let animationFrameId = 0
+let needsGraphUpdate = false
 let scrollCleanup = null
-const requestDraw = () => {
+const requestDraw = (rebuildGraph = false) => {
+  needsGraphUpdate ||= rebuildGraph
   if (animationFrameId) return
   animationFrameId = requestAnimationFrame(() => {
     animationFrameId = 0
+    if (needsGraphUpdate) {
+      needsGraphUpdate = false
+      processGraph()
+      updateManagerPanelPosition()
+    }
     draw()
   })
 }
@@ -793,16 +800,13 @@ const resizeObserver = new ResizeObserver(entries => {
 
 watch(() => props.listIds, () => {
   manualActiveGroupId.value = ''
-  processGraph()
-  requestDraw()
+  requestDraw(true)
 }, { deep: true, immediate: true })
 
 watch(
   () => [props.isFilter, hiddenSourceIdsKey.value, focusSourceId.value],
   () => {
-    processGraph()
-    requestDraw()
-    updateManagerPanelPosition()
+    requestDraw(true)
   }
 )
 

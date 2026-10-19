@@ -1,8 +1,22 @@
 import json
+import gzip
+import zlib
 import os
 import tempfile
 from pathlib import Path
 from typing import Any
+
+
+def read_json_dataset(path: str | Path) -> Any:
+    """按内容识别 JSON/GZip，下载临时后缀和历史错误后缀不参与格式判断。"""
+    with open(path, "rb") as handle:
+        is_gzip = handle.read(2) == b"\x1f\x8b"
+    opener = gzip.open if is_gzip else open
+    try:
+        with opener(path, "rt", encoding="utf-8-sig") as handle:
+            return json.load(handle)
+    except (gzip.BadGzipFile, EOFError, zlib.error) as error:
+        raise ValueError("GZip 数据文件损坏或不完整") from error
 
 
 def write_json_atomic(path: Path | str, payload: Any, *, indent: int = 4, lock: Any = None) -> None:

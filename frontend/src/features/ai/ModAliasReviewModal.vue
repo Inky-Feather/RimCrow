@@ -61,7 +61,7 @@
 
                   <div class="w-8/12 flex flex-col gap-1">
                     <div class="flex items-center gap-2">
-                      <label class="w-12 shrink-0 text-[0.65rem] text-right uppercase text-accent-special font-bold tracking-widest" :class="{ 'text-accent-warn': !item.alias_name }">
+                      <label class="w-12 shrink-0 text-[0.65rem] text-right text-accent-special font-bold tracking-widest" :class="{ 'text-accent-warn': !item.alias_name }">
 	                        {{ t('dialog.mod_alias_review.ai_alias', 'AI 别名') }}
                       </label>
 	                      <input v-model="item.alias_name" :placeholder="t('dialog.mod_alias_review.alias_placeholder', '请输入或点击重试生成...')"
@@ -70,7 +70,7 @@
                       />
                     </div>
                     <div class="flex items-start gap-2 flex-1">
-                      <label class="w-12 shrink-0 text-[0.65rem] text-right uppercase text-accent-special font-bold tracking-widest mt-2" :class="{ 'text-accent-warn': !item.notes }">
+                      <label class="w-12 shrink-0 text-[0.65rem] text-right text-accent-special font-bold tracking-widest mt-2" :class="{ 'text-accent-warn': !item.notes }">
 	                        {{ t('dialog.mod_alias_review.ai_notes', 'AI 备注') }}
                       </label>
 	                      <textarea v-model="item.notes" :placeholder="t('dialog.mod_alias_review.notes_placeholder', '请输入或点击重新生成...')"

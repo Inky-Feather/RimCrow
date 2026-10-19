@@ -164,12 +164,12 @@
                 </button>
 
                 <section class="modal-section space-y-3 p-3">
-                  <h3 class="text-xs font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.scope_title', '处理范围') }}</h3>
+                  <h3 class="text-xs font-black tracking-widest text-text-main">{{ t('dialog.texture_opt.scope_title', '处理范围') }}</h3>
                   <CommonSelect v-model="targetScope" :options="targetScopeOptions" />
                 </section>
 
                 <section class="modal-section space-y-2 p-3">
-                  <h3 class="text-xs font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.generate_options', '生成选项') }}</h3>
+                  <h3 class="text-xs font-black tracking-widest text-text-main">{{ t('dialog.texture_opt.generate_options', '生成选项') }}</h3>
                   <CommonSelect :label="t('dialog.texture_opt.process_mode_label', '生成范围')" v-model="config.process_mode" @change="saveConfig"
                     :description="t('dialog.texture_opt.process_mode_desc', '全部处理（完全覆盖重新生成所有贴图），只补缺失的贴图（增量处理，不重新生成已存在的优化贴图），只处理需要缩放的图片（已经存在的无法缩放的优化贴图不用重新生成，可缩放的覆盖生成）。')"
                     :options="processModeOptions"
@@ -201,7 +201,7 @@
                 </section>
 
                 <section class="modal-section space-y-3 p-3">
-                  <h3 class="text-xs font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.scale_options', '缩放选项（进一步节省显存）') }}</h3>
+                  <h3 class="text-xs font-black tracking-widest text-text-main">{{ t('dialog.texture_opt.scale_options', '缩放选项（进一步节省显存）') }}</h3>
                   <CommonSelect :label="t('dialog.texture_opt.scale_factor_label', '缩放比例')" v-model.number="config.scale_factor" @change="saveConfig"
                     :description="t('dialog.texture_opt.scale_factor_desc', '优先按当前选定的比例处理；如果某些图片不适合这个比例，会自动回退到更稳妥的比例，必要时保持原尺寸。')"
                     :options="scaleFactorOptions"
@@ -219,7 +219,7 @@
                 </section>
 
                 <section class="modal-section space-y-2 p-3">
-                  <h3 class="text-xs font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.clean_description_title', '清理说明') }}</h3>
+                  <h3 class="text-xs font-black tracking-widest text-text-main">{{ t('dialog.texture_opt.clean_description_title', '清理说明') }}</h3>
                   <div class=" text-xs text-text-dim">
                     {{ cleanDescription }}
                   </div>
@@ -288,7 +288,7 @@
 
               <div class="flex-1 space-y-4 overflow-y-auto custom-scrollbar p-4 text-xs">
                 <section class="modal-section space-y-2 p-3">
-                  <h3 class="font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.current_status', '当前状态') }}</h3>
+                  <h3 class="font-black tracking-widest text-text-main">{{ t('dialog.texture_opt.current_status', '当前状态') }}</h3>
                   <div class="text-text-dim">{{ progressFullMessage }}</div>
                   <div class="flex items-center gap-3 text-text-dim">
                     <span>{{ progressCountLabel || t('dialog.texture_opt.no_progress', '暂无任务进度') }}</span>
@@ -298,7 +298,7 @@
 
                 <section class="modal-section space-y-2 p-3">
                   <div class="flex items-center justify-between gap-2">
-                    <h3 class="font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.recent_results', '最近结果') }}</h3>
+                    <h3 class="font-black tracking-widest text-text-main">{{ t('dialog.texture_opt.recent_results', '最近结果') }}</h3>
                     <button class="text-text-dim hover:text-text-main" @click="textureStore.loadResultHistory()">{{ t('common.action.refresh', '刷新') }}</button>
                   </div>
                   <div v-if="resultHistory.length === 0" class="text-text-dim">{{ t('dialog.texture_opt.no_history', '暂无历史结果') }}</div>
@@ -317,7 +317,7 @@
 
                 <section class="modal-section space-y-2 p-3">
                   <div class="flex items-center justify-between gap-2">
-                    <h3 class="font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.failed_items', '失败项') }}</h3>
+                    <h3 class="font-black tracking-widest text-text-main">{{ t('dialog.texture_opt.failed_items', '失败项') }}</h3>
                     <input v-model.trim="failedSearchQuery" type="text" :placeholder="t('dialog.texture_opt.failed_filter_placeholder', '筛选失败项')"
                       class="input-glass w-40 px-2 py-1 text-xs text-text-main outline-none" >
                   </div>
@@ -352,7 +352,7 @@
 
                 <section class="modal-section space-y-2 p-3">
                   <div class="flex items-center justify-between gap-2">
-                    <h3 class="font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.mod_exclusions', '模组排除') }}</h3>
+                    <h3 class="font-black tracking-widest text-text-main">{{ t('dialog.texture_opt.mod_exclusions', '模组排除') }}</h3>
                     <input v-model.trim="excludeModQuery" type="text" :placeholder="t('dialog.texture_opt.exclusion_filter_placeholder', '筛选已排除')"
                       class="input-glass w-40 px-2 py-1 text-xs text-text-main outline-none" >
                   </div>
@@ -377,7 +377,7 @@
 
                 <section class="modal-section space-y-2 p-3">
                   <div class="flex items-center justify-between gap-2">
-                    <h3 class="font-black uppercase tracking-widest text-text-main">{{ t('dialog.texture_opt.file_exclusions', '文件排除') }}</h3>
+                    <h3 class="font-black tracking-widest text-text-main">{{ t('dialog.texture_opt.file_exclusions', '文件排除') }}</h3>
                     <input v-model.trim="excludeFileQuery" type="text" :placeholder="t('dialog.texture_opt.exclusion_filter_placeholder', '筛选已排除')"
                       class="input-glass w-40 px-2 py-1 text-xs text-text-main outline-none" >
                   </div>

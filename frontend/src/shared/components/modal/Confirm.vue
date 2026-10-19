@@ -2,8 +2,9 @@
   <Teleport to="body">
     <!-- 统一过渡容器 -->
     <Transition :name="isMini ? 'mini-zoom' : 'modal-fade'">
-      <div v-if="confirmStore.isVisible"
-        class="fixed inset-0 z-9999 font-sans text-text-main selection:bg-bg-overlay/10"
+      <div v-if="confirmStore.isVisible" data-popover-scope
+        class="fixed inset-0 font-sans text-text-main selection:bg-bg-overlay/10"
+        :style="{ zIndex: UI_Z_INDEX.CONFIRM }"
         :class="isMini ? 'pointer-events-none' : 'flex items-center justify-center'"
         @keydown.esc="handleCancel"
         @keydown.enter="handleEnterKey"
@@ -13,7 +14,7 @@
         <div v-if="!isMini" @mousedown="handleBackdropClick" class="absolute inset-0 bg-bg-deep/20 backdrop-blur-xs transition-opacity duration-500"></div>
 
         <!-- 2. 弹窗主体容器 -->
-        <div ref="modalRef"
+        <div ref="modalRef" role="dialog" aria-modal="true" :aria-label="confirmStore.state.title"
           class="relative flex flex-col overflow-hidden transition-all pointer-events-auto box-border"
           :class="[
             // 核心质感：极深色玻璃 + 顶部高光边框 + 强阴影
@@ -146,6 +147,15 @@
                   <div v-else class="whitespace-pre-line break-words">{{ item.description }}</div>
                 </div>
                 <div class="min-w-0">
+                  <details v-if="item.details?.length" class="mt-3 text-xs text-text-dim">
+                    <summary class="cursor-pointer py-2 text-text-soft">{{ item.detailsTitle }}</summary>
+                    <dl class="space-y-2 border-t border-border-base/10 py-2">
+                      <div v-for="(detail, index) in item.details" :key="index" class="flex flex-wrap justify-between gap-x-4 gap-y-1">
+                        <dt>{{ detail.label }}</dt>
+                        <dd class="min-w-0 break-words">{{ detail.value }}</dd>
+                      </div>
+                    </dl>
+                  </details>
                   <div v-if="item.meta?.length" class="mt-1 flex flex-wrap gap-1">
                     <span
                       v-for="meta in item.meta"
@@ -171,13 +181,22 @@
           <div class="modal-footer flex shrink-0 flex-wrap items-center justify-end gap-2"
             :class="isMini ? 'px-2 py-1' : 'px-4 py-2'">
 
+            <div v-if="confirmStore.state.actionSelector?.options?.length > 1" class="mr-auto min-w-36 max-w-60">
+              <CommonSelect
+                v-model="confirmStore.state.actionSelector.value"
+                :label="confirmStore.state.actionSelector.label"
+                :options="confirmStore.state.actionSelector.options"
+                mini
+              />
+            </div>
+
             <!-- 自定义底部按钮用于“全部处理/全部稍后”等窗口级动作，保持普通确认弹窗的旧按钮逻辑不变。 -->
             <template v-if="Array.isArray(confirmStore.state.actionButtons) && confirmStore.state.actionButtons.length > 0">
               <button
                 v-for="action in confirmStore.state.actionButtons"
                 :key="action.value?.action || action.label"
                 :disabled="confirmStore.state.isResolving"
-                @click="confirmStore.chooseAction(action.value)"
+                @click="chooseFooterAction(action)"
                 class="rounded-lg text-xs font-bold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
                 :class="[
                   isMini ? 'px-2 py-1' : 'px-4 py-1.5',
@@ -217,14 +236,18 @@
           </div>
 
         </div>
+        <div ref="popoverHost" class="pointer-events-none absolute inset-0 z-20 overflow-visible"></div>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup>
-import { computed, ref, nextTick, watch } from 'vue'
+import { computed, ref, nextTick, provide, watch } from 'vue'
 import { useConfirmStore } from './confirmStore'
+import CommonSelect from '../input/CommonSelect.vue'
+import { UI_Z_INDEX } from '../../lib/constants.js'
+import { POPOVER_PORTAL_KEY } from '../popover/popoverContext.js'
 import { useAppStore } from '../../../app/stores/appStore'
 import { onClickOutside, useWindowSize } from '@vueuse/core'
 import { Info, CircleAlert, CircleX, CircleCheckBig } from 'lucide-vue-next'
@@ -242,7 +265,20 @@ const appStore = useAppStore()
 const confirmStore = useConfirmStore()
 const { width: winW, height: winH } = useWindowSize()
 
+const chooseFooterAction = (action) => {
+  if (!confirmStore.state.actionSelector) return confirmStore.chooseAction(action.value)
+  const selection = confirmStore.state.actionSelector.value
+  const value = action.value
+  confirmStore.chooseAction(value && typeof value === 'object' && !Array.isArray(value)
+    ? { ...value, selection }
+    : { value, selection })
+}
+
 const modalRef = ref(null)
+const popoverHost = ref(null)
+provide(POPOVER_PORTAL_KEY, {
+  target: popoverHost, active: computed(() => confirmStore.isVisible), boundary: modalRef,
+})
 const inputRef = ref(null)
 const shake = ref(false)
 const richDescriptionHtml = ref({})
@@ -384,7 +420,7 @@ const handleBackdropClick = () => {
   }
 }
 
-// 自动聚焦
+// 弹窗按需挂载时已处于可见状态，首次也必须初始化聚焦和富文本。
 watch(() => confirmStore.isVisible, async (val) => {
   if (val && confirmStore.state.mode === 'prompt') {
     await nextTick()
@@ -395,7 +431,7 @@ watch(() => confirmStore.isVisible, async (val) => {
   } else {
     richDescriptionHtml.value = {}
   }
-})
+}, { immediate: true })
 
 watch(
   () => confirmStore.state.promptItems,
@@ -410,7 +446,7 @@ onClickOutside(modalRef, () => {
   if (isMini.value && confirmStore.isVisible) {
     confirmStore.cancel()
   }
-})
+}, { ignore: [popoverHost] })
 
 </script>
 
@@ -499,6 +535,14 @@ onClickOutside(modalRef, () => {
 :deep(.prompt-description-rich ol) {
   margin: 0.35rem 0;
   padding-left: 1.1rem;
+}
+
+:deep(.prompt-description-rich ul) {
+  list-style-type: disc;
+}
+
+:deep(.prompt-description-rich ol) {
+  list-style-type: decimal;
 }
 
 :deep(.prompt-description-rich li) {

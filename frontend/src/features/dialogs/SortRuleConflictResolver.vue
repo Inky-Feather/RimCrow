@@ -18,7 +18,7 @@
       <div class="grid min-h-0 flex-1 grid-cols-5 overflow-hidden">
         <aside class="col-span-3 flex min-h-0 flex-col overflow-y-auto border-r border-border-base/10 bg-bg-inset/45 p-4 custom-scrollbar">
           <div class="mb-3 flex items-center justify-between gap-2">
-            <div class="text-[0.65rem] font-black uppercase tracking-wider text-text-dim">{{ t('dialog.sort_conflict.groups_title', '冲突链路') }}</div>
+            <div class="text-[0.65rem] font-black tracking-wider text-text-dim">{{ t('dialog.sort_conflict.groups_title', '冲突链路') }}</div>
             <div class="flex items-center gap-1.5">
               <span class="rounded border border-border-base/10 bg-bg-overlay/5 px-1.5 py-0.5 text-[0.65rem] text-text-dim">
                 {{ t('dialog.sort_conflict.edge_count', '{count} 条规则线', { count: graph.edges.length }) }}
@@ -113,7 +113,7 @@
           <div class="min-h-0 flex-1 overflow-y-auto p-5 custom-scrollbar">
             <!-- 未选中线条时直接显示图上的规则线清单，右侧信息和左侧视觉模型保持一致 -->
             <template v-if="selectedEdgeIndex === null">
-              <div class="mb-4 text-[0.65rem] font-black uppercase tracking-wider text-text-dim">{{ t('dialog.sort_conflict.line_overview_title', '冲突规则线') }}</div>
+              <div class="mb-4 text-[0.65rem] font-black tracking-wider text-text-dim">{{ t('dialog.sort_conflict.line_overview_title', '冲突规则线') }}</div>
               <div class="space-y-2">
                 <button v-for="edge in graph.edges" :key="edge.key" type="button"
                   class="flex flex-col w-full items-center gap-3 rounded-lg border border-border-base/10 bg-bg-overlay/3 px-2 py-2 text-left transition-colors hover:border-accent-danger/20 hover:bg-accent-danger/6"
@@ -159,7 +159,7 @@
 
               <!-- 当前规则线：只解释用户点击的这条线，避免和下方“完整规则卡片”混淆 -->
               <section v-if="selectedRuleGroups.length" class="mb-3 rounded-lg border border-border-base/10 bg-bg-overlay/3 p-3">
-                <div class="mb-2 text-[0.65rem] font-black uppercase tracking-wider text-text-dim">{{ t('dialog.sort_conflict.selected_line_rules', '当前规则线') }}</div>
+                <div class="mb-2 text-[0.65rem] font-black tracking-wider text-text-dim">{{ t('dialog.sort_conflict.selected_line_rules', '当前规则线') }}</div>
                 <div class="space-y-2">
                   <div v-for="group in selectedRuleGroups" :key="group.source" class="space-y-1.5">
                     <div class="flex items-center gap-1.5">
@@ -199,7 +199,7 @@
 
                   <div class="space-y-2">
                     <div v-for="section in card.sections" :key="section.type" class="space-y-1">
-                      <div class="text-xs font-bold uppercase" :class="relationSectionLabelClass(section.type)">{{ relationSectionLabel(section.type) }}</div>
+                      <div class="text-xs font-bold" :class="relationSectionLabelClass(section.type)">{{ relationSectionLabel(section.type) }}</div>
                       <div class="flex flex-wrap gap-1.5">
                         <span v-for="item in section.items" :key="item.id" v-tooltip="relationItemTooltip(item.id, item.info)"
                           class="inline-flex max-w-full items-center gap-1 rounded border px-1.5 py-0.5 text-[0.75rem] text-text-main"

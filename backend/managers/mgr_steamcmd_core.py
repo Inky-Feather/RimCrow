@@ -18,22 +18,11 @@ class SteamCMDController:
         self.progress_pattern = re.compile(r'\[\s*(\d+)%\]')
 
     def _get_clean_env(self):
-        """
-        获取干净的环境变量（极其重要）
-        解决 HTTPS 证书报错的核心：在初始化阶段屏蔽所有的网络代理变量
-        """
+        """构造 SteamCMD 子进程环境，不改动宿主进程的代理配置。"""
         env = os.environ.copy()
-        
-        # 除非你在设置里明确指定让 SteamCMD 走代理，否则强行剔除代理环境变量
-        # （注意：建议在首次初始化时，即使设置了代理也强制设为 False，初始化完再开启）
-        if not settings.config.network.use_proxy_on_steamcmd:
-            env.pop('HTTP_PROXY', None)
-            env.pop('HTTPS_PROXY', None)
-            env.pop('http_proxy', None)
-            env.pop('https_proxy', None)
-            env.pop('ALL_PROXY', None)
-            env.pop('all_proxy', None)
-            
+        if settings.config.network.use_proxy_on_steamcmd:
+            from backend.managers.mgr_network import network_mgr
+            env.update(network_mgr.get_proxy_env())
         return env
 
     def initialize_steamcmd(self, on_progress=None):

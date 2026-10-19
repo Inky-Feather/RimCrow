@@ -5,7 +5,7 @@ import {
   buildWorkshopWebUrl,
   dispatchSteamUri,
   openWorkshopPage,
-} from '../frontend/src/shared/lib/steamUri.js'
+} from '../src/shared/lib/steamUri.js'
 
 assert.equal(buildWorkshopSteamUri(' 12345 '), 'steam://url/CommunityFilePage/12345')
 assert.equal(buildWorkshopWebUrl('12345'), 'https://steamcommunity.com/sharedfiles/filedetails/?id=12345')

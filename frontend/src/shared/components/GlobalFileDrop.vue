@@ -1,7 +1,9 @@
 <template>
   <div
+    ref="dropZoneRef"
     id="global-file-drop-zone"
-    class="pointer-events-none fixed inset-0 z-20"
+    class="absolute inset-0 z-20"
+    :class="showOverlay ? 'pointer-events-auto' : 'pointer-events-none'"
   >
     <Transition name="fade-drop">
       <div v-if="showOverlay" class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-bg-deep/70 backdrop-blur-sm">
@@ -27,6 +29,8 @@ import { t } from '../i18n.js'
 const appStore = useAppStore()
 const orderStore = useOrderStore()
 const profileStore = useProfileStore()
+const dropZoneRef = ref(null)
+let dropContainer = null
 const showOverlay = ref(false)
 const dragDepth = ref(0)
 const activeDrop = ref('')
@@ -146,6 +150,8 @@ const handleDragLeave = (event) => {
 const handleDrop = async (event) => {
   if (!isFileDrag(event)) return
   event.preventDefault(); reset()
+  // 桌面模式由 pywebview 原生监听提供绝对路径，前端事件只负责阻止浏览器默认行为，避免重复导入。
+  if (!browserMode.value) return
   const files = Array.from(event?.dataTransfer?.files || [])
   if (files.length > 1) toast.info(t('toast.global_drop.first_file_only', '一次只能导入一个文件，已使用第一个文件。'))
   const path = extractPath(event)
@@ -156,8 +162,10 @@ const handleDrop = async (event) => {
 
 const bindNativeDrop = async () => {
   if (browserMode.value || !window.pywebview?.api?.bind_global_file_drop_zone) return
+  // 原生事件绑定到主工作区；内部列表会在自己的 drop 处理器中停止冒泡。
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const result = await window.pywebview.api.bind_global_file_drop_zone('app-shell')
+    if (!dropContainer) return
+    const result = await window.pywebview.api.bind_global_file_drop_zone('main-workspace')
     if (result?.status === 'success' || result?.status === 'error') return
     await new Promise(resolve => window.setTimeout(resolve, 250))
   }
@@ -165,17 +173,20 @@ const bindNativeDrop = async () => {
 
 onMounted(() => {
   window.__handleNativeFileDrop = handleNativeDrop
-  window.addEventListener('dragenter', handleDragEnter)
-  window.addEventListener('dragover', handleDragOver)
-  window.addEventListener('dragleave', handleDragLeave)
-  window.addEventListener('drop', handleDrop)
+  // 监听遮罩所在的工作区，标题栏和其它窗口区域不参与文件导入。
+  dropContainer = dropZoneRef.value.parentElement
+  dropContainer.addEventListener('dragenter', handleDragEnter)
+  dropContainer.addEventListener('dragover', handleDragOver)
+  dropContainer.addEventListener('dragleave', handleDragLeave)
+  dropContainer.addEventListener('drop', handleDrop)
   if (!browserMode.value) window.setTimeout(bindNativeDrop, 0)
 })
 onUnmounted(() => {
-  window.removeEventListener('dragenter', handleDragEnter)
-  window.removeEventListener('dragover', handleDragOver)
-  window.removeEventListener('dragleave', handleDragLeave)
-  window.removeEventListener('drop', handleDrop)
+  dropContainer?.removeEventListener('dragenter', handleDragEnter)
+  dropContainer?.removeEventListener('dragover', handleDragOver)
+  dropContainer?.removeEventListener('dragleave', handleDragLeave)
+  dropContainer?.removeEventListener('drop', handleDrop)
+  dropContainer = null
   if (window.__handleNativeFileDrop === handleNativeDrop) delete window.__handleNativeFileDrop
 })
 </script>

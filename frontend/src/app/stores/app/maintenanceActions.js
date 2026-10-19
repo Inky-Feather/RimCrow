@@ -11,6 +11,7 @@ export const useMaintenanceActions = ({
   refreshModCoreData,
   downloadWorkshopItems,
 } = {}) => {
+  let externalCheckId = ''
   const isTimedCheckDue = (enabled, lastCheckTime, intervalDays, fallbackDays = 1) => {
     if (!enabled) return false
     const last = Number(lastCheckTime || 0)
@@ -287,21 +288,25 @@ export const useMaintenanceActions = ({
   }
 
   // 外部库更新属于网络下载动作：启动期可以静默检查，但实际更新必须经由队列弹窗确认。
-  const checkExternalDataUpdates = async ({ manual = true, prompt = true, overrides = null } = {}) => {
+  const checkExternalDataUpdates = async ({ manual = true, prompt = true, overrides = null, onCheckId = null } = {}) => {
+    const checkId = globalThis.crypto?.randomUUID?.() || `external-${Date.now()}-${Math.random()}`
+    externalCheckId = checkId
+    onCheckId?.(checkId)
     const data = await fetchMaintenanceData({
       apiName: 'maintenance_check_external_data',
       workName: t('check.maintenance.external_data', '检查外部库更新'),
       manual,
       lastCheckKey: 'last_external_data_update_check_time',
-      overrides,
+      overrides: { ...(overrides || {}), check_id: checkId },
       // 整轮远端状态都没拿到时，不要把失败记录成一次成功检查。
       shouldPersistCheckedAt: (payload) => {
+        if (payload?.cancelled || externalCheckId !== checkId) return false
         const items = Array.isArray(payload?.items) ? payload.items : []
         const failed = Array.isArray(payload?.failed) ? payload.failed : []
         return items.length === 0 || failed.length < items.length
       },
     })
-    if (!data) return null
+    if (!data || data.cancelled || externalCheckId !== checkId) return null
 
     const updates = Array.isArray(data.updates) ? data.updates : []
     const failed = Array.isArray(data.failed) ? data.failed : []

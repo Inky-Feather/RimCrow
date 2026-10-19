@@ -5,7 +5,7 @@
     <slot />
     <div class="flex flex-col items-center flex-1 min-w-10">
       <span class="text-lg font-bold leading-none" :class="highlight && value > 0 ? 'text-accent-primary' : 'text-text-dim'">{{ value }}</span>
-      <span class="text-[0.7rem] text-text-dim uppercase scale-90">{{ label }}</span>
+      <span class="text-[0.7rem] text-text-dim scale-90">{{ label }}</span>
     </div>
   </div>
 </template>

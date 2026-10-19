@@ -76,7 +76,7 @@
               <div class="sidebar-surface flex min-h-0 flex-col overflow-hidden">
                 <!-- 搜索结果筛选 -->
                 <div class="flex gap-1.5 items-center justify-between bg-bg-surface px-3 py-2 shadow-md/30">
-                  <div class="text-sm font-black uppercase tracking-[0.18em] text-text-disabled">{{ t('dialog.file_search.results_title', '搜索结果') }}</div>
+                  <div class="text-sm font-black tracking-[0.18em] text-text-disabled">{{ t('dialog.file_search.results_title', '搜索结果') }}</div>
                   <input v-model="fileSearchStore.resultFilter" type="text" :placeholder="t('dialog.file_search.result_filter_placeholder', '筛选模组、文件名、路径、命中内容')" class="input-glass h-8 min-w-0 flex-1 px-3 text-sm text-text-main outline-none" >
                   <span class="rounded-full border border-border-base/10 bg-bg-overlay/5 px-2 py-0.5 text-xs text-text-dim">
                     {{ fileSearchStore.filteredResults.length }} / {{ fileSearchStore.results.length }}

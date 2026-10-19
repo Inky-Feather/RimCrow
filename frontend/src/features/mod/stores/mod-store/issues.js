@@ -74,6 +74,11 @@ export const useModIssues = ({
       const id = normalizeCanonicalId(instanceToken)
       const issueId = normalizeListToken(mod?.active_package_token || instanceToken)
 
+      if (mod.disabled) {
+        _add(issueId, ISSUE_TYPE.ERROR_DISABLED_MOD, ISSUE_LEVEL.ERROR, t('issue.message.disabled_mod', '该模组已被禁用，将不会在游戏中加载。文件仍保留，可在“已禁用”列表中重新启用。'), issueId)
+        continue
+      }
+
       // A. 文件缺失
       if (!mod.path || mod.isMissing) {
         _add(issueId, ISSUE_TYPE.ERROR_MISSING_FILE, ISSUE_LEVEL.ERROR, t('issue.message.missing_file', '本地文件缺失或无法解析'), issueId)
@@ -102,6 +107,7 @@ export const useModIssues = ({
     const langPackFallbackMap = new Map() // 兜底命中：归属可信，但语言作者可能漏标 supported_languages
     if (checkLangEnabled && targetLang) {
       for (const mod of instanceMap.values()) {
+        if (mod.disabled) continue
         const isLangPack = isLanguagePackMod(mod)
         if (!isLangPack) continue
         if (!canUseLanguagePackForIssueDetection(mod)) continue
@@ -134,8 +140,9 @@ export const useModIssues = ({
         const canonicalId = normalizeCanonicalId(activeIds.value[i])
         const tokenId = normalizeListToken(activeIds.value[i])
         if (!canonicalId) continue
-        activeIndexMap.set(canonicalId, i)
         activeTokenMap.set(canonicalId, tokenId)
+        if (takeModById(tokenId)?.disabled) continue
+        activeIndexMap.set(canonicalId, i)
     }
     const multiplayerActive = activeIndexMap.has('rwmt.multiplayer')
     const mpCompatActive = activeIndexMap.has('rwmt.multiplayercompatibility')
@@ -149,7 +156,7 @@ export const useModIssues = ({
     for (let i = 0; i < len; i++) {
         const currentId = normalizeCanonicalId(activeIds.value[i])
         const mod = takeModById(activeIds.value[i])
-        if (!mod || mod.isMissing || !mod.rules) continue
+        if (!mod || mod.isMissing || mod.disabled || !mod.rules) continue
         const rules = mod.rules || {}
         // 我必须在别人之后 -> 别人必须在我之前
         const afterTargets = [...(rules.load_after || []), ...(rules.dependencies || [])]
@@ -169,7 +176,7 @@ export const useModIssues = ({
       const currentToken = normalizeListToken(activeIds.value[i])
       const currentId = normalizeCanonicalId(activeIds.value[i])
       const mod = takeModById(activeIds.value[i])
-      if (!mod || mod.isMissing) continue // X. 文件缺失已在全局检查中处理，这里简单跳过
+      if (!mod || mod.isMissing || mod.disabled) continue // 缺失和禁用已在全局检查中处理。
       const mpCompat = mod.multiplayer_compat || {}
       if (multiplayerActive && mpCompat.enabled) {
         const status = Number(mpCompat.effective_status ?? 0)
@@ -262,11 +269,14 @@ export const useModIssues = ({
               t('issue.message.alternative_used', '__{title}__：前置依赖 [[{base}]] 已由备选模组 [[{alternative}]] 替代', { title: getIssueTitle(ISSUE_TYPE.INFO_ALTERNATIVE_USED), base: baseName, alternative: altName }), activeTargetToken)
           } else {
             // 缺失或停用
-            const baseMod = allModsMap.value.get(baseTargetId)
+            const baseMod = takeModById(activeTokenMap.get(baseTargetId) || baseTargetId)
             const baseName = baseMod ? displayModName(baseMod) : baseTargetId
             const hasInstalledBaseMod = hasRealModById(baseTargetId)
 
-            if (!hasInstalledBaseMod) {
+            if (baseMod?.disabled) {
+              _add(currentToken, ISSUE_TYPE.ERROR_INACTIVE_DEPENDENCY, ISSUE_LEVEL.ERROR,
+                t('issue.message.disabled_dependency', '前置模组 [[{mod}]] 已被禁用，将不会在游戏中加载。请先在“已禁用”列表中重新启用。', { mod: baseName }), baseTargetId)
+            } else if (!hasInstalledBaseMod) {
               // 主包不在本地，找找备选包在不在本地！
               const localAlt = alts.find(alt => hasRealModById(alt))
               if (localAlt) {

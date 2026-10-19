@@ -668,7 +668,6 @@
       "multiplayer_compatibility_failed": "Failed to update the Multiplayer compatibility table.",
       "multiplayer_compatibility_started": "Multiplayer compatibility table update started",
       "path_or_url_missing": "Update URL or target path is not configured",
-      "reload_failed_after_success": "{message} Cache reload failed. Refresh manually later.",
       "update_start_failed": "Failed to start the external data update. Check the update URL, network connection, proxy settings, and target folder permissions.",
       "workshop_db_done": "Community Workshop database updated.",
       "workshop_db_failed": "Failed to update the community Workshop database.",
@@ -696,16 +695,10 @@
       "invalid_launch_warning_action": "Invalid launch confirmation action",
       "launch_after_steam_exit": "Steam has exited. Game launch started. Waiting for the game process to confirm.",
       "launch_cancelled": "Launch cancelled",
-      "launch_prepare_active_done": "Startup check sync is complete for the current environment.",
-      "launch_prepare_active_failed": "Startup check sync failed for the current environment.",
-      "launch_prepare_cache_sync_done": "Startup check sync completed using the current cached state.",
-      "launch_prepare_cache_sync_failed": "Startup check sync failed while using the current cached state.",
       "launch_prepare_failed": "Launch preparation failed. Check the current profile paths, file permissions, and Mod links.",
       "launch_prepare_missing_context": "Could not build the target environment context. Check whether the environment exists.",
       "launch_prepare_missing_scan_paths": "The target environment has no mod paths available for startup check sync.",
-      "launch_prepare_no_context_builder": "Environment context builder is unavailable, so startup check sync was skipped.",
-      "launch_prepare_scan_sync_done": "Startup check sync is complete and links were updated from the latest scan results.",
-      "launch_prepare_scan_sync_failed": "Startup check scan completed, but link sync failed.",
+      "launch_prepare_scan_failed": "The pre-launch scan did not finish. Game launch has been stopped.",
       "launch_prepare_sync_failed": "Startup sync failed",
       "launch_prepare_unhealthy_context": "The target environment path is unavailable. Complete path setup first.",
       "steam_launch_failed": "Failed to submit the Steam launch request.",
@@ -1023,7 +1016,8 @@
     "update": {
       "download_started": "Started downloading update package",
       "installing_restart": "Restarting and installing the update.",
-      "no_available_info": "No update information is available. Check for updates first."
+      "no_available_info": "No update information is available. Check for updates first.",
+      "result_changed": "Update information has changed. Please view the update again."
     },
     "uri": {
       "no_link_to_open": "No link to open.",
@@ -2413,6 +2407,7 @@
         "active": "Currently active",
         "all": "All states",
         "coexist_disabled": "Coexist disabled",
+        "duplicates": "Has duplicates",
         "inactive": "Inactive",
         "mod_disabled": "Mod inactive"
       },
@@ -3164,13 +3159,18 @@
       "access_denied": "The target service rejected the request. Check login status, access permissions, or request settings.",
       "auth_failed": "Target service authentication failed. Check login status, access token, or request settings.",
       "connection_failed": "Could not connect to the target service. Check the network connection, proxy settings, or service status.",
+      "invalid_response": "The server returned incomplete or invalid content. Try again, or choose another download source or mirror.",
       "not_found": "The target resource does not exist or the link has expired. Check the link, parameters, or try again later.",
       "proxy_auth": "The proxy server requires authentication. Check the proxy username and password, or turn off the proxy.",
       "proxy_failed": "Proxy connection failed. Check the proxy address, port, username, and password, or turn off the proxy and try again.",
       "rate_limited": "Too many requests or the service is rate limiting. Try again later.",
+      "redirect": "The service requires a redirect to another address. If this keeps happening, check the link or try a different proxy or mirror.",
+      "request_failed": "The service could not accept this request. Check the link, input and settings, or update the app and try again.",
       "request_invalid": "Invalid request settings. Check your input or settings and try again.",
       "service_unavailable": "The target service is temporarily unavailable. Try again later, or check the service status.",
-      "timeout": "The network request timed out. Check the network connection, proxy settings, or try again later."
+      "steam_access_denied": "Steam rejected the request. If you use the Web API, check your API Key and permissions. You can also try a different network or proxy.",
+      "timeout": "The network request timed out. Check the network connection, proxy settings, or try again later.",
+      "tls_failed": "The secure connection could not be verified or established. Check the system clock, certificates and proxy settings. Keep certificate verification enabled."
     },
     "path": {
       "batch_check_failed": "Failed to check paths in batch. Make sure paths exist, permissions allow access, then try again later.",
@@ -3231,7 +3231,7 @@
       "workshop_status_failed": "Failed to check Steam Workshop install status. Make sure Steam is running and logged in, then try again later."
     },
     "steamcmd": {
-      "acf_read_failed": "Failed to read SteamCMD Workshop records. Check file permissions or try again later.",
+      "acf_repair_failed": "Failed to repair SteamCMD Workshop records. Check the file format, permissions, and whether the file is in use.",
       "download_start_failed": "Failed to start SteamCMD download. Check network connection, proxy settings, SteamCMD status, and target folder permissions.",
       "execution_failed": "SteamCMD failed. Check the Steam installation, network connection, and download environment.",
       "execution_failed_with_target": "SteamCMD failed. Check the Steam installation, network connection, and download folder permissions.",
@@ -3837,6 +3837,8 @@
     "message": {
       "alternative_used": "__{title}__: dependency [[{base}]] is replaced by alternative mod [[{alternative}]]",
       "dependency_after_mod": "!!Dependency After Target!!: must load after dependency [[{mod}]]",
+      "disabled_dependency": "Required mod [[{mod}]] has been disabled and will not load in the game. Re-enable it in the Disabled list first.",
+      "disabled_mod": "This mod has been disabled and will not load in the game. Its files are still present. You can re-enable it in the Disabled list.",
       "inactive_alternative_dependency": "!!{title}!!: alternative dependency [[{mod}]] is not active",
       "inactive_dependency": "!!{title}!!: dependency [[{mod}]] is not active",
       "inactive_language_pack": "^^{title}^^: does not support the current language, but local language pack [[{pack}]] exists",
@@ -4280,6 +4282,18 @@
       "import_success": "Import successful"
     }
   },
+  "network": {
+    "hosts": {
+      "authorization_cancelled": "Administrator approval was cancelled. System Hosts was not updated. In-app mappings are unaffected.",
+      "authorization_timeout": "Waiting for administrator approval timed out. System Hosts was not updated. Retry if needed.",
+      "content_changed": "Another program changed system Hosts. Stop simultaneous edits and retry.",
+      "permission_denied": "Permission to update system Hosts was denied. Retry and approve the administrator prompt, or check your security software.",
+      "permission_denied_unix": "Permission to update system Hosts was denied. Check the file permissions and retry. In-app mappings are unaffected.",
+      "system_apply_failed": "System Hosts could not be updated. In-app mappings remain available. Check file permissions or security software settings, then retry.",
+      "system_remove_failed": "Previous mappings may remain in system Hosts. Click retry to finish removing them.",
+      "write_timeout": "Updating system Hosts timed out and the result is unconfirmed. Retry to check and apply your saved settings."
+    }
+  },
   "secret": {
     "errors": {
       "backend_unavailable": "System credential storage is unavailable",
@@ -4402,6 +4416,7 @@
       "queued": "Task has been queued",
       "scan_complete": "Scan complete",
       "scan_interrupted_by_suspend": "Scan was interrupted because the interface was suspended. Refresh again.",
+      "scan_link_sync_failed": "Scan complete, but mod link synchronization failed",
       "texture_task": "Texture task"
     },
     "mod_package": {
@@ -4573,7 +4588,9 @@
   "toast": {
     "api": {
       "error": "{workname} failed:\n{message}",
+      "network_advice": "If your connection is unstable, open Network to adjust connection settings or explore the recommended network optimization tools.",
       "open_corresponding_log": "View related system log",
+      "open_network_settings": "Open network settings",
       "success": "{workname} completed",
       "warning": "{workname} needs attention:\n{message}"
     },
@@ -4732,6 +4749,7 @@
       "scan_done_with_restore_warning": "Scan completed. Scanned {total} mods: {added} added, {updated} updated, {removed} removed, {skipped} known.\n{extra}",
       "scan_external_enabled_count": "{count} externally re-enabled",
       "scan_failed": "Scan failed. Path permissions, files in use, or scanner state may be causing the problem.",
+      "scan_link_sync_failed": "Scan complete, but mod link synchronization failed. The game may not load the current mods.\n{reason}",
       "scan_request_failed": "Scan request failed. The app service may be temporarily unavailable, or the current profile paths may be invalid.",
       "scan_start_failed": "Failed to start the scan. The current profile path may be invalid, the scanner may not be initialized, or background tasks may be unavailable.",
       "scan_strict_restore_failed_count": "{count} restore failed",
@@ -4814,9 +4832,6 @@
       "name_required": "Enter a rule name",
       "weight_clamped": "Dynamic weight was clamped to the allowed range (weight {weightMin}-{weightMax}, shift {shiftMin} to {shiftMax})."
     },
-    "rules": {
-      "community_reload_unavailable": "The rule engine is not initialized, so the community rule database cannot be reloaded now."
-    },
     "settings": {
       "about": {
         "copied": "Copied: {text}",
@@ -4855,8 +4870,7 @@
       },
       "save_failed": "Failed to save settings. The app service may be unavailable, the configuration file may not be writable, or the current path may not have sufficient permissions. Please try again later.",
       "secret_storage_warning": "Some keys could not be written to secure storage, so they are temporarily kept in the config file. Check the system credential service and save the keys again.",
-      "self_mods_path_reset": "The manager-downloaded Mods folder cannot be the same as the Workshop directory, so it has been restored to the default folder.",
-      "steamcmd_junction_sync_failed": "The current drive cannot connect SteamCMD's download folder. Your manager download folder setting was kept, but mods downloaded by SteamCMD will not appear in the manager folder automatically. Move SteamCMD to an NTFS drive, or set the manager mod download path to: {path}"
+      "self_mods_path_reset": "The manager-downloaded Mods folder cannot be the same as the Workshop directory, so it has been restored to the default folder."
     },
     "startup": {
       "auxiliary_warmup_failed": "Some background data could not be warmed up yet. Related hints may appear later.",
@@ -4906,9 +4920,7 @@
       "download_started": "Update download started. Watch the status bar for progress.",
       "install_cancelled": "Update installation cancelled.",
       "partial_no_update": "Some update sources are unavailable. No new version was found from the available sources.",
-      "recommend_scan": "Run a full scan to apply the new version's core engine features.",
-      "start_failed": "Failed to start the update. Check the network connection, proxy settings, and install folder permissions.",
-      "up_to_date": "You are already on the latest version."
+      "recommend_scan": "Run a full scan to apply the new version's core engine features."
     },
     "workspace": {
       "cleanup_deleted_done": "Cleaned {count} deleted records",
@@ -5321,6 +5333,9 @@
         "jump": "__Click to jump to the other conflicting command.__",
         "scopes": "Scopes: {scopes}"
       },
+      "network": {
+        "network_check": "Check common sites using the proxy, Hosts, and GitHub mirror values in this form"
+      },
       "paths": {
         "auto_detect": "Try to find paths from system and Steam records",
         "auto_detect_loading": "Auto-detecting paths",
@@ -5678,6 +5693,9 @@
         "by_name_short": "By original name",
         "by_package_id": "By package ID",
         "by_workshop_id": "By Workshop ID"
+      },
+      "status": {
+        "disabled": "Disabled"
       }
     },
     "mod_details": {
@@ -5766,6 +5784,7 @@
         "last_active_time": "Activation time",
         "last_moved_time": "Moved time",
         "multiplayer_compat": "Multiplayer compatibility",
+        "original_name": "Original name",
         "patch_file_count": "Patch count",
         "texture_file_count": "Texture count",
         "xml_file_count": "XML count"
@@ -6064,6 +6083,8 @@
         "downloads_desc": "View source code, release packages, and mirror download links.",
         "feedback": "Feedback and community",
         "feedback_desc": "When reporting an issue, screenshots, logs, and reproduction steps are recommended.",
+        "gitee_mirror": "Gitee repository",
+        "gitee_mirror_note": "Domestic code repository and backup source for future releases.",
         "github_releases": "GitHub releases",
         "github_releases_note": "Download GitHub release packages or view release notes for each version.",
         "github_repo": "GitHub repository",
@@ -6077,6 +6098,8 @@
         "qq_group_note": "Best for quick feedback and extra screenshots.",
         "references": "Referenced projects",
         "references_desc": "These projects provide references for sorting, log analysis, and management features.",
+        "sourceforge_mirror": "SourceForge download",
+        "sourceforge_mirror_note": "Stable public download entry for release packages.",
         "tieba_thread": "Tieba thread",
         "tieba_thread_note": "View centralized notes and public discussion.",
         "title": "About",
@@ -6417,13 +6440,104 @@
         "unbound": "Unbound"
       },
       "network": {
+        "community_tools_help": "These tools are maintained independently by the community. Download and enable them using their own instructions. Try one at a time to avoid conflicts.",
+        "community_tools_title": "Community network tools",
         "custom_hosts": "Custom Hosts mapping",
+        "custom_hosts_desc": "Manually specify the IP address for a domain. Usually no changes are needed; use this only when you know the target address.",
+        "dynamic_mirrors_enabled": "Enable dynamic mirrors",
+        "dynamic_mirrors_enabled_desc": "When enabled, dynamic mirrors are fetched and tested immediately. Available mirrors are added to the selector above. Dynamic mirrors are not used when this is disabled.",
+        "effective_hosts_desc": "Dynamic Hosts are read-only; cache file:",
+        "effective_hosts_empty": "No dynamic Hosts mappings are currently active.",
+        "effective_hosts_title": "View active dynamic Hosts",
         "enable_proxy": "Enable proxy service",
         "enable_proxy_desc": "Enable proxy service. All network requests will go through the proxy server. Some external data downloads, update checks, description image loading, built-in browser access, and similar features may need this to work.\n\nYou can also configure a global network environment outside the app.",
         "enable_steam_enhanced_api": "Enable enhanced Workshop information",
         "enable_steam_enhanced_api_desc": "After enabling and filling in the Key, Workshop pages prefer online enhanced information. Without a Key or when disabled, local cache search is used automatically.",
         "get_page": "page",
+        "github_access_choice": "If you have a stable proxy, prefer it for network problems. Try a GitHub mirror when downloads are slow, or Dynamic Hosts when GitHub cannot connect. You do not need both after one works; neither replaces a proxy.",
+        "github_access_desc": "GitHub mirrors can provide project pages, files, source archives, and releases when GitHub is slow or unavailable. If a mirror fails, the app falls back to a direct connection.",
+        "github_access_title": "GitHub mirrors",
+        "github_hosts_auto_update": "Update dynamic Hosts automatically",
+        "github_hosts_auto_update_desc": "Update dynamic Hosts at startup when the refresh interval has elapsed.",
+        "github_hosts_enabled": "Dynamic Hosts",
+        "github_hosts_enabled_desc": "Fetch website IP addresses from trusted sources to help with connection failures caused by domain lookup errors. Works for any website included in the sources. Enabling starts a background fetch immediately; save settings to apply. Existing mappings are kept if fetching fails.",
+        "github_hosts_failed": "Failed to fetch Hosts. Check your connection and the source URL, then try again. Existing mappings will be kept.",
+        "github_hosts_loading": "Fetching Hosts in the background. On a slow connection this may take more than a minute. You can still save settings.",
+        "github_hosts_ready": "Hosts fetched and applied.",
+        "github_hosts_refresh_interval": "Update interval (hours)",
+        "github_hosts_retry": "Fetch again",
+        "github_hosts_timeout": "Fetching Hosts timed out. Check your connection or try again later. Existing mappings will be kept.",
+        "github_hosts_url": "Hosts sources",
+        "github_hosts_url_desc": "Use HTTPS URLs serving Hosts text or JSON. Edit, enable, disable or delete each source. For duplicate domains, the first successful source takes priority. Other sources can still be used if one fails.",
+        "github_mirror_auto": "Choose a mirror automatically",
+        "github_mirror_direct": "Connect to GitHub directly",
+        "github_mirror_selector_help": "Choose a GitHub mirror. Automatic selection prefers an available mirror with lower latency.",
+        "github_mirror_selector_label": "Mirror",
         "host": "Host",
+        "hosts_help": "Hosts acts like a website address book: it tells the app which IP to connect to for a domain. It may restore access when domain lookup fails, but cannot guarantee that the server is reachable. By default it only affects this app. Dynamic Hosts fetches mappings from sources; custom Hosts uses mappings you enter.",
+        "hosts_partial_failure": "Some sources failed. Mappings from successful sources are in use. Check the sources and try fetching again.",
+        "hosts_pending_save": "Hosts fetched. Save settings to apply.",
+        "hosts_priority": "If a domain appears in both dynamic and custom mappings, the custom mapping takes priority.",
+        "hosts_source_add": "+ Add source",
+        "hosts_source_enabled": "Enable this Hosts source",
+        "hosts_source_remove": "Delete this Hosts source",
+        "hosts_sources_empty": "No Hosts sources are enabled. Add a URL and enable its checkbox.",
+        "hosts_title": "Hosts address mappings",
+        "mirror_add": "Add mirror",
+        "mirror_add_help": "Add a custom GitHub mirror",
+        "mirror_apply": "Test and add",
+        "mirror_edit": "Edit selected mirror",
+        "mirror_edit_help": "Edit the selected mirror configuration",
+        "mirror_editor": "Edit GitHub mirror",
+        "mirror_file_help": "Changes take effect after saving the settings. You can also edit the configuration file directly, then restart the app.",
+        "mirror_id": "Mirror ID (letters, numbers, underscores, or hyphens)",
+        "mirror_invalid": "Enter a name, a unique valid ID, and an HTTPS URL containing one {url}. The ID cannot be direct.",
+        "mirror_name": "Mirror name",
+        "mirror_open_failed": "Could not open the mirror configuration file. Open it manually using the displayed path.",
+        "mirror_open_file": "Open mirror configuration file",
+        "mirror_open_file_help": "Open the mirror list file to view or edit it",
+        "mirror_probe_failed": "Mirror detection failed; this configuration was not saved. Check the address and network connection, then try again.",
+        "mirror_probe_loading": "Checking which features this mirror supports. Please wait…",
+        "mirror_probe_result": "Automatic detection results",
+        "mirror_remove": "Delete selected mirror",
+        "mirror_remove_help": "Delete the selected mirror configuration",
+        "mirror_status_supported": "Supported",
+        "mirror_status_unknown": "Unknown",
+        "mirror_status_unsupported": "Unsupported",
+        "mirror_type_api": "GitHub API",
+        "mirror_type_archive": "Source archives",
+        "mirror_type_clone": "Git Clone",
+        "mirror_type_gist": "Gist content",
+        "mirror_type_lfs": "LFS media files",
+        "mirror_type_raw": "Raw files",
+        "mirror_type_release": "Release attachments",
+        "mirror_type_web": "Project pages",
+        "mirror_url": "Mirror conversion URL",
+        "mirror_url_help": "Enter the HTTPS conversion URL provided by the mirror and use {url} for the original GitHub URL. The project page, Raw files, and source archives are checked before saving.",
+        "network_check": "Check access",
+        "network_check_bypass": "Direct connection via bypass list",
+        "network_check_desc": "Checks access and response time for common sites using the proxy, Hosts, and GitHub mirror values currently in this form.",
+        "network_check_direct": "Direct",
+        "network_check_domain": "Domain",
+        "network_check_error_code": "Error code",
+        "network_check_failed": "The check did not finish. Try again later.",
+        "network_check_failed_item": "Unavailable",
+        "network_check_hosts_hit": "Hosts mapping applied",
+        "network_check_http_error": "Service returned an error",
+        "network_check_latency": "Latency",
+        "network_check_loading_item": "Loading",
+        "network_check_mirror": "Mirror applied",
+        "network_check_name": "Name",
+        "network_check_ok": "Reachable",
+        "network_check_proxy": "Proxy",
+        "network_check_reason": "Details",
+        "network_check_redirect": "Redirect required",
+        "network_check_result": "Status code / result",
+        "network_check_route": "Connection method",
+        "network_check_status_code": "Status code",
+        "network_check_timeout": "Connection timed out",
+        "network_check_url": "Address",
+        "network_checking": "Checking…",
         "password": "Password",
         "port": "Port",
         "protocol": "Protocol",
@@ -6436,6 +6550,11 @@
         "steam_web_api_key_placeholder": "Enables enhanced search when filled",
         "steam_web_api_key_risk": "Anyone who obtains this Key can silently cancel a player's real trades without triggering Steam Guard, and replace them with fake trades sent to a scammer. Never share your API key with anyone or any unverified third-party website.",
         "steam_web_api_key_warning": "Warning: your API key is effectively a backdoor key to your Steam account. It can read public account data/inventory information and manage or listen to trade offers.",
+        "steamcommunity302_description": "Helps with connection issues on Steam Community, Workshop and similar pages. Try it when pages will not open or images fail to load.",
+        "steampp_description": "Improves access to Steam Community, Workshop and other sites, with extra Steam utilities such as account switching.",
+        "system_hosts_applying": "Updating system Hosts.",
+        "system_hosts_authorizing": "Waiting for administrator approval. Check the system prompt. Your settings can still be saved.",
+        "system_hosts_retry": "Retry saved system Hosts settings",
         "title": "Network protocol and proxy",
         "use_proxy_on_ai": "Use proxy for AI requests",
         "use_proxy_on_ai_desc": "When enabled, AI requests go through the proxy server. Do not enable this if the configured endpoint is already a local/domestic proxy.",
@@ -6443,8 +6562,9 @@
         "use_proxy_on_steamcmd_desc": "Whether SteamCMD uses the proxy server.\n\nWhen enabled, SteamCMD download, update, and install operations go through the proxy server.",
         "username": "Username",
         "visit": "Visit",
-        "write_to_system_hosts": "Write custom Hosts to the system hosts file",
-        "write_to_system_hosts_desc": "Warning: this directly modifies the system hosts file and may require administrator permission."
+        "visit_tool_website": "Visit tool website",
+        "write_to_system_hosts": "Apply Hosts mappings to the system",
+        "write_to_system_hosts_desc": "Write dynamic and custom mappings to system Hosts so other apps can use them. Usually unnecessary. On Windows, saving related settings or retrying may request administrator approval; startup updates and exit cleanup never prompt. Mappings are removed on exit when possible, but may remain without permission. To remove them, turn this off and save before exiting."
       },
       "panel": {
         "apply_and_save": "Apply and save settings",
@@ -6806,17 +6926,36 @@
       }
     },
     "update": {
+      "auto_source_message": "If a download fails, backup addresses will be tried automatically. If it still fails, use a download link in Settings → About to get the package for your system, then exit the app and extract the package into the installation folder, replacing existing files.",
       "available_desc": "An update is available.",
+      "check_failed": "Unable to check for updates. Please try again later.",
+      "checking_sources": "Checking update sources…",
+      "download_update": "Download update",
       "downloaded": "Downloaded",
+      "downloading": "Downloading update; see the task bar for progress",
       "file_size_meta": "File size: {size}",
       "ignore_version": "Ignore this version",
       "install_now": "Install now",
+      "last_checked": "Last checked: {time}",
       "later": "Later",
-      "multiple_sources_message": "Multiple sources were found for the same version: {sources}. The first source will be used first, and fallback sources will be tried automatically if it fails.",
       "new_version_title": "New version v{version} available",
-      "single_source_message": "Source: {source}. File size: {size}.",
-      "source_meta": "Source: {source}",
-      "update_now": "Update now"
+      "no_compatible_update": "No new version for this system was found",
+      "not_checked": "Updates have not been checked yet",
+      "partial_available": "Some sources could not be checked. You can still use the update found on other sources.",
+      "ready": "The update package is ready. You can install it later.",
+      "result_changed": "Update information has changed. Please view the update again.",
+      "source_auto": "Automatic (recommended)",
+      "source_available": "New version v{version} found",
+      "source_details": "Source details",
+      "source_failed": "Temporarily unable to check",
+      "source_no_package": "No compatible update package",
+      "source_no_release": "No release published yet",
+      "source_no_update": "No new version found",
+      "source_older": "Target version not yet available (v{version})",
+      "source_selector": "Download source",
+      "version_available": "New version v{version} available",
+      "via_builtin_mirror": " · Read through the built-in mirror",
+      "view_update": "View update"
     },
     "update_modal": {
       "empty": "No update records found...",

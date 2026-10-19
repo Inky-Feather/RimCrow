@@ -1,7 +1,7 @@
 import { h } from 'vue'
 import { createToastInterface, globalEventBus } from 'vue-toastification'
 import { t } from '../i18n.js'
-import { buildUserErrorMessage, stripLogHint } from './userErrorMessage.js'
+import { buildUserErrorMessage, stripLogHint, shouldOfferNetworkSettings } from './userErrorMessage.js'
 
 // -----------------------------------------------------------------
 // 文本与列表工具 (Text / Collection Utils)
@@ -87,11 +87,25 @@ const UserErrorToast = {
   props: {
     message: { type: String, required: true },
     errorId: { type: String, default: '' },
+    showNetworkSettings: { type: Boolean, default: false },
   },
   emits: ['close-toast'],
   setup(props, { emit }) {
     return () => h('div', { class: 'max-w-[24rem] space-y-2 text-sm leading-5' }, [
       h('div', { class: 'whitespace-pre-wrap' }, props.message),
+      props.showNetworkSettings
+        ? h('div', {}, [
+          h('p', { class: 'mb-2 text-xs leading-5' }, t('toast.api.network_advice', '连接不稳定时，可前往“网络连接”调整网络设置，或查看推荐的网络优化工具。')),
+          h('button', {
+            type: 'button',
+            class: 'min-h-10 rounded bg-bg-overlay/10 px-3 py-2 text-xs font-bold hover:bg-bg-overlay/20',
+            onClick: () => {
+              window.dispatchEvent(new CustomEvent('rimcrow-open-network-settings'))
+              emit('close-toast')
+            },
+          }, t('toast.api.open_network_settings', '打开网络连接设置')),
+        ])
+        : null,
       props.errorId
         ? h('button', {
           type: 'button',
@@ -199,8 +213,12 @@ export const showUserErrorToast = (payload = {}, fallback = '', options = {}) =>
     data.error_id
     || data.errorId
   )
-  if (errorId) {
-    toast[variant]({ component: UserErrorToast, props: { message, errorId } }, toastOptions)
+  const showNetworkSettings = shouldOfferNetworkSettings(data)
+  if (errorId || showNetworkSettings) {
+    const actionOptions = showNetworkSettings
+      ? { ...toastOptions, closeOnClick: false, timeout: toastOptions.timeout === false ? false : Math.max(toastOptions.timeout ?? 0, 8000) }
+      : toastOptions
+    toast[variant]({ component: UserErrorToast, props: { message, errorId, showNetworkSettings } }, actionOptions)
     return
   }
   toast[variant](stripLogHint(message), toastOptions)

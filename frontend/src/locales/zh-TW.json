@@ -668,7 +668,6 @@
       "multiplayer_compatibility_failed": "Multiplayer 兼容表更新失敗！",
       "multiplayer_compatibility_started": "Multiplayer 兼容表開始更新",
       "path_or_url_missing": "更新地址或目標路徑未配置",
-      "reload_failed_after_success": "{message} 但重載失敗，請稍後手動重新整理。",
       "update_start_failed": "啟動外部資料更新失敗。請檢查更新位址、網路連線、代理設定和目標目錄寫入權限。",
       "workshop_db_done": "社區工坊資料庫更新完畢！",
       "workshop_db_failed": "社區工坊資料庫更新失敗！",
@@ -696,16 +695,10 @@
       "invalid_launch_warning_action": "無效的啟動確認動作",
       "launch_after_steam_exit": "Steam 已退出，已發起遊戲啟動，等待遊戲進程確認。",
       "launch_cancelled": "已取消啟動",
-      "launch_prepare_active_done": "目前活動環境已完成啟動前檢查同步。",
-      "launch_prepare_active_failed": "目前活動環境啟動前檢查同步失敗。",
-      "launch_prepare_cache_sync_done": "已按目前快取狀態完成啟動前檢查同步。",
-      "launch_prepare_cache_sync_failed": "按目前快取執行啟動前檢查同步失敗。",
       "launch_prepare_failed": "啟動前準備失敗。請檢查目前環境路徑、檔案權限和模組連結狀態。",
       "launch_prepare_missing_context": "無法構建目標環境上下文，請檢查環境是否存在。",
       "launch_prepare_missing_scan_paths": "目標環境沒有可用於啟動前檢查同步的模組路徑。",
-      "launch_prepare_no_context_builder": "缺少環境上下文構建器，已跳過啟動前檢查同步。",
-      "launch_prepare_scan_sync_done": "已完成啟動前檢查同步，並按最新掃描結果更新連結。",
-      "launch_prepare_scan_sync_failed": "啟動前檢查同步已完成掃描，但連結同步失敗。",
+      "launch_prepare_scan_failed": "啟動前掃描未完成，已停止啟動遊戲。",
       "launch_prepare_sync_failed": "啟動前同步失敗",
       "launch_prepare_unhealthy_context": "目標環境路徑不可用，請先完成路徑設定。",
       "steam_launch_failed": "無法提交 Steam 啟動請求。",
@@ -1023,7 +1016,8 @@
     "update": {
       "download_started": "開始下載更新包",
       "installing_restart": "正在重啟並安裝更新。",
-      "no_available_info": "目前沒有可用的更新資訊，請先檢查更新"
+      "no_available_info": "目前沒有可用的更新資訊，請先檢查更新",
+      "result_changed": "更新資訊已變更，請重新查看更新。"
     },
     "uri": {
       "no_link_to_open": "沒有可打開的連結。",
@@ -2413,6 +2407,7 @@
         "active": "目前激活",
         "all": "全部狀態",
         "coexist_disabled": "共存停用",
+        "duplicates": "存在重複",
         "inactive": "未啟用",
         "mod_disabled": "模組停用"
       },
@@ -3164,13 +3159,18 @@
       "access_denied": "目標服務拒絕了請求。請檢查登入狀態、存取權限或請求設定。",
       "auth_failed": "目標服務驗證失敗。請檢查登入狀態、存取權杖或請求設定。",
       "connection_failed": "無法連線到目標服務。請檢查網路連線、代理設定或服務狀態。",
+      "invalid_response": "伺服器傳回的內容不完整或格式錯誤。請重試，或更換下載來源、鏡像後重試。",
       "not_found": "目標資源不存在或位址已失效。請檢查連結、參數或稍後重試。",
       "proxy_auth": "代理伺服器需要驗證。請檢查代理帳號、密碼或關閉不可用的代理。",
       "proxy_failed": "代理連線失敗。請檢查代理位址、連接埠、帳號密碼，或臨時關閉代理後重試。",
       "rate_limited": "請求過於頻繁或服務限流。請稍後重試。",
+      "redirect": "服務要求跳轉到其他位址。若一直停留在此狀態，請檢查連結或更換代理、鏡像後重試。",
+      "request_failed": "服務無法接受此請求。請檢查連結、輸入內容和設定，或更新軟體後重試。",
       "request_invalid": "請求參數無效。請檢查輸入內容或設定後重試。",
       "service_unavailable": "目標服務暫時不可用。請稍後重試，或檢查服務狀態。",
-      "timeout": "網路請求超時。請檢查網路連線、代理設定或稍後重試。"
+      "steam_access_denied": "Steam 拒絕了請求。使用 Web API 時請檢查 API Key 和存取權限，也可切換網路或代理後重試。",
+      "timeout": "網路請求超時。請檢查網路連線、代理設定或稍後重試。",
+      "tls_failed": "無法驗證安全連線或建立加密連線。請檢查系統時間、憑證和代理設定，請勿關閉憑證驗證。"
     },
     "path": {
       "batch_check_failed": "批量檢查路徑失敗。請確認路徑存在、權限可訪問，並稍後重試。",
@@ -3231,7 +3231,7 @@
       "workshop_status_failed": "檢查 Steam 工坊安裝狀態失敗。請確認 Steam 已啟動並完成登入，稍後重試。"
     },
     "steamcmd": {
-      "acf_read_failed": "讀取 SteamCMD 工坊記錄失敗。請檢查檔案權限或稍後重試。",
+      "acf_repair_failed": "SteamCMD 工作坊記錄修復失敗。請檢查檔案格式、權限，或檔案是否正在使用。",
       "download_start_failed": "啟動 SteamCMD 下載失敗。請檢查網路連接、代理設定、SteamCMD 狀態和目標目錄權限。",
       "execution_failed": "SteamCMD 執行失敗，請檢查 Steam 安裝、網路連線和下載環境。",
       "execution_failed_with_target": "SteamCMD 執行失敗，請檢查 Steam 安裝、網路連線和下載目錄權限。",
@@ -3837,6 +3837,8 @@
     "message": {
       "alternative_used": "__{title}__：前置依賴 [[{base}]] 已由備選模組 [[{alternative}]] 替代",
       "dependency_after_mod": "!!依賴後置!!：必須在依賴 [[{mod}]] 之後載入",
+      "disabled_dependency": "前置模組 [[{mod}]] 已被禁用，將不會在遊戲中載入。請先在「已禁用」清單中重新啟用。",
+      "disabled_mod": "該模組已被禁用，將不會在遊戲中載入。檔案仍保留，可在「已禁用」清單中重新啟用。",
       "inactive_alternative_dependency": "!!{title}!!：未啟用備選前置模組 [[{mod}]]",
       "inactive_dependency": "!!{title}!!：未啟用前置模組 [[{mod}]]",
       "inactive_language_pack": "^^{title}^^：不支持目前語言，但本地存在語言包 [[{pack}]]",
@@ -4280,6 +4282,18 @@
       "import_success": "匯入成功"
     }
   },
+  "network": {
+    "hosts": {
+      "authorization_cancelled": "已取消管理員授權，系統 Hosts 未完成更新。應用程式內的映射不受影響。",
+      "authorization_timeout": "等待管理員授權逾時，系統 Hosts 未完成更新。需要時可點選重試。",
+      "content_changed": "偵測到其他程式修改了系統 Hosts，請停止同時修改後重試。",
+      "permission_denied": "沒有權限更新系統 Hosts。可點選重試並允許管理員授權，或檢查安全軟體的攔截設定。",
+      "permission_denied_unix": "沒有權限更新系統 Hosts，請檢查系統檔案權限後重試。應用程式內的映射不受影響。",
+      "system_apply_failed": "系統 Hosts 無法更新，應用程式內的映射仍可使用。請檢查系統檔案權限或安全軟體設定後重試。",
+      "system_remove_failed": "系統 Hosts 中可能仍保留先前的映射，請點選重試完成清理。",
+      "write_timeout": "系統 Hosts 更新逾時，結果尚未確認。請點選重試以確認並套用已儲存的設定。"
+    }
+  },
   "secret": {
     "errors": {
       "backend_unavailable": "系統憑據庫不可用",
@@ -4402,6 +4416,7 @@
       "queued": "任務已加入背景佇列",
       "scan_complete": "掃描完成",
       "scan_interrupted_by_suspend": "掃描因介面掛起而中斷，請重新重新整理。",
+      "scan_link_sync_failed": "掃描完成，但模組連結同步失敗",
       "texture_task": "貼圖任務"
     },
     "mod_package": {
@@ -4573,7 +4588,9 @@
   "toast": {
     "api": {
       "error": "{workname}失敗：\n{message}",
+      "network_advice": "連線不穩定時，可前往「網路連線」調整網路設定，或查看推薦的網路最佳化工具。",
       "open_corresponding_log": "查看對應系統日誌",
+      "open_network_settings": "開啟網路連線設定",
       "success": "{workname}已完成",
       "warning": "{workname}需要確認：\n{message}"
     },
@@ -4732,6 +4749,7 @@
       "scan_done_with_restore_warning": "掃描已完成，共掃描 {total} 個模組，新增 {added} 個，更新 {updated} 個，刪除 {removed} 個，已知 {skipped} 個。\n{extra}",
       "scan_external_enabled_count": "外部解除禁用 {count} 個",
       "scan_failed": "掃描異常。可能是路徑權限、檔案佔用或掃描器內部狀態暫時不可用。",
+      "scan_link_sync_failed": "掃描完成，但模組連結同步失敗，遊戲可能無法載入目前模組。\n{reason}",
       "scan_request_failed": "掃描請求異常。可能是軟體後端暫時不可用或目前環境路徑設定異常。",
       "scan_start_failed": "掃描啟動失敗。可能是目前環境路徑無效、掃描器未初始化或背景任務暫時不可用。",
       "scan_strict_restore_failed_count": "恢復失敗 {count} 個",
@@ -4814,9 +4832,6 @@
       "name_required": "請輸入規則名稱",
       "weight_clamped": "動態權重已自動限制到允許範圍內（權重 {weightMin}-{weightMax}，偏移 {shiftMin} 到 {shiftMax}）。"
     },
-    "rules": {
-      "community_reload_unavailable": "規則引擎未初始化，無法立即重載社區規則庫。"
-    },
     "settings": {
       "about": {
         "copied": "已複製：{text}",
@@ -4855,8 +4870,7 @@
       },
       "save_failed": "儲存設定失敗。可能是後端服務暫時不可用、配置檔案無法寫入或目前路徑權限不足，請稍後重試。",
       "secret_storage_warning": "部分密鑰暫時無法寫入本機安全存儲，已臨時保留在配置檔案中。請檢查系統憑據服務後重新儲存密鑰。",
-      "self_mods_path_reset": "管理器下載模組路徑不能與創意工坊目錄相同，已自動恢復為預設目錄。",
-      "steamcmd_junction_sync_failed": "目前磁碟無法連接 SteamCMD 下載目錄，已保留你的管理器下載目錄設定，但 SteamCMD 下載的模組不會自動出現在管理器目錄中。請改用 NTFS 磁碟，或將管理器下載模組路徑設為：{path}"
+      "self_mods_path_reset": "管理器下載模組路徑不能與創意工坊目錄相同，已自動恢復為預設目錄。"
     },
     "startup": {
       "auxiliary_warmup_failed": "部分背景資料暫時未能預熱，相關提示可能稍後才會出現。",
@@ -4906,9 +4920,7 @@
       "download_started": "已開始下載更新包，請留意底部狀態欄。",
       "install_cancelled": "已取消安裝更新。",
       "partial_no_update": "部分更新源暫時不可用，目前可用來源未發現新版本。",
-      "recommend_scan": "建議執行一次全量掃描，以應用新版本的核心引擎特性！",
-      "start_failed": "啟動更新失敗。請檢查網路連線、代理設定和安裝目錄權限。",
-      "up_to_date": "目前已是最新版本"
+      "recommend_scan": "建議執行一次全量掃描，以應用新版本的核心引擎特性！"
     },
     "workspace": {
       "cleanup_deleted_done": "已清理 {count} 條已刪除記錄",
@@ -5321,6 +5333,9 @@
         "jump": "__點擊跳轉到另一條衝突命令。__",
         "scopes": "作用域：{scopes}"
       },
+      "network": {
+        "network_check": "使用此表單中的代理、Hosts 和 GitHub 鏡像設定檢查常用網站"
+      },
       "paths": {
         "auto_detect": "嘗試通過系統和 Steam 記錄自動搜尋路徑",
         "auto_detect_loading": "正在自動搜尋路徑",
@@ -5678,6 +5693,9 @@
         "by_name_short": "按原名",
         "by_package_id": "按包名",
         "by_workshop_id": "按工坊 ID"
+      },
+      "status": {
+        "disabled": "已禁用"
       }
     },
     "mod_details": {
@@ -5766,6 +5784,7 @@
         "last_active_time": "啟用時間",
         "last_moved_time": "移動時間",
         "multiplayer_compat": "聯機兼容性",
+        "original_name": "原名",
         "patch_file_count": "補丁數量",
         "texture_file_count": "貼圖數量",
         "xml_file_count": "XML 數量"
@@ -6064,6 +6083,8 @@
         "downloads_desc": "查看源碼、發佈包和備用下載地址。",
         "feedback": "反饋與交流",
         "feedback_desc": "遇到問題時，建議帶上截圖、日誌和復現步驟。",
+        "gitee_mirror": "Gitee 儲存庫",
+        "gitee_mirror_note": "國內程式碼儲存庫，也是後續版本的備用來源。",
         "github_releases": "GitHub 發佈頁",
         "github_releases_note": "下載 GitHub 發佈包，或查看每個版本的發佈內容。",
         "github_repo": "GitHub 倉庫",
@@ -6077,6 +6098,8 @@
         "qq_group_note": "適合快速反饋和補充截圖。",
         "references": "參考項目",
         "references_desc": "這些項目為排序、日誌分析和管理功能提供了參考。",
+        "sourceforge_mirror": "SourceForge 下載",
+        "sourceforge_mirror_note": "提供穩定的公開版本套件下載入口。",
         "tieba_thread": "貼吧主貼",
         "tieba_thread_note": "查看集中說明和公開討論。",
         "title": "關於項目",
@@ -6417,13 +6440,104 @@
         "unbound": "未綁定"
       },
       "network": {
+        "community_tools_help": "以上工具由社群獨立維護，需自行下載並依工具說明啟用。建議先使用一種，避免同時開啟多個加速工具造成衝突。",
+        "community_tools_title": "社群網路工具推薦",
         "custom_hosts": "自定義 Hosts 映射",
+        "custom_hosts_desc": "手動指定網域對應的 IP 位址。一般不需要修改，只有在你確定目標位址時才使用。",
+        "dynamic_mirrors_enabled": "啟用動態鏡像節點",
+        "dynamic_mirrors_enabled_desc": "開啟後立即取得並檢測動態鏡像節點，將通過檢測的節點加入上方選擇器。關閉後不會使用動態節點。",
+        "effective_hosts_desc": "動態 Hosts 僅供檢視；快取檔案：",
+        "effective_hosts_empty": "目前沒有生效的動態 Hosts 對應。",
+        "effective_hosts_title": "檢視目前生效的動態 Hosts",
         "enable_proxy": "啟用代理服務",
         "enable_proxy_desc": "啟用代理服務，所有網路請求將通過代理服務器處理，部分外置資料下載、更新檢查、簡介圖片載入、內部瀏覽器訪問等功能可能需要該配置才能正常使用。\n\n也可以在軟體外部自行配置全局網路環境。",
         "enable_steam_enhanced_api": "啟用工坊增強資訊",
         "enable_steam_enhanced_api_desc": "開啟並填寫 Key 後，工坊頁會優先使用在線增強資訊；沒有 Key 或關閉此項時會自動使用本地快取搜尋。",
         "get_page": "獲取頁面",
+        "github_access_choice": "如果有穩定的代理，遇到網路問題時優先使用代理。GitHub 下載緩慢時可嘗試鏡像來源，無法連線時可嘗試下方的動態 Hosts。只要其中一種方式有效，就不需要同時開啟；兩者都不能取代代理。",
+        "github_access_desc": "GitHub 鏡像來源可提供專案頁面、檔案、原始碼封存及發行版下載，協助解決連線緩慢或失敗。鏡像無法使用時會改為直接連線。",
+        "github_access_title": "GitHub 鏡像來源",
+        "github_hosts_auto_update": "自動更新動態 Hosts",
+        "github_hosts_auto_update_desc": "軟體啟動時，超過更新間隔後自動更新動態 Hosts。",
+        "github_hosts_enabled": "動態 Hosts",
+        "github_hosts_enabled_desc": "從可信來源取得網站的 IP 位址，協助解決網域解析造成的連線失敗，適用於來源中包含的任何網站。開啟開關立即在背景取得，儲存後生效；失敗時保留既有對應。",
+        "github_hosts_failed": "取得 Hosts 失敗，請檢查網路和來源網址後重試。既有對應會繼續保留。",
+        "github_hosts_loading": "正在背景取得 Hosts，請稍候。網路較慢時可能需要一分鐘以上，不影響儲存設定。",
+        "github_hosts_ready": "Hosts 已取得並套用。",
+        "github_hosts_refresh_interval": "更新間隔（小時）",
+        "github_hosts_retry": "重新取得",
+        "github_hosts_timeout": "取得 Hosts 逾時，請檢查網路或稍後重試。既有對應會繼續保留。",
+        "github_hosts_url": "Hosts 來源",
+        "github_hosts_url_desc": "支援 Hosts 文字或 JSON 的 HTTPS 位址，可逐條編輯、啟停和刪除。同一網域優先使用排在前面的有效來源；某個來源失敗時仍會使用其他成功來源。",
+        "github_mirror_auto": "自動選擇鏡像",
+        "github_mirror_direct": "直接連線 GitHub",
+        "github_mirror_selector_help": "選擇要使用的 GitHub 鏡像節點。自動選擇會優先使用可用且延遲較低的節點。",
+        "github_mirror_selector_label": "鏡像節點",
         "host": "主機地址",
+        "hosts_help": "Hosts 就像網站通訊錄，告訴軟體某個網域應該連線到哪個 IP。網域解析出錯時，它可能協助恢復存取，但不能保證目標伺服器一定可用。預設只在軟體內部生效。動態 Hosts 從來源自動取得，自訂 Hosts 由你手動填寫。",
+        "hosts_partial_failure": "部分來源取得失敗，已使用成功來源的對應。可檢查來源後重新取得。",
+        "hosts_pending_save": "Hosts 已取得，儲存設定後生效。",
+        "hosts_priority": "同一網域同時出現在動態和自訂對應中時，優先使用自訂對應。",
+        "hosts_source_add": "+ 新增來源",
+        "hosts_source_enabled": "啟用此 Hosts 來源",
+        "hosts_source_remove": "刪除此 Hosts 來源",
+        "hosts_sources_empty": "目前沒有啟用的 Hosts 來源，請新增位址並勾選啟用。",
+        "hosts_title": "Hosts 位址對應",
+        "mirror_add": "新增鏡像",
+        "mirror_add_help": "新增自訂 GitHub 鏡像來源",
+        "mirror_apply": "檢測並加入設定",
+        "mirror_edit": "編輯所選鏡像",
+        "mirror_edit_help": "編輯選取的鏡像設定",
+        "mirror_editor": "編輯 GitHub 鏡像來源",
+        "mirror_file_help": "儲存設定後變更才會生效。也可以直接編輯設定檔，然後重新啟動軟體。",
+        "mirror_id": "鏡像 ID（字母、數字、底線或連字號）",
+        "mirror_invalid": "請填寫名稱、唯一的有效 ID，以及包含一個 {url} 的 HTTPS 位址。ID 不能使用 direct。",
+        "mirror_name": "鏡像名稱",
+        "mirror_open_failed": "無法開啟鏡像設定檔，請依照顯示的路徑手動開啟。",
+        "mirror_open_file": "開啟鏡像設定檔",
+        "mirror_open_file_help": "開啟鏡像清單檔案以檢視或編輯",
+        "mirror_probe_failed": "鏡像檢測失敗，未儲存此設定。請檢查位址和網路連線後重試。",
+        "mirror_probe_loading": "正在檢測鏡像支援的功能，請稍候…",
+        "mirror_probe_result": "自動檢測結果",
+        "mirror_remove": "刪除所選鏡像",
+        "mirror_remove_help": "刪除選取的鏡像設定",
+        "mirror_status_supported": "支援",
+        "mirror_status_unknown": "未知",
+        "mirror_status_unsupported": "不支援",
+        "mirror_type_api": "GitHub API",
+        "mirror_type_archive": "原始碼壓縮包",
+        "mirror_type_clone": "Git Clone",
+        "mirror_type_gist": "Gist 內容",
+        "mirror_type_lfs": "LFS 媒體檔案",
+        "mirror_type_raw": "Raw 檔案",
+        "mirror_type_release": "發行版附件",
+        "mirror_type_web": "專案頁面",
+        "mirror_url": "鏡像轉換位址",
+        "mirror_url_help": "請填寫鏡像服務提供的 HTTPS 轉換位址，用 {url} 代表原始 GitHub 位址。儲存前會自動檢查專案頁面、Raw 檔案和原始碼壓縮包是否支援。",
+        "network_check": "檢查連線",
+        "network_check_bypass": "已依略過清單直接連線",
+        "network_check_desc": "使用此表單中的代理、Hosts 和 GitHub 鏡像設定，檢查常用網站的可存取性與回應時間。",
+        "network_check_direct": "直接連線",
+        "network_check_domain": "網域",
+        "network_check_error_code": "錯誤代碼",
+        "network_check_failed": "檢查未完成，請稍後再試。",
+        "network_check_failed_item": "無法存取",
+        "network_check_hosts_hit": "已使用 Hosts 對應",
+        "network_check_http_error": "服務回傳錯誤",
+        "network_check_latency": "延遲",
+        "network_check_loading_item": "載入中",
+        "network_check_mirror": "已使用鏡像來源",
+        "network_check_name": "名稱",
+        "network_check_ok": "可存取",
+        "network_check_proxy": "代理伺服器",
+        "network_check_reason": "說明",
+        "network_check_redirect": "需要跳轉",
+        "network_check_result": "狀態碼結果",
+        "network_check_route": "連線方式",
+        "network_check_status_code": "狀態碼",
+        "network_check_timeout": "連線逾時",
+        "network_check_url": "網址",
+        "network_checking": "檢查中…",
         "password": "密碼",
         "port": "端口",
         "protocol": "協議",
@@ -6436,6 +6550,11 @@
         "steam_web_api_key_placeholder": "填寫後啟用增強搜尋",
         "steam_web_api_key_risk": "任何人一旦獲取了此 Key，就可以在不觸發 Steam 令牌的情況下，暗中取消玩家的真實交易，並替換為發給騙子的假交易。絕對不要將 API 密鑰分享給任何人或任何未經驗證的第三方網站。",
         "steam_web_api_key_warning": "注意！“API 密鑰（API Key）相當於你的 Steam 賬號後門鑰匙”。可以讀取賬號公開資料/庫存資訊 以及 管理與監聽交易報價。",
+        "steamcommunity302_description": "改善 Steam 社群、工作坊等頁面的連線問題，遇到網頁無法開啟或圖片載入異常時可以嘗試。",
+        "steampp_description": "改善 Steam 社群、工作坊等網站的存取速度，並整合帳號切換等 Steam 實用工具。",
+        "system_hosts_applying": "正在更新系統 Hosts",
+        "system_hosts_authorizing": "正在等待管理員授權，請留意系統授權視窗。不影響設定儲存。",
+        "system_hosts_retry": "重試已儲存的系統 Hosts 設定",
         "title": "網路協議與代理",
         "use_proxy_on_ai": "為 AI 請求使用代理",
         "use_proxy_on_ai_desc": "如果啟用，AI 將通過代理服務器進行。已經是國內代理後的端口不用開此選項。",
@@ -6443,8 +6562,9 @@
         "use_proxy_on_steamcmd_desc": "SteamCMD 是否使用代理服務器。\n\n如果啟用，SteamCMD 下載、更新、安裝等操作將通過代理服務器進行。",
         "username": "使用者名",
         "visit": "訪問",
-        "write_to_system_hosts": "將自定義 Hosts 寫入系統 hosts 檔案",
-        "write_to_system_hosts_desc": "注意：這將直接修改系統 hosts 檔案，可能需要管理員權限。"
+        "visit_tool_website": "造訪工具網頁",
+        "write_to_system_hosts": "將 Hosts 對應套用至系統",
+        "write_to_system_hosts_desc": "將動態和自訂映射寫入系統 Hosts，讓其他軟體也能使用，通常不需要開啟。儲存相關設定或點選重試時，Windows 可能要求管理員授權；啟動更新和結束清理不會顯示授權視窗。結束時會嘗試移除映射，沒有清理權限時可能保留，請在結束前關閉此項並儲存。"
       },
       "panel": {
         "apply_and_save": "應用並儲存配置",
@@ -6806,17 +6926,36 @@
       }
     },
     "update": {
+      "auto_source_message": "下載失敗時會自動嘗試備用位址。若仍無法下載，可前往「設定 → 關於專案」的下載位址，手動取得適用於目前系統的安裝套件，退出軟體後解壓縮並覆蓋安裝目錄。",
       "available_desc": "發現可用更新。",
+      "check_failed": "無法檢查更新，請稍後重試。",
+      "checking_sources": "正在檢查更新來源…",
+      "download_update": "下載更新",
       "downloaded": "已下載",
+      "downloading": "正在下載更新，進度可在工作列查看",
       "file_size_meta": "檔案大小: {size}",
       "ignore_version": "忽略此版本",
       "install_now": "立即安裝",
+      "last_checked": "最近檢查：{time}",
       "later": "以後再說",
-      "multiple_sources_message": "檢測到多個同版本來源: {sources}。將優先使用第一個來源，失敗後自動嘗試候補來源。",
       "new_version_title": "發現新版本 v{version}",
-      "single_source_message": "來源: {source}。檔案大小: {size}。",
-      "source_meta": "來源: {source}",
-      "update_now": "立即更新"
+      "no_compatible_update": "未發現適用於目前系統的新版本",
+      "not_checked": "尚未檢查更新",
+      "partial_available": "部分來源暫時無法檢查，不影響使用已發現的更新。",
+      "ready": "安裝套件已就緒，可稍後安裝",
+      "result_changed": "更新資訊已變更，請重新查看更新。",
+      "source_auto": "自動選擇（推薦）",
+      "source_available": "發現新版本 v{version}",
+      "source_details": "來源詳細資訊",
+      "source_failed": "暫時無法檢查",
+      "source_no_package": "沒有適用的安裝套件",
+      "source_no_release": "尚未發佈版本",
+      "source_no_update": "未發現新版本",
+      "source_older": "尚未同步目標版本（v{version}）",
+      "source_selector": "下載來源",
+      "version_available": "發現新版本 v{version}",
+      "via_builtin_mirror": " · 透過內建鏡像讀取",
+      "view_update": "查看更新"
     },
     "update_modal": {
       "empty": "沒有找到更新記錄...",

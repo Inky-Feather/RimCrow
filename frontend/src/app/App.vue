@@ -22,11 +22,11 @@
   </div>
 
   <div v-else id="app-shell" class="relative h-screen w-full flex flex-col p-1 overflow-hidden font-sans bg-bg-deep text-text-main select-none">
-    <GlobalFileDrop />
     <RimHeader class="z-500" />
 
     <!-- 主工作区 -->
-    <div class="flex-1 flex flex-col min-h-0 relative">
+    <div id="main-workspace" class="flex-1 flex flex-col min-h-0 relative">
+      <GlobalFileDrop />
       <!-- 容器 -->
       <div ref="containerRef" class="flex flex-1 w-full overflow-hidden relative">
 
@@ -86,7 +86,7 @@
                     :class="[{'scan': appStore.isScanRunning}, isBaseActionDisabled('scan') ? 'app-action-disabled' : '']" v-tooltip="t('tooltip.app.actions.scan', '扫描文件变动，并同步当前环境的 Mod 列表')"
                     data-tour="scan-button"
                     class="col-span-1 py-1 rounded-lg bg-bg-overlay/5 border border-border-base/5 group
-                          text-sm text-text-soft font-bold uppercase tracking-wider relative cursor-pointer
+                          text-sm text-text-soft font-bold tracking-wider relative cursor-pointer
                           hover:bg-bg-overlay/10 hover:text-text-main hover:border-border-base/18
                           active:scale-95 transition-all duration-200 group flex items-center justify-center gap-1"
                     @click="runBaseScan(false)"
@@ -97,7 +97,7 @@
                     <button v-show="!appStore.isScanRunning" v-tooltip="t('tooltip.app.actions.force_scan', '重新检查所有文件，包括未变动的文件，比较耗时')"
                       :disabled="isBaseActionDisabled('force-scan')" :class="isBaseActionDisabled('force-scan') ? 'app-action-disabled' : ''"
                       class="absolute bottom-full py-1 px-2 mb-1.5 rounded-lg bg-accent-secondary/50 border border-border-base/10 transition-all duration-500
-                          text-sm text-text-dim font-bold uppercase tracking-wider opacity-0 invisible group-hover:opacity-100 group-hover:visible
+                          text-sm text-text-dim font-bold tracking-wider opacity-0 invisible group-hover:opacity-100 group-hover:visible
                           hover:bg-accent-secondary/80 hover:text-text-main hover:border-border-base/18"
                           @click.stop="runBaseScan(true)">
                       {{ baseActionPending === 'force-scan' ? t('ui.app.actions.scanning', '扫描中...') : t('ui.app.actions.force_scan', '强制扫描') }}
@@ -106,7 +106,7 @@
                   </div>
                   <!-- 自动排序按钮 -->
                   <button data-tour="autosort-button" :disabled="isBaseActionDisabled('autosort')" :class="isBaseActionDisabled('autosort') ? 'app-action-disabled' : ''"
-                    class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider bg-accent-tip/80 text-on-accent-tip hover:bg-accent-tip shadow-lg shadow-accent-tip/10
+                    class="col-span-1 py-1 rounded-lg text-sm font-bold tracking-wider bg-accent-tip/80 text-on-accent-tip hover:bg-accent-tip shadow-lg shadow-accent-tip/10
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
                           @click="runBaseAction('autosort', () => modStore.autoSortMods())" v-tooltip="t('tooltip.app.actions.autosort', '根据规则设定自动排序当前启用的所有模组，如果排序效果不如旧版理想，可在设置中切换回旧版排序逻辑。')"
                   >
@@ -115,7 +115,7 @@
                   </button>
 
                   <!-- 保存按钮 (Dirty 状态提示) -->
-                  <button data-tour="save-button" :disabled="isBaseActionDisabled('save')" class="col-span-1 py-1 rounded-lg text-sm font-bold uppercase tracking-wider
+                  <button data-tour="save-button" :disabled="isBaseActionDisabled('save')" class="col-span-1 py-1 rounded-lg text-sm font-bold tracking-wider
                           flex items-center justify-center gap-1 transition-all duration-300 relative overflow-hidden"
                     :class="[modStore.isDirty
                         ? 'bg-accent-secondary text-on-accent-secondary hover:bg-accent-warn hover:text-on-accent-warn shadow-[0_0_15px_rgba(var(--rgb-accent-warn),0.4)] animate-pulse-soft'
@@ -150,8 +150,7 @@
                   <!-- 启动游戏 -->
                   <button data-tour="launch-button" :disabled="isBaseActionDisabled('launch')" :class="isBaseActionDisabled('launch') ? 'app-action-disabled' : ''"
                     class="flex-1 py-3 mt-1 rounded-lg bg-accent-success text-on-accent-success text-mdfont-bold
-                          shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2
-                          transition-all duration-200 uppercase tracking-widest
+                          shadow-lg shadow-accent-success/20 flex items-center justify-center gap-2 transition-all duration-200 tracking-widest
                           hover:bg-accent-success/85 hover:shadow-accent-success/40 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
                     @click="runBaseAction('launch', () => appStore.launchGame())"
                   >
@@ -461,6 +460,8 @@ const handleOpenSystemLogTarget = (event) => {
   appStore.uiState.showLogDrawer = true
 }
 
+const handleOpenNetworkSettings = () => appStore.openSettingsPanel('network')
+
 const closeThemeEditor = () => {
   appStore.themeEditor.isOpen = false
   appStore.themeEditor.theme = null
@@ -583,6 +584,7 @@ onMounted(() => {
   startupPerfMark('app_mounted')
   stopKeybindingRuntime = startKeybindingRuntime({ commandStore })
   window.addEventListener('rimcrow-open-system-log-target', handleOpenSystemLogTarget)
+  window.addEventListener('rimcrow-open-network-settings', handleOpenNetworkSettings)
   // 确保数据初始化
   appStore.initialize()
   // 监听后端传递过来的升级上下文
@@ -622,6 +624,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('rimcrow-open-system-log-target', handleOpenSystemLogTarget)
+  window.removeEventListener('rimcrow-open-network-settings', handleOpenNetworkSettings)
   if (stopKeybindingRuntime) stopKeybindingRuntime()
   orderStore.saveInactiveOrder();  // 退出前先保存停用列表顺序
   if (resizeObserver) resizeObserver.disconnect()

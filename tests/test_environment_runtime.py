@@ -1,3 +1,4 @@
+import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -7,6 +8,7 @@ from unittest.mock import Mock, patch
 from backend.managers.mgr_game import GameManager
 from backend.managers.mgr_game_monitor import GameMonitor
 from backend.paths.rimworld_layout import resolve_rimworld_layout
+from backend.startup import StartupCoordinator
 from backend.utils.restart import _build_restart_environment, _resolve_restart_command
 
 
@@ -263,3 +265,34 @@ class TestRestartRuntime(unittest.TestCase):
         self.assertEqual(env["HOME"], "/Users/test")
         self.assertNotIn("PYTHONPATH", env)
         self.assertEqual(env["PYINSTALLER_RESET_ENVIRONMENT"], "1")
+
+
+def test_startup_warmup_runs_once_and_rebuilds_workshop_rules(monkeypatch):
+    """验证启动预热只启动一次，成功时不打扰用户，也不写入升级上下文。"""
+
+    workshop_db = SimpleNamespace(cache_loaded=False, load_all_cache=Mock())
+    rule_mgr = SimpleNamespace(build_workshop_rules=Mock())
+    finished = threading.Event()
+    messages = []
+    toasts = []
+
+    monkeypatch.setattr(
+        "backend.startup.coordinator.EventBus.send_toast",
+        lambda message, type="info", duration=3000: toasts.append((message, type, duration)),
+    )
+
+    coordinator = StartupCoordinator(
+        workshop_db,
+        rule_mgr_provider=lambda: rule_mgr,
+        dlc_cache_warmup=finished.set,
+        append_messages=messages.extend,
+    )
+
+    assert coordinator.start_background_warmup() is True
+    assert coordinator.start_background_warmup() is False
+
+    assert finished.wait(2)
+    workshop_db.load_all_cache.assert_called_once()
+    rule_mgr.build_workshop_rules.assert_called_once()
+    assert messages == []
+    assert toasts == []

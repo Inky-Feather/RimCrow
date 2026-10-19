@@ -39,12 +39,12 @@
         <div v-if="activeRepo.local_path || activeRepo.local_folder" class="mt-4 text-xs text-text-dim break-all">{{ activeRepo.local_path || activeRepo.local_folder }}</div>
       </section>
       <section class="bg-bg-inset/70 border border-border-base/10 rounded-2xl p-5 shadow-xl">
-        <h4 class="text-xs font-bold text-text-dim uppercase tracking-widest mb-5 flex items-center gap-2"><Activity class="size-4" />{{ t('ui.workspace.github.active.local_audit_log', '本地执行追踪 (Local Audit Log)') }}</h4>
+        <h4 class="text-xs font-bold text-text-dim tracking-widest mb-5 flex items-center gap-2"><Activity class="size-4" />{{ t('ui.workspace.github.active.local_audit_log', '本地执行追踪 (Local Audit Log)') }}</h4>
         <div v-if="workspaceStore.github.repoTimelines.length" class="relative pl-4">
           <div class="absolute left-0.5 top-2 bottom-0 w-px bg-linear-to-b from-text-main/30 to-transparent"></div>
           <div v-for="(log, index) in workspaceStore.github.repoTimelines" :key="index" class="mb-5 relative">
             <div class="absolute -left-[1.2rem] top-1.5 size-3 rounded-full border-2 bg-bg-deep z-10" :class="getLogColor(log.type)"></div>
-            <div class="flex items-center gap-2"><span class="text-xs font-mono text-text-dim">{{ formatDate(log.time) }}</span><span class="px-1.5 py-0.5 rounded text-[0.7rem] font-black uppercase" :class="getLogBgColor(log.type)">{{ log.title }}</span></div>
+            <div class="flex items-center gap-2"><span class="text-xs font-mono text-text-dim">{{ formatDate(log.time) }}</span><span class="px-1.5 py-0.5 rounded text-[0.7rem] font-black" :class="getLogBgColor(log.type)">{{ log.title }}</span></div>
             <div class="text-sm text-text-soft mt-1 leading-relaxed">{{ log.desc }}</div>
           </div>
         </div>
@@ -148,7 +148,7 @@
       </template>
       <div v-else class="h-full flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-border-base/18 rounded-2xl">
         <Github class="size-24 mb-4" />
-        <span class="text-sm font-black uppercase tracking-widest">{{ t('ui.workspace.github.empty.select_or_add', '选择或添加仓库') }}</span>
+        <span class="text-sm font-black tracking-widest">{{ t('ui.workspace.github.empty.select_or_add', '选择或添加仓库') }}</span>
       </div>
     </div>
   </div>

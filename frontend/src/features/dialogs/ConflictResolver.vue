@@ -1,8 +1,9 @@
 <template>
-  <CommonModalShell :show="visible" :show-header="false" size="page" :z-index="100" accent="danger"
+  <CommonModalShell :show="visible" :show-header="false" size="page" :z-index="UI_Z_INDEX.SECONDARY_MODAL" accent="danger"
+    :close-on-backdrop="!processing" :close-on-esc="!processing"
     panel-class="border-accent-danger/18" content-class="flex flex-col"
-    @close="visible = false" >
-        <div class="shrink-0 border-b border-border-base/10 bg-[linear-gradient(135deg,rgba(var(--rgb-bg-deep),0.94),rgba(var(--rgb-bg-inset),0.92))] px-4 py-3" data-tour="conflict-summary">
+    @close="!processing && (visible = false)" >
+        <div class="shrink-0 border-b border-border-base/10 bg-[linear-gradient(135deg,rgba(var(--rgb-bg-deep),0.94),rgba(var(--rgb-bg-inset),0.92))] px-4 py-3" data-tour="conflict-summary" :inert="processing">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
@@ -43,17 +44,17 @@
           </div>
         </div>
 
-        <div class="flex min-h-0 flex-1">
-          <div class="min-w-0 flex-1 overflow-y-auto px-4 py-4" data-tour="conflict-list">
-            <div class="space-y-3">
-              <div v-for="group in localGroups" :key="group.key"
-                class="overflow-hidden rounded-2xl border border-border-base/10 bg-[linear-gradient(180deg,rgba(var(--rgb-accent-primary),0.026),rgba(var(--rgb-accent-primary),0.015))]" >
-                <div class="toolbar-surface flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+        <div class="flex min-h-0 flex-1" :inert="processing">
+          <div ref="scrollRef" class="min-w-0 flex-1 overflow-y-auto px-4 py-4" data-tour="conflict-list">
+            <div class="relative" :style="{ height: `${virtualizer.getTotalSize()}px` }">
+              <div v-for="{ key, index, start, group, mod } in virtualRows" :key="key" :ref="measureRow" :data-index="index"
+                class="absolute left-0 top-0 w-full pb-2" :style="{ transform: `translateY(${start}px)` }">
+                <div v-if="!mod" class="toolbar-surface mt-1 flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2">
                   <div class="min-w-0 flex items-center gap-2">
                     <span class="truncate font-mono text-sm font-black text-accent-highlight">
                       {{ group.package_id }}
                     </span>
-                    <span tabindex="0" class="rounded-full border px-2 py-0.5 text-[0.7rem] font-black uppercase tracking-[0.14em] cursor-help"
+                    <span tabindex="0" class="rounded-full border px-2 py-0.5 text-[0.7rem] font-black tracking-[0.14em] cursor-help"
                       :class="group._type === 'hard'
                         ? 'border-accent-danger/28 bg-accent-danger/10 text-accent-danger'
                         : 'border-accent-primary/25 bg-accent-primary/10 text-accent-primary'"
@@ -66,9 +67,8 @@
                   </div>
                 </div>
 
-                <div class="space-y-2 p-3">
-                  <div v-for="mod in group.items" :key="getItemKey(mod)"
-                    class="flex items-center gap-2 rounded-xl border px-3 py-2 transition-all"
+                  <div v-else
+                    class="flex items-center gap-2 rounded-xl border px-3 py-2 transition-colors"
                     :class="isWinner(group, mod)
                       ? 'border-accent-success/30 bg-accent-success/8'
                       : 'border-border-base/10 bg-bg-inset/55 hover:border-border-base/18 hover:bg-bg-inset/80'"
@@ -147,7 +147,6 @@
                       </div>
                     </div>
                   </div>
-                </div>
               </div>
             </div>
           </div>
@@ -155,7 +154,7 @@
           <aside class="w-75 shrink-0 overflow-y-auto border-l border-border-base/10 bg-[linear-gradient(180deg,rgba(var(--rgb-bg-deep),0.9),rgba(var(--rgb-bg-inset),0.92))] px-4 py-4">
             <div class="space-y-3">
               <section class="modal-section p-3" data-tour="conflict-batch">
-                <div class="text-xs font-black uppercase tracking-[0.16em] text-text-dim">{{ t('dialog.conflict.batch_title', '批量选择') }}</div>
+                <div class="text-xs font-black tracking-[0.16em] text-text-dim">{{ t('dialog.conflict.batch_title', '批量选择') }}</div>
                 <p class="mt-1 text-xs leading-5 text-text-dim">
                   {{ t('dialog.conflict.batch_desc', '选范围，选保留谁，再选其余副本怎么处理。') }}
                 </p>
@@ -235,7 +234,7 @@
           </div>
           <div class="flex shrink-0 items-center gap-2">
             <button class="rounded-xl border border-border-base/10 bg-bg-overlay/5 px-4 py-2 text-xs font-bold text-text-dim transition-colors hover:border-border-base/18 hover:text-text-main"
-              v-tooltip="t('tooltip.conflict.defer', '关闭弹窗，暂不处理这些冲突')" @click="visible = false"
+              :disabled="processing" v-tooltip="t('tooltip.conflict.defer', '关闭弹窗，暂不处理这些冲突')" @click="visible = false"
             >
               {{ t('dialog.conflict.defer', '稍后处理') }}
             </button>
@@ -251,6 +250,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useToast } from 'vue-toastification'
 import { Check, EllipsisVertical, ExternalLink, Folder, FolderInput, X, XCircle } from 'lucide-vue-next'
 import CommonSwitch from '../../shared/components/input/CommonSwitch.vue'
@@ -262,7 +262,7 @@ import { useModStore } from '../mod/stores/modStore'
 import { useConfirmStore } from '../../shared/components/modal/confirmStore'
 import { buildModExternalMenuItem, buildModInfoCopyMenuItem, normalizeModMenuSource } from '../mod/lib/modContextMenuItems'
 import { showUserErrorToast, toUserMessage } from '../../shared/lib/common'
-import { getStoreTypeLabel } from '../../shared/lib/constants'
+import { getStoreTypeLabel, UI_Z_INDEX } from '../../shared/lib/constants'
 import { getCurrentLocale, t } from '../../shared/i18n.js'
 
 const appStore = useAppStore()
@@ -275,6 +275,22 @@ const visible = ref(false)
 const processing = ref(false)
 const localGroups = ref([])
 const submitFeedback = ref(null)
+const scrollRef = ref(null)
+// 标题和副本分别虚拟化，避免单个重复组包含大量副本时仍一次性挂载全部内容。
+const displayRows = computed(() => localGroups.value.flatMap(group => [
+  { key: group.key, group, mod: null },
+  ...group.items.map(mod => ({ key: `copy:${getItemKey(mod)}`, group, mod })),
+]))
+const virtualizer = useVirtualizer(computed(() => ({
+  count: displayRows.value.length,
+  getScrollElement: () => scrollRef.value,
+  getItemKey: index => displayRows.value[index].key,
+  estimateSize: index => displayRows.value[index].mod ? 84 : 48,
+  overscan: 6,
+  enabled: visible.value,
+})))
+const virtualRows = computed(() => virtualizer.value.getVirtualItems().map(row => ({ ...row, ...displayRows.value[row.index] })))
+const measureRow = element => { if (element) virtualizer.value.measureElement(element) }
 
 const selections = reactive({})
 const actionMap = reactive({})
@@ -729,39 +745,38 @@ const submit = async () => {
     t('dialog.conflict.confirm.rescan_notice', '提交后会立即刷新数据库并重新扫描文件系统，剩余未成功项会在新一轮扫描中重新提示。'),
   ].filter(Boolean).join('\n')
 
-  const deleteCount = summary.value.deleteCount || 0
-  const confirmResult = deleteCount > 0
-    ? await confirmStore.confirmDeleteAction(
-        t('dialog.conflict.confirm.title', '确认处理冲突'),
-        confirmMessage,
-        {
-          confirmText: t('dialog.conflict.confirm.confirm_text', '确认执行'),
-          cancelText: t('dialog.conflict.confirm.cancel_text', '再检查一下'),
-          trashOptionText: t('dialog.conflict.confirm.trash_option', '删除副本并移入回收站'),
-          forceOptionText: t('dialog.conflict.confirm.force_option', '强制彻底删除副本'),
-          deleteOptionsHint: t('dialog.conflict.confirm.delete_hint', '该选项仅影响本次选择为“删除”的副本；禁用项仍只会调整文件状态。'),
-        }
-      )
-    : await confirmStore.confirmAction(
-        t('dialog.conflict.confirm.title', '确认处理冲突'),
-        confirmMessage,
-        {
-          type: 'warning',
-          confirmText: t('dialog.conflict.confirm.confirm_text', '确认执行'),
-          cancelText: t('dialog.conflict.confirm.cancel_text', '再检查一下'),
-        }
-      )
-  if (deleteCount > 0) {
-    if (!confirmResult?.confirmed) return
-    operations.forEach((item) => {
-      if (item.action === 'delete') item.force_delete = !!confirmResult.force
-    })
-  } else if (!confirmResult) return
-
   processing.value = true
   submitFeedback.value = null
-
   try {
+    const deleteCount = summary.value.deleteCount || 0
+    const confirmResult = deleteCount > 0
+      ? await confirmStore.confirmDeleteAction(
+          t('dialog.conflict.confirm.title', '确认处理冲突'),
+          confirmMessage,
+          {
+            confirmText: t('dialog.conflict.confirm.confirm_text', '确认执行'),
+            cancelText: t('dialog.conflict.confirm.cancel_text', '再检查一下'),
+            trashOptionText: t('dialog.conflict.confirm.trash_option', '删除副本并移入回收站'),
+            forceOptionText: t('dialog.conflict.confirm.force_option', '强制彻底删除副本'),
+            deleteOptionsHint: t('dialog.conflict.confirm.delete_hint', '该选项仅影响本次选择为“删除”的副本；禁用项仍只会调整文件状态。'),
+          }
+        )
+      : await confirmStore.confirmAction(
+          t('dialog.conflict.confirm.title', '确认处理冲突'),
+          confirmMessage,
+          {
+            type: 'warning',
+            confirmText: t('dialog.conflict.confirm.confirm_text', '确认执行'),
+            cancelText: t('dialog.conflict.confirm.cancel_text', '再检查一下'),
+          }
+        )
+    if (deleteCount > 0) {
+      if (!confirmResult?.confirmed) return
+      operations.forEach((item) => {
+        if (item.action === 'delete') item.force_delete = !!confirmResult.force
+      })
+    } else if (!confirmResult) return
+
     const res = await window.pywebview.api.scan_conflicts_resolve(operations)
     const resultStats = res?.data?.stats || {}
 

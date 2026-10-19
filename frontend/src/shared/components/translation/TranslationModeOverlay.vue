@@ -3,7 +3,7 @@
     :style="hoverBoxStyle"
   ></div>
 
-  <div v-if="enabled" ref="overlayRef" class="fixed pointer-events-auto select-none" :style="overlayStyle">
+  <div v-if="enabled" ref="overlayRef" data-popover-scope class="fixed pointer-events-auto select-none" :style="overlayStyle">
     <button v-if="!showPanel" class="size-12 rounded-full border border-accent-primary/35 bg-bg-surface/95 text-accent-primary shadow-2xl shadow-bg-deep/60 backdrop-blur-md flex items-center justify-center transition-all hover:scale-105"
       :class="pickerActive ? 'bg-accent-primary text-on-accent-primary' : ''"
       v-tooltip="pickerActive ? t('ui.i18n.translation_mode.cancel_pick', '取消拾取') : t('ui.i18n.translation_mode.pick_text', '拾取文本')"
@@ -45,7 +45,6 @@
             class="w-full"
             :label="t('ui.i18n.translation_mode.candidate_key', '候选文本 key')"
             :options="candidateKeyOptions"
-            :popover-z-index="translationPopoverZIndex"
             show-bottom
           />
 
@@ -67,7 +66,6 @@
             class="w-full"
             :label="t('ui.translation.controls.provider', '翻译器')"
             :options="providerOptions"
-            :popover-z-index="translationPopoverZIndex"
             show-bottom
           />
 
@@ -90,16 +88,18 @@
         </div>
       </div>
     </div>
+    <div ref="popoverHost" class="pointer-events-none absolute inset-0 z-20 overflow-visible"></div>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, provide, reactive, ref, watch } from 'vue'
 import { Languages, Minimize2, MousePointer2, Save, WandSparkles, X } from 'lucide-vue-next'
 import { useAppStore } from '../../../app/stores/appStore'
 import CommonSelect from '../input/CommonSelect.vue'
 import { DEFAULT_LOCALE, findTranslationEntriesForText, findTranslationEntryByKey, getCurrentLocale, getTranslationValidationIssue, setLocale, t, translateMessagePayload } from '../../i18n.js'
 import { showUserErrorToast, toast } from '../../lib/common'
+import { POPOVER_PORTAL_KEY } from '../popover/popoverContext.js'
 
 const appStore = useAppStore()
 const overlayRef = ref(null)
@@ -114,11 +114,12 @@ const position = reactive({ x: 24, y: 96 })
 const dragState = reactive({ active: false, moved: false, startX: 0, startY: 0, originX: 0, originY: 0 })
 const hoverBox = reactive({ visible: false, left: 0, top: 0, width: 0, height: 0 })
 const translationOverlayZIndex = 2147483600
-const translationPopoverZIndex = 2147483647
 
 const enabled = computed(() => !!appStore.translationModeEnabled)
 const hasSelection = computed(() => selectedEntries.value.length > 0)
 const showPanel = computed(() => hasSelection.value && !pickerActive.value && !panelMinimized.value)
+const popoverHost = ref(null)
+provide(POPOVER_PORTAL_KEY, { target: popoverHost, active: showPanel })
 const selectedEntry = computed(() => selectedEntries.value.find(entry => entry.key === selectedKey.value) || selectedEntries.value[0] || null)
 const shortcutHint = computed(() => t('ui.i18n.translation_mode.shortcut_hint', 'Ctrl + Shift + L 开关'))
 const candidateKeyOptions = computed(() => selectedEntries.value.map(entry => ({ label: entry.key, value: entry.key })))

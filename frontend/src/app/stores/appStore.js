@@ -54,6 +54,7 @@ export const useAppStore = defineStore('app', () => {
   // UI 状态
   const uiState = reactive({
     showSettingsPanel: false,    // 是否显示设置面板
+    settingsTab: 'paths',        // 设置面板当前页面，也供外部操作直接跳转
     showUpdateModal: false,      // 是否显示更新弹窗
     showDiffDrawer: false,       // 是否显示差异抽屉
     showLogDrawer: false,        // 是否显示日志抽屉
@@ -100,6 +101,8 @@ export const useAppStore = defineStore('app', () => {
     hasUpdate: false,
     info: null,    // 存储后端返回的 UpdateInfo
     isChecking: false,
+    lastCheckedAt: 0,
+    checkError: '',
   })
   const remoteImageCache = reactive({
     file_count: 0,
@@ -542,7 +545,7 @@ export const useAppStore = defineStore('app', () => {
 
   const {
     // 更新检查与安装提示
-    checkUpdate, showChangelog, _showInstallPrompt,
+    checkUpdate, showChangelog, showAvailableUpdate, _showInstallPrompt,
   } = useUpdateActions({
     updateState,
     upgradeContext,
@@ -1136,12 +1139,14 @@ export const useAppStore = defineStore('app', () => {
           type: 'scan',
           status: String(detail.status || 'success'),
           progress: Number(detail.progress ?? (detail.status === 'success' ? 100 : 0)),
-          message: translateMessagePayload(detail, detail.status === 'success' ? t('tasks.message.scan_complete', '扫描完成') : ''),
+          message: detail.runtime_sync?.ok === false
+            ? t('tasks.message.scan_link_sync_failed', '扫描完成，但模组链接同步失败')
+            : translateMessagePayload(detail, detail.status === 'success' ? t('tasks.message.scan_complete', '扫描完成') : ''),
           metrics: {
             title: t('tasks.type.scan', '模组扫描'),
             ...(detail.metrics || {}),
             ...(detail.stats ? { stats: detail.stats } : {}),
-            ...(detail.runtime_sync_message ? { runtime_sync_message: detail.runtime_sync_message } : {}),
+            ...(detail.runtime_sync ? { runtime_sync: detail.runtime_sync } : {}),
           },
           timestamp: Date.now(),
         })
@@ -1294,7 +1299,10 @@ export const useAppStore = defineStore('app', () => {
         showUserErrorToast(task, t('messages.app.steam_unsubscribe.failed', '取消订阅失败。请确认 Steam 已登录、网络可用，稍后重试。'))
       }
       if (task.type === 'update' && task.status === 'success' && task.metrics?.ready_to_install) {
-        if (updateState.info) updateState.info.local_status = 'ready'
+        if (updateState.info) {
+          updateState.info.local_status = 'ready'
+          updateState.info.local_file_path = task.metrics.path
+        }
         if (!updateInstallPrompted.has(task.id)) {
           updateInstallPrompted.add(task.id)
           _showInstallPrompt(task.metrics)
@@ -1302,6 +1310,7 @@ export const useAppStore = defineStore('app', () => {
       }
       if (task.type === 'update' && task.status === 'failed') {
         if (task.metrics?.has_fallback_source) return
+        if (updateState.info?.local_status === 'downloading') updateState.info.local_status = 'remote'
         showUserErrorToast(task, t('messages.app.update.download_failed', '下载更新包失败。请检查网络连接、代理设置和磁盘空间，稍后重试。'))
       }
       if (task.type === 'ai-task' && task.status === 'failed') {
@@ -1788,7 +1797,7 @@ export const useAppStore = defineStore('app', () => {
     // 模式1: 轻提示 (Toast)
     if (mode === 'toast') {
       const toastType = type || 'info' // success, error, warning, info
-      if (type === 'error' || event.detail?.error_id) {
+      if (type === 'error' || type === 'warning' || event.detail?.error_id) {
         showUserErrorToast({ ...event.detail, user_message: popupMessage }, popupMessage, {
           variant: toastType,
           timeout: duration || 3000,
@@ -1948,7 +1957,7 @@ export const useAppStore = defineStore('app', () => {
     downloadWorkshopItemsViaSteam, repairWorkshopItemsViaSteamCMD, querySteamWorkshopDetails,
     // 设置、任务与应用维护
     saveSetting, applySettings, revealSecret, clearSecret, refreshUserThemes, saveUserTheme, deleteUserTheme, openSettingsPanel, closeSettingsPanel, resetDatabase, repairDatabase, restartApplication, showChangelog, setSidebarTab, cancelTextureTask, cancelTaskByProgress, supportsTaskCancellation, canCancelTask, isTaskCancelPending,
-    checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks, checkUpdate, updateExternalDB,
+    checkSteamTools, checkToolMaintenance, checkExternalDataUpdates, checkManagedModUpdates, checkSteamcmdModUpdates, runScheduledMaintenanceChecks, checkUpdate, showAvailableUpdate, updateExternalDB,
     // 包传输
     openPackageTransferDialog, openCustomModExportDialog, updatePackageTransferDialogPreset, closePackageTransferDialog,
     getDataBundleSchema, inspectDataBundle, exportDataBundle, importDataBundle,

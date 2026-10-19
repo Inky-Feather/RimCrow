@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { isOfficialMod } from '../frontend/src/features/mod/lib/packageScope.js'
+import { isOfficialMod } from '../src/features/mod/lib/packageScope.js'
 
 assert.equal(isOfficialMod({ package_id: 'ludeon.rimworld' }), true)
 assert.equal(isOfficialMod({ package_id: 'ludeon.rimworld.royalty' }), true)

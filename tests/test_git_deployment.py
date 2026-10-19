@@ -106,12 +106,12 @@ def test_same_named_repositories_do_not_share_install_folder(git_env):
     folders = []
     with patch.object(manager, "install_from_github", side_effect=lambda _download, request: folders.append(request.install.final_name)):
         for url in (URL, "https://github.com/another/mod", "https://gitgud.io/team/mod"):
-            manager.install_repo_mod(Mock(), url, "source", "dev")
+            manager.install_repo_mod(Mock(), url, "source", "dev", install_options={"ref_type": "branch"})
     assert len(set(folders)) == 3
     GithubModRecord.create(repo_url=URL, owner="team", repo_name="mod", local_folder="_GH_mod")
     GithubModRecord.create(repo_url="https://github.com/another/mod", owner="another", repo_name="mod", local_folder="_GH_mod")
     with pytest.raises(ValueError, match="同一个本地目录"):
-        manager.install_repo_mod(Mock(), URL, "source", "dev")
+        manager.install_repo_mod(Mock(), URL, "source", "dev", install_options={"ref_type": "branch"})
 
 
 def test_explicit_checks_bypass_cache_and_return_independent_objects(git_env):
@@ -140,7 +140,7 @@ def test_url_ref_ambiguity_and_subdirectory(git_env):
         with pytest.raises(ValueError, match="歧义"):
             manager.resolve_repo_location(URL + "/tree/v1")
     with pytest.raises(ValueError): manager.resolve_repo_location(URL + "/issues/1")
-    assert manager.parse_repo_url("https://example.invalid/github.com/team/mod") == (None, None)
+    assert manager.parse_git_repo_url("https://example.invalid/github.com/team/mod") is None
 
 
 def test_cached_repository_does_not_reuse_another_mod_directory(git_env):
@@ -334,7 +334,7 @@ def test_status_uses_sha_including_force_pushes_and_errors():
 def test_release_source_status_uses_tag_sha_and_selected_directory(git_env):
     manager, _ = git_env
     with patch.object(manager, "fetch_repo", return_value={"default_branch": "main"}), \
-         patch.object(manager, "fetch_latest_release", return_value={"tag_name": "v1", "assets": []}), \
+         patch.object(manager, "fetch_release", return_value={"tag_name": "v1", "assets": []}), \
          patch.object(manager, "fetch_ref_commit", return_value={"sha": SHA}) as fetch:
         info = manager._fetch_repo_info_via_api("team", "mod", force_refresh=True)
     assert info["latest_release_commit_sha"] == SHA
@@ -353,7 +353,7 @@ def test_download_callback_failure_never_reports_completed(tmp_path):
     emitted = []
     manager._emit_progress = lambda task: emitted.append(task.status)
     task = DownloadTask(url="https://example.invalid/a.zip", dest_path=str(tmp_path / "a.zip"), filename="a.zip",
-        on_complete=Mock(side_effect=ValueError("invalid mod")), metadata={"complete_after_callback": True})
+        on_post_download=Mock(side_effect=ValueError("invalid mod")))
     response = Mock(headers={"content-length": "3"}, url=task.url)
     response.iter_content.return_value = [b"zip"]
     session = MagicMock()
@@ -367,7 +367,6 @@ def test_download_callback_failure_never_reports_completed(tmp_path):
 def test_install_failure_records_only_one_git_timeline_error(git_env):
     manager, root = git_env
     request, task, resolved = make_install(manager, root)
-    task.metadata = {"complete_after_callback": True}
     manager.record_timeline = Mock()
 
     with patch.object(manager, "_execute_install_plan", side_effect=ValueError("invalid mod")), pytest.raises(ValueError):

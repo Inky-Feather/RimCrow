@@ -4,6 +4,7 @@ from unittest.mock import patch
 from bs4 import BeautifulSoup
 
 from backend.browser_runtime import WorkshopPageRenderer
+from backend.managers.mgr_sub_browser import SubBrowserManager
 
 
 class TestWorkshopPageRenderer(unittest.TestCase):
@@ -24,7 +25,7 @@ class TestWorkshopPageRenderer(unittest.TestCase):
         self.assertIn("data-rimcrow-proxy-url", bridge_script)
         self.assertNotIn("data-proxy-url", bridge_script)
 
-    def test_render_uses_managed_proxy_for_workshop_request(self):
+    def test_render_leaves_proxy_routing_to_managed_session(self):
         captured = {}
 
         class FakeResponse:
@@ -47,7 +48,7 @@ class TestWorkshopPageRenderer(unittest.TestCase):
 
         self.assertIn("Demo", html)
         self.assertEqual(captured["url"], "https://steamcommunity.com/sharedfiles/filedetails/?id=123")
-        self.assertEqual(captured["kwargs"]["proxies"], {"http": "http://127.0.0.1:10808", "https": "http://127.0.0.1:10808"})
+        self.assertNotIn("proxies", captured["kwargs"])
         self.assertIn("User-Agent", captured["kwargs"]["headers"])
         self.assertNotIn(429, retry_factory.call_args.kwargs["status_forcelist"])
 
@@ -96,6 +97,61 @@ class TestWorkshopPageRenderer(unittest.TestCase):
         self.assertIn(target_url, html)
         self.assertNotIn("加载页面失败", html)
         self.assertEqual(warning.call_args.kwargs["extra"]["extra_context"]["status_code"], 429)
+
+
+class FakeWindow:
+    def __init__(self, current_url="https://steamcommunity.com/sharedfiles/filedetails/?id=2023507013"):
+        self.current_url = current_url
+        self.title = ""
+        self.scripts = []
+
+    def get_current_url(self):
+        return self.current_url
+
+    def set_title(self, title):
+        self.title = title
+
+    def evaluate_js(self, script):
+        self.scripts.append(script)
+
+
+def test_loaded_injects_toolbar_for_direct_steam_workshop_page():
+    manager = SubBrowserManager.__new__(SubBrowserManager)
+    manager.window = FakeWindow()
+    manager._mode = "workshop_proxy"
+    manager._current_url = "https://steamcommunity.com/sharedfiles/filedetails/?id=2023507013"
+
+    manager._on_loaded()
+
+    assert manager.window.title == manager.window.current_url
+    assert manager.window.scripts
+    assert "rimcrow-direct-workshop-toolbar" in manager.window.scripts[-1]
+
+
+def test_injected_workshop_toolbar_uses_pywebview_bridge_without_iframe():
+    manager = SubBrowserManager.__new__(SubBrowserManager)
+    manager.window = FakeWindow()
+
+    manager._inject_workshop_toolbar("https://steamcommunity.com/sharedfiles/filedetails/?id=2023507013")
+
+    script = manager.window.scripts[-1]
+    assert "<iframe" not in script.lower()
+    assert "window.pywebview" in script
+    assert "workshop_browser_action(action, config.workshopId" in script
+    assert "2023507013" in script
+    assert "SteamCMD 下载" in script
+
+
+def test_loaded_does_not_inject_toolbar_for_non_workshop_page():
+    manager = SubBrowserManager.__new__(SubBrowserManager)
+    manager.window = FakeWindow("https://example.com/")
+    manager._mode = "external"
+    manager._current_url = "https://example.com/"
+
+    manager._on_loaded()
+
+    assert manager.window.title == "https://example.com/"
+    assert manager.window.scripts == []
 
 
 if __name__ == "__main__":

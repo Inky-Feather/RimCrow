@@ -12,7 +12,7 @@
     <!-- 2. Grid 面板模式 (嵌入式网格) -->
     <div v-else-if="item.type === 'grid'" class="px-1 py-1">
       <!-- 可选的小标题 -->
-      <div v-if="item.label" class="text-[10px] text-text-dim px-1 mb-[6px] font-bold tracking-wider uppercase opacity-60">
+      <div v-if="item.label" class="text-[10px] text-text-dim px-1 mb-[6px] font-bold tracking-wider opacity-60">
         {{ item.label }}
       </div>
       

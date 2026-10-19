@@ -21,7 +21,7 @@ if __name__ == "__main__":
 from backend.database.workshop_selection import normalize_cached_workshop_id
 from backend.database.dao_ext import ExtDAO
 from backend.database.models_ext import WorkshopAuthorCache, WorkshopOnlineCache, ext_db, init_ext_db
-from backend.managers.mgr_network import build_retry_session, merge_headers, network_mgr
+from backend.managers.mgr_network import build_retry_session, merge_headers
 from backend.settings import settings
 from backend.utils.constants import (
     RIMWORLD_DLC_APPID_PACKAGE_MAP, RIMWORLD_STEAM_APP_ID,
@@ -64,19 +64,11 @@ class SteamWebAPI:
 
     @classmethod
     def _build_request_kwargs(cls, *, headers: dict[str, str] | None = None, timeout: tuple[int, int] = (10, 20)) -> dict[str, Any]:
-        """
-        统一整理 Steam 请求参数。
-
-        这里显式传入代理，而不是完全依赖 requests 的环境变量探测，
-        这样在运行时修改代理配置后，后续请求可以立即使用新配置。
-        """
+        """统一整理 Steam 请求参数；代理与 Hosts 由 RoutedSession 按 URL 决定。"""
         request_kwargs: dict[str, Any] = {
             "headers": merge_headers(headers),
             "timeout": timeout,
         }
-        proxy_url = network_mgr.get_proxy_url()
-        if proxy_url:
-            request_kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
         return request_kwargs
 
     @classmethod
@@ -93,7 +85,7 @@ class SteamWebAPI:
         """通过统一的重试、代理和报错转换逻辑请求 Steam JSON 接口。"""
         with build_retry_session(allowed_methods=("GET", "HEAD", "POST")) as session:
             response = session.request(method, url, params=params, data=data, **cls._build_request_kwargs(headers=headers, timeout=timeout))
-            cls._raise_for_steam_status(response, url)
+            response.raise_for_status()
             payload = response.json()
         if not isinstance(payload, dict):
             raise RuntimeError(f"Steam 接口返回了无法识别的 JSON 结构: {url}")
@@ -126,11 +118,19 @@ class SteamWebAPI:
         response = payload.get("response") if isinstance(payload, dict) else None
         if not isinstance(response, dict):
             raise RuntimeError(f"{api_name} 返回缺少 response")
+        if "result" in response and str(response["result"]) != "1":
+            raise RuntimeError(f"{api_name} 请求未成功，Steam 结果码：{response['result']}")
         return response
 
     @classmethod
-    def _require_response_list(cls, payload: dict[str, Any], field: str, api_name: str) -> list[Any]:
+    def _require_response_list(cls, payload: dict[str, Any], field: str, api_name: str, *, allow_empty_search: bool = False) -> list[Any]:
         response = cls._require_response_dict(payload, api_name)
+        # Steam 搜索无匹配项时只返回 total=0，会省略重复字段；部分接口版本连 total
+        # 也会省略，但会保留 next_cursor/total_results 之外的分页元数据，此时同样按空结果处理。
+        if allow_empty_search and field not in response:
+            total = response.get("total", response.get("total_results"))
+            if type(total) is int and total == 0:
+                return []
         if not isinstance(response.get(field), list):
             raise RuntimeError(f"{api_name} 返回缺少 response.{field}")
         return response[field]
@@ -206,18 +206,8 @@ class SteamWebAPI:
         """供网页抓取回退方案复用的统一文本请求。"""
         with build_retry_session(allowed_methods=("GET", "HEAD", "POST")) as session:
             response = session.request(method, url, params=params, data=data, **cls._build_request_kwargs(headers=headers, timeout=timeout))
-            cls._raise_for_steam_status(response, url)
+            response.raise_for_status()
             return response.text
-
-    @classmethod
-    def _raise_for_steam_status(cls, response: requests.Response, request_label: str) -> None:
-        """把 Steam HTTP 错误转换成更贴近调用场景的异常文本。"""
-        if response.status_code < 400: return
-        if response.status_code == 403:
-            raise RuntimeError("Steam Web API Key 无效、权限不足，或当前网络/IP 未被 Steam 接受")
-        if response.status_code == 429:
-            raise RuntimeError("Steam Web API 请求过于频繁，请稍后重试")
-        raise RuntimeError(f"Steam 接口请求失败({response.status_code}): {request_label}")
 
     @classmethod
     def _safe_int(cls, value: Any, default: int = 0) -> int:
@@ -1137,7 +1127,7 @@ class SteamWebAPI:
         cls._add_indexed_params(params, "excluded_appids_required_for_use", normalized_filters.get("excluded_appids_required_for_use"))
         payload = cls._request_json("GET", cls.QUERY_FILES_URL, params=params)
         response = cls._require_response_dict(payload, "Steam QueryFiles")
-        raw_items = cls._require_response_list(payload, "publishedfiledetails", "Steam QueryFiles")
+        raw_items = cls._require_response_list(payload, "publishedfiledetails", "Steam QueryFiles", allow_empty_search=True)
         items = [cls._normalize_query_file_item(item) for item in raw_items if isinstance(item, dict)]
         if filters and filters.get("force_details", filters.get("forceDetails", False)):
             detail_map = cls.fetch_published_file_service_details(
@@ -1527,7 +1517,7 @@ class SteamWebAPI:
         cls._add_date_range_params(params, "date_range_updated", normalized_filters.get("date_range_updated"))
         payload = cls._request_published_file_service("GetUserFiles", params=params)
         response = cls._require_response_dict(payload, "Steam GetUserFiles")
-        raw_items = cls._require_response_list(payload, "publishedfiledetails", "Steam GetUserFiles")
+        raw_items = cls._require_response_list(payload, "publishedfiledetails", "Steam GetUserFiles", allow_empty_search=True)
         items = [cls._normalize_published_file_service_detail_item(item) for item in (raw_items or []) if isinstance(item, dict)]
         if not bool(filters.get("skip_author_profiles") or filters.get("skipAuthorProfiles")):
             items = cls._attach_author_profiles(items)

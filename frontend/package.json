@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --test --experimental-loader ./tests/esm-loader.mjs tests/*.test.mjs",
     "i18n:extract": "cd .. && uv run python scripts/extract_i18n_messages.py",
     "i18n:check": "cd .. && uv run python scripts/extract_i18n_messages.py --check",
     "prebuild": "npm run i18n:check"

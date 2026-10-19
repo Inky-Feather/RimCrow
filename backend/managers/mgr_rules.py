@@ -13,6 +13,7 @@ from backend.utils.logger import logger
 from backend.database.dao import GroupDAO, ModDAO, normalize_interlock_payload, normalize_user_mod_data_payload
 from backend.settings import RULES_DIR, USER_RULES_PATH, settings
 from backend.utils.tools import current_ms, normalize_package_id
+from backend.utils.json_io import read_json_dataset
 from backend.load_order.language_pack_ownership import get_effective_mod_type
 from backend.load_order.package_tokens import parse_package_token, select_mod_instance
 from backend._version import __version__
@@ -165,21 +166,25 @@ class RuleManager:
 
     def _load_community_rules(self):
         """独立加载社区规则，避免其异常误伤用户规则。"""
-        self.community_rules = {}
-        self.community_rules_update_time = 0
         community_file_path = Path(settings.config.community_rules_path)
-        if not community_file_path.exists(): return
-
-        with open(community_file_path, 'r', encoding='utf-8', errors='replace') as f:
-            data = json.load(f)
-
-        if not isinstance(data, dict):
-            raise ValueError("Community rules root is not an object")
-
-        # 兼容不同格式：既支持 {\"rules\": {...}}，也支持直接以规则字典作为根对象。
-        rules_payload = data.get("rules")
-        self.community_rules = rules_payload if isinstance(rules_payload, dict) else data
+        if not community_file_path.exists():
+            self.community_rules = {}
+            self.community_rules_update_time = 0
+            return
+        data = self.prepare_community_rules(community_file_path)
+        self.community_rules = data["rules"]
         self.community_rules_update_time = self._parse_community_rules_timestamp(data)
+
+    @staticmethod
+    def prepare_community_rules(path: Path) -> dict[str, Any]:
+        """先校验再切换内存；保留包装格式、裸规则字典及合法空规则。"""
+        data = read_json_dataset(path)
+        if not isinstance(data, dict):
+            raise ValueError("社区规则根节点必须是对象")
+        rules = data["rules"] if "rules" in data else {key: value for key, value in data.items() if key != "timestamp"}
+        if not isinstance(rules, dict) or any(not isinstance(value, dict) for value in rules.values()):
+            raise ValueError("社区规则必须是规则对象字典")
+        return {"rules": rules, "timestamp": data.get("timestamp")}
 
     def _load_user_rules(self):
         """独立加载用户规则，路径切换时先清空旧状态再按新文件重建。"""
@@ -304,7 +309,7 @@ class RuleManager:
             logger.error(f"保存用户规则失败：{e}", exc_info=True)
             raise
     
-    def build_workshop_rules(self):
+    def build_workshop_rules(self, *, raise_errors: bool = False):
         """
         精准构建工坊依赖缓存：仅针对本地已安装/存在的 Mod 构建规则。
         """
@@ -377,6 +382,8 @@ class RuleManager:
             )
         except Exception as e:
             logger.error(f"构建创意工坊规则缓存失败：{e}", exc_info=True)
+            if raise_errors:
+                raise
     
     # =========================================================================
     # 0. 开关控制逻辑 (Professional Toggle Logic)

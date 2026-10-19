@@ -94,7 +94,7 @@
       </div>
 
       <div class="p-6 rounded-2xl bg-accent-danger/5 border border-accent-danger/20 space-y-4">
-        <h4 class="text-sm font-bold text-accent-danger uppercase">{{ t('ui.settings.dev.danger_zone', '危险操作区') }}</h4>
+        <h4 class="text-sm font-bold text-accent-danger">{{ t('ui.settings.dev.danger_zone', '危险操作区') }}</h4>
         <p class="text-xs text-accent-danger/60 leading-relaxed">{{ t('ui.settings.dev.danger_zone_desc', '修复会尝试恢复当前的本地数据。修复成功后需要重启软件才能生效；如果修复失败，建议直接重置数据库。重置会清空分组、备注等本地数据，且无法撤销，请确认后再继续。') }}</p>
         <div class="grid grid-cols-2 gap-3">
           <button @click="handleRepair" :disabled="appStore.isLoading"

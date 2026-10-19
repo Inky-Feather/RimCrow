@@ -1,15 +1,18 @@
 # backend/settings.py
 
 import json
+import locale
 import os
 import platform
+import re
 import shutil
 import threading
 from copy import deepcopy
 from dataclasses import dataclass, asdict, field, fields, is_dataclass
 from pathlib import Path
 import sys
-from typing import Dict, Any, List, Optional, Tuple, Set
+from typing import TYPE_CHECKING, Dict, Any, List, Optional, Tuple, Set
+from urllib.parse import urlparse
 from backend.utils.constants import RIMWORLD_STEAM_APP_ID_STR, normalize_language_code
 from backend.migrations.app_relocation import apply_config_relocation
 from backend.utils.json_io import write_json_atomic
@@ -17,6 +20,9 @@ from backend.utils.secret_store import SECRET_FIELDS, SecretStoreError, secret_s
 from backend.paths.game_locations import normalize_steam_root
 from backend.utils.tools import normalize_path_for_storage, normalize_string_list, normalize_text, same_path
 from backend.window_state import WindowStateConfig
+
+if TYPE_CHECKING:
+    from backend.managers.mgr_files import LinkSyncResult
 
 
 def _resolve_base_resource_dir() -> Path:
@@ -44,6 +50,10 @@ else:
 
 DATA_DIR = HOME_DIR / "data"                # 数据目录
 CONFIG_PATH = DATA_DIR / "config.json"      # 配置文件路径
+GITHUB_MIRRORS_PATH = DATA_DIR / "github_mirrors.json"  # GitHub 下载镜像列表
+GITHUB_MIRROR_CATALOG_CACHE_PATH = DATA_DIR / "cache" / "github_mirror_catalog.json"  # 动态镜像节点目录缓存
+GITHUB_MIRROR_CAPABILITIES = ("web", "raw", "archive", "release_asset", "api", "git_clone", "gist", "lfs_media")
+GITHUB_MIRROR_MODES = ("direct", "auto", "builtin", "custom", "dynamic")
 CONFIG_UPDATE_BACKUP_PATH = DATA_DIR / "config.json.update.bak"
 UPDATE_DIR = HOME_DIR / "updates"     # 更新目录
 TOOLS_DIR = HOME_DIR / "tools"                # 工具目录
@@ -66,6 +76,100 @@ MP_COMPAT_PACKAGE_IDS_PATH = DATA_DIR / "mpCompatPackageIds.json"         # Mult
 GIT_PROVIDER_CATALOG_DIR = DATA_DIR / "git_catalogs"  # Git 推荐清单缓存目录
 
 
+_BUILTIN_UI_LANGUAGE_CODES = {"zh-CN", "zh-TW", "en", "de", "ko", "ru"}
+
+
+def _detect_initial_language() -> str:
+    """首次创建配置时匹配内置界面语言；不支持或读取失败时使用英语。"""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            # 界面语言与地区格式可能不同，不能用 Windows 的区域设置代替。
+            language = locale.windows_locale.get(ctypes.windll.kernel32.GetUserDefaultUILanguage(), "")
+        else:
+            language = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES")
+                        or os.environ.get("LANG") or locale.getlocale()[0] or "")
+    except (AttributeError, OSError, ValueError):
+        return "en"
+
+    code = normalize_language_code(language.split(".", 1)[0].split("@", 1)[0])
+    parts = code.lower().split("-")
+    if parts[0] == "zh":
+        if "hans" in parts:
+            code = "zh-CN"
+        else:
+            code = "zh-TW" if "hant" in parts or any(region in parts for region in ("tw", "hk", "mo")) else "zh-CN"
+    elif code not in _BUILTIN_UI_LANGUAGE_CODES:
+        code = parts[0]
+    return code if code in _BUILTIN_UI_LANGUAGE_CODES else "en"
+
+
+def normalize_github_mirrors(raw: Any, *, strict: bool = False) -> list[dict[str, Any]]:
+    """归一化用户自定义镜像节点；能力和健康状态由探测结果写回。"""
+    if not isinstance(raw, list):
+        if strict:
+            raise ValueError("GitHub 镜像列表必须是数组")
+        return []
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw:
+        try:
+            if not isinstance(item, dict):
+                raise ValueError("GitHub 镜像条目必须是对象")
+            mirror_id = normalize_text(item.get("id")).lower()
+            template = normalize_text(item.get("url_template"))
+            parsed = urlparse(template.replace("{url}", "https://github.com/example/repo"))
+            parsed.port  # 校验端口格式和范围，避免保存无法使用的地址。
+            if not re.fullmatch(r"[a-z0-9_-]+", mirror_id) or mirror_id in {"direct", "auto"} or mirror_id in seen:
+                raise ValueError("GitHub 镜像 ID 只能使用字母、数字、下划线和短横线，且不能重复或使用 direct、auto")
+            if (template.count("{url}") != 1 or any(char in template.replace("{url}", "") for char in "{}\r\n")
+                or parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username or parsed.password
+                or "{" in urlparse(template).netloc or parsed.fragment):
+                raise ValueError("GitHub 镜像地址必须是 HTTPS 地址，包含一个 {url}，且不能包含登录信息或片段")
+            def normalize_states(raw_states: Any, allowed: set[str]) -> dict[str, dict[str, Any]]:
+                if raw_states is None:
+                    return {}
+                if not isinstance(raw_states, dict):
+                    raise ValueError("GitHub 镜像状态必须是对象")
+                unknown = set(raw_states) - set(GITHUB_MIRROR_CAPABILITIES)
+                if unknown:
+                    raise ValueError(f"GitHub 镜像状态包含未知能力: {sorted(unknown)}")
+                normalized = {}
+                for capability in GITHUB_MIRROR_CAPABILITIES:
+                    value = raw_states.get(capability)
+                    if not isinstance(value, dict):
+                        continue
+                    state = normalize_text(value.get("status")).lower()
+                    if state not in allowed:
+                        raise ValueError("GitHub 镜像状态无效")
+                    entry = {"status": state}
+                    if str(value.get("http_status", "")).isdigit():
+                        entry["http_status"] = int(value["http_status"])
+                    if isinstance(value.get("latency_ms"), (int, float)) and float(value["latency_ms"]) >= 0:
+                        entry["latency_ms"] = round(float(value["latency_ms"]), 2)
+                    if isinstance(value.get("checked_at"), (int, float)) and float(value["checked_at"]) >= 0:
+                        entry["checked_at"] = max(0.0, float(value["checked_at"]))
+                    if normalize_text(value.get("reason")):
+                        entry["reason"] = normalize_text(value.get("reason"))
+                    normalized[capability] = entry
+                return normalized
+            url_mode = normalize_text(item.get("url_mode"), default="full_url").lower()
+            if url_mode not in {"full_url", "github_host_path", "github_path"}:
+                raise ValueError("GitHub 镜像 url_mode 无效")
+            entry = {"id": mirror_id, "label": normalize_text(item.get("label")) or mirror_id,
+                     "url_template": template, "url_mode": url_mode, "origin": "custom",
+                     "enabled": item.get("enabled", True) is not False,
+                     "support": normalize_states(item.get("support"), {"supported", "unsupported", "unknown"}),
+                     "health": normalize_states(item.get("health"), {"valid", "invalid", "unknown"})}
+            result.append(entry)
+            seen.add(mirror_id)
+        except (ValueError, TypeError):
+            if strict:
+                raise
+    return result
+
+
 @dataclass
 class ProxyConfig:
     enabled: bool = False
@@ -86,6 +190,14 @@ class NetworkConfig:
     # 自定义 Hosts (域名 -> IP 映射)
     hosts: Dict[str, str] = field(default_factory=dict) 
     write_to_system_hosts: bool = False         # 是否将自定义 Hosts 写入系统 hosts 文件
+    github_hosts_enabled: bool = False          # 是否启用动态 Hosts 来源中的完整有效映射
+    github_hosts_auto_update: bool = True       # 是否启动时按间隔自动刷新动态 Hosts
+    hosts_sources: list[dict[str, Any]] = field(default_factory=lambda: [
+        {"url": "https://raw.hellogithub.com/hosts", "enabled": True},
+        {"url": "https://cdn.jsdelivr.net/gh/Clov614/SteamHostSync@main/Hosts_steam", "enabled": True},
+    ])
+    github_hosts_refresh_interval_hours: int = 24
+    github_hosts_updated_at: float = 0
     use_proxy_on_steamcmd: bool = False         # SteamCMD 是否使用代理
     use_proxy_on_ai: bool = False               # AI 是否使用代理
 
@@ -336,6 +448,9 @@ class AppConfig:
     enable_auto_update_check: bool = True  # 自动检查更新开关
     ignored_update_version: str = ""       # 跳过的版本号
     last_update_check_time: float = 0      # 上次检查时间（用于限流）
+    github_mirror_id: str = "direct"         # 当前 GitHub 镜像节点：direct / auto / 节点 selection_id
+    github_dynamic_mirrors_enabled: bool = False  # 是否启用动态镜像节点并允许刷新
+    github_mirrors: List[Dict[str, Any]] = field(default_factory=list)  # 用户自定义 GitHub 镜像节点
     # 以下三类检查负责启动维护；外部库可选择自动刷新，工具和管理器模组仍只提醒。
     enable_auto_tool_check: bool = True
     tool_check_interval_days: int = 3
@@ -370,6 +485,7 @@ class AppConfig:
 
 class SettingsManager:
     _instance = None
+    _update_lock = threading.RLock()
     
     def __new__(cls):
         """单例模式：确保全局只有一个 SettingsManager 实例"""
@@ -389,6 +505,7 @@ class SettingsManager:
         self.config = AppConfig()
         # 2. 执行加载（此时 _recursive_update 访问 self.config 就安全了）
         self._load_to_config()
+        self._load_github_mirrors()
         self._hydrate_secrets()
         
         self._initialized = True
@@ -492,8 +609,22 @@ class SettingsManager:
         1. 只要还能识别出一部分字段，就把它们留下；
         2. 识别不到的字段直接忽略，不因为局部损坏把整份配置判死刑。
         """
+        data = self._migrate_hosts_sources(data)
         compatible = self._extract_compatible_config_values(data, AppConfig())
         return compatible or None
+
+    @staticmethod
+    def _migrate_hosts_sources(data: Dict[str, Any]) -> Dict[str, Any]:
+        """独立迁移旧的逐行地址字段；已有新列表（包括空列表）始终优先。"""
+        network = data.get("network")
+        if not isinstance(network, dict) or "hosts_sources" in network or "github_hosts_url" not in network:
+            return data
+        urls = list(dict.fromkeys(line.strip() for line in str(network["github_hosts_url"] or "").splitlines() if line.strip()))
+        if urls in ([], ["https://raw.githubusercontent.com/521xueweihan/GitHub520/master/hosts"], ["https://raw.hellogithub.com/hosts"]):
+            sources = NetworkConfig().hosts_sources
+        else:
+            sources = [{"url": url, "enabled": True} for url in urls]
+        return {**data, "network": {**network, "hosts_sources": sources}}
 
     def _read_config_fragment(self, path: Path, source_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -537,6 +668,8 @@ class SettingsManager:
         backup_fragment = self._read_config_fragment(CONFIG_UPDATE_BACKUP_PATH, "update-backup")
 
         if current_fragment is None and backup_fragment is None:
+            self.config.language = _detect_initial_language()
+            self.config.network.github_hosts_enabled = self.config.language == "zh-CN"
             self._normalize_config()
             self._sync_derived_paths()
             return
@@ -607,6 +740,37 @@ class SettingsManager:
             "git_provider_catalog_url",
         ):
             setattr(self.config, url_key, normalize_text(getattr(self.config, url_key, "")))
+
+        raw_sources = self.config.network.hosts_sources
+        self.config.network.hosts_sources = [
+            {"url": normalize_text(row.get("url")), "enabled": row.get("enabled", True) is True}
+            for row in (raw_sources if isinstance(raw_sources, list) else NetworkConfig().hosts_sources)
+            if isinstance(row, dict)
+        ]
+        self.config.network.github_hosts_enabled = bool(getattr(self.config.network, "github_hosts_enabled", False))
+        self.config.network.github_hosts_auto_update = bool(getattr(self.config.network, "github_hosts_auto_update", True))
+        try:
+            self.config.network.github_hosts_refresh_interval_hours = max(
+                1, min(24 * 30, int(getattr(self.config.network, "github_hosts_refresh_interval_hours", 24) or 24))
+            )
+        except (TypeError, ValueError):
+            self.config.network.github_hosts_refresh_interval_hours = 24
+        try:
+            self.config.network.github_hosts_updated_at = max(0.0, float(getattr(self.config.network, "github_hosts_updated_at", 0) or 0))
+        except (TypeError, ValueError):
+            self.config.network.github_hosts_updated_at = 0
+
+        self.config.github_mirror_id = normalize_text(getattr(self.config, "github_mirror_id", "direct")).lower() or "direct"
+        self.config.github_dynamic_mirrors_enabled = bool(getattr(self.config, "github_dynamic_mirrors_enabled", False))
+        if not self.config.github_dynamic_mirrors_enabled and (
+            self.config.github_mirror_id == "auto" or self.config.github_mirror_id.startswith("dynamic:")
+        ):
+            self.config.github_mirror_id = "direct"
+        self.config.github_mirrors = normalize_github_mirrors(getattr(self.config, "github_mirrors", []))
+        for mirror in self.config.github_mirrors:
+            if self.config.github_mirror_id in {str(mirror.get("id") or ""), f"custom:{mirror.get('id')}"}:
+                self.config.github_mirror_id = f"custom:{mirror['id']}"
+                break
 
         proxy = self.config.network.proxy
         proxy.host = normalize_text(proxy.host)
@@ -754,52 +918,38 @@ class SettingsManager:
     def _snapshot_config(self) -> "AppConfig":
         return deepcopy(self.config)
 
-    def set(self, key: str, value: Any):
-        """
-        设置配置项并自动处理路径同步逻辑
-        """
+    def set(self, key: str, value: Any) -> None:
+        """单项与批量设置走相同的校验、路径切换和保存流程。"""
         if not hasattr(self.config, key):
-            print(f"Warning: Unknown key {key}")
-            return
-        old_config = self._snapshot_config()
-        before_state = asdict(self.config)
+            raise ValueError(f"未知配置项：{key}")
+        self.update_from_dict({key: value})
+
+    def _load_github_mirrors(self) -> None:
+        """加载独立的自定义镜像节点文件；损坏文件保留原样，普通设置保存不覆盖它。"""
+        self._github_mirrors_ready = False
         try:
-            current_attr = getattr(self.config, key)
-            if is_dataclass(current_attr) and isinstance(value, dict):
-                self._recursive_update(current_attr, value)
+            if GITHUB_MIRRORS_PATH.exists():
+                payload = json.loads(GITHUB_MIRRORS_PATH.read_text(encoding="utf-8-sig"))
+                if not isinstance(payload, dict):
+                    raise ValueError("GitHub 镜像配置必须是对象")
+                self.config.github_mirrors = normalize_github_mirrors(payload.get("mirrors"), strict=True)
             else:
-                setattr(self.config, key, value)
-            self._normalize_config()
-            self._sync_derived_paths()
-            after_state = asdict(self.config)
-            if after_state == before_state: return
-            old_self_mods_path = before_state.get('self_mods_path', '')
-            old_steamcmd_path = before_state.get('steamcmd_path', '')
-            new_self_mods_path = after_state.get('self_mods_path', '')
-            new_steamcmd_path = after_state.get('steamcmd_path', '')
-            # --- 逻辑触发区 ---
-            # 1. 重新计算衍生路径
-            # 2. 如果 self_mods_path 变了，触发同步
-            if old_self_mods_path != new_self_mods_path:
-                from backend.managers.mgr_files import FileManager
-                FileManager.sync_steamcmd_root_link(
-                    old_mods_path=old_self_mods_path,
-                    move_old_data=self.config.move_old_self_mods
-                )
-            # 3. 如果 steamcmd_path 变了，也触发同步
-            if old_steamcmd_path != new_steamcmd_path:
-                from backend.managers.mgr_files import FileManager
-                FileManager.sync_steamcmd_root_link()
-            self.save()
-        except Exception:
-            self.config = old_config
-            raise
+                write_json_atomic(GITHUB_MIRRORS_PATH, {"mirrors": self.config.github_mirrors}, indent=4, lock=self._save_lock)
+            self._github_mirrors_ready = True
+        except (OSError, ValueError, TypeError) as exc:
+            print(f"GitHub 镜像配置读取失败，保留原文件并使用现有列表: {GITHUB_MIRRORS_PATH}: {exc}")
+        self._github_mirrors_snapshot = deepcopy(self.config.github_mirrors)
+        self._normalize_config()
 
     def save(self):
         """保存当前配置到磁盘"""
         try:
             self._normalize_config()
             self._sync_derived_paths()
+            if hasattr(self, "_github_mirrors_snapshot") and self.config.github_mirrors != self._github_mirrors_snapshot:
+                write_json_atomic(GITHUB_MIRRORS_PATH, {"mirrors": self.config.github_mirrors}, indent=4, lock=self._save_lock)
+                self._github_mirrors_snapshot = deepcopy(self.config.github_mirrors)
+                self._github_mirrors_ready = True
             write_json_atomic(CONFIG_PATH, self.to_storage_dict(), indent=4, lock=self._save_lock)
             # print("Settings saved.")
         except Exception as e:
@@ -836,11 +986,15 @@ class SettingsManager:
 
     def to_storage_dict(self) -> Dict[str, Any]:
         payload = asdict(self.config)
+        if getattr(self, "_github_mirrors_ready", False):
+            payload.pop("github_mirrors", None)
         self._clear_secret_fields(payload, preserve_keys=secret_store.fallback_keys)
         return payload
 
     def to_public_dict(self) -> Dict[str, Any]:
         payload = self.to_storage_dict()
+        payload["github_mirrors"] = deepcopy(self.config.github_mirrors)
+        payload["_github_mirrors_path"] = str(GITHUB_MIRRORS_PATH)
         payload["_secret_status"] = self.get_secret_status()
         if secret_store.fallback_keys:
             payload["_secret_storage_warning"] = "secret_storage_warning"
@@ -860,49 +1014,63 @@ class SettingsManager:
             if isinstance(current, dict):
                 current[path[-1]] = ""
 
-    def update_from_dict(self, data_dict: Dict[str, Any]) -> list[str]:
-        """
-        全量更新，同样需要处理逻辑触发
-        """
-        old_config = self._snapshot_config()
-        before_state = asdict(self.config)
-        try:
-            self.apply_secret_inputs(data_dict, save=False)
-            self._recursive_update(self.config, data_dict)
-            normalization_warnings = self._normalize_config()
-            self._sync_derived_paths()
-            after_state = asdict(self.config)
-            if after_state == before_state:
-                return normalization_warnings
-            old_self_mods_path = before_state.get('self_mods_path', '')
-            old_steamcmd_path = before_state.get('steamcmd_path', '')
-            new_self_mods_path = after_state.get('self_mods_path', '')
-            new_steamcmd_path = after_state.get('steamcmd_path', '')
-            # 检查并同步
-            if old_self_mods_path != new_self_mods_path or \
-               old_steamcmd_path != new_steamcmd_path:
-                from backend.managers.mgr_files import FileManager
-                sync_ok = FileManager.sync_steamcmd_root_link(
-                    old_mods_path=old_self_mods_path,
-                    move_old_data=self.config.move_old_self_mods
-                )
-                if not sync_ok:
-                    normalization_warnings.append("steamcmd_junction_sync_failed")
-            self.save()
-            return normalization_warnings
-        except Exception:
-            self.config = old_config
-            raise
+    def ensure_steamcmd_storage(self, old_mods_path: str = "") -> "LinkSyncResult":
+        from backend.managers.mgr_files import FileManager
 
-    def update_paths(self, paths_dict: Dict[str, str]):
-        """批量更新路径"""
-        changed = False
-        for k, v in paths_dict.items():
-            if hasattr(self.config, k):
-                setattr(self.config, k, v)
-                changed = True
-        if changed:
+        previous_storage_path = self.config.self_mods_path
+        def commit(storage_path: str) -> None:
+            self.config.self_mods_path = storage_path
             self.save()
+
+        result = FileManager.sync_steamcmd_root_link(
+            self.config.self_mods_path, self.config.steamcmd_mods_path,
+            old_mods_path=old_mods_path, move_old_data=bool(old_mods_path and self.config.move_old_self_mods),
+            commit=commit,
+        )
+        if not result.ok:
+            self.config.self_mods_path = previous_storage_path
+        return result
+
+    def update_from_dict(self, data_dict: Dict[str, Any]) -> list[str]:
+        """路径变更验证成功后保存；下载进行中拒绝切换，失败保留旧配置和旧目录。"""
+        from backend.managers.mgr_files import FileManager
+
+        with self._update_lock:
+            path_update = any(key in data_dict and data_dict[key] != getattr(self.config, key)
+                              for key in ("self_mods_path", "steamcmd_path"))
+            if path_update and not FileManager.storage_lock.acquire(blocking=False):
+                raise RuntimeError("模组目录正在被使用，请等待下载或链接同步完成后再修改路径。")
+            old_config = None
+            try:
+                old_config = self._snapshot_config()
+                before_state = asdict(self.config)
+                if "github_mirrors" in data_dict:
+                    normalize_github_mirrors(data_dict["github_mirrors"], strict=True)
+                self.apply_secret_inputs(data_dict, save=False)
+                self._recursive_update(self.config, data_dict)
+                warnings = self._normalize_config()
+                if "github_mirrors" in data_dict and not self.config.github_mirrors and self.config.github_mirror_id.startswith("custom:"):
+                    self.config.github_mirror_id = "direct"
+                self._sync_derived_paths()
+                after_state = asdict(self.config)
+                if after_state == before_state:
+                    return warnings
+                if any(before_state.get(key) != after_state.get(key) for key in ("self_mods_path", "steamcmd_path")):
+                    result = self.ensure_steamcmd_storage(str(before_state.get("self_mods_path") or ""))
+                    if not result.ok:
+                        raise RuntimeError(result.message)
+                    if result.message:
+                        warnings.append(result.message)
+                else:
+                    self.save()
+                return warnings
+            except Exception:
+                if old_config is not None:
+                    self.config = old_config
+                raise
+            finally:
+                if path_update:
+                    FileManager.storage_lock.release()
 
 # 全局单例实例
 settings = SettingsManager()

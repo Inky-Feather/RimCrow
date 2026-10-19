@@ -81,13 +81,10 @@ class WorkshopPageRenderer:
 
         parsed = urlparse(normalized_url)
         workshop_id = self.extract_workshop_id(normalized_url)
-        proxy_url = network_mgr.get_proxy_url()
         request_kwargs = {
             "timeout": REMOTE_FETCH_TIMEOUT_SECONDS,
             "headers": merge_headers(user_agent=REMOTE_USER_AGENT),
         }
-        if proxy_url:
-            request_kwargs["proxies"] = {"http": proxy_url, "https": proxy_url}
 
         try:
             with build_retry_session(total=2, connect=2, read=2, status_forcelist=(500, 502, 503, 504), allowed_methods=("GET", "HEAD")) as session:
@@ -95,6 +92,7 @@ class WorkshopPageRenderer:
                 response.raise_for_status()
         except Exception as exc:
             status_code = int(getattr(getattr(exc, "response", None), "status_code", 0) or 0)
+            proxy_url = network_mgr.get_proxy_url()
             proxy_context = {
                 "app_proxy_enabled": bool(proxy_url),
                 "env_proxy_available": any(bool(os.environ.get(key)) for key in PROXY_ENV_KEYS),

@@ -1,5 +1,5 @@
 # backend/_version.py
-__version__ = "0.24.12"  # 主版本.次版本.补丁
+__version__ = "0.24.19"  # 主版本.次版本.补丁
 __db_version__ = "5"
 __build__ = "dev"  # dev, alpha, beta, stable, release
 
@@ -8,8 +8,59 @@ __build__ = "dev"  # dev, alpha, beta, stable, release
 # type 支持: "feature" (新增), "fix" (修复), "optimize" (优化), "breaking" (重大变更)
 APP_CHANGELOG = [
     {
+        "version": "0.24.19",
+        "date": "2026-10-19",
+        "entries": [
+            {
+                "title": "更新来源优化与交互增强",
+                "changes": [
+                { "type": "feature", "text": "优化多更新源并发检查与状态追踪的处理逻辑" },
+                { "type": "feature", "text": "模组预览图支持更多图片格式并支持忽略扩展名大小写识别" },
+                { "type": "feature", "text": "模组设置新增“存在重复状态”筛选项，便于快速定位多文件配置冲突" },
+                { "type": "feature", "text": "模组列表新增按原名排序功能，默认名称排序调整为优先采用自定义别名" }
+                ]
+            },
+            {
+                "title": "模组启动校验与存储稳定性保障",
+                "changes": [
+                { "type": "feature", "text": "强化启动前模组扫描与链接校验，同步异常时及时告警并阻止游戏启动以保护游戏环境" },
+                { "type": "optimize", "text": "重构模组存储迁移机制，引入事务级链接同步与自动回滚支持" },
+                { "type": "fix", "text": "修复多任务并发执行（如环境切换、后台下载与配置修改）时的运行时状态竞争问题" }
+                ]
+            },
+            {
+                "title": "模组诊断与 Steam 创意工坊支持优化",
+                "changes": [
+                { "type": "feature", "text": "增强物理禁用模组的依赖异常诊断及快捷解禁处理能力" },
+                { "type": "feature", "text": "新增 SteamCMD 下载节点与安装包网络连通性检测" },
+                { "type": "optimize", "text": "冲突项弹窗引入虚拟滚动机制并完善提交过程中的交互防重锁定" },
+                { "type": "optimize", "text": "重构创意工坊配置安全写入与对账逻辑，提升模组识别准确性" }
+                ]
+            },
+            {
+                "title": "网络连通性与多通道更新服务升级",
+                "changes": [
+                { "type": "feature", "text": "支持动态 Hosts 自动安全写入与提权运行，中文环境默认开启动态加速" },
+                { "type": "feature", "text": "支持多更新源（Gitee/SourceForge 等）配置，并在关于页面直观展示渠道" },
+                { "type": "feature", "text": "新增动态镜像节点池管理、SOCKS 代理支持及多候选源故障自动回退下载" },
+                { "type": "feature", "text": "网络错误弹窗支持一键直达设置面板，并提供网络优化工具推荐" },
+                { "type": "optimize", "text": "网络配置写入与缓存刷新改为后台异步处理，消除界面卡顿" },
+                { "type": "optimize", "text": "优化网盘链接解析稳定性并微调基础组件样式" }
+                ]
+            },
+            {
+                "title": "列表拖拽与界面交互性能优化",
+                "changes": [
+                { "type": "fix", "text": "修复因外部文件拖入判定影响导致的模组列表操作卡顿问题" },
+                { "type": "optimize", "text": "重构模组列表、分组列表及依赖图的拖拽渲染与事件同步机制，大幅提升排序与批量选择的流畅度" },
+                { "type": "optimize", "text": "优化通用页面布局层级与部分视觉样式细节" }
+                ]
+            }
+        ]
+    },
+    {
         "version": "0.24.12",
-        "date": "2026-07-26",
+        "date": "2026-10-15",
         "entries": [
             {
                 "title": "数据管理、备份恢复与GitHub集成增强",

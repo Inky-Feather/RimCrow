@@ -1,0 +1,21 @@
+## What's Changed
+* release: v0.24.12 by @Inky-Feather in https://github.com/Inky-Feather/RimCrow/pull/27
+## 版本更新说明
+本次更新紧急修复了 Rimworld 1.7 的日志路径及运行程序名称变动的支持问题，修复了部分其它问题，优化了一些操作和提示，暂时没有新增功能。（因为种种原因吧，一直卡在本地模组检测更新功能部分，推倒重来好几回，所以鸽了好久还没弄好。）
+
+### 一、功能新增
+无
+
+### 二、体验与性能优化
+1. 数据管理：数据管理设立单独设置页面，新增导入数据前自动备份数据功能，允许恢复导入前状态。
+2. Git模组管理：优化前端交互方式，修复部分解析问题，支持了源码分支选择和打包文件版本选择功能。
+3. 增加 Rimworld 1.7 版本的可执行文件与日志路径支持。
+
+### 三、问题修复
+1. 网络代理配置修复，支持 SOCKS。
+2. 修复其它体验小问题。
+
+### 四、感谢
+@hogtinbao 、@1579486875 感谢二位支持与贡献 https://github.com/Inky-Feather/RimCrow/pull/26 ，https://github.com/Inky-Feather/RimCrow/pull/25 
+
+**Full Changelog**: https://github.com/Inky-Feather/RimCrow/compare/v0.24.7...v0.24.12

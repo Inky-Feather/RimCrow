@@ -10,8 +10,8 @@
   -->
   <div
     class="relative"
-    @dragover.prevent="handleDragOver"
-    @drop.prevent="handleDrop"
+    @dragover="handleDragOver"
+    @drop="handleDrop"
     @dragleave="handleDragLeave"
   >
     <div :class="wrapClass">
@@ -31,7 +31,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -47,12 +47,6 @@ const isDropActive = ref(false)
 const items = computed(() => Array.isArray(props.modelValue) ? props.modelValue : [])
 
 const getRowKey = (record, index) => record?.[props.dataKey] ?? record?.id ?? index
-const normalizeGroupName = (group) => {
-  // group 兼容字符串和 SortableJS 风格对象，便于小列表和虚拟列表共享同一套拖拽会话。
-  if (!group) return ''
-  if (typeof group === 'string') return group
-  return String(group.name || '')
-}
 const canPutFrom = (sourceGroup) => {
   // 只判断“来源组是否允许投放”，具体去重、批量导入等业务规则交给父组件处理。
   // 这里刻意不读取目标列表内容，避免 SimpleDropList 变成规则编辑器的业务组件。
@@ -64,11 +58,15 @@ const canPutFrom = (sourceGroup) => {
   return String(put) === sourceGroup
 }
 
-const handleDragOver = () => {
+const handleDragOver = (event) => {
   // VirtualDragList 在 dragstart 时写入 window.__VIRTUAL_DRAG_SESSION__；
   // 小型 drop zone 只读取这份会话，避免每个小组件都实现一套拖拽协议。
   const session = window.__VIRTUAL_DRAG_SESSION__
   isDropActive.value = !!session && canPutFrom(session.sourceGroup)
+  if (isDropActive.value) {
+    event.preventDefault()
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+  }
 }
 const handleDragLeave = (event) => {
   // dragleave 会在子元素之间移动时频繁触发，只在真正离开整个 drop zone 时关闭高亮。
@@ -79,20 +77,13 @@ const handleDragLeave = (event) => {
 const handleDrop = (event) => {
   const session = window.__VIRTUAL_DRAG_SESSION__
   isDropActive.value = false
+  event.preventDefault()
+  if (session) event.stopPropagation()
   if (!session || !canPutFrom(session.sourceGroup)) return
-  const item = session.item
-  // 这里永远投放到末尾；规则列表不承担排序职责，父组件只需要知道“拖入了哪些模组”。
-  emit('drop', {
-    item,
-    key: item?.[props.dataKey] ?? item?.id,
-    newIndex: items.value.length,
-    list: [...items.value, item],
-    event: {
-      ...event,
-      from: session.sourceEl || null,
-      to: event.currentTarget,
-      target: event.currentTarget,
-    },
-  })
+  session.end()
+  emit('drop', { item: session.item, index: items.value.length, sameList: false })
 }
+const resetDrop = () => { isDropActive.value = false }
+onMounted(() => window.addEventListener('dragend', resetDrop))
+onBeforeUnmount(() => window.removeEventListener('dragend', resetDrop))
 </script>

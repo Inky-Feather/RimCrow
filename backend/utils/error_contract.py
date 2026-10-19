@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import errno
 import re
+import ssl
 import traceback
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
@@ -23,6 +24,11 @@ class AppError:
 
 
 ErrorEnvelope = AppError
+
+
+class InvalidResponseError(RuntimeError):
+    """远端内容未通过格式或完整性校验。"""
+
 
 _ERROR_DETAIL_KEYS = ("traceback", "exception_type", "exception_module")
 
@@ -168,7 +174,10 @@ def _infer_domain(module: str = "", action: str = "", context: Mapping[str, Any]
 
 
 def _classify_http_status(status_code: int | None, domain: str = "", text: str = "") -> tuple[str, str, str, str]:
+    """集中定义 HTTP 状态说明，AI、Git 和 Steam 只保留有业务含义的差异。"""
     lowered = str(text or "").lower()
+    if status_code and 300 <= status_code < 400:
+        return "NETWORK", "NETWORK.REDIRECT", "errors.network.redirect", tr("errors.network.redirect", "服务要求跳转到其他地址。若一直停留在此状态，请检查链接或更换代理、镜像后重试。")
     if status_code == 400:
         if domain == "ai":
             return _error_type_from_code("AI.REQUEST_INVALID"), "AI.REQUEST_INVALID", "errors.ai.request_invalid", tr("errors.ai.request_invalid", "AI 请求参数无效。请检查模型名称、Base URL、接口模式和高级参数。")
@@ -186,6 +195,8 @@ def _classify_http_status(status_code: int | None, domain: str = "", text: str =
             return _error_type_from_code("AI.ACCESS_DENIED"), "AI.ACCESS_DENIED", "errors.ai.access_denied", tr("errors.ai.access_denied", "AI 服务拒绝访问。请检查账号权限、模型权限、额度和地区限制。")
         if domain == "git":
             return _error_type_from_code("GIT.ACCESS_DENIED"), "GIT.ACCESS_DENIED", "errors.git.access_denied", tr("errors.git.access_denied", "仓库资源没有访问权限。请检查登录状态、账号权限或仓库可见性。")
+        if domain == "steam":
+            return "NETWORK", "NETWORK.ACCESS_DENIED", "errors.network.steam_access_denied", tr("errors.network.steam_access_denied", "Steam 拒绝了请求。使用 Web API 时请检查 API Key 和访问权限，也可切换网络或代理后重试。")
         return _error_type_from_code("NETWORK.ACCESS_DENIED"), "NETWORK.ACCESS_DENIED", "errors.network.access_denied", tr("errors.network.access_denied", "目标服务拒绝了请求。请检查登录状态、访问权限或请求配置。")
     if status_code == 404:
         if domain == "ai":
@@ -209,6 +220,8 @@ def _classify_http_status(status_code: int | None, domain: str = "", text: str =
         if domain == "git":
             return _error_type_from_code("GIT.SERVICE_UNAVAILABLE"), "GIT.SERVICE_UNAVAILABLE", "errors.git.service_unavailable", tr("errors.git.service_unavailable", "仓库服务暂时不可用。请稍后重试，或检查目标站点状态。")
         return _error_type_from_code("NETWORK.SERVICE_UNAVAILABLE"), "NETWORK.SERVICE_UNAVAILABLE", "errors.network.service_unavailable", tr("errors.network.service_unavailable", "目标服务暂时不可用。请稍后重试，或检查服务状态。")
+    if status_code and 400 <= status_code < 500:
+        return "NETWORK", "NETWORK.REQUEST_FAILED", "errors.network.request_failed", tr("errors.network.request_failed", "服务未能接受此请求。请检查链接、输入内容和配置，或更新软件后重试。")
     return "", "", "", ""
 
 
@@ -223,7 +236,7 @@ def _classify_ai_error_text(text: str = "") -> tuple[str, str, str, str]:
     if ("choices" in lowered and ("empty" in lowered or "missing" in lowered)) or "non openai chat completions" in lowered:
         return _error_type_from_code("AI.RESPONSE_FORMAT"), "AI.RESPONSE_FORMAT", "errors.ai.response_format", tr("errors.ai.response_format", "AI 服务返回格式不兼容。请确认 Base URL、接口模式和模型协议是否匹配。")
     if "insufficient_quota" in lowered or "quota" in lowered:
-        return _error_type_from_code("AI.RATE_LIMIT"), "AI.RATE_LIMIT", "errors.ai.rate_limited", tr("errors.ai.rate_limited", "AI 请求过多或额度不足。请稍后重试，或检查账号额度与限速设置。")
+        return _classify_http_status(429, "ai")
     return "", "", "", ""
 
 
@@ -268,9 +281,9 @@ def classify_exception(exc: BaseException, *, module: str = "", action: str = ""
         requests = None  # type: ignore[assignment]
 
     try:
-        from openai import AuthenticationError, APIConnectionError, RateLimitError, BadRequestError
+        from openai import AuthenticationError, APIConnectionError, APITimeoutError, RateLimitError, BadRequestError
     except Exception:  # pragma: no cover - optional dependency guard
-        AuthenticationError = APIConnectionError = RateLimitError = BadRequestError = ()  # type: ignore[assignment]
+        AuthenticationError = APIConnectionError = APITimeoutError = RateLimitError = BadRequestError = ()  # type: ignore[assignment]
 
     for current in _iter_exception_chain(exc):
         current_text = _exception_text(current)
@@ -291,13 +304,13 @@ def classify_exception(exc: BaseException, *, module: str = "", action: str = ""
             error_type, error_code, message_key, user_message = _classify_http_status(_exception_status_code(current) or 401, "ai", current_text)
             break
         if isinstance(current, RateLimitError):
-            error_type, error_code, message_key, user_message = _error_type_from_code("AI.RATE_LIMIT"), "AI.RATE_LIMIT", "errors.ai.rate_limited", tr("errors.ai.rate_limited", "AI 请求过多或额度不足。请稍后重试，或检查账号额度与限速设置。")
+            error_type, error_code, message_key, user_message = _classify_http_status(429, "ai", current_text)
             break
-        if isinstance(current, APIConnectionError):
-            error_type, error_code, message_key, user_message = _error_type_from_code("NETWORK.CONNECTION"), "NETWORK.CONNECTION", "errors.network.connection_failed", tr("errors.network.connection_failed", "无法连接到目标服务。请检查网络连接、代理设置或服务状态。")
+        if isinstance(current, (TimeoutError,)) or isinstance(current, APITimeoutError) or (requests and isinstance(current, requests.Timeout)) or (httpx and isinstance(current, httpx.TimeoutException)):
+            error_type, error_code, message_key, user_message = _classify_http_status(408)
             break
-        if isinstance(current, (TimeoutError,)) or (requests and isinstance(current, requests.Timeout)) or (httpx and isinstance(current, httpx.TimeoutException)):
-            error_type, error_code, message_key, user_message = _error_type_from_code("NETWORK.TIMEOUT"), "NETWORK.TIMEOUT", "errors.network.timeout", tr("errors.network.timeout", "网络请求超时。请检查网络连接、代理设置或稍后重试。")
+        if isinstance(current, ssl.SSLError) or (requests and isinstance(current, requests.exceptions.SSLError)):
+            error_type, error_code, message_key, user_message = "NETWORK", "NETWORK.TLS", "errors.network.tls_failed", tr("errors.network.tls_failed", "无法验证安全连接或建立加密连接。请检查系统时间、证书和代理设置，不要关闭证书验证。")
             break
         if isinstance(current, PermissionError) or (isinstance(current, OSError) and getattr(current, "errno", None) in {errno.EACCES, errno.EPERM}):
             error_type, error_code, message_key, user_message = _error_type_from_code("SYSTEM.PERMISSION"), "SYSTEM.PERMISSION", "errors.system.permission_denied", tr("errors.system.permission_denied", "文件或目录权限不足。请关闭占用程序，或检查目标路径权限后重试。")
@@ -305,28 +318,31 @@ def classify_exception(exc: BaseException, *, module: str = "", action: str = ""
         if class_name in {"ProxyError"}:
             error_type, error_code, message_key, user_message = _error_type_from_code("NETWORK.PROXY"), "NETWORK.PROXY", "errors.network.proxy_failed", tr("errors.network.proxy_failed", "代理连接失败。请检查代理地址、端口、账号密码，或临时关闭代理后重试。")
             break
-        if isinstance(current, (ConnectionError,)) or (requests and isinstance(current, requests.ConnectionError)) or (httpx and isinstance(current, httpx.NetworkError)):
+        if isinstance(current, InvalidResponseError) or (requests and isinstance(current, (requests.exceptions.ChunkedEncodingError, requests.exceptions.ContentDecodingError))):
+            error_type, error_code, message_key, user_message = "NETWORK", "NETWORK.INVALID_RESPONSE", "errors.network.invalid_response", tr("errors.network.invalid_response", "服务器返回的内容不完整或格式错误。请重试，或更换下载来源、镜像后重试。")
+            break
+        if isinstance(current, (ConnectionError,)) or isinstance(current, APIConnectionError) or (requests and isinstance(current, requests.ConnectionError)) or (httpx and isinstance(current, httpx.NetworkError)):
             error_type, error_code, message_key, user_message = _error_type_from_code("NETWORK.CONNECTION"), "NETWORK.CONNECTION", "errors.network.connection_failed", tr("errors.network.connection_failed", "无法连接到目标服务。请检查网络连接、代理设置或服务状态。")
             break
         if isinstance(current, BadRequestError):
-            error_type, error_code, message_key, user_message = _error_type_from_code("AI.REQUEST_INVALID"), "AI.REQUEST_INVALID", "errors.ai.request_invalid", tr("errors.ai.request_invalid", "AI 请求参数无效。请检查模型名称、Base URL、接口模式和高级参数。")
+            error_type, error_code, message_key, user_message = _classify_http_status(400, "ai", current_text)
             break
         if isinstance(current, ValueError) and current_domain == "ai":
-            error_type, error_code, message_key, user_message = _error_type_from_code("AI.REQUEST_INVALID"), "AI.REQUEST_INVALID", "errors.ai.request_invalid", tr("errors.ai.request_invalid", "AI 请求参数无效。请检查模型名称、Base URL、接口模式和高级参数。")
+            error_type, error_code, message_key, user_message = _classify_http_status(400, "ai", current_text)
             break
         if isinstance(current, ValueError):
             error_type, error_code, message_key, user_message = _error_type_from_code("SYSTEM.INVALID_INPUT"), "SYSTEM.INVALID_INPUT", "errors.system.invalid_input", tr("errors.system.invalid_input", "请求参数无效。请检查配置、输入内容或接口兼容性。")
             break
 
         if class_name in {"GithubRateLimitError"}:
-            error_type, error_code, message_key, user_message = _error_type_from_code("GIT.RATE_LIMIT"), "GIT.RATE_LIMIT", "errors.git.rate_limited", tr("errors.git.rate_limited", "Git 资源请求过多。请稍后重试，或检查访问频率限制。")
+            error_type, error_code, message_key, user_message = _classify_http_status(429, "git")
             break
         if class_name in {"GithubApiError"}:
             lowered = current_text.lower()
             if "限流" in current_text or "rate limit" in lowered:
-                error_type, error_code, message_key, user_message = _error_type_from_code("GIT.RATE_LIMIT"), "GIT.RATE_LIMIT", "errors.git.rate_limited", tr("errors.git.rate_limited", "Git 资源请求过多。请稍后重试，或检查访问频率限制。")
+                error_type, error_code, message_key, user_message = _classify_http_status(429, "git")
             elif "不存在" in current_text or "404" in current_text:
-                error_type, error_code, message_key, user_message = _error_type_from_code("GIT.NOT_FOUND"), "GIT.NOT_FOUND", "errors.git.not_found", tr("errors.git.not_found", "仓库资源不存在、分支不存在或下载地址已失效。请检查链接、分支和访问权限。")
+                error_type, error_code, message_key, user_message = _classify_http_status(404, "git")
             else:
                 error_type, error_code, message_key, user_message = _error_type_from_code("GIT.REQUEST_FAILED"), "GIT.REQUEST_FAILED", "errors.git.request_failed", tr("errors.git.request_failed", "Git 资源请求失败。请检查仓库地址、网络连接和访问权限。")
             break

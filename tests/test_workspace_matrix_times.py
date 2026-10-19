@@ -86,7 +86,11 @@ class TestWorkspaceMatrixTimes(unittest.TestCase):
             local_folder="_GH_TestRepo",
         )
         api = self._api()
-        api.github_mgr = SimpleNamespace(detect_repo_provider=Mock(return_value=("github", "github.com")), record_timeline=Mock())
+        api.github_mgr = SimpleNamespace(
+            detect_repo_provider=Mock(return_value=("github", "github.com")),
+            subscription_status=Mock(return_value="current"),
+            record_timeline=Mock(),
+        )
         api._schedule_github_subs_refresh = Mock(return_value=False)
 
         res = API.github_get_subscribed(api)

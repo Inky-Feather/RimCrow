@@ -8,13 +8,17 @@ import time
 import zipfile
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import unquote, urlparse
+
+import requests
 
 from backend.settings import settings
 from backend.managers.mgr_github import GithubManager
 from backend.managers.mgr_network import build_retry_session, merge_headers
 from backend.utils.logger import logger
+from backend.utils.tools import validate_zip_archive
+from backend.utils.json_io import read_json_dataset
 
 
 MULTIPLAYER_PACKAGE_ID = "rwmt.multiplayer"
@@ -47,8 +51,7 @@ class MultiplayerCompatibilityManager:
         if not path.exists() or not path.is_file():
             return None
         try:
-            with path.open("r", encoding="utf-8-sig") as handle:
-                return json.load(handle)
+            return read_json_dataset(path)
         except Exception as exc:
             logger.warning("读取 Multiplayer 兼容数据失败: path=%s error=%s", path, exc, exc_info=True)
             return None
@@ -57,10 +60,17 @@ class MultiplayerCompatibilityManager:
         target = Path(str(path_text or settings.config.multiplayer_compatibility_path or "").strip())
         if not str(target):
             raise ValueError("Multiplayer 兼容表路径未配置")
-        with target.open("r", encoding="utf-8-sig") as handle:
-            payload = json.load(handle)
+        payload = self.prepare_official_compatibility(target)
         # 下载源通常是压缩 JSON；保存为稳定缩进，便于人工检查和后续差异比较。
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    @staticmethod
+    def prepare_official_compatibility(path: Path) -> Any:
+        payload = read_json_dataset(path)
+        records = payload.get("mods") if isinstance(payload, dict) else payload
+        if not isinstance(records, list) or any(not isinstance(record, dict) for record in records):
+            raise ValueError("Multiplayer 兼容表必须包含记录数组")
+        return payload
 
     def _load_official_records(self) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
         payload = self._read_json_file(settings.config.multiplayer_compatibility_path)
@@ -153,10 +163,12 @@ class MultiplayerCompatibilityManager:
         }
 
     @classmethod
-    def extract_mp_compat_package_ids_from_archive(cls, archive_bytes: bytes) -> set[str]:
+    def extract_mp_compat_package_ids_from_archive(cls, archive_bytes: bytes | Path, *, cancel_check: Callable[[], None] | None = None) -> set[str]:
         package_ids: set[str] = set()
-        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+        with zipfile.ZipFile(io.BytesIO(archive_bytes) if isinstance(archive_bytes, bytes) else archive_bytes) as archive:
             for name in archive.namelist():
+                if cancel_check:
+                    cancel_check()
                 normalized_name = name.replace("\\", "/")
                 if not normalized_name.lower().endswith(".cs"):
                     continue
@@ -168,6 +180,28 @@ class MultiplayerCompatibilityManager:
                     source = archive.read(name).decode("utf-8", errors="ignore")
                 package_ids.update(cls.extract_mp_compat_package_ids_from_source(source))
         return package_ids
+
+    def prepare_mp_compat_cache(self, archive_path: Path, source_url: str,
+                                *, cancel_check: Callable[[], None] | None = None) -> dict[str, Any]:
+        """从已下载的暂存 ZIP 生成缓存，不在校验或提交阶段额外发起网络请求。"""
+        if cancel_check:
+            cancel_check()
+        validate_zip_archive(archive_path)
+        package_ids = self.extract_mp_compat_package_ids_from_archive(archive_path, cancel_check=cancel_check)
+        if not package_ids:
+            raise ValueError("未能从 MP Compat 源码中解析到适配包名")
+        digest = hashlib.sha256()
+        with archive_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                if cancel_check:
+                    cancel_check()
+                digest.update(chunk)
+        with zipfile.ZipFile(archive_path) as archive:
+            # GitHub 源码 ZIP 的注释携带提交 SHA；没有该证据时不把 ZIP 摘要当提交 ID。
+            commit_sha = archive.comment.decode("ascii", errors="ignore").strip()
+        marker = {"source_id": commit_sha, "source_id_type": "github_commit"} if re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha) else {}
+        return {"package_ids": sorted(package_ids), "source": {"url": source_url, "signature": digest.hexdigest(),
+                **marker, "generated_at": int(time.time() * 1000)}}
 
     @classmethod
     def extract_mp_compat_package_ids_from_source(cls, source: str) -> set[str]:
@@ -250,10 +284,32 @@ class MultiplayerCompatibilityManager:
 
     @staticmethod
     def _download_source_archive(url: str) -> tuple[bytes, dict[str, Any], str]:
+        parsed = urlparse(str(url or "").strip())
+        is_github_archive = (parsed.hostname or "").lower() in {"github.com", "www.github.com", "codeload.github.com"}
+        candidates = GithubManager._github_download_candidates(url, "archive") if is_github_archive else [url]
+        last_error: Exception | None = None
         with build_retry_session() as session:
-            with session.get(url, timeout=(15, 120), headers=merge_headers({"Accept-Encoding": "identity"}), allow_redirects=True) as response:
-                response.raise_for_status()
-                return response.content, dict(response.headers), str(response.url or url)
+            for candidate in candidates:
+                response = None
+                try:
+                    response = session.get(candidate, timeout=(15, 120), headers=merge_headers({"Accept-Encoding": "identity"}), allow_redirects=True)
+                    response.raise_for_status()
+                    content = response.content
+                    # 镜像可能返回 HTML 登录页但仍是 200；先校验 ZIP，才能继续尝试直链。
+                    validate_zip_archive(io.BytesIO(content))
+                    if candidate != url:
+                        GithubManager.record_mirror_result(candidate, success=True, capability="archive")
+                    return content, dict(response.headers), str(response.url or candidate)
+                except (requests.RequestException, ValueError, zipfile.BadZipFile) as exc:
+                    last_error = exc
+                    if candidate != url:
+                        GithubManager.record_mirror_result(candidate, success=False, capability="archive")
+                finally:
+                    if response is not None:
+                        response.close()
+        if last_error:
+            raise last_error
+        raise ValueError("源码压缩包没有可用的下载地址")
 
     @staticmethod
     def _parse_http_datetime_to_ms(value: Any) -> int:

@@ -2,8 +2,8 @@
   <div
     ref="scrollRef"
     class="overflow-auto"
-    @dragover.prevent="handleDragOver"
-    @drop.prevent="handleDrop"
+    @dragover="handleDragOver"
+    @drop="handleDrop"
     @dragleave="handleDragLeave"
   >
     <!-- TanStack Virtual 只渲染视口附近的行。 外层占位高度必须等于虚拟总高度，内部每个可见行再用 translateY 放到真实位置。 -->
@@ -15,7 +15,6 @@
           @pointerup.capture="clearDragArm"
           @pointercancel.capture="clearDragArm"
           @dragstart="event => handleDragStart(event, virtualRow.index)"
-          @dragend="handleDragEnd"
         >
           <!-- 插槽只负责渲染行内容；拖拽、滚动、落点换算都在本组件统一处理。 业务组件需要把真正可拖拽的实体标为 .select-trigger 或 .drag-handle。 -->
           <slot name="item" :record="items[virtualRow.index]" :index="virtualRow.index"
@@ -33,7 +32,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { cancelLongPressFeedback, completeLongPressFeedback, showLongPressFeedback } from '../../directives/vLongPressFeedback'
 import { t } from '../../i18n.js'
@@ -44,7 +43,6 @@ const props = defineProps({
   size: { type: Number, default: 34 },
   keeps: { type: Number, default: 50 },
   wrapClass: { type: [String, Array, Object], default: '' },
-  sortable: { type: Boolean, default: true },
   draggable: { type: Boolean, default: true },
   droppable: { type: Boolean, default: true },
   disabled: { type: Boolean, default: false },
@@ -56,14 +54,13 @@ const props = defineProps({
   delay: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['drag', 'drop', 'dragend', 'update:modelValue'])
+const emit = defineEmits(['drag', 'drop', 'dragend'])
 
 const scrollRef = ref(null)
 const dropIndex = ref(-1)
-const forbiddenDropActive = ref(false)
 const listId = `vdl-${Math.random().toString(36).slice(2)}`
-const autoScrollVelocity = ref(0)
-let autoScrollFrame = 0
+let dragFrame = 0
+let dragClientY = null
 const dragArmedIndex = ref(-1)
 let dragArmTimer = 0
 let armedTriggerEl = null
@@ -72,14 +69,16 @@ let dragPointerOffset = { x: 12, y: 12 }
 const items = computed(() => Array.isArray(props.modelValue) ? props.modelValue : [])
 const rowSize = computed(() => Number(props.size) || 34)
 const canDrag = computed(() => !!props.draggable && !props.disabled)
-const rowSizes = computed(() => {
+const rowSizes = computed((previous) => {
   // 把每行高度集中缓存成简单数字数组。
   // TanStack Virtual 在滚动过程中会频繁询问 estimateSize；这里避免每次都重新访问 row 对象和响应式 props。
   const fallback = rowSize.value
-  return items.value.map(item => {
+  const sizes = items.value.map(item => {
     const itemSize = Number(item?.rowSize)
     return itemSize > 0 ? itemSize : fallback
   })
+  // 等高行换序不改变尺寸，保留缓存，避免重新测量整份列表。
+  return previous?.length === sizes.length && sizes.every((size, index) => size === previous[index]) ? previous : sizes
 })
 const getItemSize = (index) => {
   // 默认列表是固定行高；分组列表会给“分组标题行”单独传 rowSize，用于制造分组间距。
@@ -159,19 +158,12 @@ const scrollToKey = async (key, options = {}) => {
   await nextTick()
   scrollToIndex(index, options)
 }
-const refresh = async () => {
-  await nextTick()
-  // 给父组件一个明确刷新入口，替代通过切换排序/重建组件来“逼迫”虚拟列表更新。
-  // TanStack Virtual 的尺寸缓存只需要 measure，不应该牵动业务排序状态。
-  virtualizer.value.measure()
-}
-
 defineExpose({
   getOffset,
   scrollToOffset,
   scrollToIndex,
   scrollToKey,
-  refresh,
+  cancelDrag: () => handleDragEnd(),
   $el: scrollRef,
 })
 
@@ -201,23 +193,11 @@ const canPutSessionAt = (session, index) => {
   return true
 }
 
-const buildDragEvent = (event, item, newIndex, list, meta = {}) => ({
-  item,
-  key: item?.[props.dataKey] ?? item?.id,
-  // newIndex 是“本组件已经处理同列表源行移除后”的实际插入点，父组件应优先使用它写回数据。
-  newIndex,
-  // visualIndex 是鼠标所在位置对应的原始视觉落点，用于分组标题这类仍需要按原始 row 流找目标标题的场景。
-  visualIndex: meta.visualIndex ?? newIndex,
-  sourceIndex: meta.sourceIndex ?? window.__VIRTUAL_DRAG_SESSION__?.sourceIndex ?? -1,
-  sameList: !!meta.sameList,
-  list,
-  dragSession: window.__VIRTUAL_DRAG_SESSION__ || null,
-  event: {
-    ...event,
-    from: window.__VIRTUAL_DRAG_SESSION__?.sourceEl || null,
-    to: scrollRef.value,
-    target: scrollRef.value,
-  },
+const buildDragEvent = (index) => ({
+  item: window.__VIRTUAL_DRAG_SESSION__.item,
+  // index 始终是源项尚未移除时的视觉插入点，业务层只换算一次。
+  index,
+  sameList: window.__VIRTUAL_DRAG_SESSION__.sourceListId === listId,
 })
 
 const createDragPreview = (event, item, sourceEl, pointerOffset = null) => {
@@ -234,7 +214,6 @@ const createDragPreview = (event, item, sourceEl, pointerOffset = null) => {
     'position:fixed',
     'top:-1000px',
     'left:-1000px',
-    'z-index:99999',
     `width:${Math.max(160, Math.min(rect?.width || 260, 420))}px`,
     `height:${Math.max(rect?.height || 34, 24)}px`,
     'pointer-events:none',
@@ -388,24 +367,20 @@ const handleDragStart = (event, index) => {
   const sessionItem = { ...item, ...dragMeta }
   window.__VIRTUAL_DRAG_SESSION__ = {
     item: sessionItem,
-    sourceIndex: index,
     sourceListId: listId,
-    sourceEl: scrollRef.value,
-    triggerEl,
     sourceGroup: sessionItem?.dragGroup || normalizeGroupName(props.group),
-    dataKey: props.dataKey,
+    end: handleDragEnd,
   }
   event.dataTransfer.effectAllowed = 'copyMove'
   event.dataTransfer.setData('text/plain', String(sessionItem?.[props.dataKey] ?? sessionItem?.id ?? ''))
   createDragPreview(event, sessionItem, triggerEl, dragPointerOffset)
-  emit('drag', buildDragEvent(event, sessionItem, index, items.value))
+  emit('drag', buildDragEvent(index))
 }
 
-const resolveDropIndex = (event) => {
+const resolveDropIndex = (clientY, rect) => {
   const el = scrollRef.value
   if (!el) return items.value.length
-  const rect = el.getBoundingClientRect()
-  const offsetY = event.clientY - rect.top + el.scrollTop
+  const offsetY = clientY - rect.top + el.scrollTop
   if (offsetY <= 0) return 0
   const offsets = rowOffsets.value
   const itemCount = items.value.length
@@ -424,122 +399,89 @@ const resolveDropIndex = (event) => {
   return low
 }
 
-const stopAutoScroll = () => {
-  autoScrollVelocity.value = 0
-  if (autoScrollFrame) {
-    cancelAnimationFrame(autoScrollFrame)
-    autoScrollFrame = 0
-  }
+const stopDragTracking = () => {
+  if (dragFrame) cancelAnimationFrame(dragFrame)
+  dragFrame = 0
+  dragClientY = null
+  dropIndex.value = -1
 }
 
-const runAutoScroll = () => {
+const runDragFrame = () => {
+  dragFrame = 0
   const el = scrollRef.value
-  if (!el || autoScrollVelocity.value === 0) {
-    stopAutoScroll()
+  const session = window.__VIRTUAL_DRAG_SESSION__
+  if (!el || dragClientY === null || !session || !canPutFrom(session.sourceGroup)) {
+    stopDragTracking()
     return
   }
-  el.scrollTop += autoScrollVelocity.value
-  autoScrollFrame = requestAnimationFrame(runAutoScroll)
-}
-
-const updateAutoScroll = (event) => {
-  const el = scrollRef.value
-  if (!el) return
+  // 落点与边缘滚动共用一次布局读取；滚动后立即更新指示线。
   const rect = el.getBoundingClientRect()
   const threshold = Math.min(72, Math.max(28, rect.height / 4))
   let velocity = 0
-  // 越靠近上下边缘滚动越快，避免长列表拖拽时必须先放手再滚动。
-  if (event.clientY < rect.top + threshold) {
-    velocity = -Math.ceil((1 - (event.clientY - rect.top) / threshold) * 18)
-  } else if (event.clientY > rect.bottom - threshold) {
-    velocity = Math.ceil((1 - (rect.bottom - event.clientY) / threshold) * 18)
+  if (dragClientY < rect.top + threshold) {
+    velocity = -Math.ceil(Math.min(1, 1 - (dragClientY - rect.top) / threshold) * 18)
+  } else if (dragClientY > rect.bottom - threshold) {
+    velocity = Math.ceil(Math.min(1, 1 - (rect.bottom - dragClientY) / threshold) * 18)
   }
-  autoScrollVelocity.value = velocity
-  if (velocity !== 0 && !autoScrollFrame) {
-    autoScrollFrame = requestAnimationFrame(runAutoScroll)
-  } else if (velocity === 0) {
-    stopAutoScroll()
-  }
+  const previousScrollTop = el.scrollTop
+  if (velocity) el.scrollTop += velocity
+  const index = resolveDropIndex(dragClientY, rect)
+  dropIndex.value = canPutSessionAt(session, index) ? index : -1
+  if (el.scrollTop !== previousScrollTop) dragFrame = requestAnimationFrame(runDragFrame)
 }
 
 const handleDragOver = (event) => {
   const session = window.__VIRTUAL_DRAG_SESSION__
-  const nextDropIndex = resolveDropIndex(event)
-  if (!session || !canPutSessionAt(session, nextDropIndex)) {
-    dropIndex.value = -1
-    forbiddenDropActive.value = !!session
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'none'
-    // 即使当前行禁止投放，也继续允许边缘自动滚动。
-    // 典型场景是拖动“分组整体”穿过已展开分组的内容行，用户仍需要滚到底部调整分组顺序。
-    if (session) updateAutoScroll(event)
-    else stopAutoScroll()
+  if (!session || !canPutFrom(session.sourceGroup)) {
+    stopDragTracking()
     return
   }
+  event.preventDefault()
+  dragClientY = event.clientY
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = session.sourceGroup === normalizeGroupName(props.group) ? 'move' : 'copy'
   }
-  forbiddenDropActive.value = false
-  dropIndex.value = nextDropIndex
-  updateAutoScroll(event)
+  if (!dragFrame) dragFrame = requestAnimationFrame(runDragFrame)
 }
 
 const handleDragLeave = (event) => {
   if (!scrollRef.value?.contains(event.relatedTarget)) {
-    dropIndex.value = -1
-    forbiddenDropActive.value = false
-    stopAutoScroll()
+    stopDragTracking()
   }
 }
 
 const handleDrop = (event) => {
   const session = window.__VIRTUAL_DRAG_SESSION__
-  const visualIndex = dropIndex.value === -1 ? resolveDropIndex(event) : dropIndex.value
-  if (!session || !canPutSessionAt(session, visualIndex)) {
-    dropIndex.value = -1
-    forbiddenDropActive.value = false
-    stopAutoScroll()
+  event.preventDefault()
+  if (session) event.stopPropagation()
+  if (!session || !canPutFrom(session.sourceGroup)) return
+  const el = scrollRef.value
+  if (!el) {
+    session.end()
     return
   }
-  const item = session.item
-  const current = [...items.value]
-  let nextList = current
-  let insertIndex = visualIndex
-  const sameList = session.sourceListId === listId
-  // 同列表拖拽的核心边界：
-  // 1. resolveDropIndex 得到的是“源行还在列表里”时的视觉落点，用于画指示线最直观。
-  // 2. 真正写入数组前会先移除源行；如果源行在落点前方，落点在新数组里必须左移一位。
-  // 3. 向父组件同时暴露 visualIndex 和 newIndex，避免分组标题排序这类逻辑丢失原始视觉目标。
-  if (sameList && Number.isInteger(session.sourceIndex) && session.sourceIndex < visualIndex) {
-    insertIndex = visualIndex - 1
+  const index = resolveDropIndex(event.clientY, el.getBoundingClientRect())
+  stopDragTracking()
+  if (!canPutSessionAt(session, index)) {
+    session.end()
+    return
   }
-  if (session.sourceListId === listId) {
-    const sourceKey = item?.[props.dataKey] ?? item?.id
-    nextList = current.filter(row => String(row?.[props.dataKey] ?? row?.id) !== String(sourceKey))
-    nextList.splice(Math.min(insertIndex, nextList.length), 0, item)
-  } else {
-    nextList.splice(Math.min(insertIndex, nextList.length), 0, item)
-  }
-  dropIndex.value = -1
-  forbiddenDropActive.value = false
-  stopAutoScroll()
-  emit('drop', buildDragEvent(event, item, insertIndex, nextList, {
-    visualIndex,
-    sourceIndex: session.sourceIndex,
-    sameList,
-  }))
+  const payload = buildDragEvent(index)
+  session.end()
+  emit('drop', payload)
 }
 
 const handleDragEnd = () => {
-  dropIndex.value = -1
-  forbiddenDropActive.value = false
+  stopDragTracking()
   clearDragArm()
-  stopAutoScroll()
+  if (window.__VIRTUAL_DRAG_SESSION__?.sourceListId !== listId) return
   window.__VIRTUAL_DRAG_SESSION__ = null
   emit('dragend')
 }
 
+onMounted(() => window.addEventListener('dragend', handleDragEnd))
 onBeforeUnmount(() => {
-  clearDragArm()
-  stopAutoScroll()
+  window.removeEventListener('dragend', handleDragEnd)
+  handleDragEnd()
 })
 </script>
