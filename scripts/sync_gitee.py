@@ -164,7 +164,8 @@ def sync_release(gitee: requests.Session, release: dict[str, Any],
                  dry_run: bool, max_bytes: int = 100000000) -> None:
     tag = release["tag_name"]
     metadata = {"tag_name": tag, "name": release.get("name") or tag,
-                "body": release.get("body") or "", "prerelease": False}
+                "body": release.get("body") or "", "prerelease": False,
+                "target_commitish": release.get("target_commitish") or "main"}
     if dry_run:
         print(f"预览：{'更新' if existing else '创建'} Gitee Release {tag}")
         return
