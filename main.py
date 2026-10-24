@@ -128,6 +128,8 @@ def persist_exit_state():
 
 def get_launch_mode():
     if "--browser" in sys.argv: return "browser"
+    # 可执行文件启动时默认直接用系统浏览器打开界面
+    if sys.platform.startswith("linux"): return "browser"
     return "browser" if bool(getattr(settings.config, "browser_mode", False)) else "desktop"
 
 def cleanup_update_remnants():
