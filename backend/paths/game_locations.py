@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import os
 import platform
-import posixpath
 import re
+import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import vdf
@@ -23,9 +23,19 @@ def _resolved_system_name(system_name: str | None = None) -> str:
 
 
 def _join_path(system_name: str, base: str, *parts: str) -> str:
-    if system_name != "Windows" and str(base or "").startswith("/"):
-        return posixpath.join(base, *parts)
+    # system_name 只决定“默认目录布局”，分隔符始终跟随当前宿主，
+    # 否则在 Linux 上模拟 Windows 时会产出宿主机无法访问的反斜杠路径。
+    del system_name
     return os.path.join(base, *parts)
+
+
+def _host_system_name() -> str:
+    # 不使用 platform.system()：测试会用 patch 模拟其他平台，宿主分隔符必须保持不变。
+    if sys.platform.startswith("win"):
+        return "Windows"
+    if sys.platform == "darwin":
+        return "Darwin"
+    return "Linux"
 
 
 def _pure_path(path: str, system_name: str):
@@ -51,18 +61,18 @@ def get_default_user_data_paths(system_name: str | None = None) -> list[str]:
         user_profile = os.getenv("USERPROFILE") or os.path.expanduser("~")
         return unique_paths([
             _join_path(resolved_system_name, user_profile, "AppData", "LocalLow", "Ludeon Studios", "RimWorld by Ludeon Studios"),
-        ], system_name=resolved_system_name)
+        ], system_name=_host_system_name())
 
     home = os.path.expanduser("~")
     if resolved_system_name == "Darwin":
         return unique_paths([
             _join_path(resolved_system_name, home, "Library", "Application Support", "RimWorld"),
-        ], system_name=resolved_system_name)
+        ], system_name=_host_system_name())
 
     return unique_paths([
         _join_path(resolved_system_name, home, ".config", "unity3d", "Ludeon Studios", "RimWorld by Ludeon Studios"),
         _join_path(resolved_system_name, home, ".var", "app", "com.valvesoftware.Steam", "config", "unity3d", "Ludeon Studios", "RimWorld by Ludeon Studios"),
-    ], system_name=resolved_system_name)
+    ], system_name=_host_system_name())
 
 
 def get_default_player_log_paths(filename: str = "Player.log", system_name: str | None = None, *, game_version: str = "") -> list[str]:
@@ -73,7 +83,7 @@ def get_default_player_log_paths(filename: str = "Player.log", system_name: str 
         return unique_paths([
             _join_path(resolved_system_name, home, "Library", "Logs", "Ludeon Studios", "RimWorld by Ludeon Studios", target_name),
             _join_path(resolved_system_name, home, "Library", "Logs", "Unity", target_name),
-        ], system_name=resolved_system_name)
+        ], system_name=_host_system_name())
 
     major_version = extract_major_game_version(game_version)
     version = tuple(int(part) for part in major_version.split(".")) if "." in major_version else None
@@ -83,7 +93,7 @@ def get_default_player_log_paths(filename: str = "Player.log", system_name: str 
         os.path.join(root, directory, target_name)
         for root in get_default_user_data_paths(system_name=resolved_system_name)
         for directory in log_dirs
-    ], system_name=resolved_system_name)
+    ], system_name=_host_system_name())
     if version is None:
         mtimes = {}
         for path in candidates:
@@ -131,7 +141,7 @@ def get_default_steam_root_candidates(system_name: str | None = None) -> list[st
 
     return unique_paths([
         normalize_path_for_storage(path, system_name=resolved_system_name) for path in candidates if path
-    ], system_name=resolved_system_name)
+    ], system_name=_host_system_name())
 
 
 def get_default_steam_data_root_candidates(system_name: str | None = None) -> list[str]:
@@ -140,7 +150,7 @@ def get_default_steam_data_root_candidates(system_name: str | None = None) -> li
         home = os.path.expanduser("~")
         return unique_paths([
             _join_path(resolved_system_name, home, "Library", "Application Support", "Steam"),
-        ], system_name=resolved_system_name)
+        ], system_name=_host_system_name())
     return get_default_steam_root_candidates(system_name=resolved_system_name)
 
 

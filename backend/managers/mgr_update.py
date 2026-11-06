@@ -1261,7 +1261,8 @@ class UpdateManager:
             payload_dir = None
             payload_exe_name = exe_name
             exe_candidates = [exe_name]
-            if os.name == "nt" and exe_name.lower() == "rimmodmanager.exe":
+            if exe_name.lower() == "rimmodmanager.exe":
+                # 兼容旧版 Windows 可执行文件；Linux 不会走到该文件名，但测试与迁移包需要。
                 exe_candidates.insert(0, "RimCrow.exe")
             for root, dirs, files in os.walk(extract_path):
                 payload_exe_name = next((name for name in exe_candidates if name in files), "")

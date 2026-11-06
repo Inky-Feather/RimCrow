@@ -22,7 +22,12 @@ def canonicalize_path_text(path: str, system_name: str | None = None) -> str:
     expanded = os.path.expandvars(expanded)
     path_mod = _path_module(system_name)
     if re.match(r"^[A-Za-z]:[\\/]", expanded):
-        return ntpath.normpath(expanded)
+        normalized = ntpath.normpath(expanded)
+        # 非 Windows 主机上不要把盘符路径改写成反斜杠：后续 os.path.join/path_key
+        # 都按宿主分隔符处理，混用会让同一路径产生两个 key。
+        if _system_name(system_name) == "Windows":
+            return normalized
+        return normalized.replace("\\", "/")
     if _system_name(system_name) == "Windows" or system_name is None:
         return os.path.normpath(os.path.abspath(expanded))
     return path_mod.normpath(expanded)

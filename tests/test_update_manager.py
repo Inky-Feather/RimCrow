@@ -830,7 +830,7 @@ class TestConfiguredUpdateSources(unittest.TestCase):
             "version": "99.0.0",
             "changelog": "清单更新",
             "assets": [{
-                "platform": "windows-x64",
+                "platform": "all",
                 "size": 2048,
                 "sha256": "a" * 64,
                 "mirrors": [
