@@ -109,7 +109,8 @@ def resolve_rimworld_layout(install_path: str, system_name: str | None = None) -
             install_root / "RimWorldWin64.exe",
             install_root / "RimWorldWin.exe",
         ],
-        "Linux": [install_root / "RimWorldLinux", install_root / "RimWorldLinux.x86_64"],
+        # RimWorld 1.7 (Waylith engine) also ships a plain "RimWorld" launcher on Linux.
+        "Linux": [install_root / "RimWorld", install_root / "RimWorldLinux", install_root / "RimWorldLinux.x86_64"],
     }.get(resolved_system_name, [])
     executable_path = ""
     for candidate in executable_candidates:

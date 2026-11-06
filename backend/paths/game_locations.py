@@ -172,7 +172,7 @@ def detect_rimworld_executable(install_path: str, system_name: str | None = None
         # RimWorld 1.7 (Waylith engine) ships RimWorld.exe on Windows; legacy names are kept.
         "Windows": ["RimWorld.exe", "RimWorldWin64.exe", "RimWorldWin.exe"],
         "Darwin": ["RimWorldMac.app", "RimWorldMac"],
-        "Linux": ["RimWorldLinux", "RimWorldLinux.x86_64", "start_RimWorld.sh"],
+        "Linux": ["RimWorld", "RimWorldLinux", "RimWorldLinux.x86_64", "start_RimWorld.sh"],
     }
     candidates = list(candidates_by_system.get(resolved_system_name, []))
     for other_system, other_candidates in candidates_by_system.items():

@@ -680,10 +680,37 @@ export const useAppStore = defineStore('app', () => {
   // 等待后端就绪
   const waitForBackend = () => {
     return new Promise((resolve) => {
-      // 情况 1: 如果 API 已经存在（前端加载慢，后端已经注入了），直接继续
-      if (window.pywebview) resolve()
-      // 情况 2: API 还没来（前端加载快），监听 pywebviewready 事件, { once: true } 确保只触发一次
-      else window.addEventListener('pywebviewready', () => resolve(), { once: true })
+      // pywebview 会先注入 window.pywebview，再异步补齐 api 方法；只看 window.pywebview
+      // 会在 finish.js 执行前提前放行，导致 get_startup_bootstrap 尚未定义。
+      const apiReady = () => Boolean(window.pywebview?.api?.get_startup_bootstrap)
+      if (apiReady()) {
+        resolve()
+        return
+      }
+      let settled = false
+      let pollTimer = null
+      let timeoutTimer = null
+      const cleanup = () => {
+        if (pollTimer) clearInterval(pollTimer)
+        if (timeoutTimer) clearTimeout(timeoutTimer)
+        window.removeEventListener('pywebviewready', check)
+      }
+      const finish = () => {
+        if (settled || !apiReady()) return
+        settled = true
+        cleanup()
+        resolve()
+      }
+      const check = () => finish()
+      window.addEventListener('pywebviewready', check)
+      pollTimer = setInterval(check, 20)
+      // 保持原有兜底行为：桥接异常时也放行，让启动流程自行报错而不是永久卡住。
+      timeoutTimer = setTimeout(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve()
+      }, 10000)
     })
   }
 

@@ -214,6 +214,28 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
             self.assertEqual(layout.executable_path, str(exe_path))
             self.assertEqual(layout.layout_kind, "windows")
 
+    def test_linux_detect_executable_accepts_waylith_launcher(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            exe_path = install_root / "RimWorld"
+            exe_path.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Linux"):
+                self.assertEqual(GameManager.detect_executable(str(install_root)), str(exe_path))
+
+    def test_linux_resolve_layout_reports_waylith_executable(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            (install_root / "Mods").mkdir()
+            (install_root / "Data" / "Core").mkdir(parents=True)
+            exe_path = install_root / "RimWorld"
+            exe_path.write_text("", encoding="utf-8")
+
+            layout = resolve_rimworld_layout(str(install_root), "Linux")
+
+            self.assertEqual(layout.executable_path, str(exe_path))
+            self.assertEqual(layout.layout_kind, "linux")
+
     def test_linux_detect_executable_accepts_proton_windows_binary(self):
         with TemporaryDirectory() as tmp:
             install_root = Path(tmp)
