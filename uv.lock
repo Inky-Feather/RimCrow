@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 
 [[package]]
@@ -1657,6 +1657,12 @@ wheels = [
 ]
 
 [[package]]
+name = "pycairo"
+version = "1.29.2"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/bb/5e/19ab2572981a996ce96b853a189d2dcced40506b67d9555a7568457abcf2/pycairo-1.29.2.tar.gz", hash = "sha256:3e69fff74fe64f5ba2dfa31f67c6bdf26413342574047437d2ac520d35e9a489" }
+
+[[package]]
 name = "pycparser"
 version = "3.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -1785,6 +1791,15 @@ sdist = { url = "https://mirrors.aliyun.com/pypi/packages/b0/77/a5b8c569bf593b01
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b" },
 ]
+
+[[package]]
+name = "pygobject"
+version = "3.58.1"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+dependencies = [
+    { name = "pycairo" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/65/1e/d590f82e14db75945b03f6b63e0f19662e0340babd8f574fdb1bb5a015e2/pygobject-3.58.1.tar.gz", hash = "sha256:4c80598ade17fbaa7798e01a25d0bf29ce109740786026a074c5c62bb3e79d23" }
 
 [[package]]
 name = "pyinstaller"
@@ -2300,6 +2315,7 @@ dependencies = [
     { name = "pip-system-certs" },
     { name = "psutil" },
     { name = "pydantic" },
+    { name = "pygobject", marker = "sys_platform == 'linux'" },
     { name = "pyinstaller" },
     { name = "pytest" },
     { name = "python-dateutil" },
@@ -2334,6 +2350,7 @@ requires-dist = [
     { name = "pip-system-certs", specifier = ">=5.3" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "pygobject", marker = "sys_platform == 'linux'", specifier = ">=3.50.0" },
     { name = "pyinstaller", specifier = ">=6.18.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "python-dateutil", specifier = ">=2.9.0.post0" },
