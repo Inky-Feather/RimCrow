@@ -25,7 +25,7 @@ RimCrow（原名 RimModManager）是一个面向 **RimWorld** 的桌面模组管
 | --- | --- | --- |
 | Windows | 主要支持平台 | 桌面应用、打包和完整功能主要按 Windows 验证，需要 WebView2 Runtime。 |
 | macOS | 基础路径支持 | 主程序启动、RimWorld / Steam / 用户数据 / Player.log 定位和基础 Steam 启动路径可用；SteamworksPy 编译产物和打包质量暂不承诺。 |
-| Linux | 逐步补充 | 已扩展部分 Steam 路径识别，但桌面运行、Steamworks 和打包分发暂不保证。 |
+| Linux | 桌面支持（x86_64） | GTK3 + WebKit2GTK 4.1 桌面壳、路径 / 日志 / 进程监控、Steam 与 Proton 启动、ripgrep / todds Linux 工具链、PyInstaller onedir 打包均已支持；Steamworks 仍需用 Steamworks SDK 自行编译 `.so`。 |
 
 ## 主要功能
 
@@ -142,6 +142,7 @@ RimCrow（原名 RimModManager）是一个面向 **RimWorld** 的桌面模组管
 | Node.js | 18+ | 18+ | 18+ |
 | uv | 必需 | 必需 | 必需 |
 | WebView2 Runtime | 桌面模式必需 | 不需要 | 不需要 |
+| GTK3 + WebKit2GTK 4.1 | 不需要 | 不需要 | 桌面模式必需 |
 | Steamworks SDK | 完整 Steam 客户端工坊功能需要 | 需要自行编译 | 需要自行编译 |
 
 ### 克隆源码
@@ -357,6 +358,18 @@ uv run python scripts/locale_workfile.py <workfile> --import
 ```powershell
 uv run python pack_pyinstaller.py
 ```
+
+Linux 需要先安装 GTK 运行依赖并同步包含 PyGObject 的依赖：
+
+```bash
+# Arch / CachyOS / Manjaro
+sudo pacman -S --needed gtk3 webkit2gtk-4.1 gobject-introspection
+# Debian / Ubuntu
+sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 gir1.2-webkit2-4.1 python3-gi
+uv sync
+```
+
+Linux 产物为 `dist/RimCrow/` onedir 目录；发布压缩包内附带 `install-linux.sh`，解压后执行它即可写入 `~/.local/share/applications/rimcrow.desktop` 桌面入口。
 
 常用参数：
 
