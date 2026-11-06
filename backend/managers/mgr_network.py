@@ -6,6 +6,7 @@ import ipaddress
 import json
 import math
 import re
+import sys
 import time
 import threading
 import queue
@@ -35,6 +36,27 @@ DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.
 PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy")
 GITHUB_HOSTS_CACHE_PATH = CACHE_DIR / "github_hosts.json"
 _HOSTS_OVERRIDE: ContextVar[dict[str, str] | None] = ContextVar("network_hosts_override", default=None)
+def _steamcmd_platform_key() -> str:
+    if sys.platform.startswith("win"):
+        return "win32"
+    if sys.platform == "darwin":
+        return "osx"
+    return "linux"
+
+
+def _steamcmd_install_url() -> str:
+    name = {
+        "win32": "steamcmd.zip",
+        "osx": "steamcmd_osx.tar.gz",
+        "linux": "steamcmd_linux.tar.gz",
+    }[_steamcmd_platform_key()]
+    return f"https://steamcdn-a.akamaihd.net/client/installer/{name}"
+
+
+def _steamcmd_update_url() -> str:
+    return f"https://client-update.steamstatic.com/steam_cmd_{_steamcmd_platform_key()}"
+
+
 NETWORK_CHECK_TARGETS = (
     ("github", "GitHub 项目浏览", "https://github.com/Inky-Feather/RimCrow"),
     ("github_api", "GitHub API", "https://api.github.com/repos/Inky-Feather/RimCrow"),
@@ -46,8 +68,8 @@ NETWORK_CHECK_TARGETS = (
     ("sourceforge", "SourceForge 下载入口", "https://sourceforge.net/projects/rimcrow/files/latest/download?format=json"),
     ("steam_workshop", "Steam 创意工坊", "https://steamcommunity.com/app/294100/workshop/"),
     ("steam_api", "Steam Web API", "https://api.steampowered.com/ISteamWebAPIUtil/GetServerInfo/v1/"),
-    ("steamcmd_install", "SteamCMD 安装包", "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip"),
-    ("steamcmd_update", "SteamCMD 更新清单", "https://client-update.steamstatic.com/steam_cmd_win32"),
+    ("steamcmd_install", "SteamCMD 安装包", _steamcmd_install_url()),
+    ("steamcmd_update", "SteamCMD 更新清单", _steamcmd_update_url()),
     # 下载节点仅作连通性参考，不代表 SteamCMD 的全部可用节点。
     ("steamcmd_cdn_clngaa", "SteamCMD 下载节点（clngaa）", "http://dl.steam.clngaa.com/"),
     ("steamcmd_cdn_eccdnx", "SteamCMD 下载节点（eccdnx）", "http://st.dl.eccdnx.com/"),

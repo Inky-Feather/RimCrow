@@ -21,7 +21,8 @@ def supports_win32_ctypes() -> bool:
 
 
 def monitoring_mode() -> str:
-    return "windows" if is_windows() else "disabled"
+    # Windows 使用 psapi 做工作集裁剪；Linux/macOS 复用 psutil 轮询进程即可。
+    return "windows" if is_windows() else ("psutil" if is_linux() or is_macos() else "disabled")
 
 
 def supports_process_monitoring() -> bool:

@@ -68,6 +68,10 @@ import webbrowser
 from backend._version import __version__
 from backend.utils.logger import logger 
 from backend.settings import settings, BASE_RESOURCE_DIR, HOME_DIR
+
+# Linux 统一走 GTK/WebKit2GTK；即使桌面环境是 KDE，也不强制尝试未安装的 Qt 绑定。
+if sys.platform.startswith("linux"):
+    os.environ.setdefault("PYWEBVIEW_GUI", "gtk")
 from backend.utils.event_bus import EventBus
 from backend.utils.tools import current_ms
 from validate_environment import (

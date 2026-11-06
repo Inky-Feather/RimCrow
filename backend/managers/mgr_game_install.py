@@ -23,6 +23,14 @@ from backend.utils.tools import current_ms
 KNOWN_INSTALLS_PATH = DATA_DIR / "known_game_installs.json"
 
 
+def _host_system_name() -> str:
+    if sys.platform.startswith("win"):
+        return "Windows"
+    if sys.platform == "darwin":
+        return "Darwin"
+    return "Linux"
+
+
 def _canonicalize_path_text(path_str: str) -> str:
     """
     统一路径文本。
@@ -231,7 +239,7 @@ class GameInstallInspector:
 
     @staticmethod
     def _dedupe_paths(paths: list[Path]) -> list[Path]:
-        return [Path(value) for value in unique_paths([str(path) for path in paths], system_name=platform.system())]
+        return [Path(value) for value in unique_paths([str(path) for path in paths], system_name=_host_system_name())]
 
     def _find_app_bundle_path(self, executable_path: str) -> Path | None:
         resolved = find_app_bundle_path(executable_path)

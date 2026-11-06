@@ -198,6 +198,50 @@ def show_webview2_missing_dialog():
     if res == 6: # 用户点击了“是”
         webbrowser.open(url)
 
+def _linux_desktop_packages_hint() -> str:
+    """按发行版给出最小运行依赖安装命令，避免只报 ImportError。"""
+    try:
+        release = Path("/etc/os-release").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        release = ""
+    values = {}
+    for line in release.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip('"')
+    distro = " ".join([values.get("ID", ""), values.get("ID_LIKE", "")]).lower()
+    if any(name in distro for name in ("arch", "cachyos", "manjaro")):
+        return "sudo pacman -S --needed gtk3 webkit2gtk-4.1 gobject-introspection"
+    if any(name in distro for name in ("debian", "ubuntu", "linuxmint", "pop")):
+        return "sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 gir1.2-webkit2-4.1 python3-gi"
+    if any(name in distro for name in ("fedora", "rhel", "centos")):
+        return "sudo dnf install gtk3 webkit2gtk4.1 python3-gobject"
+    if "suse" in distro:
+        return "sudo zypper install gtk3 webkit2gtk-4_1 typelib-1_0-WebKit2-4_1"
+    return "请安装 GTK3、WebKit2GTK 4.1 与 GObject Introspection 运行库"
+
+
+def check_linux_desktop_runtime() -> tuple[bool, str]:
+    """检查 GTK3 + WebKit2GTK 4.1 绑定与图形会话。"""
+    if not sys.platform.startswith("linux"):
+        return True, ""
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return False, "未检测到图形会话（DISPLAY/WAYLAND_DISPLAY 为空），无法启动桌面窗口。"
+
+    try:
+        import gi
+        gi.require_version("Gtk", "3.0")
+        gi.require_version("WebKit2", "4.1")
+        from gi.repository import Gtk, WebKit2  # noqa: F401
+    except Exception as exc:
+        return False, (
+            "缺少 GTK3 / WebKit2GTK 4.1 的 Python 绑定。\n\n"
+            f"当前错误：{exc}\n\n"
+            f"请安装运行依赖：{_linux_desktop_packages_hint()}"
+        )
+    return True, ""
+
+
 def validate_environment(on_error=None, require_webview2=True):
     """
     启动前的环境全校验
@@ -210,7 +254,16 @@ def validate_environment(on_error=None, require_webview2=True):
         show_webview2_missing_dialog()
         sys.exit(1)
 
-    # 2. 检测前端入口文件是否存在 (防止打包丢失资源)
+    # 2. Linux 桌面模式检查 GTK/WebKit2GTK；浏览器模式不需要。
+    if require_webview2 and sys.platform.startswith("linux"):
+        desktop_ready, desktop_message = check_linux_desktop_runtime()
+        if not desktop_ready:
+            if on_error:
+                on_error()
+            show_native_error("Linux 桌面依赖缺失", desktop_message)
+            sys.exit(1)
+
+    # 3. 检测前端入口文件是否存在 (防止打包丢失资源)
     # 这里假设之前的 get_entrypoint 逻辑
     entry = get_entrypoint()
     if not entry.startswith('http'):

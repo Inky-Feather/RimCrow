@@ -1967,19 +1967,18 @@ class PathChecker:
         if not path.is_dir():
             return cls._format_res(False, msg=tr("api.path.texture_tools_not_dir", "贴图工具路径必须是目录"))
 
-        exe_path = path / "todds.exe"
+        binary_name = "todds.exe" if platform.system() == "Windows" else "todds"
+        exe_path = path / binary_name
         if exe_path.exists():
             return cls._format_res(True, data=path_str, msg=tr("api.path.texture_tools_executable", "贴图工具：{path}", path=str(exe_path)))
-        if platform.system() != "Windows":
-            return cls._format_res(False, msg=tr("api.path.texture_tools_windows_only", "当前核心运行范围不包含 macOS/Linux 的 todds 自动化支持"), msg_type="warn")
-        return cls._format_res(False, msg=tr("api.path.todds_missing", "目录下未找到 todds.exe，可在外部工具检查中下载安装"), msg_type="warn")
+        return cls._format_res(False, msg=tr("api.path.todds_missing", "目录下未找到 {name}，可在外部工具检查中下载安装", name=binary_name), msg_type="warn")
 
     @classmethod
     def check_ripgrep_path(cls, path_str: str) -> Dict:
         """
         检查 ripgrep 工具路径是否有效。
 
-        兼容“直接指向 rg.exe”与“指向包含 rg.exe 的目录”两种输入，
+        兼容“直接指向 rg / rg.exe”与“指向包含该文件的目录”两种输入，
         但前端仍建议用户选择目录，以便后续自动更新时保持一致。
         """
         if not path_str:
@@ -2001,8 +2000,8 @@ class PathChecker:
             )
 
         if path.is_file():
-            return cls._format_res(False, msg=tr("api.path.ripgrep_choose_executable_or_dir", "请选择 rg.exe 或其所在目录"), msg_type="warn")
-        return cls._format_res(False, msg=tr("api.path.ripgrep_missing_executable", "目录下未找到 rg.exe，可在外部工具检查中下载安装"), msg_type="warn")
+            return cls._format_res(False, msg=tr("api.path.ripgrep_choose_executable_or_dir", "请选择 rg 可执行文件或其所在目录"), msg_type="warn")
+        return cls._format_res(False, msg=tr("api.path.ripgrep_missing_executable", "目录下未找到 rg 可执行文件，可在外部工具检查中下载安装"), msg_type="warn")
         
     @classmethod
     def paths_check(cls, paths_data: Dict[str, str]) -> Dict:

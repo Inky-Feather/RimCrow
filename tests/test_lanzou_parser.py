@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 import requests
@@ -108,7 +108,8 @@ def test_folder_parameters_and_pagination(parser):
         response(payload={"zt": 2, "info": "empty"}),
     ]
     parser.get_file = Mock(return_value={"note": "release", "download_url": "https://cdn.example/file.zip"})
-    result = parser.get_all_files("share.example/folder", "secret")
+    with patch("backend.utils.tools.platform.system", return_value="Windows"):
+        result = parser.get_all_files("share.example/folder", "secret")
     assert len(result["files"]) == 51
     assert result["latest"]["version"] == "0.2.0"
     assert parser.get_file.call_args.args[0] == "https://share.example/new?webpage=keep"
@@ -250,7 +251,8 @@ def test_no_working_download_means_no_actionable_update(parser):
     parser.session.get.return_value = response("$.ajax({url:'/api',data:{fid:1,t:'t',k:'k',pg:1}});")
     parser.session.post.return_value = response(payload={"zt": 1, "text": FIRST_PAGE[:1]})
     parser.get_file = Mock(return_value=None)
-    assert parser.get_all_files("https://share.example/folder") is None
+    with patch("backend.utils.tools.platform.system", return_value="Windows"):
+        assert parser.get_all_files("https://share.example/folder") is None
     assert parser.last_error
 
 

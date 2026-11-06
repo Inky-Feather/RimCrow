@@ -149,7 +149,7 @@ class TestSystemHostsService(unittest.TestCase):
     def test_only_explicit_permission_failure_can_request_elevation(self):
         service = SystemHostsService(Path("main.py"), Mock())
         for allow, code, expected in ((False, "PERMISSION_DENIED", False), (True, "WRITE_FAILED", False),
-                                       (True, "PERMISSION_DENIED", os.name == "nt")):
+                                       (True, "PERMISSION_DENIED", True)):
             result = subprocess.CompletedProcess([], 1, json.dumps({"status": "error", "error_code": f"NETWORK.HOSTS.{code}"}))
             with self.subTest(allow=allow, code=code), patch.object(service, "_execute_elevated", return_value={"status": "success"}) as elevate, \
                     patch.object(system_hosts.subprocess, "run", return_value=result):

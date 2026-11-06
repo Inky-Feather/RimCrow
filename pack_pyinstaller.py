@@ -220,7 +220,8 @@ def _iter_release_output_files(output_path: Path):
         return
 
     if output_path.is_dir():
-        root_parent = output_path.parent
+        # macOS 的 .app 需要保留 bundle 目录名；Linux onedir 则直接平铺到压缩包根目录。
+        root_parent = output_path.parent if output_path.suffix.lower() == ".app" else output_path
         for file_path in output_path.rglob("*"):
             if file_path.is_file():
                 yield file_path, file_path.relative_to(root_parent)
@@ -392,6 +393,9 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "--collect-submodules", "steamworks",
             "--collect-submodules", "tiktoken",
             "--collect-submodules", "tiktoken_ext",
+            *(["--hidden-import", "webview.platforms.gtk",
+               "--hidden-import", "gi.repository.Gtk",
+               "--hidden-import", "gi.repository.WebKit2"] if sys.platform.startswith("linux") else []),
             "--hidden-import", "tiktoken_ext",
             "--hidden-import", "tiktoken_ext.openai_public",
             
@@ -400,11 +404,15 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             # "--exclude-module", "_distutils_hack.override",
             "--exclude-module", "pkg_resources", # 通常这两个是一起出现的，建议一并排除
             
+            *(["--exclude-module", "pyi_splash"] if sys.platform.startswith("linux") else []),
+
             "--clean",  # 清理旧构建文件
             "-n", name,  # 指定名称
             main_file  # 主程序文件
         ]
-        if _is_macos():
+        # onedir 在 Linux 上更容易让 GTK/WebKit 的 typelib 与动态库按相对路径加载；
+        # 单文件模式解压到 /tmp 后，原生 WebKit 进程的库搜索路径容易失效。
+        if _is_macos() or sys.platform.startswith("linux"):
             pyinstaller_args.insert(3, "-D")
         else:
             pyinstaller_args.insert(3, "-F")
@@ -428,10 +436,10 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
 
         print(f"执行命令: {' '.join(cmd)}")
         # 3. 执行打包
-        build_log_path = Path("dist") / "pyinstaller-build.log"
+        build_log_path = project_root / "dist" / "pyinstaller-build.log"
         returncode = _run_command_with_log(cmd, build_log_path, env=env)
         if returncode == 0:
-            output_path = _resolve_pyinstaller_output(Path("dist"), name)
+            output_path = _resolve_pyinstaller_output(project_root / "dist", name)
             print("\n" + "="*30)
             print("★ 打包成功！")
             print(f"★ 输出产物: {output_path}")
@@ -580,6 +588,53 @@ def _iter_release_docs_files(docs_dir: Path):
             yield file_path, file_path.relative_to(docs_dir)
 
 
+def _linux_install_script() -> str:
+    return """#!/bin/sh
+set -eu
+APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+APP_EXE="$APP_DIR/RimCrow"
+if [ ! -x "$APP_EXE" ]; then
+    echo "未找到可执行文件: $APP_EXE" >&2
+    exit 1
+fi
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+APPS_DIR="$DATA_HOME/applications"
+ICON_DIR="$DATA_HOME/icons/hicolor/scalable/apps"
+mkdir -p "$APPS_DIR" "$ICON_DIR"
+if [ -f "$APP_DIR/icon.svg" ]; then
+    cp "$APP_DIR/icon.svg" "$ICON_DIR/rimcrow.svg"
+fi
+cat > "$APPS_DIR/rimcrow.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=RimCrow
+Comment=RimWorld Mod Manager
+Exec="$APP_EXE" %U
+Path=$APP_DIR
+Icon=rimcrow
+Terminal=false
+Categories=Game;
+StartupWMClass=RimCrow
+EOF
+chmod +x "$APPS_DIR/rimcrow.desktop"
+command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS_DIR" || true
+echo "已安装桌面入口: $APPS_DIR/rimcrow.desktop"
+"""
+
+
+def _prepare_linux_launcher_files(project_root: Path) -> tuple[tempfile.TemporaryDirectory, list[tuple[Path, Path]]]:
+    temp_dir = tempfile.TemporaryDirectory(prefix="rimcrow_linux_launcher_")
+    root = Path(temp_dir.name)
+    install_script = root / "install-linux.sh"
+    install_script.write_text(_linux_install_script(), encoding="utf-8")
+    install_script.chmod(0o755)
+    files = [(install_script, Path("install-linux.sh"))]
+    icon_path = project_root / "icon.svg"
+    if icon_path.is_file():
+        files.append((icon_path, Path("icon.svg")))
+    return temp_dir, files
+
+
 def create_release_zip(app_name: str, version: str, docs_dir: Path | None = None, include_docs: bool = True):
     """基于 dist 中的平台产物生成发布压缩包，并附带运行所需的外部资源。"""
     project_root = Path(__file__).resolve().parent
@@ -598,12 +653,21 @@ def create_release_zip(app_name: str, version: str, docs_dir: Path | None = None
             resolved_docs_dir = project_root / resolved_docs_dir
         release_items.extend(_iter_release_docs_files(resolved_docs_dir) or [])
 
+    launcher_temp = None
+    if sys.platform.startswith("linux"):
+        launcher_temp, launcher_files = _prepare_linux_launcher_files(project_root)
+        release_items.extend(launcher_files)
+
     if zip_path.exists():
         zip_path.unlink()
 
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for source_path, archive_path in release_items:
-            archive.write(source_path, arcname=(archive_root / archive_path).as_posix())
+    try:
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+            for source_path, archive_path in release_items:
+                archive.write(source_path, arcname=(archive_root / archive_path).as_posix())
+    finally:
+        if launcher_temp is not None:
+            launcher_temp.cleanup()
 
     print("\n" + "="*30)
     print("★ 发布压缩包已生成！")

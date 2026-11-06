@@ -392,9 +392,15 @@ class TestNetworkManagerHostsCleanup(unittest.TestCase):
         self.assertEqual(len(domains), len(result["targets"]))
         self.assertEqual(len({item["id"] for item in result["targets"]}), len(result["targets"]))
         steamcmd_urls = {item["id"]: item["url"] for item in result["targets"] if item["id"].startswith("steamcmd_")}
+        steamcmd_key = "win32" if sys.platform.startswith("win") else "osx" if sys.platform == "darwin" else "linux"
+        steamcmd_install = {
+            "win32": "steamcmd.zip",
+            "osx": "steamcmd_osx.tar.gz",
+            "linux": "steamcmd_linux.tar.gz",
+        }[steamcmd_key]
         self.assertEqual(steamcmd_urls, {
-            "steamcmd_install": "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip",
-            "steamcmd_update": "https://client-update.steamstatic.com/steam_cmd_win32",
+            "steamcmd_install": f"https://steamcdn-a.akamaihd.net/client/installer/{steamcmd_install}",
+            "steamcmd_update": f"https://client-update.steamstatic.com/steam_cmd_{steamcmd_key}",
             "steamcmd_cdn_clngaa": "http://dl.steam.clngaa.com/",
             "steamcmd_cdn_eccdnx": "http://st.dl.eccdnx.com/",
         })

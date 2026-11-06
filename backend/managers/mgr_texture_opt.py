@@ -42,6 +42,26 @@ ZSTD_COMPRESS_RETRY_DELAYS_SECONDS = (0.1, 0.3)
 TODDS_WINDOWS_ASSET_PREFIX = "todds_Windows_"
 TODDS_FALLBACK_VERSION = "0.4.1"
 TODDS_FALLBACK_FILENAME = f"todds_Windows_{TODDS_FALLBACK_VERSION}.zip"
+
+
+def get_todds_binary_name(system_name: str | None = None) -> str:
+    return "todds.exe" if str(system_name or platform.system()) == "Windows" else "todds"
+
+
+def get_todds_asset_spec(system_name: str | None = None, machine: str | None = None) -> tuple[str, str]:
+    """返回当前平台的 todds Release 资产前缀与文件名；不支持的架构返回空值。"""
+    system = str(system_name or platform.system()).strip()
+    arch = str(machine or platform.machine()).strip().lower()
+    version = TODDS_FALLBACK_VERSION
+    if system == "Windows":
+        return TODDS_WINDOWS_ASSET_PREFIX, f"todds_Windows_{version}.zip"
+    if system == "Darwin":
+        if arch in {"arm64", "aarch64"}:
+            return "todds_Darwin_arm_", f"todds_Darwin_arm_{version}.zip"
+        return "todds_Darwin_i386_", f"todds_Darwin_i386_{version}.zip"
+    if system == "Linux" and arch in {"x86_64", "amd64"}:
+        return "todds_Linux_x86_64_", f"todds_Linux_x86_64_{version}.zip"
+    return "", ""
 SOURCE_IMAGE_EXTENSIONS = (".png",)
 SOURCE_REFERENCE_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".psd")
 TEXTURE_OUTPUT_DDS_EXT = ".dds"
@@ -502,18 +522,28 @@ class ToddsEncoder:
         self.options = options
 
     def resolve_executable(self) -> Path:
-        if platform.system() != "Windows":
-            raise TextureOptError("todds 后端当前仅支持 Windows 自动集成。")
+        binary_name = get_todds_binary_name()
         texture_tools_path = resolve_texture_tools_path(self.options)
         candidates = [
             str(self.options.get("todds_path") or "").strip(),
-            str(texture_tools_path / "todds.exe"),
-            str(TOOLS_DIR / "texture_tools" / "todds.exe"),
-            shutil.which("todds.exe") or "",
+            str(texture_tools_path / binary_name),
+            str(TOOLS_DIR / "texture_tools" / binary_name),
+            shutil.which(binary_name) or "",
         ]
         for candidate in candidates:
-            if candidate and Path(candidate).exists(): return Path(candidate)
-        raise TextureOptError("未找到 todds.exe。请在贴图优化中心下载 todds。")
+            if not candidate:
+                continue
+            path = Path(candidate)
+            if not path.is_file():
+                continue
+            # Linux 的 todds Release zip 不带可执行位，首次运行时补上。
+            if os.name != "nt":
+                try:
+                    path.chmod(path.stat().st_mode | 0o111)
+                except OSError:
+                    pass
+            return path
+        raise TextureOptError(f"未找到 {binary_name}。请在贴图优化中心下载 todds。")
 
     def encode_batch(
         self,
@@ -1074,8 +1104,9 @@ class TextureOptimizationManager:
             }
 
     def prepare_tool_download(self, download_mgr, options: dict[str, Any] | None = None) -> dict[str, Any]:
-        if platform.system() != "Windows":
-            raise TextureOptError("当前自动下载工具链仅支持 Windows 平台。")
+        asset_prefix, asset_filename = get_todds_asset_spec()
+        if not asset_prefix:
+            raise TextureOptError("当前平台或架构暂不支持自动下载 todds。")
 
         merged_options = self._build_options(options)
         status = self.get_backend_status(merged_options)
@@ -1099,12 +1130,12 @@ class TextureOptimizationManager:
                 repo="todds",
                 artifact=GithubArtifactRequest(
                     kind=GITHUB_ARTIFACT_RELEASE_ASSET,
-                    asset_name_prefix=TODDS_WINDOWS_ASSET_PREFIX,
+                    asset_name_prefix=asset_prefix,
                     asset_name_suffix=".zip",
-                    fallback_download_url=f"https://github.com/todds-encoder/todds/releases/download/{TODDS_FALLBACK_VERSION}/{TODDS_FALLBACK_FILENAME}",
-                    fallback_filename=TODDS_FALLBACK_FILENAME,
+                    fallback_download_url=f"https://github.com/todds-encoder/todds/releases/download/{TODDS_FALLBACK_VERSION}/{asset_filename}",
+                    fallback_filename=asset_filename,
                     fallback_version=TODDS_FALLBACK_VERSION,
-                    fallback_asset_name=TODDS_FALLBACK_FILENAME,
+                    fallback_asset_name=asset_filename,
                 ),
                 install=GithubInstallPlan(
                     action=GITHUB_INSTALL_EXTRACT,

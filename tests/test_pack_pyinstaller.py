@@ -190,6 +190,7 @@ class TestPackPyInstaller(unittest.TestCase):
 
     def test_pack_application_uses_macos_onedir_and_skips_windows_options(self):
         self._prepare_pack_root()
+        (self.temp_dir / "dist" / "RimCrow.app" / "Contents" / "MacOS").mkdir(parents=True)
         main_file = self.temp_dir / "main.py"
         main_file.write_text("print('ok')", encoding="utf-8")
         captured: dict[str, list[str]] = {}

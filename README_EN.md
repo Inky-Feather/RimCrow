@@ -29,7 +29,7 @@ Chinese docs are the primary source of truth. English docs are maintained as pai
 | --- | --- | --- |
 | Windows | Primary platform | Desktop mode, packaging, and full workflows are mainly verified on Windows. WebView2 Runtime is required. |
 | macOS | Basic path support | Basic path detection for RimWorld, Steam, user data, Player.log, and Steam launch paths is available. Packaging quality is not promised yet. |
-| Linux | In progress | Some Steam path detection has been added, but desktop runtime, Steamworks, and packaging are not guaranteed yet. |
+| Linux | Desktop support (x86_64) | GTK3 + WebKit2GTK 4.1 desktop shell, path/log/process monitoring, Steam and Proton launch, ripgrep/todds Linux toolchain, and PyInstaller onedir packaging are supported. Steamworks still requires a `.so` built with the Steamworks SDK. |
 
 ## Main Features
 

@@ -21,7 +21,9 @@ from backend.settings import TOOLS_DIR, settings
 
 RIPGREP_TOOL_DIR = TOOLS_DIR / "ripgrep"
 RIPGREP_EXECUTABLE_NAMES = ("rg.exe", "rg")
-RIPGREP_WINDOWS_ASSET_PREFIX = "ripgrep-"
+RIPGREP_ASSET_PREFIX = "ripgrep-"
+# 旧常量保留给外部引用；实际资产按运行平台选择。
+RIPGREP_WINDOWS_ASSET_PREFIX = RIPGREP_ASSET_PREFIX
 RIPGREP_WINDOWS_ASSET_SUFFIX = "-x86_64-pc-windows-msvc.zip"
 RIPGREP_VERSION_PATTERN = re.compile(r"^ripgrep\s+([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE)
 
@@ -40,6 +42,24 @@ class RipgrepStatus:
             "current_version": self.current_version,
             "message": self.message,
         }
+def get_ripgrep_asset_suffix(system_name: str | None = None, machine: str | None = None) -> str:
+    """返回当前平台对应的 GitHub Release 资产后缀；不支持时返回空字符串。"""
+    system = str(system_name or platform.system()).strip().lower()
+    arch = str(machine or platform.machine()).strip().lower()
+    if system == "windows":
+        return "-x86_64-pc-windows-msvc.zip"
+    if system == "darwin":
+        return "-aarch64-apple-darwin.tar.gz" if arch in {"arm64", "aarch64"} else "-x86_64-apple-darwin.tar.gz"
+    if system == "linux":
+        if arch in {"x86_64", "amd64"}:
+            return "-x86_64-unknown-linux-musl.tar.gz"
+        if arch in {"aarch64", "arm64"}:
+            return "-aarch64-unknown-linux-gnu.tar.gz"
+        if arch.startswith("armv7"):
+            return "-armv7-unknown-linux-gnueabihf.tar.gz"
+    return ""
+
+
 def resolve_ripgrep_root(raw_path: str | None = None) -> Path:
     configured = str(raw_path or "").strip()
     if configured:
@@ -104,7 +124,10 @@ def resolve_ripgrep_executable_with_version(
                     resolved_files.append(direct_path.resolve())
 
         # ripgrep Release 压缩包自带一层版本目录，因此这里允许递归查找一次工具目录。
-        for nested_path in sorted(candidate.rglob("rg.exe"), key=lambda item: str(item).lower()):
+        nested_candidates = []
+        for executable_name in RIPGREP_EXECUTABLE_NAMES:
+            nested_candidates.extend(candidate.rglob(executable_name))
+        for nested_path in sorted(nested_candidates, key=lambda item: str(item).lower()):
             if not nested_path.is_file():
                 continue
             normalized = str(nested_path.resolve()).lower()
@@ -194,8 +217,9 @@ def get_ripgrep_status(raw_path: str | None = None, *, strict: bool = False) -> 
 
 
 def prepare_ripgrep_download(download_mgr, raw_path: str | None = None, *, force: bool = False) -> dict[str, bool]:
-    if platform.system() != "Windows":
-        raise RuntimeError(tr("text_search.ripgrep.download_windows_only", "当前自动下载 ripgrep 仅支持 Windows 平台。"))
+    asset_suffix = get_ripgrep_asset_suffix()
+    if not asset_suffix:
+        raise RuntimeError(tr("text_search.ripgrep.download_unsupported", "当前平台暂不支持自动下载 ripgrep。"))
 
     status = get_ripgrep_status(raw_path)
     # 普通安装只补缺失；维护检查判定为 outdated 时会传 force=True，复用同一套下载/覆盖流程升级。
@@ -211,8 +235,8 @@ def prepare_ripgrep_download(download_mgr, raw_path: str | None = None, *, force
             repo="ripgrep",
             artifact=GithubArtifactRequest(
                 kind=GITHUB_ARTIFACT_RELEASE_ASSET,
-                asset_name_prefix=RIPGREP_WINDOWS_ASSET_PREFIX,
-                asset_name_suffix=RIPGREP_WINDOWS_ASSET_SUFFIX,
+                asset_name_prefix=RIPGREP_ASSET_PREFIX,
+                asset_name_suffix=asset_suffix,
             ),
             install=GithubInstallPlan(
                 # Release 压缩包外层自带版本目录，这里改成“解压后整体搬运并重命名”，

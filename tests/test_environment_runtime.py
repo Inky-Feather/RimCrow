@@ -214,6 +214,28 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
             self.assertEqual(layout.executable_path, str(exe_path))
             self.assertEqual(layout.layout_kind, "windows")
 
+    def test_linux_detect_executable_accepts_waylith_launcher(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            exe_path = install_root / "RimWorld"
+            exe_path.write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Linux"):
+                self.assertEqual(GameManager.detect_executable(str(install_root)), str(exe_path))
+
+    def test_linux_resolve_layout_reports_waylith_executable(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            (install_root / "Mods").mkdir()
+            (install_root / "Data" / "Core").mkdir(parents=True)
+            exe_path = install_root / "RimWorld"
+            exe_path.write_text("", encoding="utf-8")
+
+            layout = resolve_rimworld_layout(str(install_root), "Linux")
+
+            self.assertEqual(layout.executable_path, str(exe_path))
+            self.assertEqual(layout.layout_kind, "linux")
+
     def test_linux_detect_executable_accepts_proton_windows_binary(self):
         with TemporaryDirectory() as tmp:
             install_root = Path(tmp)
@@ -232,15 +254,29 @@ class TestGameMonitorRuntimeSession(unittest.TestCase):
             with patch("backend.managers.mgr_game.platform.system", return_value="Linux"):
                 self.assertEqual(GameManager.detect_executable(str(install_root)), str(launcher_path))
 
-    def test_linux_launch_game_rejects_proton_windows_binary_for_direct_launch(self):
+    def test_linux_launch_game_routes_proton_windows_binary_through_steam(self):
         with TemporaryDirectory() as tmp:
             install_root = Path(tmp)
             exe_path = install_root / "RimWorldWin64.exe"
             exe_path.write_text("", encoding="utf-8")
 
             with patch("backend.managers.mgr_game.platform.system", return_value="Linux"), \
+                 patch.object(GameManager, "_resolve_steam_executable_for_launch", return_value="/usr/bin/steam"), \
                  patch("backend.managers.mgr_game.subprocess.Popen") as popen:
-                with self.assertRaisesRegex(Exception, "Steam/Proton"):
+                self.assertTrue(GameManager.launch_game(str(install_root)))
+
+        command = popen.call_args.args[0]
+        self.assertEqual(command[:3], ["/usr/bin/steam", "-applaunch", "294100"])
+
+    def test_linux_launch_game_reports_missing_steam_for_proton_binary(self):
+        with TemporaryDirectory() as tmp:
+            install_root = Path(tmp)
+            (install_root / "RimWorldWin64.exe").write_text("", encoding="utf-8")
+
+            with patch("backend.managers.mgr_game.platform.system", return_value="Linux"), \
+                 patch.object(GameManager, "_resolve_steam_executable_for_launch", return_value=""), \
+                 patch("backend.managers.mgr_game.subprocess.Popen") as popen:
+                with self.assertRaisesRegex(Exception, "Steam"):
                     GameManager.launch_game(str(install_root))
 
         popen.assert_not_called()

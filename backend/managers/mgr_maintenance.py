@@ -24,7 +24,7 @@ from backend.managers.mgr_steam_api import SteamWebAPI
 from backend.managers.mgr_texture_opt import TextureOptimizationManager
 from backend.managers.mgr_workshop_db import WorkshopDBManager
 from backend.paths.game_locations import resolve_steamcmd_executable_path
-from backend.text_search.tooling import get_ripgrep_status
+from backend.text_search.tooling import get_ripgrep_asset_suffix, get_ripgrep_status
 from backend.settings import settings
 from backend.utils.logger import logger
 from backend.utils.tools import current_ms
@@ -155,7 +155,7 @@ class MaintenanceManager:
         ripgrep_release = self.github_mgr.fetch_release("BurntSushi", "ripgrep", missing_ok=True) or {}
         ripgrep_current_version = str(ripgrep_status.current_version or "")
         ripgrep_latest_version = str(ripgrep_release.get("tag_name") or "")
-        ripgrep_can_install = platform.system() == "Windows" and Path(ripgrep_path).suffix.lower() != ".exe"
+        ripgrep_can_install = bool(get_ripgrep_asset_suffix()) and Path(ripgrep_path).suffix.lower() != ".exe"
         ripgrep_outdated = bool(ripgrep_status.available) and ripgrep_can_install and self._is_version_outdated(ripgrep_current_version, ripgrep_latest_version)
         items.append(
             {

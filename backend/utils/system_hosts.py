@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import secrets
+import shutil
 import socket
 import stat
 import subprocess
@@ -206,9 +207,9 @@ def _receive_message(connection: socket.socket) -> dict[str, Any]:
 
 
 def _launch_elevated_helper(entrypoint: Path, port: int, token: str) -> dict[str, Any]:
-    """运行在可回收的授权 broker 中，不把 UAC 等待放到主进程或网络锁内。"""
+    """运行在可回收的授权 broker 中，不把提权等待放到主进程或网络锁内。"""
     if os.name != "nt":
-        raise OSError("Hosts elevation is only supported on Windows")
+        return _launch_linux_elevated_helper(entrypoint, port, token)
 
     class ShellExecuteInfo(ctypes.Structure):
         _fields_ = [
@@ -257,6 +258,36 @@ def _launch_elevated_helper(entrypoint: Path, port: int, token: str) -> dict[str
             kernel.CloseHandle(info.hProcess)
         if initialized:
             ole.CoUninitialize()
+
+
+def _launch_linux_elevated_helper(entrypoint: Path, port: int, token: str) -> dict[str, Any]:
+    """通过 pkexec/polkit 启动 root helper；helper 仍只走一次性回环通道。"""
+    pkexec = shutil.which("pkexec")
+    if not pkexec:
+        raise OSError("未找到 pkexec，请安装 polkit 以启用系统 Hosts 写入。")
+    args = [] if getattr(sys, "frozen", False) or "__compiled__" in globals() else [str(entrypoint.resolve())]
+    args.extend(["--system-hosts-helper", str(port), token])
+    cmd = [pkexec, sys.executable, *args]
+    process = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    try:
+        _, stderr = process.communicate(timeout=WORKER_TIMEOUT + AUTHORIZATION_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate()
+        return {"status": "error", "error_code": "NETWORK.HOSTS.ELEVATION_TIMEOUT"}
+    if process.returncode == 0:
+        return {"status": "success"}
+    # pkexec: 126 = 授权被取消/未获授权，127 = 未授权或认证失败。
+    error_code = "NETWORK.HOSTS.ELEVATION_CANCELLED" if process.returncode == 126 else "NETWORK.HOSTS.ELEVATION_FAILED"
+    return {"status": "error", "error_code": error_code, "error": str(stderr or "").strip()[:500]}
 
 
 def run_elevated_hosts_helper(port: int, token: str) -> int:
@@ -399,7 +430,7 @@ class SystemHostsService:
             payload = json.loads(result.stdout)
             if not isinstance(payload, dict) or payload.get("status") not in {"success", "error"} or (result.returncode != 0 and payload["status"] == "success"):
                 raise ValueError("Invalid system Hosts worker result")
-            if allow_elevation and os.name == "nt" and payload.get("error_code") == "NETWORK.HOSTS.PERMISSION_DENIED":
+            if allow_elevation and payload.get("error_code") == "NETWORK.HOSTS.PERMISSION_DENIED":
                 return self._execute_elevated(hosts)
             return payload
         except subprocess.TimeoutExpired:
