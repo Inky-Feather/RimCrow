@@ -1828,6 +1828,7 @@ class SteamManager:
                 creationflags=creationflags,
                 cwd=self.steamcmd_dir,
                 bufsize=1,
+                start_new_session=(os.name != "nt"),
             )
             with self._steamcmd_lock:
                 self._steamcmd_processes[task_id] = process
@@ -2445,7 +2446,8 @@ class SteamManager:
                     creationflags=subprocess.CREATE_NO_WINDOW,
                 )
             else:
-                active_process.kill()
+                import signal
+                os.killpg(os.getpgid(active_process.pid), signal.SIGTERM)
         except Exception as e:
             logger.debug(f"终止 SteamCMD 任务失败：task_id={task_id} error={e}")
 

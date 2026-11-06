@@ -27,7 +27,7 @@ class SteamCMDController:
 
     def initialize_steamcmd(self, on_progress=None):
         """
-        执行初始化：只运行 steamcmd.exe +quit 让它自己下载依赖
+        执行初始化：只运行 SteamCMD 可执行文件 +quit 让它自己下载依赖
         """
         logger.info("开始执行 SteamCMD 初始化部署...")
         
@@ -44,11 +44,15 @@ class SteamCMDController:
         )
 
     def _clean_corrupted_init(self):
-        """清理失败的初始化残留文件 (仅保留 steamcmd.exe)"""
+        """清理失败的初始化残留文件（仅保留 SteamCMD 可执行文件）。"""
         if not Path(self.steamcmd_exe).exists(): return
-            
+        # Linux/macOS 的 steamcmd.sh 依赖同目录下的 linux32/linux64 引导文件，
+        # 不能按 Windows 单文件 exe 的方式整体清空。
+        if os.name != "nt": return
+
+        keep_name = Path(self.steamcmd_exe).name.lower()
         for item in Path(self.steamcmd_dir).iterdir():
-            if item.name.lower() != 'steamcmd.exe':
+            if item.name.lower() != keep_name:
                 try:
                     if item.is_file():
                         item.unlink()
@@ -85,6 +89,7 @@ class SteamCMDController:
                 stdin=None if debug_show_console else subprocess.PIPE,    # 非调试模式保留 stdin 防止 SteamCMD 等待用户输入卡死
                 startupinfo=startupinfo,
                 creationflags=creationflags,
+                start_new_session=(os.name != "nt"),
                 text=True,
                 encoding='utf-8',         # SteamCMD 有时会有乱码
                 errors='replace'
