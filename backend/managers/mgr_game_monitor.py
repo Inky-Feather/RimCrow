@@ -96,11 +96,20 @@ class GameMonitor:
         return str(process_name or "").strip().lower() in names
 
     def _detect_game_process(self, processes=None) -> bool:
-        process_source = processes if processes is not None else psutil.process_iter(['name'])
+        if processes is not None:
+            process_source = processes
+        else:
+            process_source = psutil.process_iter(['name', 'cmdline'])
         for proc in process_source:
             try:
-                if self._is_target_process(proc.info.get('name')):
+                info = proc.info
+                if self._is_target_process(info.get('name')):
                     return True
+                # Proton/Wine 下可执行名可能是 loader，真正的游戏名只出现在命令行里。
+                for part in info.get('cmdline') or []:
+                    candidate = str(part or "").replace("\\", "/").rsplit("/", 1)[-1]
+                    if self._is_target_process(candidate):
+                        return True
             except Exception:
                 continue
         return False

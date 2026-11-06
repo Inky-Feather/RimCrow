@@ -14,6 +14,7 @@ from backend.paths.game_locations import (
     get_default_player_log_paths,
     get_default_steam_data_root_candidates,
     get_default_user_data_paths,
+    resolve_steam_executable_path,
 )
 from backend.paths.core import unique_paths
 from backend.paths.rimworld_layout import normalize_rimworld_install_root, resolve_rimworld_layout
@@ -145,14 +146,28 @@ class GameManager:
                 subprocess.Popen(cmd)
             else: # Linux
                 if target_exe.lower().endswith(".exe"):
-                    raise Exception("Linux 下检测到 Windows 版 RimWorld，请通过 Steam/Proton 启动。")
-                cmd = [target_exe] + args
-                subprocess.Popen(cmd, cwd=game_install_path)
+                    # Proton 安装目录里只有 .exe，直接执行会失败；交给 Steam 客户端按 AppID 启动。
+                    steam_exe = cls._resolve_steam_executable_for_launch()
+                    if not steam_exe:
+                        raise Exception("检测到 Windows 版 RimWorld，但未找到 Steam 客户端。请安装 Steam 或改用原生 Linux 版。")
+                    cmd = [steam_exe, "-applaunch", RIMWORLD_STEAM_APP_ID_STR] + args
+                    subprocess.Popen(cmd, cwd=game_install_path)
+                else:
+                    cmd = [target_exe] + args
+                    subprocess.Popen(cmd, cwd=game_install_path)
             from backend.utils.logger import logger 
             logger.debug(f"通过游戏本体命令启动 RimWorld: {cmd}")
             return True
         except Exception as e:
             raise Exception(f"执行启动指令失败: {str(e)}")
+
+    @classmethod
+    def _resolve_steam_executable_for_launch(cls) -> str:
+        for root in cls._detect_steam_root_candidates():
+            executable = resolve_steam_executable_path(root, system_name=platform.system())
+            if executable and os.path.exists(executable):
+                return executable
+        return ""
 
     @staticmethod
     def get_game_version(game_install_path):
