@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 import html
 import hashlib
 import threading
+import tarfile
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
@@ -3284,14 +3285,34 @@ class GithubManager:
             raise InterruptedError("Task cancelled by user")
 
     def _extract_install_archive(self, archive_path: Path, target: Path, task: DownloadTask) -> None:
+        lower_name = archive_path.name.lower()
+        if lower_name.endswith(".zip"):
+            self._extract_zip_archive(archive_path, target, task)
+            return
+        if lower_name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".tar")):
+            self._extract_tar_archive(archive_path, target, task)
+            return
+        raise ValueError(f"不支持的压缩包格式: {archive_path.name}")
+
+    @staticmethod
+    def _safe_archive_path(target: Path, raw_name: str) -> Path:
+        normalized = str(raw_name or "").replace("\\", "/")
+        if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+            raise ValueError("压缩包包含非法路径或符号链接")
+        path = (target / normalized).resolve()
+        if not path.is_relative_to(target.resolve()):
+            raise ValueError("压缩包包含非法路径或符号链接")
+        return path
+
+    def _extract_zip_archive(self, archive_path: Path, target: Path, task: DownloadTask) -> None:
         with zipfile.ZipFile(archive_path) as archive:
             entries = archive.infolist()
             if sum(entry.file_size for entry in entries) > shutil.disk_usage(target).free:
                 raise OSError("磁盘空间不足，无法准备安装目录")
             for entry in entries:
                 self._check_install_cancelled(task)
-                path = (target / entry.filename.replace("\\", "/")).resolve()
-                if not path.is_relative_to(target.resolve()) or (entry.external_attr >> 16) & 0o170000 == 0o120000:
+                path = self._safe_archive_path(target, entry.filename)
+                if (entry.external_attr >> 16) & 0o170000 == 0o120000:
                     raise ValueError("压缩包包含非法路径或符号链接")
                 if entry.is_dir():
                     path.mkdir(parents=True, exist_ok=True)
@@ -3301,6 +3322,41 @@ class GithubManager:
                     while chunk := source.read(1024 * 1024):
                         self._check_install_cancelled(task)
                         output.write(chunk)
+                mode = (entry.external_attr >> 16) & 0o777
+                if mode:
+                    try:
+                        path.chmod(mode)
+                    except OSError:
+                        pass
+
+    def _extract_tar_archive(self, archive_path: Path, target: Path, task: DownloadTask) -> None:
+        with tarfile.open(archive_path, mode="r:*") as archive:
+            members = archive.getmembers()
+            if sum(member.size for member in members if member.isreg()) > shutil.disk_usage(target).free:
+                raise OSError("磁盘空间不足，无法准备安装目录")
+            for member in members:
+                self._check_install_cancelled(task)
+                path = self._safe_archive_path(target, member.name)
+                if member.issym() or member.islnk() or member.ischr() or member.isblk() or member.isfifo():
+                    raise ValueError("压缩包包含非法路径或符号链接")
+                if member.isdir():
+                    path.mkdir(parents=True, exist_ok=True)
+                    continue
+                if not member.isfile():
+                    continue
+                path.parent.mkdir(parents=True, exist_ok=True)
+                source = archive.extractfile(member)
+                if source is None:
+                    raise ValueError("无法读取压缩包内容")
+                with source, path.open("wb") as output:
+                    while chunk := source.read(1024 * 1024):
+                        self._check_install_cancelled(task)
+                        output.write(chunk)
+                # tar 保留可执行位；zip 在 Linux 上也会带 external_attr，但这里只处理 tar 的常见场景。
+                try:
+                    path.chmod((member.mode & 0o777) or 0o644)
+                except OSError:
+                    pass
 
     def _validate_mod_source(self, root: Path, archive_root: Path, request: GithubInstallRequest) -> str:
         xml_root = ET.parse(root / "About" / "About.xml").getroot()
