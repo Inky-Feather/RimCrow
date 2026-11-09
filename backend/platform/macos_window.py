@@ -112,6 +112,50 @@ def apply_window_appearance(mode: str) -> bool:
         return False
 
 
+def _clear_titlebar_background(appkit, window) -> None:
+    """清掉 pywebview 给标题栏 view 设的 windowBackgroundColor。
+
+    pywebview 在非 frameless 窗口里执行过：
+        contentView().superview().subviews().lastObject().setBackgroundColor_(NSColor.windowBackgroundColor())
+    而窗口外观被我们设成 DarkAqua 后，这个语义色会解析成深灰（~#323232），
+    在内容铺满窗口的情况下仍会盖出顶部一条灰条。这里把标题栏相关 view 的背景清成透明。
+    """
+    targets = []
+    try:
+        close_button = window.standardWindowButton_(appkit.NSWindowCloseButton)
+        titlebar_view = close_button.superview() if close_button is not None else None
+        if titlebar_view is not None:
+            targets.append(titlebar_view)
+            container_view = titlebar_view.superview()
+            if container_view is not None:
+                targets.append(container_view)
+    except Exception:
+        logger.debug("读取标题栏按钮视图失败", exc_info=True)
+    try:
+        content_view = window.contentView()
+        frame_view = content_view.superview() if content_view is not None else None
+        if frame_view is not None:
+            for subview in list(frame_view.subviews() or []):
+                try:
+                    class_name = str(subview.className() or "")
+                except Exception:
+                    class_name = ""
+                if "Titlebar" in class_name:
+                    targets.append(subview)
+    except Exception:
+        logger.debug("遍历窗口 frame view 失败", exc_info=True)
+    for view in targets:
+        try:
+            background_setter = getattr(view, "setBackgroundColor_", None)
+            if background_setter is not None:
+                background_setter(appkit.NSColor.clearColor())
+            draws_background_setter = getattr(view, "setDrawsBackground_", None)
+            if draws_background_setter is not None:
+                draws_background_setter(False)
+        except Exception:
+            logger.debug("清理标题栏背景失败", exc_info=True)
+
+
 # NSWindowTitlebarSeparatorStyleNone 是 macOS 11+ 的枚举，部分 pyobjc 版本没有导出模块常量。
 _TITLEBAR_SEPARATOR_STYLE_NONE = 0
 
@@ -138,6 +182,8 @@ def _apply_unified_titlebar_on_main_thread() -> bool:
         separator_setter = getattr(window, "setTitlebarSeparatorStyle_", None)
         if separator_setter is not None:
             separator_setter(getattr(AppKit, "NSWindowTitlebarSeparatorStyleNone", _TITLEBAR_SEPARATOR_STYLE_NONE))
+        # pywebview 给标题栏 view 刷过 windowBackgroundColor，必须清掉这层底色，否则仍有一条灰条。
+        _clear_titlebar_background(AppKit, window)
     except Exception:
         logger.debug("应用标题栏融合失败", exc_info=True)
         return False
