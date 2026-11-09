@@ -38,15 +38,39 @@ def _resolve_base_resource_dir() -> Path:
 # 1. 资源目录：存放前端文件、内置工具 (对应开发时的项目根目录)
 BASE_RESOURCE_DIR = _resolve_base_resource_dir()
 
-# 配置文件路径
-HOME_DIR = Path(os.getcwd())
-# 获取 exe 所在的真实目录
-if getattr(sys, 'frozen', False):
-    # PyInstaller 打包模式 时，指向 exe 所在目录
-    HOME_DIR = Path(sys.executable).parent
-else:
+
+def _resolve_home_dir() -> Path:
+    """解析用户数据根目录（macOS 打包态重定向到 Application Support）。
+
+    仅 macOS + PyInstaller 打包态生效，Windows/Linux 行为保持不变。
+    原因：PyInstaller 的 .app 里 HOME_DIR 原本等于 Contents/MacOS，直接在包内写
+    data/ 会让 codesign 复验失败，且换版本会丢配置；因此统一放到用户数据目录。
+    首次启动时若包内含内置 data/（构建时用 RIMCROW_PACK_SEED_DATA 播种），
+    复制一份到用户目录作为初始数据；之后只读写用户目录。
+    """
+    if getattr(sys, 'frozen', False):
+        if sys.platform == "darwin":
+            home_dir = Path.home() / "Library" / "Application Support" / "RimCrow"
+            try:
+                if not (home_dir / "data").exists():
+                    seed_dir = BASE_RESOURCE_DIR / "data"
+                    if seed_dir.is_dir():
+                        home_dir.mkdir(parents=True, exist_ok=True)
+                        shutil.copytree(seed_dir, home_dir / "data", dirs_exist_ok=True)
+                        print(f"[settings] 已从包内种子初始化用户数据目录: {home_dir / 'data'}")
+            except OSError as exc:
+                # 极端情况下用户目录不可写时退回包内目录（此时签名会失效，仅保证能启动）。
+                print(f"[settings] 初始化用户数据目录失败，回退到包内目录: {exc}")
+                return Path(sys.executable).parent
+            return home_dir
+        # PyInstaller 打包模式 时，指向 exe 所在目录
+        return Path(sys.executable).parent
     # 开发模式, 指向当前文件所在目录的上一级（项目根目录）
-    HOME_DIR = Path(__file__).resolve().parent.parent
+    return Path(__file__).resolve().parent.parent
+
+
+# 配置文件路径（用户数据根目录；macOS 打包态的说明见 _resolve_home_dir）
+HOME_DIR = _resolve_home_dir()
 
 DATA_DIR = HOME_DIR / "data"                # 数据目录
 CONFIG_PATH = DATA_DIR / "config.json"      # 配置文件路径

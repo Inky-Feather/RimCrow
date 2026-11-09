@@ -15,6 +15,7 @@ import { useWorkspaceStore } from '../../features/workspace/workspaceStore'
 import { useModResidueStore } from '../../features/mod-residue/modResidueStore'
 import { useTaskStore } from './taskStore'
 import { useStartupStore } from './startupStore'
+import { waitForPywebviewApiReady } from '../bridge/pywebviewBridge'
 import { DEFAULT_THEME_ID, applyTheme, findThemeById, mergeThemes } from '../../features/settings/theme/themeManager'
 import { usePathActions } from './app/pathActions'
 import { useSettingsActions } from './app/settingsActions'
@@ -677,15 +678,8 @@ export const useAppStore = defineStore('app', () => {
   };
 
   // === Utils ===
-  // 等待后端就绪
-  const waitForBackend = () => {
-    return new Promise((resolve) => {
-      // 情况 1: 如果 API 已经存在（前端加载慢，后端已经注入了），直接继续
-      if (window.pywebview) resolve()
-      // 情况 2: API 还没来（前端加载快），监听 pywebviewready 事件, { once: true } 确保只触发一次
-      else window.addEventListener('pywebviewready', () => resolve(), { once: true })
-    })
-  }
+  // 等待后端就绪：只有 window.pywebview 空壳不算就绪，必须等 api 方法补齐（见 pywebviewBridge）。
+  const waitForBackend = () => waitForPywebviewApiReady()
 
   const notifyFrontendReady = async () => {
     if (window.pywebview?.api?.monitor_frontend_ready) {

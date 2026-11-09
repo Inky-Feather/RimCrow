@@ -369,6 +369,18 @@ def _run_steam_api_probe(payload: str) -> str:
         return "probe_error"
 
 
+# macOS 上没有 SteamworksPy 运行库，改用 RimWorld 自带的 libsteam_api.dylib（ctypes，
+# 运行时从游戏安装目录探测，不打包、不拷贝）。仅这些动作走 Darwin 分支，Windows 逻辑不变。
+_DARWIN_STEAM_CTYPES_ACTIONS = frozenset({
+    "probe_status",
+    "query_workshop_states",
+    "subscribe",
+    "subscribe_batch",
+    "unsubscribe",
+    "unsubscribe_batch",
+})
+
+
 def run_steam_worker(action: str, payload: str):
     """
     独立进程运行的 Steam API 代理。
@@ -379,6 +391,17 @@ def run_steam_worker(action: str, payload: str):
     if action == "steam-api-probe":
         result = _run_steam_api_probe(payload)
         print(f"STEAM_API_PROBE_RESULT:{result}")
+        return
+
+    # Darwin 分支：ctypes 直连游戏自带的 steam_api.dylib。
+    # 找不到 dylib / Steam 未运行 / 未登录时模块内部返回结构化降级信息并正常退出。
+    if platform.system() == "Darwin" and action in _DARWIN_STEAM_CTYPES_ACTIONS:
+        try:
+            from backend.platform.steamworks_ctypes import run_mac_steam_worker_action
+
+            run_mac_steam_worker_action(action, payload)
+        except Exception as exc:
+            logger.error(f"macOS Steamworks ctypes worker 执行失败: action={action}, error={exc}")
         return
 
     try:
