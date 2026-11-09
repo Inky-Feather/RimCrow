@@ -140,8 +140,55 @@ const connectEventStream = (baseUrl, clientId) => {
   eventStream.onerror = () => {}
 }
 
+const DESKTOP_API_READY_TIMEOUT_MS = 10000
+
+const hasPopulatedDesktopApi = () => {
+  const api = window.pywebview?.api
+  return !!api && typeof api === 'object' && Object.keys(api).length > 0
+}
+
+// pywebview 在文档一开始就注入了 window.pywebview.api 空壳，真正的 API 方法要等
+// finish.js 注入后才补齐并派发 pywebviewready。必须等方法就位再放行首屏，否则启动期
+// 第一次 api 调用拿到的是 undefined，整个初始化流程会中断（mac 的 WKWebView 注入更晚，必现）。
+const waitForPopulatedDesktopApi = (timeoutMs = DESKTOP_API_READY_TIMEOUT_MS) => new Promise((resolve) => {
+  if (hasPopulatedDesktopApi()) {
+    resolve(true)
+    return
+  }
+  let timer = null
+  const cleanup = () => {
+    window.removeEventListener('pywebviewready', onReady)
+    if (timer) window.clearTimeout(timer)
+  }
+  const onReady = () => {
+    if (!hasPopulatedDesktopApi()) return
+    cleanup()
+    resolve(true)
+  }
+  window.addEventListener('pywebviewready', onReady)
+  timer = window.setTimeout(() => {
+    cleanup()
+    resolve(hasPopulatedDesktopApi())
+  }, timeoutMs)
+})
+
+// 启动编排统一用这个判断「后端桥是否可用」：桌面模式等 api 方法补齐，浏览器模式等会话建好。
+export const waitForPywebviewApiReady = async () => {
+  if (window.pywebview) return waitForPopulatedDesktopApi()
+  if (window.__APP_BROWSER_SESSION_ID__) return true
+  return new Promise((resolve) => {
+    if (window.pywebview?.api) {
+      resolve(true)
+      return
+    }
+    window.addEventListener('pywebviewready', () => resolve(true), { once: true })
+  })
+}
+
 export const setupPywebviewBridge = async () => {
-  if (window.pywebview?.api) {
+  if (window.pywebview) {
+    const apiReady = await waitForPopulatedDesktopApi()
+    if (!apiReady) console.warn('pywebview API 在超时前仍未就绪，继续以桌面模式启动')
     window.__APP_RUNTIME_MODE__ = 'desktop'
     return 'desktop'
   }
