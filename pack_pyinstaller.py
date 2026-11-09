@@ -118,10 +118,16 @@ def _prepare_pyinstaller_env(base_env: dict[str, str] | None = None) -> dict[str
     return env
 
 
-def _resolve_steamworkspy_source_dir(project_root: Path) -> Path:
+def _resolve_steamworkspy_source_dir(project_root: Path) -> Path | None:
+    """解析 SteamworksPy 源码目录；缺失时返回 None（Steamworks 降级为可选）。
+
+    macOS 上没有现成的 SteamworksPy.dylib（Valve 的 libsteam_api.dylib 也不随包分发，
+    由后端运行时从游戏目录探测），因此 macOS 构建必须允许跳过这些参数。
+    """
     source_dir = project_root / "submodules" / "SteamworksPy"
     if not (source_dir / "steamworks" / "__init__.py").exists():
-        raise FileNotFoundError(f"未找到 SteamworksPy 源码目录: {source_dir}")
+        print(f"提示: 未找到 SteamworksPy 源码目录，将跳过 Steamworks 相关打包参数: {source_dir}")
+        return None
     return source_dir
 
 
@@ -230,6 +236,11 @@ def _iter_release_output_files(output_path: Path):
 
 
 def _steamworks_runtime_files(project_root: Path) -> list[Path]:
+    """返回需要随包分发的 Steamworks 运行库；缺失时返回空列表（可选依赖）。
+
+    注意：macOS 上 Valve 的 libsteam_api.dylib 不允许随包分发，运行时由后端从
+    Steam 游戏目录探测，因此这里只跳过，不报错。
+    """
     names_by_platform = {
         "win32": ["SteamworksPy64.dll", "steam_api64.dll"],
         "darwin": ["SteamworksPy.dylib", "libsteam_api.dylib"],
@@ -240,7 +251,8 @@ def _steamworks_runtime_files(project_root: Path) -> list[Path]:
     files = [runtime_dir / name for name in names_by_platform[platform_key]]
     missing = [path for path in files if not path.is_file()]
     if missing:
-        raise FileNotFoundError("缺少当前平台 Steamworks 运行库: " + ", ".join(str(path) for path in missing))
+        print("提示: 缺少当前平台 Steamworks 运行库，已跳过随包分发: " + ", ".join(str(path) for path in missing))
+        return []
     return files
 
 
@@ -374,6 +386,15 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         steamworks_data_args = []
         for runtime_file in _steamworks_runtime_files(project_root):
             steamworks_data_args.extend(["--add-data", _pyinstaller_add_data_arg(str(runtime_file), "tools/steamworks")])
+        # SteamworksPy 源码目录缺失时（如 macOS 未编译 dylib）整套 Steamworks 参数降级跳过；
+        # 后端运行时会从 Steam 游戏目录探测运行库，不影响其余功能。
+        steamworks_source_args = ["--paths", str(steamworkspy_source_dir)] if steamworkspy_source_dir else []
+        steamworks_collect_args = ["--collect-submodules", "steamworks"] if steamworkspy_source_dir else []
+        # 可选：由 macOS 构建脚本指定的种子数据目录（首次启动播种到用户数据目录）。
+        seed_data_args = []
+        seed_data_dir = str(os.environ.get("RIMCROW_PACK_SEED_DATA", "")).strip()
+        if seed_data_dir and Path(seed_data_dir).is_dir():
+            seed_data_args.extend(["--add-data", _pyinstaller_add_data_arg(seed_data_dir, "data")])
         # 2. 构建命令
         # 这些模块在源码运行时可以被 Python 正常动态发现，
         # 但在 PyInstaller 单文件模式下，命名空间插件和动态加载模块经常会漏收。
@@ -383,13 +404,14 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             "uv", "run", "pyinstaller", # 使用uv运行pyinstaller
             "-w",  # 无控制台窗口
             "--noconfirm",  # 跳过确认提示
-            "--paths", str(steamworkspy_source_dir),
+            *steamworks_source_args,
             "--additional-hooks-dir", hook_dir_path,
             "--add-data", _pyinstaller_add_data_arg("frontend/dist", "frontend/dist"),
+            *seed_data_args,
             *steamworks_data_args,
             "--collect-binaries", "tiktoken",
             "--collect-data", "tiktoken",
-            "--collect-submodules", "steamworks",
+            *steamworks_collect_args,
             "--collect-submodules", "tiktoken",
             "--collect-submodules", "tiktoken_ext",
             "--hidden-import", "tiktoken_ext",
@@ -424,7 +446,8 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
             cmd.extend(["--osx-bundle-identifier", "com.inkyfeather.rimcrow"])
         
         env = _prepare_pyinstaller_env()
-        _append_pythonpath(env, steamworkspy_source_dir)
+        if steamworkspy_source_dir:
+            _append_pythonpath(env, steamworkspy_source_dir)
 
         print(f"执行命令: {' '.join(cmd)}")
         # 3. 执行打包
@@ -767,7 +790,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"=== 开始打包 {APP_NAME} v{app_version} ===")
         if not packApplication(
             main_file=APP_MAIN,
-            icon_path=ICON_PATH,
+            icon_path=os.environ.get("RIMCROW_ICON_PATH") or ICON_PATH,
             name=APP_NAME,
             splash_path=SPLASH_PATH,
             version=app_version,
