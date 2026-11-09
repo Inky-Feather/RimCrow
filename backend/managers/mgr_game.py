@@ -157,11 +157,19 @@ class GameManager:
     @staticmethod
     def get_game_version(game_install_path):
         """获取游戏版本号"""
-        normalized_install = normalize_rimworld_install_root(game_install_path, system_name=platform.system())
-        version_file = os.path.join(normalized_install, 'Version.txt')
-        if os.path.exists(version_file):
+        system_name = platform.system()
+        normalized_install = normalize_rimworld_install_root(game_install_path, system_name=system_name)
+        # macOS 的 Version.txt 在 RimWorldMac.app 包内，安装根目录下没有，需要补上 bundle 内路径。
+        version_candidates = [os.path.join(normalized_install, 'Version.txt')]
+        if system_name == 'Darwin':
+            bundle_path = resolve_rimworld_layout(normalized_install, system_name=system_name).app_bundle_path
+            if bundle_path:
+                version_candidates.append(os.path.join(bundle_path, 'Version.txt'))
+        for version_file in version_candidates:
+            if not os.path.exists(version_file):
+                continue
             try:
-                with open(version_file, 'r', encoding='utf-8-sig') as f: 
+                with open(version_file, 'r', encoding='utf-8-sig') as f:
                     # 使用 'utf-8-sig' 可以自动去除 BOM 头 (\ufeff)
                     content = f.read().strip()
                     if content: return content
