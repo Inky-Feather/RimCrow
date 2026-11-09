@@ -130,6 +130,27 @@ export const findThemeById = (themes = [], themeId = '') => {
   return themes.find(theme => theme.id === id) || themes.find(theme => theme.id === DEFAULT_THEME_ID) || themes[0] || getDefaultTheme()
 }
 
+// 原生窗口外观只跟随应用主题的明暗：macOS 上让标题栏同步成深/浅色，避免浅色系统下出现白条。
+let lastAppliedWindowAppearance = ''
+
+const applyWindowAppearance = (isLightTheme) => {
+  const mode = isLightTheme ? 'light' : 'dark'
+  if (mode === lastAppliedWindowAppearance) return
+  if (typeof window === 'undefined') return
+  // 浏览器模式没有原生窗口，桌面桥未就绪时也先跳过（下次主题应用再试）。
+  if (window.__APP_RUNTIME_MODE__ === 'browser') return
+  const api = window.pywebview?.api
+  if (typeof api?.set_window_appearance !== 'function') return
+  lastAppliedWindowAppearance = mode
+  try {
+    const result = api.set_window_appearance(mode)
+    // pywebview 的 API 返回 Promise；外观只是视觉优化，失败不打扰用户。
+    if (result && typeof result.catch === 'function') result.catch(() => {})
+  } catch (error) {
+    // 忽略：标题栏外观失败不影响主题本身。
+  }
+}
+
 export const applyTheme = (theme) => {
   if (typeof document === 'undefined') return
   const normalized = normalizeTheme(theme || getDefaultTheme())
@@ -196,4 +217,5 @@ export const applyTheme = (theme) => {
   root.dataset.theme = normalized.id
   root.classList.toggle('dark', !isLightTheme)
   root.style.colorScheme = isLightTheme ? 'light' : 'dark'
+  applyWindowAppearance(isLightTheme)
 }

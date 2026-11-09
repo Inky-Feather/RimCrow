@@ -380,6 +380,16 @@ def main():
             # `shown` 是“窗口可见”的信号，用它来结束 PyInstaller 启动画面；
             # `loaded` 仍然保留，用于区分页面是否真正完成加载，并配合超时提示给用户更准确的信息。
             window.events.shown += mark_desktop_window_shown
+            if sys.platform == 'darwin':
+                def apply_mac_unified_titlebar():
+                    # macOS：窗口一出现就融合标题栏（Electron hiddenInset 效果），
+                    # 放在 shown 阶段、页面加载之前，避免首屏出现“先有标题栏再跳掉”的闪动。
+                    try:
+                        from backend.platform.macos_window import apply_unified_titlebar
+                        apply_unified_titlebar()
+                    except Exception:
+                        logger.debug("macOS 标题栏融合失败", exc_info=True)
+                window.events.shown += apply_mac_unified_titlebar
             window.events.loaded += mark_desktop_page_loaded
             window.events.resized += window_state.on_resized
             window.events.moved += window_state.on_moved

@@ -190,6 +190,11 @@ export const setupPywebviewBridge = async () => {
     const apiReady = await waitForPopulatedDesktopApi()
     if (!apiReady) console.warn('pywebview API 在超时前仍未就绪，继续以桌面模式启动')
     window.__APP_RUNTIME_MODE__ = 'desktop'
+    // macOS 桌面模式下原生标题栏已与应用内容融合（见 backend/platform/macos_window.py），
+    // 给根节点打标记，让布局顶部为悬浮的红绿灯让出空间；必须早于 mount 执行。
+    if (/Mac/i.test(navigator.userAgent || '')) {
+      document.documentElement.classList.add('mac-titlebar-unified')
+    }
     return 'desktop'
   }
 

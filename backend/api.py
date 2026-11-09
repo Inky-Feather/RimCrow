@@ -1150,6 +1150,36 @@ class API:
         """获取主窗口"""
         return self._window
 
+    @log_api_call
+    def set_window_appearance(self, mode: str = "dark"):
+        """
+        切换主窗口的原生外观，让 macOS 标题栏跟随应用主题的明暗。
+
+        - 仅 macOS 桌面模式真正生效；非 macOS 或浏览器模式返回 applied=False，前端静默忽略；
+        - 纯视觉优化：失败只记日志，不抛异常、不弹提示。
+        """
+        try:
+            from backend.platform.macos_window import apply_window_appearance, normalize_appearance_mode
+            normalized = normalize_appearance_mode(mode)
+            if not normalized:
+                return ApiResponse.error(
+                    "窗口外观模式无效",
+                    code="WINDOW.APPEARANCE.INVALID_MODE",
+                    user_message="窗口外观模式无效。",
+                    context={"mode": mode},
+                )
+            applied = bool(apply_window_appearance(normalized))
+        except Exception as exc:
+            logger.debug("设置窗口外观失败: %s", exc, exc_info=True)
+            return ApiResponse.error(
+                "设置窗口外观失败",
+                code="WINDOW.APPEARANCE.APPLY_FAILED",
+                detail=exc,
+                user_message="窗口外观设置未完成，标题栏已保持系统默认外观。",
+                context={"mode": mode},
+            )
+        return ApiResponse.success({"applied": applied, "mode": normalized})
+
     def is_browser_runtime(self) -> bool:
         return self._runtime_mode == 'browser'
 

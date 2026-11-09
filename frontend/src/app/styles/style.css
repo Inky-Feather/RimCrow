@@ -602,3 +602,10 @@ body {
   z-index: 99999 !important;
   /* position: relative;  */
 }
+
+/* macOS 桌面模式：原生标题栏与应用内容融合（等价 Electron titleBarStyle=hiddenInset）。
+   红绿灯悬浮在应用自己的背景上，根布局顶部让出空间，避免内容被红绿灯遮挡。
+   28px 为 macOS 标准标题栏高度，红绿灯底边约在 20px，留约 8px 间距。 */
+html.mac-titlebar-unified #app > div {
+  padding-top: 28px;
+}
