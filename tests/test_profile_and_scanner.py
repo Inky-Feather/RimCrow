@@ -1720,6 +1720,7 @@ class TestModAnalyzer(unittest.TestCase):
             "game_xml": 0,
             "patch_xml": 0,
             "lang_xml": 0,
+            "lang_definjected": 0,
             "image": 0,
             "audio": 0,
         }
@@ -1746,6 +1747,24 @@ class TestModAnalyzer(unittest.TestCase):
         result = self.analyzer._finalize(info)
 
         self.assertEqual(result["mod_type"], "LanguagePack")
+
+    def test_finalize_translation_pack_with_helper_dll_is_language_pack(self):
+        # 汉化包附带辅助 DLL（处理硬编码文本）且含 DefInjected 翻译时，仍应识别为语言包
+        info = self._build_info(code_dll=1, lang_xml=63, lang_definjected=40)
+        info["has_assemblies"] = True
+
+        result = self.analyzer._finalize(info)
+
+        self.assertEqual(result["mod_type"], "LanguagePack")
+
+    def test_finalize_code_utility_with_own_localization_stays_assembly(self):
+        # 纯代码工具模组自带 Keyed 界面本地化（无 DefInjected）时，不应被误判为语言包
+        info = self._build_info(code_dll=1, lang_xml=5)
+        info["has_assemblies"] = True
+
+        result = self.analyzer._finalize(info)
+
+        self.assertEqual(result["mod_type"], "Assembly")
 
     def test_finalize_mixed_requires_game_xml_image_and_audio(self):
         mixed_info = self._build_info(game_xml=2, image=6, audio=3)

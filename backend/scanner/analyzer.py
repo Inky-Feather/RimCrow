@@ -53,8 +53,9 @@ class ModAnalyzer:
             'file_stats': {
                 'code_dll': 0,    # 程序集
                 'game_xml': 0,    # Defs (游戏性定义)
-                'patch_xml': 0,   # Patches (补丁)
+                'patch_xml': 0,   # 补丁
                 'lang_xml': 0,    # 翻译文件
+                'lang_definjected': 0,  # DefInjected 翻译文件（翻译其它内容的 Def 文本）
                 'image': 0,       # 贴图
                 'audio': 0,       # 音频
             },
@@ -91,6 +92,7 @@ class ModAnalyzer:
             
             is_about_dir = 'about' in lower_path_parts
             is_lang_dir = 'languages' in lower_path_parts
+            is_lang_definjected_dir = is_lang_dir and 'definjected' in lower_path_parts
             is_defs_dir = 'defs' in lower_path_parts
             is_patches_dir = 'patches' in lower_path_parts
             is_assemblies_dir = 'assemblies' in lower_path_parts
@@ -110,6 +112,8 @@ class ModAnalyzer:
                         pass # 忽略 About.xml, Manifest.xml 等元数据
                     elif is_lang_dir:
                         info['file_stats']['lang_xml'] += 1
+                        if is_lang_definjected_dir:
+                            info['file_stats']['lang_definjected'] += 1
                     elif is_patches_dir:
                         info['file_stats']['patch_xml'] += 1
                     elif is_defs_dir:
@@ -331,12 +335,16 @@ class ModAnalyzer:
         has_audio = c['audio'] > 0
         
         # 类型判定优先级
-        if info['has_assemblies']:
+        is_translation_pack = has_lang_xml and ( (not has_game_xml and not has_patch_xml) or (c['patch_xml']+c['game_xml'] == 1 and info['has_tip']))
+        # 翻译包可附带辅助 DLL 处理硬编码文本：自身无 Defs 时出现的 DefInjected 翻译必然指向其它模组，
+        # 而纯代码工具模组自带的界面本地化只有 Keyed；据此放行带辅助 DLL 的翻译包，避免误伤工具模组。
+        is_helper_dll_translation_pack = is_translation_pack and info['has_assemblies'] and c.get('lang_definjected', 0) > 0
+        if info['has_assemblies'] and not is_helper_dll_translation_pack:
             mod_type = 'Assembly' # 包含代码 (通常也是最复杂的)
         elif has_game_xml and has_image and has_audio:
             mod_type = 'Mixed'     # 混合包：同时包含核心定义、贴图和音频，通常是大型模组
-        elif has_lang_xml and ( (not has_game_xml and not has_patch_xml) or (c['patch_xml']+c['game_xml'] == 1 and info['has_tip'])):
-            mod_type = 'LanguagePack' # 纯翻译（部分翻译包还有Tip文件）
+        elif is_translation_pack:
+            mod_type = 'LanguagePack' # 纯翻译（部分翻译包还有Tip文件，也可含辅助 DLL）
         elif has_image and not has_game_xml and not has_lang_xml and not has_audio:
             mod_type = 'Texture'  # 纯贴图
         elif has_audio and not has_image and not has_lang_xml and (c['patch_xml'] + c['game_xml'] <= 1):
