@@ -24,7 +24,7 @@ except ImportError:
 APP_MAIN = "main.py"
 APP_NAME = "RimCrow"
 APP_COMPANY = "Inky Feather"
-ICON_PATH = "icon.ico"
+ICON_PATH = "icon.icns" if sys.platform == "darwin" else "icon.ico"
 SPLASH_PATH = "splash.png"
 
 DEFAULT_PACK_CONFIG: dict[str, Any] = {
@@ -372,8 +372,11 @@ def packApplication(main_file="main.py", icon_path="", name="", splash_path="", 
         hook_dir_path = create_pyinstaller_hook_dir()
         upx_dir_path = resolve_upx_dir(upx_dir) if _is_windows() else ""
         steamworks_data_args = []
-        for runtime_file in _steamworks_runtime_files(project_root):
-            steamworks_data_args.extend(["--add-data", _pyinstaller_add_data_arg(str(runtime_file), "tools/steamworks")])
+        try:
+            for runtime_file in _steamworks_runtime_files(project_root):
+                steamworks_data_args.extend(["--add-data", _pyinstaller_add_data_arg(str(runtime_file), "tools/steamworks")])
+        except FileNotFoundError as exc:
+            print(f"警告: 未找到当前平台 Steamworks 运行库，已跳过（SteamWorks 相关功能不可用，SteamCMD 路径仍可用）。原因: {exc}")
         # 2. 构建命令
         # 这些模块在源码运行时可以被 Python 正常动态发现，
         # 但在 PyInstaller 单文件模式下，命名空间插件和动态加载模块经常会漏收。
