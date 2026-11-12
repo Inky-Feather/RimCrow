@@ -32,15 +32,43 @@ def _path_if_exists(path: Path) -> str:
     return _normalized_path(path) if path.exists() else ""
 
 
+MAC_BUNDLE_NAMES = ("RimWorld.app", "RimWorldMac.app")
+MAC_EXECUTABLE_NAMES = ("RimWorld", "RimWorldMac")
+
+
 def _find_macos_bundle(path: Path) -> Path | None:
     if path.suffix.lower() == ".app":
         return path
     for candidate in [path, *path.parents]:
         if candidate.suffix.lower() == ".app":
             return candidate
-    if (path / "RimWorldMac.app").exists():
-        return path / "RimWorldMac.app"
+    # RimWorld 1.7 (Waylith engine) 的 macOS 包名为 RimWorld.app，1.6 及更早为 RimWorldMac.app。
+    for bundle_name in MAC_BUNDLE_NAMES:
+        if (path / bundle_name).exists():
+            return path / bundle_name
+    try:
+        for child in sorted(path.iterdir()):
+            if child.suffix.lower() == ".app":
+                return child
+    except OSError:
+        pass
     return None
+
+
+def _mac_official_data_root(install_root: Path, bundle: Path) -> Path:
+    """1.7 起 Data 位于安装根目录；1.6 及更早位于 .app 内。"""
+    for candidate in (install_root / "Data", bundle / "Data"):
+        if candidate.exists():
+            return candidate
+    return install_root / "Data"
+
+
+def _mac_executable(bundle: Path) -> Path:
+    for name in MAC_EXECUTABLE_NAMES:
+        candidate = bundle / "Contents" / "MacOS" / name
+        if candidate.exists():
+            return candidate
+    return bundle / "Contents" / "MacOS" / MAC_EXECUTABLE_NAMES[0]
 
 
 def resolve_rimworld_layout(install_path: str, system_name: str | None = None) -> RimWorldLayout:
@@ -53,11 +81,14 @@ def resolve_rimworld_layout(install_path: str, system_name: str | None = None) -
     path = Path(normalized_input)
     if not path.exists():
         if resolved_system_name == "Darwin":
-            bundle = path if path.suffix.lower() == ".app" else path / "RimWorldMac.app"
+            bundle = path if path.suffix.lower() == ".app" else next(
+                (path / name for name in MAC_BUNDLE_NAMES if (path / name).exists()),
+                path / MAC_BUNDLE_NAMES[0],
+            )
             install_root = bundle.parent if bundle.suffix.lower() == ".app" else path
-            official_data_root = bundle / "Data"
+            official_data_root = _mac_official_data_root(install_root, bundle)
             resource_data_root = bundle / "Contents" / "Resources" / "Data"
-            executable = bundle / "Contents" / "MacOS" / "RimWorldMac"
+            executable = bundle / "Contents" / "MacOS" / MAC_EXECUTABLE_NAMES[0]
             return RimWorldLayout(
                 install_root=_normalized_path(install_root),
                 app_bundle_path=_normalized_path(bundle),
@@ -85,8 +116,8 @@ def resolve_rimworld_layout(install_path: str, system_name: str | None = None) -
         bundle = _find_macos_bundle(path)
         if bundle:
             install_root = bundle.parent
-            executable = bundle / "Contents" / "MacOS" / "RimWorldMac"
-            official_data_root = bundle / "Data"
+            executable = _mac_executable(bundle)
+            official_data_root = _mac_official_data_root(install_root, bundle)
             resource_data_root = bundle / "Contents" / "Resources" / "Data"
             return RimWorldLayout(
                 install_root=_normalized_path(install_root),
